@@ -2,11 +2,15 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
-import { mockPacientes, mockSessoes, mockProfissionais, mockServicos } from "@/lib/mock-data";
+import { Professional } from "@/services/ProfessionalService";
+import { Evolution } from "@/services/EvolutionService";
+import { mockPacientes, mockSessoes, mockProfissionais, mockServicos, mockEvolucoes } from "@/lib/mock-data";
 
 const STORAGE_KEYS = {
   PATIENTS: "physione_patients",
   SESSIONS: "physione_sessions",
+  PROFESSIONALS: "physione_professionals",
+  EVOLUTIONS: "physione_evolutions",
 };
 
 interface DataContextType {
@@ -20,8 +24,16 @@ interface DataContextType {
   addSession: (session: Session) => void;
   updateSession: (id: string, data: Partial<Session>) => void;
   
+  // Professionals
+  professionals: Professional[];
+  addProfessional: (professional: Professional) => void;
+  updateProfessional: (id: string, data: Partial<Professional>) => void;
+  
+  // Evolutions
+  evolutions: Evolution[];
+  addEvolution: (evolution: Evolution) => void;
+  
   // Static data (from mocks, read-only for now)
-  professionals: typeof mockProfissionais;
   services: typeof mockServicos;
 }
 
@@ -73,6 +85,30 @@ function loadInitialSessions(): Session[] {
   return mockSessoes as unknown as Session[];
 }
 
+function loadInitialProfessionals(): Professional[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.PROFESSIONALS);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error("Error loading professionals from localStorage:", e);
+  }
+  return mockProfissionais as Professional[];
+}
+
+function loadInitialEvolutions(): Evolution[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.EVOLUTIONS);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error("Error loading evolutions from localStorage:", e);
+  }
+  return mockEvolucoes as Evolution[];
+}
+
 interface DataProviderProps {
   children: ReactNode;
 }
@@ -80,6 +116,8 @@ interface DataProviderProps {
 export function DataProvider({ children }: DataProviderProps) {
   const [patients, setPatients] = useState<Patient[]>(loadInitialPatients);
   const [sessions, setSessions] = useState<Session[]>(loadInitialSessions);
+  const [professionals, setProfessionals] = useState<Professional[]>(loadInitialProfessionals);
+  const [evolutions, setEvolutions] = useState<Evolution[]>(loadInitialEvolutions);
 
   // Persist patients to localStorage
   useEffect(() => {
@@ -98,6 +136,24 @@ export function DataProvider({ children }: DataProviderProps) {
       console.error("Error saving sessions to localStorage:", e);
     }
   }, [sessions]);
+
+  // Persist professionals to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.PROFESSIONALS, JSON.stringify(professionals));
+    } catch (e) {
+      console.error("Error saving professionals to localStorage:", e);
+    }
+  }, [professionals]);
+
+  // Persist evolutions to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.EVOLUTIONS, JSON.stringify(evolutions));
+    } catch (e) {
+      console.error("Error saving evolutions to localStorage:", e);
+    }
+  }, [evolutions]);
 
   const addPatient = (patient: Patient) => {
     setPatients((prev) => [...prev, patient]);
@@ -119,6 +175,20 @@ export function DataProvider({ children }: DataProviderProps) {
     );
   };
 
+  const addProfessional = (professional: Professional) => {
+    setProfessionals((prev) => [...prev, professional]);
+  };
+
+  const updateProfessional = (id: string, data: Partial<Professional>) => {
+    setProfessionals((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...data } : p))
+    );
+  };
+
+  const addEvolution = (evolution: Evolution) => {
+    setEvolutions((prev) => [evolution, ...prev]);
+  };
+
   const value: DataContextType = {
     patients,
     addPatient,
@@ -126,7 +196,11 @@ export function DataProvider({ children }: DataProviderProps) {
     sessions,
     addSession,
     updateSession,
-    professionals: mockProfissionais,
+    professionals,
+    addProfessional,
+    updateProfessional,
+    evolutions,
+    addEvolution,
     services: mockServicos,
   };
 

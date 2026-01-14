@@ -1,24 +1,91 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Calendar, Users, Activity, TrendingUp, Clock } from "lucide-react";
-import { mockDashboardStats, mockSessoes, mockPacientes } from "@/lib/mock-data";
 import { format, isToday, isFuture } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { useData } from "@/contexts/DataContext";
+import { SessionService } from "@/services/SessionService";
+import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 
 export default function Dashboard() {
+  const { sessions, patients, professionals, services, addSession } = useData();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Form state for new session modal
+  const [selectedPaciente, setSelectedPaciente] = useState("");
+  const [selectedProfissional, setSelectedProfissional] = useState("");
+  const [selectedServico, setSelectedServico] = useState("");
+  const [notes, setNotes] = useState("");
+
   // Filter upcoming sessions (today and future, not finished)
-  const upcomingSessions = mockSessoes
-    .filter((s) => (isToday(s.start_time) || isFuture(s.start_time)) && s.status !== 'finalizado' && s.status !== 'cancelado')
-    .sort((a, b) => a.start_time.getTime() - b.start_time.getTime())
+  const upcomingSessions = sessions
+    .filter((s) => {
+      const startTime = s.start_time instanceof Date ? s.start_time : new Date(s.start_time);
+      return (isToday(startTime) || isFuture(startTime)) && s.status !== 'finalizado' && s.status !== 'cancelado';
+    })
+    .sort((a, b) => {
+      const aTime = a.start_time instanceof Date ? a.start_time : new Date(a.start_time);
+      const bTime = b.start_time instanceof Date ? b.start_time : new Date(b.start_time);
+      return aTime.getTime() - bTime.getTime();
+    })
     .slice(0, 5);
 
   // Recent patients
-  const recentPatients = mockPacientes.slice(0, 4);
+  const recentPatients = patients.slice(0, 4);
+
+  // Dashboard stats from context data
+  const todaysSessions = sessions.filter((s) => {
+    const startTime = s.start_time instanceof Date ? s.start_time : new Date(s.start_time);
+    return isToday(startTime);
+  }).length;
+
+  const activePatients = patients.filter(p => p.is_active).length;
+  const weekSessions = sessions.length;
+  const completedSessions = sessions.filter(s => s.status === 'finalizado').length;
+  const attendanceRate = sessions.length > 0 ? Math.round((completedSessions / sessions.length) * 100) : 0;
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedPaciente("");
+    setSelectedProfissional("");
+    setSelectedServico("");
+    setNotes("");
+  };
+
+  const handleSubmitSession = (data: {
+    pacienteId: string;
+    profissionalId: string;
+    servicoId: string;
+    notes: string;
+  }) => {
+    try {
+      const now = new Date();
+      const newSession = SessionService.create(
+        {
+          pacienteId: data.pacienteId,
+          profissionalId: data.profissionalId,
+          servicoId: data.servicoId,
+          date: now,
+          hour: now.getHours(),
+          notes: data.notes,
+        },
+        sessions
+      );
+
+      addSession(newSession);
+      toast.success("Sessão agendada com sucesso!");
+      handleCloseModal();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
+    }
+  };
 
   return (
     <AppLayout 
@@ -30,23 +97,23 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Atendimentos Hoje"
-            value={mockDashboardStats.atendimentosHoje}
+            value={todaysSessions}
             icon={Calendar}
             trend={{ value: 12, positive: true }}
           />
           <StatCard
             title="Pacientes Ativos"
-            value={mockDashboardStats.pacientesAtivos}
+            value={activePatients}
             icon={Users}
           />
           <StatCard
             title="Sessões na Semana"
-            value={mockDashboardStats.sessoesSemana}
+            value={weekSessions}
             icon={Activity}
           />
           <StatCard
             title="Taxa de Comparecimento"
-            value={`${mockDashboardStats.taxaComparecimento}%`}
+            value={`${attendanceRate}%`}
             icon={TrendingUp}
             trend={{ value: 3, positive: true }}
           />
@@ -75,38 +142,39 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {upcomingSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                    >
+                  {upcomingSessions.map((session) => {
+                    const startTime = session.start_time instanceof Date ? session.start_time : new Date(session.start_time);
+                    return (
                       <div
-                        className="w-1 h-12 rounded-full"
-                        style={{ backgroundColor: session.servico?.color || '#10B981' }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium text-sm truncate">
-                            {session.paciente?.full_name}
+                        key={session.id}
+                        className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                      >
+                        <div
+                          className="w-1 h-12 rounded-full"
+                          style={{ backgroundColor: session.servico?.color || '#10B981' }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-medium text-sm truncate">
+                              {session.paciente?.full_name}
+                            </p>
+                            <StatusBadge status={session.status as any} />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {session.servico?.name} • {session.profissional?.full_name}
                           </p>
-                          <StatusBadge status={session.status as any} />
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {session.servico?.name} • {session.profissional?.full_name}
-                        </p>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-medium">
+                            {format(startTime, "HH:mm")}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {isToday(startTime) ? "Hoje" : format(startTime, "dd/MM")}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-medium">
-                          {format(session.start_time, "HH:mm")}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {isToday(session.start_time) 
-                            ? "Hoje" 
-                            : format(session.start_time, "dd/MM")}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -139,9 +207,7 @@ export default function Dashboard() {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{patient.full_name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {patient.phone}
-                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{patient.phone}</p>
                     </div>
                   </div>
                 ))}
@@ -153,31 +219,31 @@ export default function Dashboard() {
         {/* Quick Actions */}
         <Card className="shadow-card">
           <CardHeader className="pb-3">
-            <CardTitle className="font-display text-lg font-semibold">
-              Ações Rápidas
-            </CardTitle>
+            <CardTitle className="font-display text-lg font-semibold">Ações Rápidas</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Link to="/agenda">
-                <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30">
-                  <Calendar className="h-5 w-5 text-primary" />
-                  <span className="text-xs font-medium">Nova Sessão</span>
-                </Button>
-              </Link>
-              <Link to="/pacientes">
+              <Button 
+                variant="outline" 
+                className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30"
+                onClick={() => setIsModalOpen(true)}
+              >
+                <Calendar className="h-5 w-5 text-primary" />
+                <span className="text-xs font-medium">Nova Sessão</span>
+              </Button>
+              <Link to="/pacientes" className="w-full">
                 <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30">
                   <Users className="h-5 w-5 text-primary" />
                   <span className="text-xs font-medium">Novo Paciente</span>
                 </Button>
               </Link>
-              <Link to="/prontuarios">
+              <Link to="/prontuarios" className="w-full">
                 <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30">
                   <Activity className="h-5 w-5 text-primary" />
                   <span className="text-xs font-medium">Nova Evolução</span>
                 </Button>
               </Link>
-              <Link to="/profissionais">
+              <Link to="/profissionais" className="w-full">
                 <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30">
                   <TrendingUp className="h-5 w-5 text-primary" />
                   <span className="text-xs font-medium">Ver Relatórios</span>
@@ -187,6 +253,25 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* New Session Modal */}
+      <NewSessionModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        selectedSlot={{ date: new Date(), hour: new Date().getHours() }}
+        patients={patients}
+        professionals={professionals}
+        services={services}
+        selectedPaciente={selectedPaciente}
+        setSelectedPaciente={setSelectedPaciente}
+        selectedProfissional={selectedProfissional}
+        setSelectedProfissional={setSelectedProfissional}
+        selectedServico={selectedServico}
+        setSelectedServico={setSelectedServico}
+        notes={notes}
+        setNotes={setNotes}
+        onSubmit={handleSubmitSession}
+      />
     </AppLayout>
   );
 }
