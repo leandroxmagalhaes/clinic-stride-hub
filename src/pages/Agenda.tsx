@@ -7,12 +7,12 @@ import {
   addDays, 
   addWeeks, 
   subWeeks, 
-  isSameDay,
-  setHours,
-  setMinutes,
 } from "date-fns";
-import { mockSessoes, mockPacientes, mockProfissionais, mockServicos } from "@/lib/mock-data";
 import { toast } from "sonner";
+
+// Services and Context (SRP Architecture)
+import { useData } from "@/contexts/DataContext";
+import { SessionService } from "@/services/SessionService";
 
 // Components
 import { AgendaControls } from "@/components/agenda/AgendaControls";
@@ -23,6 +23,8 @@ import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
 
 export default function Agenda() {
+  const { sessions, addSession, patients, professionals, services } = useData();
+  
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -84,28 +86,34 @@ export default function Agenda() {
     servicoId: string;
     notes: string;
   }) => {
-    if (!data.pacienteId || !data.profissionalId || !data.servicoId) {
-      toast.error("Preencha todos os campos obrigatórios");
+    if (!selectedSlot) {
+      toast.error("Selecione um horário");
       return;
     }
 
-    // Check for conflicts
-    const slotStart = setMinutes(setHours(selectedSlot!.date, selectedSlot!.hour), 0);
-    const hasConflict = mockSessoes.some(
-      (s) =>
-        s.profissional_id === data.profissionalId &&
-        isSameDay(s.start_time, slotStart) &&
-        s.start_time.getHours() === slotStart.getHours()
-    );
+    try {
+      // Create session using service (includes validation and conflict check)
+      const newSession = SessionService.create(
+        {
+          pacienteId: data.pacienteId,
+          profissionalId: data.profissionalId,
+          servicoId: data.servicoId,
+          date: selectedSlot.date,
+          hour: selectedSlot.hour,
+          notes: data.notes,
+        },
+        sessions
+      );
 
-    if (hasConflict) {
-      toast.error("Já existe um agendamento para este profissional neste horário");
-      return;
+      // Add to context (persists to localStorage)
+      addSession(newSession);
+
+      toast.success("Sessão agendada com sucesso!");
+      setIsModalOpen(false);
+      resetForm();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
     }
-
-    toast.success("Sessão agendada com sucesso!");
-    setIsModalOpen(false);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -162,7 +170,7 @@ export default function Agenda() {
         <AgendaDesktopGrid
           weekDays={weekDays}
           hours={HOURS}
-          sessions={mockSessoes}
+          sessions={sessions}
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
         />
@@ -171,7 +179,7 @@ export default function Agenda() {
         <AgendaMobileTimeline
           currentDate={currentDate}
           hours={HOURS}
-          sessions={mockSessoes}
+          sessions={sessions}
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
         />
@@ -182,9 +190,9 @@ export default function Agenda() {
         isOpen={isModalOpen}
         onClose={handleModalClose}
         selectedSlot={selectedSlot}
-        patients={mockPacientes}
-        professionals={mockProfissionais}
-        services={mockServicos}
+        patients={patients}
+        professionals={professionals}
+        services={services}
         onSubmit={handleCreateSession}
         selectedPaciente={selectedPaciente}
         setSelectedPaciente={setSelectedPaciente}

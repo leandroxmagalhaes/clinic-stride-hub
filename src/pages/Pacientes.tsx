@@ -22,13 +22,17 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, Phone, Mail, MapPin, AlertCircle } from "lucide-react";
-import { mockPacientes } from "@/lib/mock-data";
 import { toast } from "sonner";
 
+// Services and Context (SRP Architecture)
+import { useData } from "@/contexts/DataContext";
+import { PatientService, Patient } from "@/services/PatientService";
+
 export default function Pacientes() {
+  const { patients, addPatient } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<typeof mockPacientes[0] | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -45,25 +49,34 @@ export default function Pacientes() {
     notes: "",
   });
 
-  const filteredPatients = mockPacientes.filter(
-    (p) =>
-      p.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.phone?.includes(searchTerm)
-  );
+  // Use service for filtering
+  const filteredPatients = PatientService.filterBySearch(patients, searchTerm);
 
-  const handleOpenPatient = (patient: typeof mockPacientes[0]) => {
+  const handleOpenPatient = (patient: Patient) => {
     setSelectedPatient(patient);
   };
 
   const handleCreatePatient = () => {
-    if (!formData.full_name || !formData.phone) {
-      toast.error("Nome e telefone são obrigatórios");
+    // Validate using service
+    const validation = PatientService.validate(formData);
+    if (!validation.isValid) {
+      toast.error(validation.error);
       return;
     }
-    toast.success("Paciente cadastrado com sucesso!");
-    setIsModalOpen(false);
-    resetForm();
+
+    try {
+      // Create patient using service
+      const newPatient = PatientService.create(formData);
+      
+      // Add to context (persists to localStorage)
+      addPatient(newPatient);
+      
+      toast.success("Paciente cadastrado com sucesso!");
+      setIsModalOpen(false);
+      resetForm();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao cadastrar paciente");
+    }
   };
 
   const resetForm = () => {
@@ -85,7 +98,7 @@ export default function Pacientes() {
   return (
     <AppLayout
       title="Pacientes"
-      subtitle={`${mockPacientes.length} pacientes cadastrados`}
+      subtitle={`${patients.length} pacientes cadastrados`}
       actions={
         <Button onClick={() => setIsModalOpen(true)} className="gap-2">
           <Plus className="h-4 w-4" />
