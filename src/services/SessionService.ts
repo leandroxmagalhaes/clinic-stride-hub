@@ -1,0 +1,166 @@
+// SessionService - Business logic for session/appointment operations (SRP)
+import { isSameDay, setHours, setMinutes, addMinutes } from "date-fns";
+import { DEMO_CLINIC_ID, mockServicos, mockPacientes, mockProfissionais } from "@/lib/mock-data";
+
+export interface Session {
+  id: string;
+  clinic_id: string;
+  paciente_id: string;
+  profissional_id: string;
+  servico_id: string;
+  start_time: Date;
+  end_time: Date;
+  status: string;
+  price: number;
+  payment_status: string;
+  payment_method: string | null;
+  notes: string | null;
+  // Joined data for display
+  paciente?: {
+    id: string;
+    full_name: string;
+  };
+  profissional?: {
+    id: string;
+    full_name: string;
+  };
+  servico?: {
+    id: string;
+    name: string;
+    color: string;
+    duration_minutes: number;
+  };
+}
+
+export interface CreateSessionData {
+  pacienteId: string;
+  profissionalId: string;
+  servicoId: string;
+  date: Date;
+  hour: number;
+  notes?: string;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  error?: string;
+}
+
+export class SessionService {
+  // Validate session data before creation
+  static validate(data: CreateSessionData): ValidationResult {
+    if (!data.pacienteId) {
+      return { isValid: false, error: "Selecione um paciente" };
+    }
+    if (!data.profissionalId) {
+      return { isValid: false, error: "Selecione um profissional" };
+    }
+    if (!data.servicoId) {
+      return { isValid: false, error: "Selecione um serviço" };
+    }
+    if (!data.date || !data.hour) {
+      return { isValid: false, error: "Data e hora são obrigatórios" };
+    }
+
+    return { isValid: true };
+  }
+
+  // Check for scheduling conflicts
+  static checkConflict(
+    sessions: Session[],
+    profissionalId: string,
+    date: Date,
+    hour: number
+  ): ValidationResult {
+    const slotStart = setMinutes(setHours(new Date(date), hour), 0);
+
+    const hasConflict = sessions.some(
+      (s) =>
+        s.profissional_id === profissionalId &&
+        isSameDay(new Date(s.start_time), slotStart) &&
+        new Date(s.start_time).getHours() === hour
+    );
+
+    if (hasConflict) {
+      return {
+        isValid: false,
+        error: "Conflito de horário: já existe um agendamento para este profissional neste horário",
+      };
+    }
+
+    return { isValid: true };
+  }
+
+  // Create a new session
+  static create(data: CreateSessionData, existingSessions: Session[]): Session {
+    // Validate required fields
+    const validation = this.validate(data);
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+
+    // Check for conflicts
+    const conflictCheck = this.checkConflict(
+      existingSessions,
+      data.profissionalId,
+      data.date,
+      data.hour
+    );
+    if (!conflictCheck.isValid) {
+      throw new Error(conflictCheck.error);
+    }
+
+    // Get service details for duration and price
+    const servico = mockServicos.find((s) => s.id === data.servicoId);
+    const paciente = mockPacientes.find((p) => p.id === data.pacienteId);
+    const profissional = mockProfissionais.find((p) => p.id === data.profissionalId);
+
+    const startTime = setMinutes(setHours(new Date(data.date), data.hour), 0);
+    const endTime = addMinutes(startTime, servico?.duration_minutes || 60);
+
+    return {
+      id: `sess-${Date.now()}`,
+      clinic_id: DEMO_CLINIC_ID,
+      paciente_id: data.pacienteId,
+      profissional_id: data.profissionalId,
+      servico_id: data.servicoId,
+      start_time: startTime,
+      end_time: endTime,
+      status: "agendado",
+      price: servico?.price || 0,
+      payment_status: "pendente",
+      payment_method: null,
+      notes: data.notes || null,
+      // Joined data
+      paciente: paciente ? { id: paciente.id, full_name: paciente.full_name } : undefined,
+      profissional: profissional ? { id: profissional.id, full_name: profissional.full_name } : undefined,
+      servico: servico
+        ? {
+            id: servico.id,
+            name: servico.name,
+            color: servico.color,
+            duration_minutes: servico.duration_minutes,
+          }
+        : undefined,
+    };
+  }
+
+  // Filter sessions by date
+  static filterByDate(sessions: Session[], date: Date): Session[] {
+    return sessions.filter((s) => isSameDay(new Date(s.start_time), date));
+  }
+
+  // Filter sessions by professional
+  static filterByProfessional(sessions: Session[], profissionalId: string): Session[] {
+    return sessions.filter((s) => s.profissional_id === profissionalId);
+  }
+
+  // Get sessions for a specific time slot
+  static getForTimeSlot(sessions: Session[], date: Date, hour: number): Session[] {
+    return sessions.filter(
+      (s) =>
+        isSameDay(new Date(s.start_time), date) &&
+        new Date(s.start_time).getHours() === hour
+    );
+  }
+}
