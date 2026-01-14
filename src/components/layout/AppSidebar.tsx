@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Calendar,
@@ -29,6 +29,15 @@ import {
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 interface NavItem {
   title: string;
@@ -56,6 +65,28 @@ const managementNavItems: NavItem[] = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast.error('Erro ao sair', { description: error.message });
+      return;
+    }
+    toast.success('Logout realizado com sucesso!');
+    navigate('/login');
+  };
+
+  // Get user display info
+  const userEmail = user?.email || '';
+  const userName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'Usuário';
+  const userInitials = userName
+    .split(' ')
+    .map((n: string) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = location.pathname === item.url;
@@ -140,23 +171,38 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src="" />
-            <AvatarFallback className="bg-primary/20 text-primary text-xs font-medium">
-              AD
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-primary-foreground truncate">
-              Admin
-            </p>
-            <p className="text-[10px] text-sidebar-muted truncate">
-              admin@physione.com
-            </p>
-          </div>
-          <ChevronDown className="h-4 w-4 text-sidebar-muted shrink-0" />
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src="" />
+                <AvatarFallback className="bg-primary/20 text-primary text-xs font-medium">
+                  {userInitials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-sidebar-primary-foreground truncate">
+                  {userName}
+                </p>
+                <p className="text-[10px] text-sidebar-muted truncate">
+                  {userEmail}
+                </p>
+              </div>
+              <ChevronDown className="h-4 w-4 text-sidebar-muted shrink-0" />
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 bg-popover">
+            <DropdownMenuItem disabled className="opacity-50">
+              <Settings className="mr-2 h-4 w-4" />
+              Configurações
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+              <LogOut className="mr-2 h-4 w-4" />
+              Sair
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarFooter>
     </Sidebar>
   );
