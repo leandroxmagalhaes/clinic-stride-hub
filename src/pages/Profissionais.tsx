@@ -21,13 +21,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Search, Phone, Mail, Award, User } from "lucide-react";
-import { mockProfissionais } from "@/lib/mock-data";
 import { toast } from "sonner";
+import { useData } from "@/contexts/DataContext";
+import { ProfessionalService } from "@/services/ProfessionalService";
 
 export default function Profissionais() {
+  const { professionals, addProfessional } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedProfessional, setSelectedProfessional] = useState<typeof mockProfissionais[0] | null>(null);
+  const [selectedProfessional, setSelectedProfessional] = useState<typeof professionals[0] | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -39,12 +41,7 @@ export default function Profissionais() {
     crefito: "",
   });
 
-  const filteredProfessionals = mockProfissionais.filter(
-    (p) =>
-      p.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.specialty?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProfessionals = ProfessionalService.filter(professionals, searchTerm);
 
   const getRoleLabel = (role: string) => {
     const roles: Record<string, string> = {
@@ -56,13 +53,15 @@ export default function Profissionais() {
   };
 
   const handleCreateProfessional = () => {
-    if (!formData.full_name || !formData.email) {
-      toast.error("Nome e email são obrigatórios");
-      return;
+    try {
+      const newProfessional = ProfessionalService.create(formData, professionals);
+      addProfessional(newProfessional);
+      toast.success("Profissional cadastrado com sucesso!");
+      setIsModalOpen(false);
+      resetForm();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao cadastrar profissional");
     }
-    toast.success("Profissional cadastrado com sucesso!");
-    setIsModalOpen(false);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -79,7 +78,7 @@ export default function Profissionais() {
   return (
     <AppLayout
       title="Profissionais"
-      subtitle={`${mockProfissionais.length} profissionais ativos`}
+      subtitle={`${professionals.length} profissionais ativos`}
       actions={
         <Button onClick={() => setIsModalOpen(true)} className="gap-2">
           <Plus className="h-4 w-4" />

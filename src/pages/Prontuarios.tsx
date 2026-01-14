@@ -25,13 +25,16 @@ import {
   User,
   ChevronRight,
 } from "lucide-react";
-import { mockPacientes, mockProntuarios, mockEvolucoes } from "@/lib/mock-data";
+import { mockProntuarios } from "@/lib/mock-data";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useData } from "@/contexts/DataContext";
+import { EvolutionService } from "@/services/EvolutionService";
 
 export default function Prontuarios() {
+  const { patients, professionals, evolutions, addEvolution } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProntuario, setSelectedProntuario] = useState<typeof mockProntuarios[0] | null>(null);
   const [isNewEvolucaoOpen, setIsNewEvolucaoOpen] = useState(false);
@@ -42,7 +45,7 @@ export default function Prontuarios() {
     escala_dor: 5,
   });
 
-  const filteredPacientes = mockPacientes.filter((p) =>
+  const filteredPacientes = patients.filter((p) =>
     p.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -51,7 +54,7 @@ export default function Prontuarios() {
   };
 
   const getEvolucoesForProntuario = (prontuarioId: string) => {
-    return mockEvolucoes.filter((e) => e.prontuario_id === prontuarioId);
+    return EvolutionService.getByProntuario(evolutions, prontuarioId);
   };
 
   const handleSelectPatient = (pacienteId: string) => {
@@ -60,31 +63,52 @@ export default function Prontuarios() {
       setSelectedProntuario(prontuario);
     } else {
       // Create mock prontuario for patients without one
-      const paciente = mockPacientes.find((p) => p.id === pacienteId);
-      setSelectedProntuario({
-        id: `pront-new-${pacienteId}`,
-        clinic_id: "demo-clinic-001",
-        paciente_id: pacienteId,
-        anamnese: "",
-        diagnostico: "",
-        objetivos: "",
-        observacoes: "",
-        paciente: paciente!,
-      });
+      const paciente = patients.find((p) => p.id === pacienteId);
+      if (paciente) {
+        setSelectedProntuario({
+          id: `pront-new-${pacienteId}`,
+          clinic_id: "demo-clinic-001",
+          paciente_id: pacienteId,
+          anamnese: "",
+          diagnostico: "",
+          objetivos: "",
+          observacoes: "",
+          paciente: paciente as any,
+        });
+      }
     }
   };
 
   const handleCreateEvolucao = () => {
-    if (!evolucaoForm.descricao.trim()) {
-      toast.error("Descreva a evolução do paciente");
+    if (!selectedProntuario) {
+      toast.error("Selecione um paciente primeiro");
       return;
     }
-    toast.success("Evolução registrada com sucesso!");
-    setIsNewEvolucaoOpen(false);
-    setEvolucaoForm({ descricao: "", escala_dor: 5 });
+
+    // Get first professional as default (in real app, would be the logged user)
+    const defaultProfessional = professionals[0];
+
+    try {
+      const newEvolution = EvolutionService.create(
+        {
+          prontuario_id: selectedProntuario.id,
+          profissional_id: defaultProfessional.id,
+          descricao: evolucaoForm.descricao,
+          escala_dor: evolucaoForm.escala_dor,
+        },
+        defaultProfessional.full_name
+      );
+
+      addEvolution(newEvolution);
+      toast.success("Evolução registrada com sucesso!");
+      setIsNewEvolucaoOpen(false);
+      setEvolucaoForm({ descricao: "", escala_dor: 5 });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao registrar evolução");
+    }
   };
 
-  const evolucoes = selectedProntuario 
+  const prontuarioEvolutions = selectedProntuario 
     ? getEvolucoesForProntuario(selectedProntuario.id)
     : [];
 
@@ -208,9 +232,9 @@ export default function Prontuarios() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {evolucoes.length > 0 ? (
+                      {prontuarioEvolutions.length > 0 ? (
                         <div className="space-y-4">
-                          {evolucoes.map((evolucao) => (
+                          {prontuarioEvolutions.map((evolucao) => (
                             <div
                               key={evolucao.id}
                               className="border rounded-lg p-4 hover:bg-muted/30 transition-colors"
