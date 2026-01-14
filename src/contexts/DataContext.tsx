@@ -1,10 +1,13 @@
 // DataContext - Centralized state management with localStorage persistence
+// Note: localStorage is used for demo purposes only while authentication is being set up.
+// Once full Supabase integration is complete, data will be fetched from the database with RLS protection.
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
 import { Evolution } from "@/services/EvolutionService";
 import { mockPacientes, mockSessoes, mockProfissionais, mockServicos, mockEvolucoes } from "@/lib/mock-data";
+import { supabase } from "@/integrations/supabase/client";
 
 const STORAGE_KEYS = {
   PATIENTS: "physione_patients",
@@ -113,11 +116,34 @@ interface DataProviderProps {
   children: ReactNode;
 }
 
+// Clear all localStorage data
+function clearAllStoredData() {
+  Object.values(STORAGE_KEYS).forEach(key => {
+    localStorage.removeItem(key);
+  });
+}
+
 export function DataProvider({ children }: DataProviderProps) {
   const [patients, setPatients] = useState<Patient[]>(loadInitialPatients);
   const [sessions, setSessions] = useState<Session[]>(loadInitialSessions);
   const [professionals, setProfessionals] = useState<Professional[]>(loadInitialProfessionals);
   const [evolutions, setEvolutions] = useState<Evolution[]>(loadInitialEvolutions);
+
+  // Clear localStorage on logout for security
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        clearAllStoredData();
+        // Reset to mock data after logout
+        setPatients(mockPacientes as Patient[]);
+        setSessions(mockSessoes as unknown as Session[]);
+        setProfessionals(mockProfissionais as Professional[]);
+        setEvolutions(mockEvolucoes as Evolution[]);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Persist patients to localStorage
   useEffect(() => {
