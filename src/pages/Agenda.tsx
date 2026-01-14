@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -23,7 +23,7 @@ import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
 
 export default function Agenda() {
-  const { sessions, addSession, patients, professionals, services } = useData();
+  const { sessions, addSession, updateSession, patients, professionals, services } = useData();
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
@@ -79,6 +79,23 @@ export default function Agenda() {
     // Future: Open session details/edit modal
     toast.info(`Sessão: ${session.paciente?.full_name} - ${session.servico?.name}`);
   };
+
+  const handleSessionReschedule = useCallback((sessionId: string, newDate: Date, newHour: number) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+
+    const result = SessionService.reschedule(session, newDate, newHour, sessions);
+    
+    if (result.success && result.updatedSession) {
+      updateSession(sessionId, {
+        start_time: result.updatedSession.start_time,
+        end_time: result.updatedSession.end_time,
+      });
+      toast.success("Sessão remarcada com sucesso!");
+    } else {
+      toast.error(result.error || "Erro ao remarcar sessão");
+    }
+  }, [sessions, updateSession]);
 
   const handleCreateSession = (data: {
     pacienteId: string;
@@ -173,6 +190,7 @@ export default function Agenda() {
           sessions={sessions}
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
+          onSessionReschedule={handleSessionReschedule}
         />
 
         {/* Mobile: Timeline View */}
