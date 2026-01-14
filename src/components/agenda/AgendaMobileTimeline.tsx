@@ -1,0 +1,149 @@
+import { format, isSameDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Clock, Plus, User, Calendar } from "lucide-react";
+
+interface Session {
+  id: string;
+  start_time: Date;
+  end_time: Date;
+  status: string;
+  paciente?: { full_name: string };
+  profissional?: { full_name: string };
+  servico?: { name: string; color: string; duration_minutes: number };
+}
+
+interface AgendaMobileTimelineProps {
+  currentDate: Date;
+  hours: number[];
+  sessions: Session[];
+  onSlotClick: (date: Date, hour: number) => void;
+  onSessionClick: (session: Session) => void;
+}
+
+export function AgendaMobileTimeline({ 
+  currentDate, 
+  hours, 
+  sessions,
+  onSlotClick,
+  onSessionClick,
+}: AgendaMobileTimelineProps) {
+  const getSessionsForHour = (hour: number) => {
+    return sessions.filter(
+      (s) => isSameDay(s.start_time, currentDate) && s.start_time.getHours() === hour
+    );
+  };
+
+  const isToday = isSameDay(currentDate, new Date());
+  const currentHour = new Date().getHours();
+
+  return (
+    <Card className="shadow-card md:hidden">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Calendar className="h-4 w-4 text-primary" />
+          <span className={cn(isToday && "text-primary")}>
+            {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="divide-y">
+          {hours.map((hour) => {
+            const hourSessions = getSessionsForHour(hour);
+            const isPastHour = isToday && hour < currentHour;
+            const isCurrentHour = isToday && hour === currentHour;
+            
+            return (
+              <div 
+                key={hour}
+                className={cn(
+                  "relative",
+                  isPastHour && "opacity-50"
+                )}
+              >
+                {/* Current time indicator */}
+                {isCurrentHour && (
+                  <div className="absolute left-0 right-0 top-0 h-0.5 bg-primary z-10" />
+                )}
+                
+                {hourSessions.length > 0 ? (
+                  // Sessions exist - show session cards
+                  hourSessions.map((session) => (
+                    <button
+                      key={session.id}
+                      onClick={() => onSessionClick(session)}
+                      className="w-full text-left p-4 hover:bg-muted/50 transition-colors min-h-[72px] flex items-start gap-4 active:bg-muted"
+                    >
+                      {/* Time column */}
+                      <div className="flex-shrink-0 w-14 text-center">
+                        <p className={cn(
+                          "text-sm font-semibold",
+                          isCurrentHour && "text-primary"
+                        )}>
+                          {String(hour).padStart(2, '0')}:00
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {session.servico?.duration_minutes}min
+                        </p>
+                      </div>
+                      
+                      {/* Session card */}
+                      <div 
+                        className="flex-1 p-3 rounded-lg"
+                        style={{ 
+                          backgroundColor: `${session.servico?.color}15`,
+                          borderLeft: `4px solid ${session.servico?.color}`,
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-2">
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            <p className="font-medium text-sm">
+                              {session.paciente?.full_name}
+                            </p>
+                          </div>
+                          <StatusBadge status={session.status as any} />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {session.servico?.name} • {session.profissional?.full_name}
+                        </p>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  // Empty slot - show add button
+                  <button
+                    onClick={() => onSlotClick(currentDate, hour)}
+                    className="w-full p-4 hover:bg-muted/30 transition-colors min-h-[72px] flex items-center gap-4 active:bg-muted/50 group"
+                  >
+                    {/* Time column */}
+                    <div className="flex-shrink-0 w-14 text-center">
+                      <p className={cn(
+                        "text-sm font-medium text-muted-foreground",
+                        isCurrentHour && "text-primary font-semibold"
+                      )}>
+                        {String(hour).padStart(2, '0')}:00
+                      </p>
+                    </div>
+                    
+                    {/* Empty slot indicator */}
+                    <div className="flex-1 border-2 border-dashed border-muted-foreground/20 rounded-lg p-3 flex items-center justify-center gap-2 group-hover:border-primary/40 group-hover:bg-primary/5 transition-colors">
+                      <Plus className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary/60" />
+                      <span className="text-xs text-muted-foreground/50 group-hover:text-primary/60">
+                        Agendar
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
