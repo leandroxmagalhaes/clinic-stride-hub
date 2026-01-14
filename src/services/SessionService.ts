@@ -163,4 +163,39 @@ export class SessionService {
         new Date(s.start_time).getHours() === hour
     );
   }
+
+  // Reschedule a session to a new date/time
+  static reschedule(
+    session: Session,
+    newDate: Date,
+    newHour: number,
+    existingSessions: Session[]
+  ): { success: boolean; error?: string; updatedSession?: Session } {
+    // Check for conflicts (excluding the session being moved)
+    const otherSessions = existingSessions.filter((s) => s.id !== session.id);
+    const conflictCheck = this.checkConflict(
+      otherSessions,
+      session.profissional_id,
+      newDate,
+      newHour
+    );
+
+    if (!conflictCheck.isValid) {
+      return { success: false, error: conflictCheck.error };
+    }
+
+    // Calculate new times
+    const duration = session.servico?.duration_minutes || 60;
+    const newStartTime = setMinutes(setHours(new Date(newDate), newHour), 0);
+    const newEndTime = addMinutes(newStartTime, duration);
+
+    return {
+      success: true,
+      updatedSession: {
+        ...session,
+        start_time: newStartTime,
+        end_time: newEndTime,
+      },
+    };
+  }
 }
