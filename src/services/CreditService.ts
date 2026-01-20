@@ -111,12 +111,18 @@ export class CreditService {
 
   /**
    * Create a credit purchase transaction (add credits to patient)
+   * Now includes financial data: monetaryValue, paymentMethod, paymentStatus
    */
   static async purchaseCredits(
     clinicId: string,
     patientId: string,
     amount: number,
-    description?: string
+    options?: {
+      description?: string;
+      monetaryValue?: number;
+      paymentMethod?: 'pix' | 'credit_card' | 'cash' | 'transfer';
+      paymentStatus?: 'paid' | 'pending';
+    }
   ): Promise<{ success: boolean; error?: string; transaction?: CreditTransaction }> {
     if (amount <= 0) {
       return { success: false, error: "Quantidade de créditos deve ser positiva" };
@@ -129,7 +135,10 @@ export class CreditService {
         patient_id: patientId,
         amount: amount,
         transaction_type: 'purchase',
-        description: description || `Compra de ${amount} crédito(s)`,
+        description: options?.description || `Compra de ${amount} crédito(s)`,
+        monetary_value: options?.monetaryValue || null,
+        payment_method: options?.paymentMethod || null,
+        payment_status: options?.paymentStatus || 'pending',
       })
       .select()
       .single();

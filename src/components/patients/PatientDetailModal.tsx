@@ -23,7 +23,7 @@ interface PatientDetailModalProps {
   onClose: () => void;
   creditBalance: number;
   transactions: Transaction[];
-  onAddCredits: (patientId: string, data: CreditPurchaseData) => void;
+  onAddCredits: (patientId: string, data: CreditPurchaseData) => void | Promise<void>;
 }
 
 export function PatientDetailModal({
