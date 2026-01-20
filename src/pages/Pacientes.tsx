@@ -30,6 +30,7 @@ import { PatientService, Patient } from "@/services/PatientService";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { PatientDetailModal } from "@/components/patients/PatientDetailModal";
+import { CreditPurchaseData } from "@/components/patients/AddCreditsModal";
 import { HealthTag } from "@/services/HealthTagService";
 
 export default function Pacientes() {
@@ -67,9 +68,9 @@ export default function Pacientes() {
     setSelectedPatient(patient);
   };
 
-  const handleAddCredits = (patientId: string, amount: number, description: string) => {
-    addCredits(patientId, amount);
-    // In production: await CreditService.purchaseCredits(clinicId, patientId, amount, description);
+  const handleAddCredits = (patientId: string, data: CreditPurchaseData) => {
+    addCredits(patientId, data.amount);
+    // In production: await FinancialService.recordPurchase({ clinicId, patientId, ...data });
   };
 
   const handleCreatePatient = () => {
