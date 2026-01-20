@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,15 +27,36 @@ import { toast } from "sonner";
 // Services and Context (SRP Architecture)
 import { useData } from "@/contexts/DataContext";
 import { PatientService, Patient } from "@/services/PatientService";
+import { CreditService } from "@/services/CreditService";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { PatientDetailModal } from "@/components/patients/PatientDetailModal";
 import { CreditPurchaseData } from "@/components/patients/AddCreditsModal";
 import { HealthTag } from "@/services/HealthTagService";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Pacientes() {
   const { patients, addPatient, getCreditBalance, addCredits } = useData();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
+  const [clinicId, setClinicId] = useState<string | null>(null);
+  
+  // Fetch clinic_id for the current user
+  useEffect(() => {
+    async function fetchClinicId() {
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('clinic_id')
+        .eq('user_id', user.id)
+        .single();
+      if (data?.clinic_id) {
+        setClinicId(data.clinic_id);
+      }
+    }
+    fetchClinicId();
+  }, [user]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
@@ -68,9 +89,32 @@ export default function Pacientes() {
     setSelectedPatient(patient);
   };
 
-  const handleAddCredits = (patientId: string, data: CreditPurchaseData) => {
+  const handleAddCredits = async (patientId: string, data: CreditPurchaseData) => {
+    if (!clinicId) {
+      toast.error("Clínica não identificada. Faça login novamente.");
+      return;
+    }
+
+    // Persist to Supabase with full financial data
+    const result = await CreditService.purchaseCredits(
+      clinicId,
+      patientId,
+      data.amount,
+      {
+        description: data.description,
+        monetaryValue: data.monetaryValue,
+        paymentMethod: data.paymentMethod,
+        paymentStatus: data.paymentStatus,
+      }
+    );
+
+    if (!result.success) {
+      toast.error(result.error || "Erro ao adicionar créditos");
+      return;
+    }
+
+    // Also update local state for immediate UI feedback
     addCredits(patientId, data.amount);
-    // In production: await FinancialService.recordPurchase({ clinicId, patientId, ...data });
   };
 
   const handleCreatePatient = () => {

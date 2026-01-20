@@ -524,6 +524,7 @@ export type Database = {
     }
     Functions: {
       get_patient_balance: { Args: { p_patient_id: string }; Returns: number }
+      get_user_clinic_id: { Args: { p_user_id: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
