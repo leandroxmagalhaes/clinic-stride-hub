@@ -14,7 +14,7 @@ import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
-import { AddCreditsModal } from "./AddCreditsModal";
+import { AddCreditsModal, CreditPurchaseData } from "./AddCreditsModal";
 import { TransactionHistory, Transaction } from "./TransactionHistory";
 
 interface PatientDetailModalProps {
@@ -23,7 +23,7 @@ interface PatientDetailModalProps {
   onClose: () => void;
   creditBalance: number;
   transactions: Transaction[];
-  onAddCredits: (patientId: string, amount: number, description: string) => void;
+  onAddCredits: (patientId: string, data: CreditPurchaseData) => void;
 }
 
 export function PatientDetailModal({
@@ -53,8 +53,8 @@ export function PatientDetailModal({
     .join("")
     .slice(0, 2);
 
-  const handleAddCredits = (amount: number, description: string) => {
-    onAddCredits(patient.id, amount, description);
+  const handleAddCredits = (data: CreditPurchaseData) => {
+    onAddCredits(patient.id, data);
   };
 
   return (

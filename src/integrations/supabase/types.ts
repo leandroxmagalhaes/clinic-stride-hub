@@ -57,7 +57,10 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          monetary_value: number | null
           patient_id: string
+          payment_method: string | null
+          payment_status: string | null
           related_session_id: string | null
           transaction_type: string
         }
@@ -67,7 +70,10 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          monetary_value?: number | null
           patient_id: string
+          payment_method?: string | null
+          payment_status?: string | null
           related_session_id?: string | null
           transaction_type: string
         }
@@ -77,7 +83,10 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          monetary_value?: number | null
           patient_id?: string
+          payment_method?: string | null
+          payment_status?: string | null
           related_session_id?: string | null
           transaction_type?: string
         }

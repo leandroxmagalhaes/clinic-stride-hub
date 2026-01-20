@@ -58,7 +58,7 @@ const mainNavItems: NavItem[] = [
 const managementNavItems: NavItem[] = [
   { title: "Serviços", url: "/servicos", icon: Briefcase, disabled: true, badge: "Em breve" },
   { title: "Comercial", url: "/comercial", icon: TrendingUp, disabled: true, badge: "Em breve" },
-  { title: "Financeiro", url: "/financeiro", icon: DollarSign, disabled: true, badge: "Em breve" },
+  { title: "Financeiro", url: "/financeiro", icon: DollarSign },
   { title: "Engajamento", url: "/engajamento", icon: Heart, disabled: true, badge: "Em breve" },
   { title: "Clínicas", url: "/clinicas", icon: Building2, disabled: true, badge: "Em breve" },
 ];
