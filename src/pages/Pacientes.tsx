@@ -331,11 +331,11 @@ export default function Pacientes() {
               </div>
 
               <div className="space-y-2">
-                <Label>CPF</Label>
+                <Label>NIF / CPF</Label>
                 <Input
                   value={formData.cpf}
                   onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                  placeholder="000.000.000-00"
+                  placeholder="Número fiscal (9-14 dígitos)"
                 />
               </div>
 
@@ -370,7 +370,7 @@ export default function Pacientes() {
                 <Input
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="(11) 99999-9999"
+                  placeholder="+351 912 345 678"
                 />
               </div>
 
@@ -385,11 +385,11 @@ export default function Pacientes() {
               </div>
 
               <div className="col-span-2 space-y-2">
-                <Label>Endereço</Label>
+                <Label>Morada</Label>
                 <Input
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="Rua, número, bairro, cidade"
+                  placeholder="Morada, número, localidade, código postal"
                 />
               </div>
 
@@ -407,16 +407,16 @@ export default function Pacientes() {
                 <Input
                   value={formData.emergency_phone}
                   onChange={(e) => setFormData({ ...formData, emergency_phone: e.target.value })}
-                  placeholder="(11) 99999-9999"
+                  placeholder="+351 912 345 678"
                 />
               </div>
 
               <div className="col-span-2 space-y-2">
-                <Label>Convênio</Label>
+                <Label>Seguradora / Entidade</Label>
                 <Input
                   value={formData.health_insurance}
                   onChange={(e) => setFormData({ ...formData, health_insurance: e.target.value })}
-                  placeholder="Nome do convênio (se houver)"
+                  placeholder="Nome da seguradora (se aplicável)"
                 />
               </div>
 

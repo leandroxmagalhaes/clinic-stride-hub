@@ -77,10 +77,11 @@ export default function Financeiro() {
     }
   };
 
+  // i18n: Portugal locale with EUR currency
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
+    return new Intl.NumberFormat("pt-PT", {
       style: "currency",
-      currency: "BRL",
+      currency: "EUR",
     }).format(value);
   };
 
