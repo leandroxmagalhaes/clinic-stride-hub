@@ -1,16 +1,14 @@
-// DataContext - Centralized state management with localStorage persistence
-// Note: localStorage is used for demo purposes only while authentication is being set up.
-// Once full Supabase integration is complete, data will be fetched from the database with RLS protection.
+// DataContext - Centralized state management with Supabase integration
+// Patients are fetched from the database; other entities use localStorage for demo purposes.
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
 import { Evolution } from "@/services/EvolutionService";
-import { mockPacientes, mockSessoes, mockProfissionais, mockServicos, mockEvolucoes, mockCreditBalances } from "@/lib/mock-data";
+import { mockSessoes, mockProfissionais, mockServicos, mockEvolucoes, mockCreditBalances } from "@/lib/mock-data";
 import { supabase } from "@/integrations/supabase/client";
 
 const STORAGE_KEYS = {
-  PATIENTS: "physione_patients",
   SESSIONS: "physione_sessions",
   PROFESSIONALS: "physione_professionals",
   EVOLUTIONS: "physione_evolutions",
@@ -20,8 +18,10 @@ const STORAGE_KEYS = {
 interface DataContextType {
   // Patients
   patients: Patient[];
+  patientsLoading: boolean;
   addPatient: (patient: Patient) => void;
   updatePatient: (id: string, data: Partial<Patient>) => void;
+  refreshPatients: () => Promise<void>;
   
   // Sessions
   sessions: Session[];
@@ -68,19 +68,6 @@ function deserializeSessions(json: string): Session[] {
     start_time: new Date(s.start_time),
     end_time: new Date(s.end_time),
   }));
-}
-
-// Load initial data from localStorage or use mock data
-function loadInitialPatients(): Patient[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEYS.PATIENTS);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (e) {
-    console.error("Error loading patients from localStorage:", e);
-  }
-  return mockPacientes as Patient[];
 }
 
 function loadInitialSessions(): Session[] {
@@ -143,7 +130,8 @@ function clearAllStoredData() {
 }
 
 export function DataProvider({ children }: DataProviderProps) {
-  const [patients, setPatients] = useState<Patient[]>(loadInitialPatients);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patientsLoading, setPatientsLoading] = useState(true);
   const [sessions, setSessions] = useState<Session[]>(loadInitialSessions);
   const [professionals, setProfessionals] = useState<Professional[]>(loadInitialProfessionals);
   const [evolutions, setEvolutions] = useState<Evolution[]>(loadInitialEvolutions);
@@ -152,32 +140,53 @@ export function DataProvider({ children }: DataProviderProps) {
   // Track credit usage per session for idempotency (session_id -> boolean)
   const [creditUsageMap, setCreditUsageMap] = useState<Record<string, boolean>>({});
 
+  // Fetch patients from Supabase
+  const fetchPatients = async () => {
+    setPatientsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("pacientes")
+        .select("*")
+        .order("full_name");
+
+      if (error) {
+        console.error("Error fetching patients:", error);
+        return;
+      }
+
+      setPatients(data as Patient[]);
+    } catch (err) {
+      console.error("Exception fetching patients:", err);
+    } finally {
+      setPatientsLoading(false);
+    }
+  };
+
+  // Load patients on mount and when auth changes
+  useEffect(() => {
+    fetchPatients();
+  }, []);
+
   // Clear localStorage on logout for security
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         clearAllStoredData();
-        // Reset to mock data after logout
-        setPatients(mockPacientes as Patient[]);
+        // Reset state after logout
+        setPatients([]);
         setSessions(mockSessoes as unknown as Session[]);
         setProfessionals(mockProfissionais as Professional[]);
         setEvolutions(mockEvolucoes as Evolution[]);
         setCreditBalances({ ...mockCreditBalances });
         setCreditUsageMap({});
+      } else if (event === 'SIGNED_IN') {
+        // Refresh patients when user signs in
+        fetchPatients();
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
-
-  // Persist patients to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(patients));
-    } catch (e) {
-      console.error("Error saving patients to localStorage:", e);
-    }
-  }, [patients]);
 
   // Persist sessions to localStorage
   useEffect(() => {
@@ -288,8 +297,10 @@ export function DataProvider({ children }: DataProviderProps) {
 
   const value: DataContextType = {
     patients,
+    patientsLoading,
     addPatient,
     updatePatient,
+    refreshPatients: fetchPatients,
     sessions,
     addSession,
     updateSession,
