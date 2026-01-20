@@ -22,7 +22,8 @@ interface Session {
   start_time: Date;
   end_time: Date;
   status: string;
-  paciente?: { full_name: string };
+  payment_status?: string;
+  paciente?: { full_name: string; id?: string };
   profissional?: { full_name: string };
   servico?: { name: string; color: string };
 }
@@ -34,6 +35,7 @@ interface AgendaDesktopGridProps {
   onSlotClick: (date: Date, hour: number) => void;
   onSessionClick: (session: Session) => void;
   onSessionReschedule?: (sessionId: string, newDate: Date, newHour: number) => void;
+  getCreditBalance?: (patientId: string) => number;
 }
 
 export function AgendaDesktopGrid({ 
@@ -43,6 +45,7 @@ export function AgendaDesktopGrid({
   onSlotClick,
   onSessionClick,
   onSessionReschedule,
+  getCreditBalance,
 }: AgendaDesktopGridProps) {
   const [activeSession, setActiveSession] = useState<Session | null>(null);
 
@@ -155,13 +158,20 @@ export function AgendaDesktopGrid({
                           hasSession={slotSessions.length > 0}
                           onSlotClick={() => onSlotClick(day, hour)}
                         >
-                          {slotSessions.map((session) => (
-                            <DraggableSession
-                              key={session.id}
-                              session={session}
-                              onClick={onSessionClick}
-                            />
-                          ))}
+                          {slotSessions.map((session) => {
+                            const patientId = session.paciente?.id;
+                            const hasCredits = patientId && getCreditBalance 
+                              ? getCreditBalance(patientId) > 0 
+                              : undefined;
+                            return (
+                              <DraggableSession
+                                key={session.id}
+                                session={session}
+                                onClick={onSessionClick}
+                                hasCredits={hasCredits}
+                              />
+                            );
+                          })}
                         </DroppableSlot>
                       );
                     })}

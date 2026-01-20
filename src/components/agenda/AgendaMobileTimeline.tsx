@@ -4,14 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Clock, Plus, User, Calendar } from "lucide-react";
+import { Clock, Plus, User, Calendar, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface Session {
   id: string;
   start_time: Date;
   end_time: Date;
   status: string;
-  paciente?: { full_name: string };
+  payment_status?: string;
+  paciente?: { full_name: string; id?: string };
   profissional?: { full_name: string };
   servico?: { name: string; color: string; duration_minutes: number };
 }
@@ -22,6 +23,7 @@ interface AgendaMobileTimelineProps {
   sessions: Session[];
   onSlotClick: (date: Date, hour: number) => void;
   onSessionClick: (session: Session) => void;
+  getCreditBalance?: (patientId: string) => number;
 }
 
 export function AgendaMobileTimeline({ 
@@ -30,6 +32,7 @@ export function AgendaMobileTimeline({
   sessions,
   onSlotClick,
   onSessionClick,
+  getCreditBalance,
 }: AgendaMobileTimelineProps) {
   const getSessionsForHour = (hour: number) => {
     return sessions.filter(
@@ -72,48 +75,75 @@ export function AgendaMobileTimeline({
                 
                 {hourSessions.length > 0 ? (
                   // Sessions exist - show session cards
-                  hourSessions.map((session) => (
-                    <button
-                      key={session.id}
-                      onClick={() => onSessionClick(session)}
-                      className="w-full text-left p-4 hover:bg-muted/50 transition-colors min-h-[72px] flex items-start gap-4 active:bg-muted"
-                    >
-                      {/* Time column */}
-                      <div className="flex-shrink-0 w-14 text-center">
-                        <p className={cn(
-                          "text-sm font-semibold",
-                          isCurrentHour && "text-primary"
-                        )}>
-                          {String(hour).padStart(2, '0')}:00
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {session.servico?.duration_minutes}min
-                        </p>
-                      </div>
-                      
-                      {/* Session card */}
-                      <div 
-                        className="flex-1 p-3 rounded-lg"
-                        style={{ 
-                          backgroundColor: `${session.servico?.color}15`,
-                          borderLeft: `4px solid ${session.servico?.color}`,
-                        }}
+                  hourSessions.map((session) => {
+                    const patientId = session.paciente?.id;
+                    const hasCredits = patientId && getCreditBalance 
+                      ? getCreditBalance(patientId) > 0 
+                      : undefined;
+                    const isPendingPayment = session.payment_status === 'pending' || hasCredits === false;
+                    
+                    return (
+                      <button
+                        key={session.id}
+                        onClick={() => onSessionClick(session)}
+                        className="w-full text-left p-4 hover:bg-muted/50 transition-colors min-h-[72px] flex items-start gap-4 active:bg-muted"
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <div className="flex items-center gap-2">
-                            <User className="h-3.5 w-3.5 text-muted-foreground" />
-                            <p className="font-medium text-sm">
-                              {session.paciente?.full_name}
-                            </p>
-                          </div>
-                          <StatusBadge status={session.status as any} />
+                        {/* Time column */}
+                        <div className="flex-shrink-0 w-14 text-center">
+                          <p className={cn(
+                            "text-sm font-semibold",
+                            isCurrentHour && "text-primary"
+                          )}>
+                            {String(hour).padStart(2, '0')}:00
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {session.servico?.duration_minutes}min
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {session.servico?.name} • {session.profissional?.full_name}
-                        </p>
-                      </div>
-                    </button>
-                  ))
+                        
+                        {/* Session card */}
+                        <div 
+                          className={cn(
+                            "flex-1 p-3 rounded-lg relative",
+                            isPendingPayment && "ring-2 ring-warning/50",
+                            hasCredits === true && "ring-1 ring-success/30"
+                          )}
+                          style={{ 
+                            backgroundColor: `${session.servico?.color}15`,
+                            borderLeft: `4px solid ${session.servico?.color}`,
+                          }}
+                        >
+                          {/* Credit indicator */}
+                          {hasCredits !== undefined && (
+                            <div className="absolute -top-1 -right-1">
+                              {hasCredits ? (
+                                <div className="bg-success text-success-foreground rounded-full p-0.5">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                </div>
+                              ) : (
+                                <div className="bg-warning text-warning-foreground rounded-full p-0.5">
+                                  <AlertTriangle className="h-3 w-3" />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-2">
+                              <User className="h-3.5 w-3.5 text-muted-foreground" />
+                              <p className="font-medium text-sm">
+                                {session.paciente?.full_name}
+                              </p>
+                            </div>
+                            <StatusBadge status={session.status as any} />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {session.servico?.name} • {session.profissional?.full_name}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })
                 ) : (
                   // Empty slot - show add button
                   <button
