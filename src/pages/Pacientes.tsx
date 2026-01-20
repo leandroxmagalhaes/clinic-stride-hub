@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,15 +21,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Phone, Mail, MapPin, AlertCircle } from "lucide-react";
+import { Plus, Search, Phone, Mail, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 // Services and Context (SRP Architecture)
 import { useData } from "@/contexts/DataContext";
 import { PatientService, Patient } from "@/services/PatientService";
+import { HealthTagList } from "@/components/ui/health-tag-badge";
+import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
+import { PatientDetailModal } from "@/components/patients/PatientDetailModal";
+import { HealthTag } from "@/services/HealthTagService";
 
 export default function Pacientes() {
-  const { patients, addPatient } = useData();
+  const { patients, addPatient, getCreditBalance, addCredits } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -52,12 +56,23 @@ export default function Pacientes() {
   // Use service for filtering
   const filteredPatients = PatientService.filterBySearch(patients, searchTerm);
 
+  // Mock transactions for demo (in production, fetch from Supabase)
+  const patientTransactions = useMemo(() => {
+    if (!selectedPatient) return [];
+    // Demo transactions - in production, call CreditService.getTransactionHistory
+    return [];
+  }, [selectedPatient]);
+
   const handleOpenPatient = (patient: Patient) => {
     setSelectedPatient(patient);
   };
 
+  const handleAddCredits = (patientId: string, amount: number, description: string) => {
+    addCredits(patientId, amount);
+    // In production: await CreditService.purchaseCredits(clinicId, patientId, amount, description);
+  };
+
   const handleCreatePatient = () => {
-    // Validate using service
     const validation = PatientService.validate(formData);
     if (!validation.isValid) {
       toast.error(validation.error);
@@ -65,12 +80,8 @@ export default function Pacientes() {
     }
 
     try {
-      // Create patient using service
       const newPatient = PatientService.create(formData);
-      
-      // Add to context (persists to localStorage)
       addPatient(newPatient);
-      
       toast.success("Paciente cadastrado com sucesso!");
       setIsModalOpen(false);
       resetForm();
@@ -124,54 +135,61 @@ export default function Pacientes() {
 
         {/* Patients Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredPatients.map((patient) => (
-            <Card
-              key={patient.id}
-              className="shadow-card hover:shadow-medium transition-shadow cursor-pointer"
-              onClick={() => handleOpenPatient(patient)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start gap-4">
-                  <Avatar className="h-12 w-12">
-                    <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                      {patient.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold truncate">{patient.full_name}</h3>
-                      {patient.is_active ? (
-                        <Badge variant="secondary" className="bg-success/10 text-success text-[10px]">
-                          Ativo
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px]">
-                          Inativo
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="space-y-1 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-3 w-3" />
-                        <span className="truncate">{patient.phone}</span>
+          {filteredPatients.map((patient) => {
+            const healthTags = (patient.health_tags as HealthTag[]) || [];
+            const balance = getCreditBalance(patient.id);
+            
+            return (
+              <Card
+                key={patient.id}
+                className="shadow-card hover:shadow-medium transition-shadow cursor-pointer"
+                onClick={() => handleOpenPatient(patient)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-4">
+                    <Avatar className="h-12 w-12">
+                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                        {patient.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold truncate">{patient.full_name}</h3>
+                        {patient.is_active ? (
+                          <Badge variant="secondary" className="bg-success/10 text-success text-[10px]">
+                            Ativo
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px]">
+                            Inativo
+                          </Badge>
+                        )}
                       </div>
-                      {patient.email && (
+                      <div className="space-y-1 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
-                          <Mail className="h-3 w-3" />
-                          <span className="truncate">{patient.email}</span>
+                          <Phone className="h-3 w-3" />
+                          <span className="truncate">{patient.phone}</span>
                         </div>
-                      )}
+                        {patient.email && (
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-3 w-3" />
+                            <span className="truncate">{patient.email}</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Health Tags & Credits */}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <CreditBalanceBadge balance={balance} size="sm" showTooltip={false} />
+                        {healthTags.length > 0 && (
+                          <HealthTagList tags={healthTags} maxVisible={2} size="sm" showTooltip={false} />
+                        )}
+                      </div>
                     </div>
-                    {patient.health_insurance && (
-                      <Badge variant="outline" className="mt-2 text-[10px]">
-                        {patient.health_insurance}
-                      </Badge>
-                    )}
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         {filteredPatients.length === 0 && (
@@ -187,77 +205,15 @@ export default function Pacientes() {
         )}
       </div>
 
-      {/* Patient Details Modal */}
-      <Dialog open={!!selectedPatient} onOpenChange={(open) => !open && setSelectedPatient(null)}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="font-display flex items-center gap-3">
-              <Avatar className="h-10 w-10">
-                <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                  {selectedPatient?.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                </AvatarFallback>
-              </Avatar>
-              {selectedPatient?.full_name}
-            </DialogTitle>
-          </DialogHeader>
-
-          {selectedPatient && (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs mb-1">CPF</p>
-                  <p className="font-medium">{selectedPatient.cpf || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs mb-1">Data de Nascimento</p>
-                  <p className="font-medium">{selectedPatient.birth_date || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs mb-1">Telefone</p>
-                  <p className="font-medium">{selectedPatient.phone}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs mb-1">Email</p>
-                  <p className="font-medium truncate">{selectedPatient.email || "-"}</p>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <div className="flex items-start gap-2 text-sm mb-3">
-                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                  <p>{selectedPatient.address || "Endereço não informado"}</p>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <p className="text-xs text-muted-foreground mb-2">Contato de Emergência</p>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="font-medium">{selectedPatient.emergency_contact || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium">{selectedPatient.emergency_phone || "-"}</p>
-                  </div>
-                </div>
-              </div>
-
-              {selectedPatient.notes && (
-                <div className="border-t pt-4">
-                  <p className="text-xs text-muted-foreground mb-2">Observações</p>
-                  <p className="text-sm">{selectedPatient.notes}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedPatient(null)}>
-              Fechar
-            </Button>
-            <Button>Ver Prontuário</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Patient Details Modal with Tabs */}
+      <PatientDetailModal
+        patient={selectedPatient}
+        isOpen={!!selectedPatient}
+        onClose={() => setSelectedPatient(null)}
+        creditBalance={selectedPatient ? getCreditBalance(selectedPatient.id) : 0}
+        transactions={patientTransactions}
+        onAddCredits={handleAddCredits}
+      />
 
       {/* New Patient Modal */}
       <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if (!open) resetForm(); }}>

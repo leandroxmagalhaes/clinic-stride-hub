@@ -23,7 +23,7 @@ import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
 
 export default function Agenda() {
-  const { sessions, addSession, updateSession, patients, professionals, services } = useData();
+  const { sessions, addSession, updateSession, patients, professionals, services, getCreditBalance } = useData();
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
@@ -191,6 +191,7 @@ export default function Agenda() {
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
           onSessionReschedule={handleSessionReschedule}
+          getCreditBalance={getCreditBalance}
         />
 
         {/* Mobile: Timeline View */}
@@ -200,6 +201,7 @@ export default function Agenda() {
           sessions={sessions}
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
+          getCreditBalance={getCreditBalance}
         />
       </div>
 
@@ -220,6 +222,7 @@ export default function Agenda() {
         setSelectedServico={setSelectedServico}
         notes={notes}
         setNotes={setNotes}
+        getCreditBalance={getCreditBalance}
       />
     </AppLayout>
   );
