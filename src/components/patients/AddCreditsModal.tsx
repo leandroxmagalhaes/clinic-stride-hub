@@ -34,7 +34,7 @@ interface AddCreditsModalProps {
   onClose: () => void;
   patientName: string;
   patientId: string;
-  onAddCredits: (data: CreditPurchaseData) => void;
+  onAddCredits: (data: CreditPurchaseData) => Promise<void> | void;
 }
 
 const PACK_OPTIONS = [
@@ -65,8 +65,8 @@ export function AddCreditsModal({
   const [description, setDescription] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'cash' | 'transfer'>("pix");
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending'>("paid");
-
-  const handleSubmit = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const handleSubmit = async () => {
     const pack = PACK_OPTIONS.find((p) => p.id === selectedPack);
     
     let amount: number;
@@ -94,15 +94,23 @@ export function AddCreditsModal({
       return;
     }
 
-    onAddCredits({
-      amount,
-      description: desc,
-      monetaryValue,
-      paymentMethod,
-      paymentStatus,
-    });
-    toast.success(`${amount} crédito(s) adicionado(s) com sucesso!`);
-    resetAndClose();
+    setIsSubmitting(true);
+    try {
+      await onAddCredits({
+        amount,
+        description: desc,
+        monetaryValue,
+        paymentMethod,
+        paymentStatus,
+      });
+      toast.success(`${amount} crédito(s) adicionado(s) com sucesso!`);
+      resetAndClose();
+    } catch (error) {
+      console.error('Error adding credits:', error);
+      toast.error("Erro ao adicionar créditos. Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetAndClose = () => {
@@ -259,10 +267,19 @@ export function AddCreditsModal({
           <Button
             onClick={handleSubmit}
             className="min-h-[44px] w-full sm:w-auto"
-            disabled={!selectedPack || (isCustom && !customAmount)}
+            disabled={!selectedPack || (isCustom && !customAmount) || isSubmitting}
           >
-            <Coins className="h-4 w-4 mr-2" />
-            Confirmar Compra
+            {isSubmitting ? (
+              <>
+                <span className="animate-spin mr-2">⏳</span>
+                Salvando...
+              </>
+            ) : (
+              <>
+                <Coins className="h-4 w-4 mr-2" />
+                Confirmar Compra
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -53,8 +53,8 @@ export function PatientDetailModal({
     .join("")
     .slice(0, 2);
 
-  const handleAddCredits = (data: CreditPurchaseData) => {
-    onAddCredits(patient.id, data);
+  const handleAddCredits = async (data: CreditPurchaseData) => {
+    await onAddCredits(patient.id, data);
   };
 
   return (
