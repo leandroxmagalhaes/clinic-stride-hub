@@ -24,6 +24,7 @@ import {
   Clock,
   User,
   ChevronRight,
+  Pencil,
 } from "lucide-react";
 import { mockProntuarios } from "@/lib/mock-data";
 import { format } from "date-fns";
@@ -32,12 +33,41 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useData } from "@/contexts/DataContext";
 import { EvolutionService } from "@/services/EvolutionService";
+import { EditClinicalDataModal } from "@/components/prontuarios/EditClinicalDataModal";
+
+// Local state for prontuarios (will be moved to DataContext later)
+interface ProntuarioData {
+  id: string;
+  clinic_id: string;
+  paciente_id: string;
+  anamnese: string;
+  diagnostico: string;
+  objetivos: string;
+  observacoes: string;
+  paciente?: {
+    id: string;
+    full_name: string;
+    phone?: string;
+    email?: string;
+  };
+}
 
 export default function Prontuarios() {
   const { patients, professionals, evolutions, addEvolution } = useData();
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedProntuario, setSelectedProntuario] = useState<typeof mockProntuarios[0] | null>(null);
+  const [selectedProntuario, setSelectedProntuario] = useState<ProntuarioData | null>(null);
   const [isNewEvolucaoOpen, setIsNewEvolucaoOpen] = useState(false);
+  const [isEditClinicalOpen, setIsEditClinicalOpen] = useState(false);
+
+  // Local state for prontuarios data (persisted changes)
+  const [prontuariosData, setProntuariosData] = useState<Record<string, ProntuarioData>>(() => {
+    // Initialize from mock data
+    const initial: Record<string, ProntuarioData> = {};
+    mockProntuarios.forEach(p => {
+      initial[p.paciente_id] = p as ProntuarioData;
+    });
+    return initial;
+  });
 
   // Form state for new evolution
   const [evolucaoForm, setEvolucaoForm] = useState({
@@ -49,8 +79,8 @@ export default function Prontuarios() {
     p.full_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getProntuarioForPatient = (pacienteId: string) => {
-    return mockProntuarios.find((p) => p.paciente_id === pacienteId);
+  const getProntuarioForPatient = (pacienteId: string): ProntuarioData | undefined => {
+    return prontuariosData[pacienteId];
   };
 
   const getEvolucoesForProntuario = (prontuarioId: string) => {
@@ -58,24 +88,31 @@ export default function Prontuarios() {
   };
 
   const handleSelectPatient = (pacienteId: string) => {
-    const prontuario = getProntuarioForPatient(pacienteId);
-    if (prontuario) {
-      setSelectedProntuario(prontuario);
-    } else {
-      // Create mock prontuario for patients without one
-      const paciente = patients.find((p) => p.id === pacienteId);
-      if (paciente) {
-        setSelectedProntuario({
-          id: `pront-new-${pacienteId}`,
-          clinic_id: "demo-clinic-001",
-          paciente_id: pacienteId,
-          anamnese: "",
-          diagnostico: "",
-          objetivos: "",
-          observacoes: "",
-          paciente: paciente as any,
-        });
-      }
+    const existingProntuario = getProntuarioForPatient(pacienteId);
+    const paciente = patients.find((p) => p.id === pacienteId);
+    
+    if (existingProntuario) {
+      setSelectedProntuario({
+        ...existingProntuario,
+        paciente: paciente as any,
+      });
+    } else if (paciente) {
+      // Create new prontuario for patient
+      const newProntuario: ProntuarioData = {
+        id: `pront-new-${pacienteId}`,
+        clinic_id: "demo-clinic-001",
+        paciente_id: pacienteId,
+        anamnese: "",
+        diagnostico: "",
+        objetivos: "",
+        observacoes: "",
+        paciente: paciente as any,
+      };
+      setProntuariosData(prev => ({
+        ...prev,
+        [pacienteId]: newProntuario,
+      }));
+      setSelectedProntuario(newProntuario);
     }
   };
 
@@ -106,6 +143,26 @@ export default function Prontuarios() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao registrar evolução");
     }
+  };
+
+  const handleSaveClinicalData = (prontuarioId: string, data: {
+    anamnese: string;
+    diagnostico: string;
+    objetivos: string;
+    observacoes: string;
+  }) => {
+    if (!selectedProntuario) return;
+
+    const updated: ProntuarioData = {
+      ...selectedProntuario,
+      ...data,
+    };
+
+    setProntuariosData(prev => ({
+      ...prev,
+      [selectedProntuario.paciente_id]: updated,
+    }));
+    setSelectedProntuario(updated);
   };
 
   const prontuarioEvolutions = selectedProntuario 
@@ -203,10 +260,21 @@ export default function Prontuarios() {
                         </p>
                       </div>
                     </div>
-                    <Button onClick={() => setIsNewEvolucaoOpen(true)} className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      Nova Evolução
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setIsEditClinicalOpen(true)}
+                        className="gap-2"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Editar Dados Clínicos
+                      </Button>
+                      <Button onClick={() => setIsNewEvolucaoOpen(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Nova Evolução
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -279,13 +347,27 @@ export default function Prontuarios() {
 
                 <TabsContent value="prontuario">
                   <Card className="shadow-card">
-                    <CardContent className="p-6 space-y-6">
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                      <CardTitle className="font-display text-lg">Dados Clínicos</CardTitle>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setIsEditClinicalOpen(true)}
+                        className="gap-2"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Editar
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
                       <div>
                         <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                           Anamnese
                         </Label>
-                        <p className="mt-2 text-sm">
-                          {selectedProntuario.anamnese || "Não informada"}
+                        <p className="mt-2 text-sm whitespace-pre-wrap">
+                          {selectedProntuario.anamnese || (
+                            <span className="text-muted-foreground italic">Não informada</span>
+                          )}
                         </p>
                       </div>
 
@@ -293,8 +375,10 @@ export default function Prontuarios() {
                         <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                           Diagnóstico
                         </Label>
-                        <p className="mt-2 text-sm">
-                          {selectedProntuario.diagnostico || "Não informado"}
+                        <p className="mt-2 text-sm whitespace-pre-wrap">
+                          {selectedProntuario.diagnostico || (
+                            <span className="text-muted-foreground italic">Não informado</span>
+                          )}
                         </p>
                       </div>
 
@@ -302,8 +386,10 @@ export default function Prontuarios() {
                         <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                           Objetivos do Tratamento
                         </Label>
-                        <p className="mt-2 text-sm">
-                          {selectedProntuario.objetivos || "Não informados"}
+                        <p className="mt-2 text-sm whitespace-pre-wrap">
+                          {selectedProntuario.objetivos || (
+                            <span className="text-muted-foreground italic">Não informados</span>
+                          )}
                         </p>
                       </div>
 
@@ -312,7 +398,7 @@ export default function Prontuarios() {
                           <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                             Observações
                           </Label>
-                          <p className="mt-2 text-sm">
+                          <p className="mt-2 text-sm whitespace-pre-wrap">
                             {selectedProntuario.observacoes}
                           </p>
                         </div>
@@ -392,6 +478,23 @@ export default function Prontuarios() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Clinical Data Modal */}
+      {selectedProntuario && (
+        <EditClinicalDataModal
+          isOpen={isEditClinicalOpen}
+          onClose={() => setIsEditClinicalOpen(false)}
+          patientName={selectedProntuario.paciente?.full_name || ""}
+          prontuarioId={selectedProntuario.id}
+          currentData={{
+            anamnese: selectedProntuario.anamnese,
+            diagnostico: selectedProntuario.diagnostico,
+            objetivos: selectedProntuario.objetivos,
+            observacoes: selectedProntuario.observacoes,
+          }}
+          onSave={handleSaveClinicalData}
+        />
+      )}
     </AppLayout>
   );
 }

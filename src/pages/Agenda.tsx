@@ -23,7 +23,7 @@ import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
 
 export default function Agenda() {
-  const { sessions, addSession, updateSession, patients, professionals, services, getCreditBalance } = useData();
+  const { sessions, addSession, updateSession, patients, professionals, services, getCreditBalance, useCredit } = useData();
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
@@ -102,8 +102,14 @@ export default function Agenda() {
     profissionalId: string;
     servicoId: string;
     notes: string;
+    date?: Date;
+    hour?: number;
   }) => {
-    if (!selectedSlot) {
+    // Use provided date/hour or fall back to selectedSlot
+    const finalDate = data.date || selectedSlot?.date;
+    const finalHour = data.hour ?? selectedSlot?.hour;
+
+    if (!finalDate || finalHour === undefined) {
       toast.error("Selecione um horário");
       return;
     }
@@ -115,8 +121,8 @@ export default function Agenda() {
           pacienteId: data.pacienteId,
           profissionalId: data.profissionalId,
           servicoId: data.servicoId,
-          date: selectedSlot.date,
-          hour: selectedSlot.hour,
+          date: finalDate,
+          hour: finalHour,
           notes: data.notes,
         },
         sessions
@@ -125,7 +131,18 @@ export default function Agenda() {
       // Add to context (persists to localStorage)
       addSession(newSession);
 
-      toast.success("Sessão agendada com sucesso!");
+      // Deduct credit from patient balance (idempotent - uses session ID)
+      const creditResult = useCredit(data.pacienteId, newSession.id);
+      
+      // Update session payment status based on credit result
+      if (!creditResult.success) {
+        updateSession(newSession.id, { payment_status: "pendente" });
+        toast.warning("Sessão agendada com pagamento pendente (sem créditos)");
+      } else {
+        updateSession(newSession.id, { payment_status: "pago" });
+        toast.success("Sessão agendada e crédito descontado!");
+      }
+
       setIsModalOpen(false);
       resetForm();
     } catch (error) {

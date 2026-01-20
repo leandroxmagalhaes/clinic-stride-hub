@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -15,14 +15,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Clock } from "lucide-react";
+import { Clock, CalendarIcon } from "lucide-react";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { ScheduleWarningAlert } from "@/components/agenda/ScheduleWarningAlert";
 import { HealthTagService, HealthTag } from "@/services/HealthTagService";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface Patient {
   id: string;
@@ -54,6 +62,8 @@ interface NewSessionModalProps {
     profissionalId: string;
     servicoId: string;
     notes: string;
+    date?: Date;
+    hour?: number;
   }) => void;
   selectedPaciente: string;
   setSelectedPaciente: (value: string) => void;
@@ -65,6 +75,9 @@ interface NewSessionModalProps {
   setNotes: (value: string) => void;
   getCreditBalance?: (patientId: string) => number;
 }
+
+// Generate hours array for time picker (7:00 to 18:00)
+const AVAILABLE_HOURS = Array.from({ length: 12 }, (_, i) => i + 7);
 
 export function NewSessionModal({
   isOpen,
@@ -84,12 +97,43 @@ export function NewSessionModal({
   setNotes,
   getCreditBalance,
 }: NewSessionModalProps) {
+  // Local state for date/time when no slot is pre-selected
+  const [manualDate, setManualDate] = useState<Date | undefined>(undefined);
+  const [manualHour, setManualHour] = useState<string>("");
+
+  // Reset manual selections when modal opens/closes or slot changes
+  useEffect(() => {
+    if (isOpen && selectedSlot) {
+      // Slot was pre-selected (clicked on calendar)
+      setManualDate(selectedSlot.date);
+      setManualHour(String(selectedSlot.hour));
+    } else if (isOpen && !selectedSlot) {
+      // Opened from global button - reset
+      setManualDate(undefined);
+      setManualHour("");
+    }
+  }, [isOpen, selectedSlot]);
+
+  // Determine if we're in "manual selection" mode (no pre-selected slot)
+  const isManualMode = !selectedSlot;
+
+  // Final date/time to use
+  const finalDate = selectedSlot?.date ?? manualDate;
+  const finalHour = selectedSlot?.hour ?? (manualHour ? parseInt(manualHour, 10) : undefined);
+
   const handleSubmit = () => {
+    if (!finalDate || finalHour === undefined) {
+      toast.error("Selecione data e horário");
+      return;
+    }
+
     onSubmit({
       pacienteId: selectedPaciente,
       profissionalId: selectedProfissional,
       servicoId: selectedServico,
       notes,
+      date: finalDate,
+      hour: finalHour,
     });
   };
 
@@ -105,9 +149,21 @@ export function NewSessionModal({
 
   // Get schedule warnings based on health tags and selected time
   const scheduleWarnings = useMemo(() => {
-    if (!selectedSlot || patientHealthTags.length === 0) return [];
-    return HealthTagService.validateScheduling(patientHealthTags, selectedSlot.hour);
-  }, [patientHealthTags, selectedSlot]);
+    if (finalHour === undefined || patientHealthTags.length === 0) return [];
+    return HealthTagService.validateScheduling(patientHealthTags, finalHour);
+  }, [patientHealthTags, finalHour]);
+
+  // Show toast warnings for health tag conflicts
+  useEffect(() => {
+    if (scheduleWarnings.length > 0 && selectedPaciente && finalHour !== undefined) {
+      scheduleWarnings.forEach(warning => {
+        toast.warning(warning.message, {
+          description: "Você pode prosseguir, mas considere a preferência do paciente.",
+          duration: 5000,
+        });
+      });
+    }
+  }, [scheduleWarnings, selectedPaciente, finalHour]);
 
   // Get credit balance for selected patient
   const patientBalance = useMemo(() => {
@@ -128,14 +184,63 @@ export function NewSessionModal({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {selectedSlot && (
+          {/* Date/Time Selection - Always visible but editable only in manual mode */}
+          {!isManualMode && finalDate && finalHour !== undefined ? (
             <div className="p-3 rounded-lg bg-muted/50 text-sm">
               <p className="font-medium">
-                {format(selectedSlot.date, "EEEE, d 'de' MMMM", { locale: ptBR })}
+                {format(finalDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
               </p>
               <p className="text-muted-foreground">
-                {String(selectedSlot.hour).padStart(2, '0')}:00
+                {String(finalHour).padStart(2, '0')}:00
               </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              {/* Date Picker */}
+              <div className="space-y-2">
+                <Label>Data *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal min-h-[44px]",
+                        !manualDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {manualDate ? format(manualDate, "dd/MM/yyyy") : "Selecione"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={manualDate}
+                      onSelect={setManualDate}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Time Picker */}
+              <div className="space-y-2">
+                <Label>Horário *</Label>
+                <Select value={manualHour} onValueChange={setManualHour}>
+                  <SelectTrigger className="min-h-[44px]">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AVAILABLE_HOURS.map((hour) => (
+                      <SelectItem key={hour} value={String(hour)} className="min-h-[44px]">
+                        {String(hour).padStart(2, '0')}:00
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 
