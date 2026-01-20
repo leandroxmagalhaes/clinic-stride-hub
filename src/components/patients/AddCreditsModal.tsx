@@ -96,6 +96,7 @@ export function AddCreditsModal({
 
     setIsSubmitting(true);
     try {
+      console.log("DEBUG AddCreditsModal: Iniciando onAddCredits...", { patientId, amount, monetaryValue, paymentMethod, paymentStatus });
       await onAddCredits({
         amount,
         description: desc,
@@ -103,11 +104,14 @@ export function AddCreditsModal({
         paymentMethod,
         paymentStatus,
       });
+      console.log("DEBUG AddCreditsModal: onAddCredits SUCESSO!");
       toast.success(`${amount} crédito(s) adicionado(s) com sucesso!`);
       resetAndClose();
     } catch (error) {
-      console.error('Error adding credits:', error);
-      toast.error("Erro ao adicionar créditos. Tente novamente.");
+      console.error('DEBUG AddCreditsModal ERROR:', error);
+      // Show the REAL error message, not a generic one
+      const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+      toast.error(`Erro: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
