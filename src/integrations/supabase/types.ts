@@ -53,7 +53,7 @@ export type Database = {
       credit_transactions: {
         Row: {
           amount: number
-          clinic_id: string
+          clinic_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -66,7 +66,7 @@ export type Database = {
         }
         Insert: {
           amount: number
-          clinic_id: string
+          clinic_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -79,7 +79,7 @@ export type Database = {
         }
         Update: {
           amount?: number
-          clinic_id?: string
+          clinic_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
