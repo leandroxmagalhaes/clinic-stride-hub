@@ -120,7 +120,7 @@ export class CreditService {
     options?: {
       description?: string;
       monetaryValue?: number;
-      paymentMethod?: "pix" | "credit_card" | "cash" | "transfer";
+      paymentMethod?: "mbway" | "multibanco" | "transferencia" | "numerario" | "cartao";
       paymentStatus?: "paid" | "pending";
     }
   ): Promise<{ success: boolean; error?: string; transaction?: CreditTransaction }> {

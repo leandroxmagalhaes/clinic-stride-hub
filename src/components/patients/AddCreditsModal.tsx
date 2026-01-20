@@ -25,7 +25,7 @@ export interface CreditPurchaseData {
   amount: number;
   description: string;
   monetaryValue: number;
-  paymentMethod: 'pix' | 'credit_card' | 'cash' | 'transfer';
+  paymentMethod: 'mbway' | 'multibanco' | 'transferencia' | 'numerario' | 'cartao';
   paymentStatus: 'paid' | 'pending';
 }
 
@@ -46,10 +46,11 @@ const PACK_OPTIONS = [
 ];
 
 const PAYMENT_METHODS = [
-  { id: "pix", label: "PIX" },
-  { id: "credit_card", label: "Cartão de Crédito" },
-  { id: "cash", label: "Dinheiro" },
-  { id: "transfer", label: "Transferência" },
+  { id: "mbway", label: "MBWay" },
+  { id: "multibanco", label: "Multibanco" },
+  { id: "transferencia", label: "Transferência Bancária" },
+  { id: "numerario", label: "Numerário" },
+  { id: "cartao", label: "Cartão de Débito/Crédito" },
 ] as const;
 
 export function AddCreditsModal({
@@ -63,7 +64,7 @@ export function AddCreditsModal({
   const [customAmount, setCustomAmount] = useState("");
   const [customPrice, setCustomPrice] = useState("");
   const [description, setDescription] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'cash' | 'transfer'>("pix");
+  const [paymentMethod, setPaymentMethod] = useState<'mbway' | 'multibanco' | 'transferencia' | 'numerario' | 'cartao'>("mbway");
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending'>("paid");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const handleSubmit = async () => {
@@ -122,7 +123,7 @@ export function AddCreditsModal({
     setCustomAmount("");
     setCustomPrice("");
     setDescription("");
-    setPaymentMethod("pix");
+    setPaymentMethod("mbway");
     setPaymentStatus("paid");
     onClose();
   };
