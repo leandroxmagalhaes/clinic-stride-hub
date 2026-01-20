@@ -130,10 +130,11 @@ export function AddCreditsModal({
   const isCustom = selectedPack === "custom";
   const selectedPackData = PACK_OPTIONS.find((p) => p.id === selectedPack);
 
+  // i18n: Portugal locale with EUR currency
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
+    return new Intl.NumberFormat("pt-PT", {
       style: "currency",
-      currency: "BRL",
+      currency: "EUR",
     }).format(value);
   };
 
@@ -188,14 +189,14 @@ export function AddCreditsModal({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Valor Cobrado (R$)</Label>
+                <Label>Valor Cobrado (€)</Label>
                 <Input
                   type="number"
                   min="0"
                   step="0.01"
                   value={customPrice}
                   onChange={(e) => setCustomPrice(e.target.value)}
-                  placeholder="Ex: 500.00"
+                  placeholder="Ex: 50.00"
                 />
               </div>
             </>

@@ -222,7 +222,7 @@ export default function Profissionais() {
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                     <Award className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <p className="text-xs text-muted-foreground">CREFITO</p>
+                      <p className="text-xs text-muted-foreground">Cédula / Registro Profissional</p>
                       <p className="font-medium">{selectedProfessional.crefito}</p>
                     </div>
                   </div>
@@ -273,7 +273,7 @@ export default function Profissionais() {
                 <Input
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="(11) 99999-9999"
+                  placeholder="+351 912 345 678"
                 />
               </div>
             </div>
@@ -307,11 +307,11 @@ export default function Profissionais() {
             </div>
 
             <div className="space-y-2">
-              <Label>CREFITO</Label>
+              <Label>Cédula / Registro Profissional</Label>
               <Input
                 value={formData.crefito}
                 onChange={(e) => setFormData({ ...formData, crefito: e.target.value })}
-                placeholder="CREFITO-X/XXXXX-F"
+                placeholder="Número da cédula profissional"
               />
             </div>
           </div>

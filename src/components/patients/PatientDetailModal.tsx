@@ -97,7 +97,7 @@ export function PatientDetailModal({
             <TabsContent value="info" className="space-y-4 py-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground text-xs mb-1">CPF</p>
+                  <p className="text-muted-foreground text-xs mb-1">NIF / CPF</p>
                   <p className="font-medium">{patient.cpf || "-"}</p>
                 </div>
                 <div>
