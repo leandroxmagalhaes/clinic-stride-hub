@@ -120,47 +120,60 @@ export class CreditService {
     options?: {
       description?: string;
       monetaryValue?: number;
-      paymentMethod?: 'pix' | 'credit_card' | 'cash' | 'transfer';
-      paymentStatus?: 'paid' | 'pending';
+      paymentMethod?: "pix" | "credit_card" | "cash" | "transfer";
+      paymentStatus?: "paid" | "pending";
     }
   ): Promise<{ success: boolean; error?: string; transaction?: CreditTransaction }> {
     if (amount <= 0) {
       return { success: false, error: "Quantidade de créditos deve ser positiva" };
     }
 
-    const { data, error } = await supabase
-      .from('credit_transactions')
-      .insert({
+    try {
+      const payload = {
         clinic_id: clinicId,
         patient_id: patientId,
         amount: amount,
-        transaction_type: 'purchase',
+        transaction_type: "purchase" as const,
         description: options?.description || `Compra de ${amount} crédito(s)`,
-        monetary_value: options?.monetaryValue || null,
-        payment_method: options?.paymentMethod || null,
-        payment_status: options?.paymentStatus || 'pending',
-      })
-      .select()
-      .single();
+        monetary_value: options?.monetaryValue ?? null,
+        payment_method: options?.paymentMethod ?? null,
+        payment_status: options?.paymentStatus ?? "pending",
+      };
 
-    if (error) {
-      console.error('Error creating purchase transaction:', error);
-      return { success: false, error: "Erro ao registrar compra de créditos" };
-    }
+      const { data, error } = await supabase
+        .from("credit_transactions")
+        .insert(payload)
+        .select()
+        .single();
 
-    return { 
-      success: true, 
-      transaction: {
-        id: data.id,
-        clinic_id: data.clinic_id,
-        patient_id: data.patient_id,
-        amount: data.amount,
-        transaction_type: data.transaction_type as TransactionType,
-        description: data.description,
-        related_session_id: data.related_session_id,
-        created_at: data.created_at,
+      if (error) {
+        console.error("ERRO SUPABASE (credit_transactions INSERT):", error);
+        return {
+          success: false,
+          error: error.message || "Erro ao registrar compra de créditos",
+        };
       }
-    };
+
+      return {
+        success: true,
+        transaction: {
+          id: data.id,
+          clinic_id: data.clinic_id,
+          patient_id: data.patient_id,
+          amount: data.amount,
+          transaction_type: data.transaction_type as TransactionType,
+          description: data.description,
+          related_session_id: data.related_session_id,
+          created_at: data.created_at,
+        },
+      };
+    } catch (err) {
+      console.error("ERRO SUPABASE (purchaseCredits catch):", err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Erro inesperado ao adicionar créditos",
+      };
+    }
   }
 
   /**

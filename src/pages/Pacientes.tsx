@@ -46,15 +46,29 @@ export default function Pacientes() {
   useEffect(() => {
     async function fetchClinicId() {
       if (!user) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('clinic_id')
-        .eq('user_id', user.id)
-        .single();
-      if (data?.clinic_id) {
-        setClinicId(data.clinic_id);
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("clinic_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("ERRO SUPABASE (fetch clinic_id):", error);
+        toast.error(`Erro ao identificar clínica: ${error.message}`);
+        setClinicId(null);
+        return;
       }
+
+      if (!data?.clinic_id) {
+        toast.error("Clínica não identificada para este usuário.");
+        setClinicId(null);
+        return;
+      }
+
+      setClinicId(data.clinic_id);
     }
+
     fetchClinicId();
   }, [user]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -90,27 +104,34 @@ export default function Pacientes() {
   };
 
   const handleAddCredits = async (patientId: string, data: CreditPurchaseData) => {
-    if (!clinicId) {
-      toast.error("Clínica não identificada. Faça login novamente.");
-      return;
+    // Basic UUID sanity check (helps catch undefined / wrong IDs)
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(patientId)) {
+      const msg = `patient_id inválido (UUID esperado): ${patientId}`;
+      console.error(msg);
+      toast.error(msg);
+      throw new Error(msg);
     }
 
-    // Persist to Supabase with full financial data
-    const result = await CreditService.purchaseCredits(
-      clinicId,
-      patientId,
-      data.amount,
-      {
-        description: data.description,
-        monetaryValue: data.monetaryValue,
-        paymentMethod: data.paymentMethod,
-        paymentStatus: data.paymentStatus,
-      }
-    );
+    if (!clinicId) {
+      const msg = "Clínica não identificada. Faça login novamente.";
+      toast.error(msg);
+      throw new Error(msg);
+    }
+
+    const result = await CreditService.purchaseCredits(clinicId, patientId, data.amount, {
+      description: data.description,
+      monetaryValue: data.monetaryValue,
+      paymentMethod: data.paymentMethod,
+      paymentStatus: data.paymentStatus,
+    });
 
     if (!result.success) {
-      toast.error(result.error || "Erro ao adicionar créditos");
-      return;
+      const msg = result.error || "Erro ao adicionar créditos";
+      toast.error(msg);
+      throw new Error(msg);
     }
 
     // Also update local state for immediate UI feedback
