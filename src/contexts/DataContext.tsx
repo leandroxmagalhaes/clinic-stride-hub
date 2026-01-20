@@ -6,7 +6,7 @@ import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
 import { Evolution } from "@/services/EvolutionService";
-import { mockPacientes, mockSessoes, mockProfissionais, mockServicos, mockEvolucoes } from "@/lib/mock-data";
+import { mockPacientes, mockSessoes, mockProfissionais, mockServicos, mockEvolucoes, mockCreditBalances } from "@/lib/mock-data";
 import { supabase } from "@/integrations/supabase/client";
 
 const STORAGE_KEYS = {
@@ -14,6 +14,7 @@ const STORAGE_KEYS = {
   SESSIONS: "physione_sessions",
   PROFESSIONALS: "physione_professionals",
   EVOLUTIONS: "physione_evolutions",
+  CREDIT_BALANCES: "physione_credit_balances",
 };
 
 interface DataContextType {
@@ -35,6 +36,12 @@ interface DataContextType {
   // Evolutions
   evolutions: Evolution[];
   addEvolution: (evolution: Evolution) => void;
+  
+  // Credit Balances (demo mode using localStorage)
+  creditBalances: Record<string, number>;
+  getCreditBalance: (patientId: string) => number;
+  addCredits: (patientId: string, amount: number) => void;
+  useCredit: (patientId: string, sessionId: string) => { success: boolean; error?: string };
   
   // Static data (from mocks, read-only for now)
   services: typeof mockServicos;
@@ -112,6 +119,18 @@ function loadInitialEvolutions(): Evolution[] {
   return mockEvolucoes as Evolution[];
 }
 
+function loadInitialCreditBalances(): Record<string, number> {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.CREDIT_BALANCES);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error("Error loading credit balances from localStorage:", e);
+  }
+  return { ...mockCreditBalances };
+}
+
 interface DataProviderProps {
   children: ReactNode;
 }
@@ -128,6 +147,10 @@ export function DataProvider({ children }: DataProviderProps) {
   const [sessions, setSessions] = useState<Session[]>(loadInitialSessions);
   const [professionals, setProfessionals] = useState<Professional[]>(loadInitialProfessionals);
   const [evolutions, setEvolutions] = useState<Evolution[]>(loadInitialEvolutions);
+  const [creditBalances, setCreditBalances] = useState<Record<string, number>>(loadInitialCreditBalances);
+  
+  // Track credit usage per session for idempotency (session_id -> boolean)
+  const [creditUsageMap, setCreditUsageMap] = useState<Record<string, boolean>>({});
 
   // Clear localStorage on logout for security
   useEffect(() => {
@@ -139,6 +162,8 @@ export function DataProvider({ children }: DataProviderProps) {
         setSessions(mockSessoes as unknown as Session[]);
         setProfessionals(mockProfissionais as Professional[]);
         setEvolutions(mockEvolucoes as Evolution[]);
+        setCreditBalances({ ...mockCreditBalances });
+        setCreditUsageMap({});
       }
     });
 
@@ -181,8 +206,19 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   }, [evolutions]);
 
+  // Persist credit balances to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CREDIT_BALANCES, JSON.stringify(creditBalances));
+    } catch (e) {
+      console.error("Error saving credit balances to localStorage:", e);
+    }
+  }, [creditBalances]);
+
   const addPatient = (patient: Patient) => {
     setPatients((prev) => [...prev, patient]);
+    // Initialize credit balance for new patient
+    setCreditBalances((prev) => ({ ...prev, [patient.id]: 0 }));
   };
 
   const updatePatient = (id: string, data: Partial<Patient>) => {
@@ -215,6 +251,41 @@ export function DataProvider({ children }: DataProviderProps) {
     setEvolutions((prev) => [evolution, ...prev]);
   };
 
+  // Credit balance functions (Ledger model simulation in localStorage)
+  const getCreditBalance = (patientId: string): number => {
+    return creditBalances[patientId] ?? 0;
+  };
+
+  const addCredits = (patientId: string, amount: number): void => {
+    if (amount <= 0) return;
+    setCreditBalances((prev) => ({
+      ...prev,
+      [patientId]: (prev[patientId] ?? 0) + amount,
+    }));
+  };
+
+  // Idempotent credit usage - returns error if already used for this session
+  const useCredit = (patientId: string, sessionId: string): { success: boolean; error?: string } => {
+    // Check idempotency - credit already used for this session?
+    if (creditUsageMap[sessionId]) {
+      return { success: true }; // Already processed - idempotent success
+    }
+
+    const currentBalance = creditBalances[patientId] ?? 0;
+    if (currentBalance <= 0) {
+      return { success: false, error: "Saldo de créditos insuficiente" };
+    }
+
+    // Deduct credit and mark session as processed
+    setCreditBalances((prev) => ({
+      ...prev,
+      [patientId]: prev[patientId] - 1,
+    }));
+    setCreditUsageMap((prev) => ({ ...prev, [sessionId]: true }));
+
+    return { success: true };
+  };
+
   const value: DataContextType = {
     patients,
     addPatient,
@@ -227,6 +298,10 @@ export function DataProvider({ children }: DataProviderProps) {
     updateProfessional,
     evolutions,
     addEvolution,
+    creditBalances,
+    getCreditBalance,
+    addCredits,
+    useCredit,
     services: mockServicos,
   };
 

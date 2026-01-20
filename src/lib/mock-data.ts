@@ -32,7 +32,7 @@ export const mockProfissionais = [
   },
 ];
 
-// Pacientes (Patients)
+// Pacientes (Patients) with health_tags
 export const mockPacientes = [
   {
     id: "pac-001",
@@ -48,6 +48,7 @@ export const mockPacientes = [
     emergency_phone: "(11) 97777-1111",
     health_insurance: "Unimed",
     notes: "Paciente com histórico de lesão no joelho",
+    health_tags: ['dor_cronica', 'prefere_manha'],
     is_active: true,
   },
   {
@@ -64,6 +65,7 @@ export const mockPacientes = [
     emergency_phone: "(11) 97777-2222",
     health_insurance: null,
     notes: null,
+    health_tags: [],
     is_active: true,
   },
   {
@@ -80,6 +82,7 @@ export const mockPacientes = [
     emergency_phone: "(11) 97777-3333",
     health_insurance: "Bradesco Saúde",
     notes: "Pratica Pilates há 2 anos",
+    health_tags: ['gestante'],
     is_active: true,
   },
   {
@@ -87,7 +90,7 @@ export const mockPacientes = [
     clinic_id: DEMO_CLINIC_ID,
     full_name: "Roberto Almeida",
     cpf: "321.654.987-00",
-    birth_date: "1965-05-10",
+    birth_date: "1955-05-10",
     gender: "M",
     phone: "(11) 98888-4444",
     email: "roberto.almeida@email.com",
@@ -96,6 +99,7 @@ export const mockPacientes = [
     emergency_phone: "(11) 97777-4444",
     health_insurance: "SulAmérica",
     notes: "Paciente pós-operatório de coluna",
+    health_tags: ['idoso', 'mobilidade_reduzida', 'cardiopata', 'prefere_tarde'],
     is_active: true,
   },
   {
@@ -112,9 +116,19 @@ export const mockPacientes = [
     emergency_phone: "(11) 97777-5555",
     health_insurance: null,
     notes: "Atleta amadora - corrida",
+    health_tags: ['dor_cronica'],
     is_active: true,
   },
 ];
+
+// Mock credit balances for demo (patient_id -> balance)
+export const mockCreditBalances: Record<string, number> = {
+  'pac-001': 5,
+  'pac-002': 0,
+  'pac-003': 10,
+  'pac-004': 2,
+  'pac-005': 1,
+};
 
 // Serviços (Services)
 export const mockServicos = [
