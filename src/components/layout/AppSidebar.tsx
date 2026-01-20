@@ -13,6 +13,7 @@ import {
   Building2,
   LogOut,
   ChevronDown,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -35,8 +36,15 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
+import { useLocale } from "@/contexts/LocaleContext";
+import { LOCALE_CONFIGS, Locale } from "@/lib/i18n";
 import { toast } from "sonner";
 
 interface NavItem {
@@ -67,6 +75,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { locale, setLocale } = useLocale();
 
   const handleLogout = async () => {
     const { error } = await signOut();
@@ -76,6 +85,11 @@ export function AppSidebar() {
     }
     toast.success('Logout realizado com sucesso!');
     navigate('/login');
+  };
+
+  const handleLocaleChange = (newLocale: Locale) => {
+    setLocale(newLocale);
+    toast.success(`Região alterada para ${LOCALE_CONFIGS[newLocale].countryName}`);
   };
 
   // Get user display info
@@ -192,6 +206,27 @@ export function AppSidebar() {
             </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 bg-popover">
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Globe className="mr-2 h-4 w-4" />
+                <span className="flex-1">Região</span>
+                <span className="ml-2 text-muted-foreground">
+                  {LOCALE_CONFIGS[locale].flag}
+                </span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="bg-popover">
+                <DropdownMenuRadioGroup value={locale} onValueChange={(value) => handleLocaleChange(value as Locale)}>
+                  <DropdownMenuRadioItem value="pt-PT">
+                    <span className="mr-2">🇵🇹</span>
+                    Portugal (€)
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="pt-BR">
+                    <span className="mr-2">🇧🇷</span>
+                    Brasil (R$)
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuItem disabled className="opacity-50">
               <Settings className="mr-2 h-4 w-4" />
               Configurações
