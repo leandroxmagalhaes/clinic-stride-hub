@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -18,10 +19,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Clock } from "lucide-react";
+import { HealthTagList } from "@/components/ui/health-tag-badge";
+import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
+import { ScheduleWarningAlert } from "@/components/agenda/ScheduleWarningAlert";
+import { HealthTagService, HealthTag } from "@/services/HealthTagService";
 
 interface Patient {
   id: string;
   full_name: string;
+  health_tags?: HealthTag[];
 }
 
 interface Professional {
@@ -57,6 +63,7 @@ interface NewSessionModalProps {
   setSelectedServico: (value: string) => void;
   notes: string;
   setNotes: (value: string) => void;
+  getCreditBalance?: (patientId: string) => number;
 }
 
 export function NewSessionModal({
@@ -75,6 +82,7 @@ export function NewSessionModal({
   setSelectedServico,
   notes,
   setNotes,
+  getCreditBalance,
 }: NewSessionModalProps) {
   const handleSubmit = () => {
     onSubmit({
@@ -84,6 +92,30 @@ export function NewSessionModal({
       notes,
     });
   };
+
+  // Get selected patient data
+  const selectedPatientData = useMemo(() => {
+    return patients.find(p => p.id === selectedPaciente);
+  }, [patients, selectedPaciente]);
+
+  // Get health tags for selected patient
+  const patientHealthTags = useMemo(() => {
+    return HealthTagService.parseTags(selectedPatientData?.health_tags as string[] | undefined);
+  }, [selectedPatientData]);
+
+  // Get schedule warnings based on health tags and selected time
+  const scheduleWarnings = useMemo(() => {
+    if (!selectedSlot || patientHealthTags.length === 0) return [];
+    return HealthTagService.validateScheduling(patientHealthTags, selectedSlot.hour);
+  }, [patientHealthTags, selectedSlot]);
+
+  // Get credit balance for selected patient
+  const patientBalance = useMemo(() => {
+    if (!selectedPaciente || !getCreditBalance) return null;
+    return getCreditBalance(selectedPaciente);
+  }, [selectedPaciente, getCreditBalance]);
+
+  const hasInsufficientCredits = patientBalance !== null && patientBalance <= 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -121,7 +153,32 @@ export function NewSessionModal({
                 ))}
               </SelectContent>
             </Select>
+            
+            {/* Patient info: Health Tags + Credit Balance */}
+            {selectedPatientData && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {patientHealthTags.length > 0 && (
+                  <HealthTagList tags={patientHealthTags} maxVisible={3} size="sm" />
+                )}
+                {patientBalance !== null && (
+                  <CreditBalanceBadge balance={patientBalance} size="sm" />
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Schedule Warnings */}
+          {scheduleWarnings.length > 0 && (
+            <ScheduleWarningAlert warnings={scheduleWarnings} />
+          )}
+
+          {/* Insufficient credits warning */}
+          {hasInsufficientCredits && (
+            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive">
+              <p className="font-medium">⚠️ Créditos insuficientes</p>
+              <p className="text-xs mt-1">Sessão será agendada com status "Pagamento Pendente".</p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Profissional *</Label>
@@ -185,7 +242,7 @@ export function NewSessionModal({
             onClick={handleSubmit}
             className="min-h-[44px] w-full sm:w-auto"
           >
-            Agendar Sessão
+            {hasInsufficientCredits ? "Agendar (Pendente)" : "Agendar Sessão"}
           </Button>
         </DialogFooter>
       </DialogContent>

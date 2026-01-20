@@ -15,7 +15,7 @@ import { SessionService } from "@/services/SessionService";
 import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 
 export default function Dashboard() {
-  const { sessions, patients, professionals, services, addSession } = useData();
+  const { sessions, patients, professionals, services, addSession, getCreditBalance, useCredit } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form state for new session modal
@@ -79,8 +79,19 @@ export default function Dashboard() {
         sessions
       );
 
+      // Try to use credit (idempotent operation)
+      const creditResult = useCredit(data.pacienteId, newSession.id);
+      if (!creditResult.success) {
+        // Mark session as payment pending
+        newSession.payment_status = 'pendente';
+      } else {
+        newSession.payment_status = 'pago';
+      }
+
       addSession(newSession);
-      toast.success("Sessão agendada com sucesso!");
+      toast.success(creditResult.success 
+        ? "Sessão agendada com sucesso! Crédito utilizado." 
+        : "Sessão agendada com pagamento pendente.");
       handleCloseModal();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
@@ -271,6 +282,7 @@ export default function Dashboard() {
         notes={notes}
         setNotes={setNotes}
         onSubmit={handleSubmitSession}
+        getCreditBalance={getCreditBalance}
       />
     </AppLayout>
   );

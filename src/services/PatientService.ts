@@ -1,5 +1,6 @@
 // PatientService - Business logic for patient operations (SRP)
 import { DEMO_CLINIC_ID } from "@/lib/mock-data";
+import { HealthTag } from "@/services/HealthTagService";
 
 export interface Patient {
   id: string;
@@ -15,6 +16,7 @@ export interface Patient {
   emergency_phone?: string | null;
   health_insurance?: string | null;
   notes?: string | null;
+  health_tags?: HealthTag[];
   is_active: boolean;
 }
 
