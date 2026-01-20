@@ -114,7 +114,7 @@ export class CreditService {
    * Now includes financial data: monetaryValue, paymentMethod, paymentStatus
    */
   static async purchaseCredits(
-    clinicId: string,
+    clinicId: string | undefined | null,
     patientId: string,
     amount: number,
     options?: {
@@ -129,8 +129,8 @@ export class CreditService {
     }
 
     try {
+      // Build payload with proper typing
       const payload = {
-        clinic_id: clinicId,
         patient_id: patientId,
         amount: amount,
         transaction_type: "purchase" as const,
@@ -138,7 +138,13 @@ export class CreditService {
         monetary_value: options?.monetaryValue ?? null,
         payment_method: options?.paymentMethod ?? null,
         payment_status: options?.paymentStatus ?? "pending",
+        // Only include clinic_id if valid, otherwise leave undefined (will be null in DB)
+        ...(clinicId && typeof clinicId === "string" && clinicId.trim() !== "" 
+          ? { clinic_id: clinicId } 
+          : {}),
       };
+
+      console.log("DEBUG purchaseCredits payload:", JSON.stringify(payload, null, 2));
 
       const { data, error } = await supabase
         .from("credit_transactions")
@@ -147,12 +153,14 @@ export class CreditService {
         .single();
 
       if (error) {
-        console.error("ERRO SUPABASE (credit_transactions INSERT):", error);
+        console.error("DEBUG CRÍTICO - ERRO SUPABASE:", error);
         return {
           success: false,
-          error: error.message || "Erro ao registrar compra de créditos",
+          error: `Erro SQL: ${error.message} (code: ${error.code})`,
         };
       }
+
+      console.log("DEBUG purchaseCredits SUCCESS:", data);
 
       return {
         success: true,
@@ -168,10 +176,10 @@ export class CreditService {
         },
       };
     } catch (err) {
-      console.error("ERRO SUPABASE (purchaseCredits catch):", err);
+      console.error("DEBUG CRÍTICO - EXCEPTION:", err);
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Erro inesperado ao adicionar créditos",
+        error: `Exception: ${err instanceof Error ? err.message : JSON.stringify(err)}`,
       };
     }
   }
