@@ -37,7 +37,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Pacientes() {
-  const { patients, addPatient, getCreditBalance, addCredits } = useData();
+  const { patients, refreshPatients, getCreditBalance, addCredits } = useData();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [clinicId, setClinicId] = useState<string | null>(null);
@@ -138,7 +138,7 @@ export default function Pacientes() {
     addCredits(patientId, data.amount);
   };
 
-  const handleCreatePatient = () => {
+  const handleCreatePatient = async () => {
     const validation = PatientService.validate(formData);
     if (!validation.isValid) {
       toast.error(validation.error);
@@ -146,8 +146,39 @@ export default function Pacientes() {
     }
 
     try {
-      const newPatient = PatientService.create(formData);
-      addPatient(newPatient);
+      if (!clinicId) {
+        toast.error("Clínica não identificada. Faça login novamente.");
+        return;
+      }
+
+      const payload = {
+        clinic_id: clinicId,
+        full_name: formData.full_name.trim(),
+        cpf: formData.cpf || null,
+        birth_date: formData.birth_date || null,
+        gender: formData.gender || null,
+        phone: formData.phone || null,
+        email: formData.email || null,
+        address: formData.address || null,
+        emergency_contact: formData.emergency_contact || null,
+        emergency_phone: formData.emergency_phone || null,
+        health_insurance: formData.health_insurance || null,
+        notes: formData.notes || null,
+        health_tags: [],
+        is_active: true,
+      };
+
+      const { error } = await supabase
+        .from("pacientes")
+        .insert(payload);
+
+      if (error) {
+        console.error("ERRO SUPABASE (pacientes INSERT):", error);
+        toast.error(`Erro ao cadastrar paciente: ${error.message}`);
+        return;
+      }
+
+      await refreshPatients();
       toast.success("Paciente cadastrado com sucesso!");
       setIsModalOpen(false);
       resetForm();
