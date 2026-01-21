@@ -280,6 +280,55 @@ export type Database = {
           },
         ]
       }
+      patient_feedback: {
+        Row: {
+          clinic_id: string
+          comment: string | null
+          created_at: string
+          id: string
+          patient_id: string
+          score: number
+        }
+        Insert: {
+          clinic_id: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          patient_id: string
+          score: number
+        }
+        Update: {
+          clinic_id?: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          patient_id?: string
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_feedback_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "patient_feedback_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "patient_feedback_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
