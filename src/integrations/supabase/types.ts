@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_flows: {
+        Row: {
+          attachment_url: string | null
+          channel: string
+          clinic_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          message_template: string
+          name: string
+          priority: number
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          attachment_url?: string | null
+          channel?: string
+          clinic_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          message_template: string
+          name: string
+          priority?: number
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          attachment_url?: string | null
+          channel?: string
+          clinic_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          message_template?: string
+          name?: string
+          priority?: number
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_flows_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clinics: {
         Row: {
           address: string | null
