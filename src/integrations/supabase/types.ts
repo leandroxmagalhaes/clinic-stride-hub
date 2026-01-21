@@ -214,6 +214,7 @@ export type Database = {
           health_insurance: string | null
           health_tags: string[] | null
           id: string
+          initial_assessment_data: Json | null
           is_active: boolean | null
           notes: string | null
           phone: string | null
@@ -234,6 +235,7 @@ export type Database = {
           health_insurance?: string | null
           health_tags?: string[] | null
           id?: string
+          initial_assessment_data?: Json | null
           is_active?: boolean | null
           notes?: string | null
           phone?: string | null
@@ -254,6 +256,7 @@ export type Database = {
           health_insurance?: string | null
           health_tags?: string[] | null
           id?: string
+          initial_assessment_data?: Json | null
           is_active?: boolean | null
           notes?: string | null
           phone?: string | null

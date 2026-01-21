@@ -39,6 +39,7 @@ interface ProntuarioData {
   objetivos: string;
   observacoes: string;
   primary_specialty_id: string | null;
+  initial_assessment_data: StructuredData | null;
   paciente?: {
     id: string;
     full_name: string;
@@ -79,6 +80,7 @@ export default function Prontuarios() {
         objetivos: p.objetivos,
         observacoes: p.observacoes,
         primary_specialty_id: null,
+        initial_assessment_data: null,
       };
       initial[p.paciente_id] = data;
     });
@@ -120,6 +122,7 @@ export default function Prontuarios() {
         objetivos: "",
         observacoes: "",
         primary_specialty_id: null,
+        initial_assessment_data: null,
         paciente: {
           ...paciente as any,
           primary_specialty_id: null,
@@ -174,12 +177,13 @@ export default function Prontuarios() {
     return templates.find(t => t.id === specialtyId) || null;
   };
 
-  const handleSaveClinicalData = (prontuarioId: string, data: {
+  const handleSaveClinicalData = (_prontuarioId: string, data: {
     anamnese: string;
     diagnostico: string;
     objetivos: string;
     observacoes: string;
     primary_specialty_id: string | null;
+    initial_assessment_data: StructuredData | null;
   }) => {
     if (!selectedProntuario) return;
 
@@ -432,6 +436,26 @@ export default function Prontuarios() {
                         </div>
                       )}
 
+                      {/* Initial Assessment Section */}
+                      {selectedProntuario.initial_assessment_data && 
+                       selectedProntuario.primary_specialty_id && 
+                       Object.keys(selectedProntuario.initial_assessment_data).length > 0 && (() => {
+                        const template = templates.find(t => t.id === selectedProntuario.primary_specialty_id);
+                        if (!template) return null;
+                        return (
+                          <div className="p-4 rounded-lg bg-accent/30 border border-accent/50">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="h-2 w-2 rounded-full bg-accent-foreground/70" />
+                              <h4 className="font-medium text-sm">Avaliação Inicial (Marco Zero)</h4>
+                            </div>
+                            <StructuredDataViewer
+                              schema={template.schema}
+                              data={selectedProntuario.initial_assessment_data as StructuredData}
+                            />
+                          </div>
+                        );
+                      })()}
+
                       <div>
                         <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                           Anamnese
@@ -521,6 +545,7 @@ export default function Prontuarios() {
             objetivos: selectedProntuario.objetivos,
             observacoes: selectedProntuario.observacoes,
             primary_specialty_id: selectedProntuario.primary_specialty_id,
+            initial_assessment_data: selectedProntuario.initial_assessment_data,
           }}
           onSave={handleSaveClinicalData}
         />

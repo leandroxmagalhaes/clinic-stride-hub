@@ -16,9 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FileText, Loader2, Stethoscope } from "lucide-react";
+import { FileText, Loader2, Stethoscope, ClipboardCheck } from "lucide-react";
 import { toast } from "sonner";
-import { SpecialtyService, type SpecialtyTemplate } from "@/services/SpecialtyService";
+import { SpecialtyService, type SpecialtyTemplate, type StructuredData, type SectionSchema } from "@/services/SpecialtyService";
+import { DynamicFormRenderer } from "./DynamicFormRenderer";
 
 interface ClinicalData {
   anamnese: string;
@@ -26,6 +27,7 @@ interface ClinicalData {
   objetivos: string;
   observacoes: string;
   primary_specialty_id: string | null;
+  initial_assessment_data: StructuredData | null;
 }
 
 interface EditClinicalDataModalProps {
@@ -48,14 +50,35 @@ export function EditClinicalDataModal({
   const [formData, setFormData] = useState<ClinicalData>(currentData);
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<SpecialtyTemplate | null>(null);
+  const [initialAssessmentData, setInitialAssessmentData] = useState<StructuredData>({});
 
   // Load templates on mount
   useEffect(() => {
     if (isOpen) {
       loadTemplates();
       setFormData(currentData);
+      setInitialAssessmentData(currentData.initial_assessment_data || {});
     }
   }, [isOpen, currentData]);
+
+  // Update selected template when specialty changes
+  useEffect(() => {
+    if (formData.primary_specialty_id && templates.length > 0) {
+      const template = templates.find(t => t.id === formData.primary_specialty_id);
+      setSelectedTemplate(template || null);
+      
+      // Initialize structured data if switching specialty and no existing data
+      if (template && template.schema.length > 0) {
+        // Keep existing data if same specialty, otherwise initialize empty
+        if (currentData.primary_specialty_id !== formData.primary_specialty_id) {
+          setInitialAssessmentData(SpecialtyService.createEmptyStructuredData(template.schema));
+        }
+      }
+    } else {
+      setSelectedTemplate(null);
+    }
+  }, [formData.primary_specialty_id, templates, currentData.primary_specialty_id]);
 
   const loadTemplates = async () => {
     setIsLoadingTemplates(true);
@@ -70,17 +93,27 @@ export function EditClinicalDataModal({
   };
 
   const handleSave = () => {
-    onSave(prontuarioId, formData);
+    // Include structured assessment data
+    const hasStructuredData = 
+      selectedTemplate && 
+      selectedTemplate.schema.length > 0 && 
+      Object.keys(initialAssessmentData).length > 0;
+
+    onSave(prontuarioId, {
+      ...formData,
+      initial_assessment_data: hasStructuredData ? initialAssessmentData : null,
+    });
     toast.success("Dados clínicos atualizados com sucesso!");
     onClose();
   };
 
   // Get non-general templates for specialty selection
   const specialtyTemplates = templates.filter(t => t.name !== "Geral");
+  const showDynamicForm = selectedTemplate && selectedTemplate.schema.length > 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
@@ -137,6 +170,24 @@ export function EditClinicalDataModal({
               </Select>
             )}
           </div>
+
+          {/* Initial Assessment Dynamic Form */}
+          {showDynamicForm && (
+            <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4 text-primary" />
+                <Label className="font-medium">Avaliação Inicial ({selectedTemplate.name})</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Registre o estado inicial do utente para comparar com as evoluções futuras
+              </p>
+              <DynamicFormRenderer
+                schema={selectedTemplate.schema}
+                value={initialAssessmentData}
+                onChange={setInitialAssessmentData}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="anamnese">Anamnese</Label>

@@ -290,6 +290,8 @@ export const mockProntuarios = [
     diagnostico: "Condromalácia patelar grau II",
     objetivos: "Fortalecimento de quadríceps, melhora da propriocepção, redução da dor",
     observacoes: "Paciente motivada e assídua ao tratamento",
+    primary_specialty_id: null as string | null,
+    initial_assessment_data: null as Record<string, string | number | string[] | null> | null,
     paciente: mockPacientes[0],
   },
   {
@@ -300,6 +302,8 @@ export const mockProntuarios = [
     diagnostico: "Lombalgia mecânica",
     objetivos: "Correção postural, fortalecimento do core, alongamento de cadeia posterior",
     observacoes: null,
+    primary_specialty_id: null as string | null,
+    initial_assessment_data: null as Record<string, string | number | string[] | null> | null,
     paciente: mockPacientes[1],
   },
 ];
