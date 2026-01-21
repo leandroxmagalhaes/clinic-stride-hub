@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Send, X, Copy, ExternalLink } from "lucide-react";
+import { MessageSquare, Send, X, Copy, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,29 +22,39 @@ export function AutomationTriggerToast({
   onDismiss 
 }: AutomationTriggerToastProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
+  const [openAttempted, setOpenAttempted] = useState(false);
+  const anchorRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     if (triggerResult?.shouldTrigger) {
       setIsOpen(true);
-      setShowFallback(false);
+      setOpenAttempted(false);
     }
   }, [triggerResult]);
 
   const handleSendWhatsApp = () => {
-    if (triggerResult?.whatsappUrl) {
-      const newWindow = window.open(triggerResult.whatsappUrl, '_blank');
-      
-      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-        // Popup blocked - show fallback
-        setShowFallback(true);
-        toast.info("Popup bloqueado. Use o link abaixo ou copie a mensagem.", {
-          duration: 5000,
-        });
-      } else {
-        toast.success("WhatsApp aberto!", { duration: 3000 });
-        handleClose();
-      }
+    if (!triggerResult?.whatsappUrl) return;
+    
+    console.debug('[WhatsApp] Attempting to open:', triggerResult.whatsappUrl);
+    setOpenAttempted(true);
+    
+    // Method 1: Anchor click (more compatible with browser security)
+    if (anchorRef.current) {
+      anchorRef.current.href = triggerResult.whatsappUrl;
+      anchorRef.current.click();
+      console.debug('[WhatsApp] Used anchor click method');
+      toast.success("Abrindo WhatsApp...", { duration: 3000 });
+      return;
+    }
+    
+    // Method 2: Fallback to window.open
+    console.debug('[WhatsApp] Anchor not available, trying window.open');
+    const newWindow = window.open(triggerResult.whatsappUrl, '_blank', 'noopener,noreferrer');
+    
+    if (newWindow) {
+      toast.success("WhatsApp aberto!", { duration: 3000 });
+    } else {
+      toast.info("Se não abriu, use 'Copiar link' abaixo.", { duration: 5000 });
     }
   };
 
@@ -52,16 +62,27 @@ export function AutomationTriggerToast({
     if (triggerResult?.processedMessage) {
       try {
         await navigator.clipboard.writeText(triggerResult.processedMessage);
-        toast.success("Mensagem copiada para a área de transferência!");
+        toast.success("Mensagem copiada!");
       } catch {
-        toast.error("Não foi possível copiar a mensagem.");
+        toast.error("Não foi possível copiar.");
+      }
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (triggerResult?.whatsappUrl) {
+      try {
+        await navigator.clipboard.writeText(triggerResult.whatsappUrl);
+        toast.success("Link copiado! Cole no navegador.");
+      } catch {
+        toast.error("Não foi possível copiar o link.");
       }
     }
   };
 
   const handleClose = () => {
     setIsOpen(false);
-    setShowFallback(false);
+    setOpenAttempted(false);
     onDismiss();
   };
 
@@ -72,19 +93,31 @@ export function AutomationTriggerToast({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-md">
+        {/* Hidden anchor for reliable opening */}
+        <a
+          ref={anchorRef}
+          href="#"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="sr-only"
+          aria-hidden="true"
+        >
+          WhatsApp
+        </a>
+
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-primary">
             <MessageSquare className="h-5 w-5" />
             Enviar Mensagem Automática?
           </DialogTitle>
           <DialogDescription>
-            Agendamento criado com sucesso! Deseja enviar uma mensagem via WhatsApp para o paciente?
+            Agendamento criado! Escolha como enviar a mensagem:
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Flow info */}
-          <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+          <div className="rounded-lg bg-muted/50 p-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Fluxo: {triggerResult.flow?.name}
             </p>
@@ -93,72 +126,68 @@ export function AutomationTriggerToast({
           {/* Message preview */}
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Mensagem a enviar:
+              Mensagem:
             </p>
-            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-sm whitespace-pre-wrap">
+            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">
               {triggerResult.processedMessage}
             </div>
           </div>
 
           {/* Phone info */}
           <p className="text-xs text-muted-foreground">
-            📱 Será aberto no WhatsApp Web para: {triggerResult.patientPhone}
+            📱 Para: {triggerResult.patientPhone}
           </p>
 
-          {/* Fallback UI when popup is blocked */}
-          {showFallback && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-4 space-y-3">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                ⚠️ O popup foi bloqueado. Use uma das opções abaixo:
-              </p>
-              
-              <div className="space-y-2">
-                <a
-                  href={triggerResult.whatsappUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 underline"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Clique aqui para abrir o WhatsApp
-                </a>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyMessage}
-                  className="gap-2 w-full"
-                >
-                  <Copy className="h-4 w-4" />
-                  Copiar mensagem
-                </Button>
-              </div>
-              
-              <p className="text-xs text-muted-foreground">
-                Se o link não abrir, copie a mensagem e cole manualmente no WhatsApp.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleClose}
-            className="gap-2 min-h-[44px]"
-          >
-            <X className="h-4 w-4" />
-            {showFallback ? "Fechar" : "Não enviar"}
-          </Button>
-          {!showFallback && (
+          {/* Always show all action options */}
+          <div className="grid grid-cols-1 gap-2">
             <Button 
               onClick={handleSendWhatsApp}
-              className="gap-2 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="gap-2 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white w-full"
             >
               <Send className="h-4 w-4" />
               Abrir WhatsApp
             </Button>
+            
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyMessage}
+                className="gap-2 min-h-[40px]"
+              >
+                <Copy className="h-4 w-4" />
+                Copiar msg
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyLink}
+                className="gap-2 min-h-[40px]"
+              >
+                <Link className="h-4 w-4" />
+                Copiar link
+              </Button>
+            </div>
+          </div>
+
+          {/* Help text after first attempt */}
+          {openAttempted && (
+            <p className="text-xs text-muted-foreground text-center">
+              Se não abriu, use "Copiar link" e cole no navegador.
+            </p>
           )}
+        </div>
+
+        <DialogFooter>
+          <Button 
+            variant="ghost" 
+            onClick={handleClose}
+            className="gap-2"
+          >
+            <X className="h-4 w-4" />
+            Fechar
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
