@@ -42,6 +42,8 @@ interface DataContextType {
   getCreditBalance: (patientId: string) => number;
   addCredits: (patientId: string, amount: number) => void;
   useCredit: (patientId: string, sessionId: string) => { success: boolean; error?: string };
+  refundCredit: (patientId: string) => void;
+  wasCreditUsedForSession: (sessionId: string) => boolean;
   
   // Static data (from mocks, read-only for now)
   services: typeof mockServicos;
@@ -295,6 +297,19 @@ export function DataProvider({ children }: DataProviderProps) {
     return { success: true };
   };
 
+  // Refund credit (add 1 back to balance)
+  const refundCredit = (patientId: string): void => {
+    setCreditBalances((prev) => ({
+      ...prev,
+      [patientId]: (prev[patientId] ?? 0) + 1,
+    }));
+  };
+
+  // Check if credit was already used for a session
+  const wasCreditUsedForSession = (sessionId: string): boolean => {
+    return creditUsageMap[sessionId] ?? false;
+  };
+
   const value: DataContextType = {
     patients,
     patientsLoading,
@@ -313,6 +328,8 @@ export function DataProvider({ children }: DataProviderProps) {
     getCreditBalance,
     addCredits,
     useCredit,
+    refundCredit,
+    wasCreditUsedForSession,
     services: mockServicos,
   };
 
