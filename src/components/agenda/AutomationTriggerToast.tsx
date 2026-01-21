@@ -23,6 +23,9 @@ export function AutomationTriggerToast({
 }: AutomationTriggerToastProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [openAttempted, setOpenAttempted] = useState(false);
+  
+  // Detect if running inside iframe (Lovable preview)
+  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   useEffect(() => {
     if (triggerResult?.shouldTrigger) {
@@ -115,41 +118,86 @@ export function AutomationTriggerToast({
             📱 Para: {triggerResult.patientPhone}
           </p>
 
-          {/* Always show all action options */}
+          {/* Iframe warning */}
+          {isInIframe && (
+            <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 p-2 rounded border border-amber-200 dark:border-amber-800">
+              ⚠️ No preview, use "Copiar link" e cole no navegador.
+            </p>
+          )}
+
+          {/* Action buttons - adapt based on environment */}
           <div className="grid grid-cols-1 gap-2">
-            <Button 
-              onClick={handleSendWhatsApp}
-              className="gap-2 min-h-[44px] w-full"
-            >
-              <Send className="h-4 w-4" />
-              Abrir WhatsApp
-            </Button>
-            
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyMessage}
-                className="gap-2 min-h-[40px]"
-              >
-                <Copy className="h-4 w-4" />
-                Copiar msg
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyLink}
-                className="gap-2 min-h-[40px]"
-              >
-                <Link2 className="h-4 w-4" />
-                Copiar link
-              </Button>
-            </div>
+            {isInIframe ? (
+              <>
+                {/* In iframe: Copy link is primary */}
+                <Button
+                  onClick={handleCopyLink}
+                  className="gap-2 min-h-[44px] w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <Link2 className="h-4 w-4" />
+                  Copiar link do WhatsApp
+                </Button>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyMessage}
+                    className="gap-2 min-h-[40px]"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copiar msg
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSendWhatsApp}
+                    className="gap-2 min-h-[40px]"
+                  >
+                    <Send className="h-4 w-4" />
+                    Tentar abrir
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* In production: Open WhatsApp is primary */}
+                <Button 
+                  onClick={handleSendWhatsApp}
+                  className="gap-2 min-h-[44px] w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <Send className="h-4 w-4" />
+                  Abrir WhatsApp
+                </Button>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyMessage}
+                    className="gap-2 min-h-[40px]"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copiar msg
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyLink}
+                    className="gap-2 min-h-[40px]"
+                  >
+                    <Link2 className="h-4 w-4" />
+                    Copiar link
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Help text after first attempt */}
-          {openAttempted && (
+          {/* Help text after first attempt (only in production) */}
+          {!isInIframe && openAttempted && (
             <p className="text-xs text-muted-foreground text-center">
               Se não abriu, use "Copiar link" e cole no navegador.
             </p>
