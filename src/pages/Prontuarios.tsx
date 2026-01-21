@@ -1,20 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Slider } from "@/components/ui/slider";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Search, 
@@ -34,6 +25,9 @@ import { cn } from "@/lib/utils";
 import { useData } from "@/contexts/DataContext";
 import { EvolutionService } from "@/services/EvolutionService";
 import { EditClinicalDataModal } from "@/components/prontuarios/EditClinicalDataModal";
+import { NewEvolutionModal } from "@/components/prontuarios/NewEvolutionModal";
+import { StructuredDataViewer } from "@/components/prontuarios/StructuredDataViewer";
+import { SpecialtyService, type SpecialtyTemplate, type StructuredData } from "@/services/SpecialtyService";
 
 // Local state for prontuarios (will be moved to DataContext later)
 interface ProntuarioData {
@@ -58,6 +52,16 @@ export default function Prontuarios() {
   const [selectedProntuario, setSelectedProntuario] = useState<ProntuarioData | null>(null);
   const [isNewEvolucaoOpen, setIsNewEvolucaoOpen] = useState(false);
   const [isEditClinicalOpen, setIsEditClinicalOpen] = useState(false);
+  
+  // Specialty templates cache for displaying structured data
+  const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
+
+  // Load templates on mount
+  useEffect(() => {
+    SpecialtyService.getTemplates()
+      .then(setTemplates)
+      .catch(console.error);
+  }, []);
 
   // Local state for prontuarios data (persisted changes)
   const [prontuariosData, setProntuariosData] = useState<Record<string, ProntuarioData>>(() => {
@@ -67,12 +71,6 @@ export default function Prontuarios() {
       initial[p.paciente_id] = p as ProntuarioData;
     });
     return initial;
-  });
-
-  // Form state for new evolution
-  const [evolucaoForm, setEvolucaoForm] = useState({
-    descricao: "",
-    escala_dor: 5,
   });
 
   const filteredPacientes = patients.filter((p) =>
@@ -116,9 +114,14 @@ export default function Prontuarios() {
     }
   };
 
-  const handleCreateEvolucao = () => {
+  const handleCreateEvolucao = (data: {
+    descricao: string;
+    escala_dor: number;
+    specialty_id: string | null;
+    structured_data: StructuredData | null;
+  }) => {
     if (!selectedProntuario) {
-      toast.error("Selecione um paciente primeiro");
+      toast.error("Selecione um utente primeiro");
       return;
     }
 
@@ -130,19 +133,26 @@ export default function Prontuarios() {
         {
           prontuario_id: selectedProntuario.id,
           profissional_id: defaultProfessional.id,
-          descricao: evolucaoForm.descricao,
-          escala_dor: evolucaoForm.escala_dor,
+          descricao: data.descricao,
+          escala_dor: data.escala_dor,
+          specialty_id: data.specialty_id,
+          structured_data: data.structured_data,
         },
         defaultProfessional.full_name
       );
 
       addEvolution(newEvolution);
-      toast.success("Evolução registrada com sucesso!");
+      toast.success("Evolução registada com sucesso!");
       setIsNewEvolucaoOpen(false);
-      setEvolucaoForm({ descricao: "", escala_dor: 5 });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao registrar evolução");
+      toast.error(error instanceof Error ? error.message : "Erro ao registar evolução");
     }
+  };
+
+  // Get template for an evolution
+  const getTemplateForEvolution = (specialtyId: string | null | undefined): SpecialtyTemplate | null => {
+    if (!specialtyId) return null;
+    return templates.find(t => t.id === specialtyId) || null;
   };
 
   const handleSaveClinicalData = (prontuarioId: string, data: {
@@ -188,7 +198,7 @@ export default function Prontuarios() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar paciente..."
+                  placeholder="Buscar utente..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-9"
@@ -302,38 +312,64 @@ export default function Prontuarios() {
                     <CardContent>
                       {prontuarioEvolutions.length > 0 ? (
                         <div className="space-y-4">
-                          {prontuarioEvolutions.map((evolucao) => (
-                            <div
-                              key={evolucao.id}
-                              className="border rounded-lg p-4 hover:bg-muted/30 transition-colors"
-                            >
-                              <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <Clock className="h-4 w-4" />
-                                  {format(new Date(evolucao.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          {prontuarioEvolutions.map((evolucao) => {
+                            const template = getTemplateForEvolution(evolucao.specialty_id);
+                            const hasStructuredData = evolucao.structured_data && 
+                              template && 
+                              Object.keys(evolucao.structured_data).length > 0;
+
+                            return (
+                              <div
+                                key={evolucao.id}
+                                className="border rounded-lg p-4 hover:bg-muted/30 transition-colors"
+                              >
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Clock className="h-4 w-4" />
+                                    {format(new Date(evolucao.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {template && (
+                                      <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
+                                        {template.name}
+                                      </Badge>
+                                    )}
+                                    {evolucao.escala_dor !== null && (
+                                      <Badge variant="outline" className={cn("text-xs", getPainColor(evolucao.escala_dor))}>
+                                        Dor: {evolucao.escala_dor}/10
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
-                                {evolucao.escala_dor !== null && (
-                                  <Badge variant="outline" className={cn("text-xs", getPainColor(evolucao.escala_dor))}>
-                                    Dor: {evolucao.escala_dor}/10
-                                  </Badge>
+
+                                {/* Structured Data Display */}
+                                {hasStructuredData && template && (
+                                  <div className="mb-3 p-3 bg-muted/20 rounded-md">
+                                    <StructuredDataViewer
+                                      schema={template.schema}
+                                      data={evolucao.structured_data as Record<string, string | number | string[] | null>}
+                                      compact
+                                    />
+                                  </div>
                                 )}
+
+                                <p className="text-sm leading-relaxed mb-3">
+                                  {evolucao.descricao}
+                                </p>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <User className="h-3 w-3" />
+                                  {evolucao.profissional?.full_name}
+                                </div>
                               </div>
-                              <p className="text-sm leading-relaxed mb-3">
-                                {evolucao.descricao}
-                              </p>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <User className="h-3 w-3" />
-                                {evolucao.profissional?.full_name}
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="text-center py-12">
                           <Activity className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                          <h3 className="font-semibold mb-1">Nenhuma evolução registrada</h3>
+                          <h3 className="font-semibold mb-1">Nenhuma evolução registada</h3>
                           <p className="text-sm text-muted-foreground mb-4">
-                            Registre a primeira evolução clínica deste paciente
+                            Registe a primeira evolução clínica deste utente
                           </p>
                           <Button onClick={() => setIsNewEvolucaoOpen(true)} variant="outline">
                             <Plus className="h-4 w-4 mr-2" />
@@ -413,10 +449,10 @@ export default function Prontuarios() {
               <div className="text-center">
                 <FileText className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
                 <h3 className="font-display text-lg font-semibold mb-1">
-                  Selecione um Paciente
+                  Selecione um Utente
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Clique em um paciente para ver seu prontuário
+                  Clique num utente para ver o seu prontuário
                 </p>
               </div>
             </Card>
@@ -425,59 +461,15 @@ export default function Prontuarios() {
       </div>
 
       {/* New Evolution Modal */}
-      <Dialog open={isNewEvolucaoOpen} onOpenChange={setIsNewEvolucaoOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="font-display flex items-center gap-2">
-              <Activity className="h-5 w-5 text-primary" />
-              Nova Evolução Clínica
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-6 py-4">
-            <div className="space-y-2">
-              <Label>Descrição do Atendimento *</Label>
-              <Textarea
-                value={evolucaoForm.descricao}
-                onChange={(e) => setEvolucaoForm({ ...evolucaoForm, descricao: e.target.value })}
-                placeholder="Descreva a evolução do paciente, procedimentos realizados, observações..."
-                rows={6}
-                className="resize-none"
-              />
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>Escala de Dor (EVA)</Label>
-                <span className={cn("font-semibold text-lg", getPainColor(evolucaoForm.escala_dor))}>
-                  {evolucaoForm.escala_dor}/10
-                </span>
-              </div>
-              <Slider
-                value={[evolucaoForm.escala_dor]}
-                onValueChange={([value]) => setEvolucaoForm({ ...evolucaoForm, escala_dor: value })}
-                max={10}
-                step={1}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Sem dor</span>
-                <span>Dor moderada</span>
-                <span>Dor intensa</span>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsNewEvolucaoOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleCreateEvolucao}>
-              Registrar Evolução
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {selectedProntuario && (
+        <NewEvolutionModal
+          isOpen={isNewEvolucaoOpen}
+          onClose={() => setIsNewEvolucaoOpen(false)}
+          patientName={selectedProntuario.paciente?.full_name || ""}
+          prontuarioId={selectedProntuario.id}
+          onSubmit={handleCreateEvolucao}
+        />
+      )}
 
       {/* Edit Clinical Data Modal */}
       {selectedProntuario && (
