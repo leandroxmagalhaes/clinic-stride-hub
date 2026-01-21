@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type SessionStatus = 'agendado' | 'confirmado' | 'em_atendimento' | 'finalizado' | 'cancelado' | 'faltou';
+type SessionStatus = 'agendado' | 'confirmado' | 'em_atendimento' | 'finalizado' | 'realizado' | 'cancelado' | 'faltou' | 'falta';
 
 interface StatusBadgeProps {
   status: SessionStatus;
@@ -24,6 +24,10 @@ const statusConfig: Record<SessionStatus, { label: string; className: string }> 
     label: "Finalizado",
     className: "bg-muted text-muted-foreground border-border",
   },
+  realizado: {
+    label: "Realizado",
+    className: "bg-muted text-muted-foreground border-border",
+  },
   cancelado: {
     label: "Cancelado",
     className: "bg-destructive/10 text-destructive border-destructive/20",
@@ -31,6 +35,10 @@ const statusConfig: Record<SessionStatus, { label: string; className: string }> 
   faltou: {
     label: "Faltou",
     className: "bg-destructive/10 text-destructive border-destructive/20",
+  },
+  falta: {
+    label: "Falta",
+    className: "bg-warning/10 text-warning border-warning/20",
   },
 };
 
