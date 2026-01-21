@@ -33,6 +33,7 @@ interface NewEvolutionModalProps {
   onClose: () => void;
   patientName: string;
   prontuarioId: string;
+  patientSpecialtyId?: string | null; // Pre-configured specialty from anamnesis
   onSubmit: (data: {
     descricao: string;
     escala_dor: number;
@@ -46,6 +47,7 @@ export function NewEvolutionModal({
   onClose,
   patientName,
   prontuarioId,
+  patientSpecialtyId,
   onSubmit,
 }: NewEvolutionModalProps) {
   // State
@@ -54,6 +56,9 @@ export function NewEvolutionModal({
   const [selectedTemplate, setSelectedTemplate] = useState<SpecialtyTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Track if specialty is locked (came from patient profile)
+  const hasPatientSpecialty = !!patientSpecialtyId;
 
   // Form data
   const [descricao, setDescricao] = useState("");
@@ -91,10 +96,15 @@ export function NewEvolutionModal({
       const data = await SpecialtyService.getTemplates();
       setTemplates(data);
       
-      // Default to "Geral" template if available
-      const geralTemplate = data.find((t) => t.name === "Geral");
-      if (geralTemplate) {
-        setSelectedTemplateId(geralTemplate.id);
+      // If patient has a specialty configured, use it
+      if (patientSpecialtyId) {
+        setSelectedTemplateId(patientSpecialtyId);
+      } else {
+        // Default to "Geral" template if available (fallback)
+        const geralTemplate = data.find((t) => t.name === "Geral");
+        if (geralTemplate) {
+          setSelectedTemplateId(geralTemplate.id);
+        }
       }
     } catch (error) {
       console.error("Error loading templates:", error);
@@ -147,9 +157,14 @@ export function NewEvolutionModal({
     setDescricao("");
     setEscalaDor(5);
     setStructuredData({});
-    const geralTemplate = templates.find((t) => t.name === "Geral");
-    if (geralTemplate) {
-      setSelectedTemplateId(geralTemplate.id);
+    // Reset to patient specialty or general
+    if (patientSpecialtyId) {
+      setSelectedTemplateId(patientSpecialtyId);
+    } else {
+      const geralTemplate = templates.find((t) => t.name === "Geral");
+      if (geralTemplate) {
+        setSelectedTemplateId(geralTemplate.id);
+      }
     }
   };
 
@@ -185,12 +200,20 @@ export function NewEvolutionModal({
           <div className="space-y-6 py-4">
             {/* Specialty Selector */}
             <div className="space-y-2">
-              <Label>Especialidade</Label>
+              <Label className="flex items-center gap-2">
+                Especialidade
+                {hasPatientSpecialty && (
+                  <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                    Definida na Anamnese
+                  </span>
+                )}
+              </Label>
               <Select
                 value={selectedTemplateId}
                 onValueChange={setSelectedTemplateId}
+                disabled={hasPatientSpecialty}
               >
-                <SelectTrigger>
+                <SelectTrigger className={hasPatientSpecialty ? "bg-muted/50" : ""}>
                   <SelectValue placeholder="Selecione a especialidade..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -208,6 +231,11 @@ export function NewEvolutionModal({
                   ))}
                 </SelectContent>
               </Select>
+              {!hasPatientSpecialty && (
+                <p className="text-xs text-muted-foreground">
+                  💡 Defina a especialidade na Anamnese para pré-carregar automaticamente
+                </p>
+              )}
             </div>
 
             {/* Dynamic Form Fields */}

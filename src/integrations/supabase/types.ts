@@ -217,6 +217,7 @@ export type Database = {
           is_active: boolean | null
           notes: string | null
           phone: string | null
+          primary_specialty_id: string | null
           updated_at: string
         }
         Insert: {
@@ -236,6 +237,7 @@ export type Database = {
           is_active?: boolean | null
           notes?: string | null
           phone?: string | null
+          primary_specialty_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -255,6 +257,7 @@ export type Database = {
           is_active?: boolean | null
           notes?: string | null
           phone?: string | null
+          primary_specialty_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -263,6 +266,13 @@ export type Database = {
             columns: ["clinic_id"]
             isOneToOne: false
             referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_primary_specialty_id_fkey"
+            columns: ["primary_specialty_id"]
+            isOneToOne: false
+            referencedRelation: "specialty_templates"
             referencedColumns: ["id"]
           },
         ]

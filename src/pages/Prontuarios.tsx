@@ -38,11 +38,13 @@ interface ProntuarioData {
   diagnostico: string;
   objetivos: string;
   observacoes: string;
+  primary_specialty_id: string | null;
   paciente?: {
     id: string;
     full_name: string;
     phone?: string;
     email?: string;
+    primary_specialty_id?: string | null;
   };
 }
 
@@ -68,7 +70,17 @@ export default function Prontuarios() {
     // Initialize from mock data
     const initial: Record<string, ProntuarioData> = {};
     mockProntuarios.forEach(p => {
-      initial[p.paciente_id] = p as ProntuarioData;
+      const data: ProntuarioData = {
+        id: p.id,
+        clinic_id: p.clinic_id,
+        paciente_id: p.paciente_id,
+        anamnese: p.anamnese,
+        diagnostico: p.diagnostico,
+        objetivos: p.objetivos,
+        observacoes: p.observacoes,
+        primary_specialty_id: null,
+      };
+      initial[p.paciente_id] = data;
     });
     return initial;
   });
@@ -92,7 +104,10 @@ export default function Prontuarios() {
     if (existingProntuario) {
       setSelectedProntuario({
         ...existingProntuario,
-        paciente: paciente as any,
+        paciente: {
+          ...paciente as any,
+          primary_specialty_id: existingProntuario.primary_specialty_id,
+        },
       });
     } else if (paciente) {
       // Create new prontuario for patient
@@ -104,7 +119,11 @@ export default function Prontuarios() {
         diagnostico: "",
         objetivos: "",
         observacoes: "",
-        paciente: paciente as any,
+        primary_specialty_id: null,
+        paciente: {
+          ...paciente as any,
+          primary_specialty_id: null,
+        },
       };
       setProntuariosData(prev => ({
         ...prev,
@@ -160,12 +179,17 @@ export default function Prontuarios() {
     diagnostico: string;
     objetivos: string;
     observacoes: string;
+    primary_specialty_id: string | null;
   }) => {
     if (!selectedProntuario) return;
 
     const updated: ProntuarioData = {
       ...selectedProntuario,
       ...data,
+      paciente: selectedProntuario.paciente ? {
+        ...selectedProntuario.paciente,
+        primary_specialty_id: data.primary_specialty_id,
+      } : undefined,
     };
 
     setProntuariosData(prev => ({
@@ -396,6 +420,18 @@ export default function Prontuarios() {
                       </Button>
                     </CardHeader>
                     <CardContent className="space-y-6">
+                      {/* Specialty Badge */}
+                      {selectedProntuario.primary_specialty_id && (
+                        <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                          <Badge variant="secondary" className="bg-primary/10 text-primary">
+                            {templates.find(t => t.id === selectedProntuario.primary_specialty_id)?.name || "Especialidade"}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            Especialidade de tratamento definida
+                          </span>
+                        </div>
+                      )}
+
                       <div>
                         <Label className="text-muted-foreground text-xs uppercase tracking-wider">
                           Anamnese
@@ -467,6 +503,7 @@ export default function Prontuarios() {
           onClose={() => setIsNewEvolucaoOpen(false)}
           patientName={selectedProntuario.paciente?.full_name || ""}
           prontuarioId={selectedProntuario.id}
+          patientSpecialtyId={selectedProntuario.primary_specialty_id}
           onSubmit={handleCreateEvolucao}
         />
       )}
@@ -483,6 +520,7 @@ export default function Prontuarios() {
             diagnostico: selectedProntuario.diagnostico,
             objetivos: selectedProntuario.objetivos,
             observacoes: selectedProntuario.observacoes,
+            primary_specialty_id: selectedProntuario.primary_specialty_id,
           }}
           onSave={handleSaveClinicalData}
         />
