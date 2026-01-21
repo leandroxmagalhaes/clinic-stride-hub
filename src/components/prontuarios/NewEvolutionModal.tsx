@@ -204,16 +204,15 @@ export function NewEvolutionModal({
                 Especialidade
                 {hasPatientSpecialty && (
                   <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    Definida na Anamnese
+                    Padrão (Anamnese)
                   </span>
                 )}
               </Label>
               <Select
                 value={selectedTemplateId}
                 onValueChange={setSelectedTemplateId}
-                disabled={hasPatientSpecialty}
               >
-                <SelectTrigger className={hasPatientSpecialty ? "bg-muted/50" : ""}>
+                <SelectTrigger>
                   <SelectValue placeholder="Selecione a especialidade..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -231,7 +230,11 @@ export function NewEvolutionModal({
                   ))}
                 </SelectContent>
               </Select>
-              {!hasPatientSpecialty && (
+              {hasPatientSpecialty ? (
+                <p className="text-xs text-muted-foreground">
+                  ℹ️ Pode alterar a especialidade para esta sessão específica
+                </p>
+              ) : (
                 <p className="text-xs text-muted-foreground">
                   💡 Defina a especialidade na Anamnese para pré-carregar automaticamente
                 </p>
