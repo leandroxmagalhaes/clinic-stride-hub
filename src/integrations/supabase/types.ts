@@ -64,6 +64,51 @@ export type Database = {
           },
         ]
       }
+      clinic_settings: {
+        Row: {
+          clinic_id: string
+          clinic_name: string | null
+          created_at: string
+          email_enabled: boolean | null
+          id: string
+          language: string | null
+          logo_url: string | null
+          primary_color: string | null
+          sms_enabled: boolean | null
+          timezone: string | null
+          updated_at: string
+          whatsapp_enabled: boolean | null
+        }
+        Insert: {
+          clinic_id: string
+          clinic_name?: string | null
+          created_at?: string
+          email_enabled?: boolean | null
+          id?: string
+          language?: string | null
+          logo_url?: string | null
+          primary_color?: string | null
+          sms_enabled?: boolean | null
+          timezone?: string | null
+          updated_at?: string
+          whatsapp_enabled?: boolean | null
+        }
+        Update: {
+          clinic_id?: string
+          clinic_name?: string | null
+          created_at?: string
+          email_enabled?: boolean | null
+          id?: string
+          language?: string | null
+          logo_url?: string | null
+          primary_color?: string | null
+          sms_enabled?: boolean | null
+          timezone?: string | null
+          updated_at?: string
+          whatsapp_enabled?: boolean | null
+        }
+        Relationships: []
+      }
       clinics: {
         Row: {
           address: string | null

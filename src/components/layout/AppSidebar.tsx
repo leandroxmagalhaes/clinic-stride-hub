@@ -227,9 +227,11 @@ export function AppSidebar() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuItem disabled className="opacity-50">
-              <Settings className="mr-2 h-4 w-4" />
-              Configurações
+            <DropdownMenuItem asChild>
+              <Link to="/configuracoes" className="flex items-center">
+                <Settings className="mr-2 h-4 w-4" />
+                Configurações
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">

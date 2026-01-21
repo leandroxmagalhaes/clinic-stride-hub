@@ -15,6 +15,7 @@ import Financeiro from "./pages/Financeiro";
 import Servicos from "./pages/Servicos";
 import Comercial from "./pages/Comercial";
 import Engajamento from "./pages/Engajamento";
+import Configuracoes from "./pages/Configuracoes";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/servicos" element={<ProtectedRoute><Servicos /></ProtectedRoute>} />
               <Route path="/comercial" element={<ProtectedRoute><Comercial /></ProtectedRoute>} />
               <Route path="/engajamento" element={<ProtectedRoute><Engajamento /></ProtectedRoute>} />
+              <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
