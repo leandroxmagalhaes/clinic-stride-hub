@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Send, X, Copy, Link } from "lucide-react";
+import { MessageSquare, Send, X, Copy, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -165,7 +165,7 @@ export function AutomationTriggerToast({
                 onClick={handleCopyLink}
                 className="gap-2 min-h-[40px]"
               >
-                <Link className="h-4 w-4" />
+                <Link2 className="h-4 w-4" />
                 Copiar link
               </Button>
             </div>
