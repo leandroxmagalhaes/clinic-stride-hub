@@ -173,20 +173,28 @@ export function SessionManagementModal({
     }
   };
 
+  // Check if session can be finalized (has credits or credit already used)
+  const canFinalize = creditWasUsed || creditBalance > 0;
+
   const handleComplete = () => {
+    // Block if no credits available
+    if (!canFinalize) {
+      toast.error("Não é possível finalizar: o utente não possui créditos. Adicione créditos antes de finalizar.");
+      return;
+    }
+
     setIsLoading(true);
     try {
       // Check if credit was already deducted
       if (!creditWasUsed) {
-        // Try to deduct credit now
+        // Deduct credit now
         const result = onUseCredit(session.paciente_id, session.id);
         if (!result.success) {
-          toast.warning("Sessão finalizada sem crédito (pagamento pendente)");
-          onUpdateSession(session.id, { status: "realizado", payment_status: "pendente" });
-        } else {
-          toast.success("Sessão finalizada e crédito descontado!");
-          onUpdateSession(session.id, { status: "realizado", payment_status: "pago" });
+          toast.error("Erro ao descontar crédito");
+          return;
         }
+        toast.success("Sessão finalizada e crédito descontado!");
+        onUpdateSession(session.id, { status: "realizado", payment_status: "pago" });
       } else {
         onUpdateSession(session.id, { status: "realizado" });
         toast.success("Sessão finalizada!");
@@ -304,6 +312,14 @@ export function SessionManagementModal({
                   </Badge>
                 )}
               </div>
+
+              {/* No credits warning */}
+              {!canFinalize && !isTerminalStatus && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>Este utente não possui créditos. Adicione créditos antes de finalizar a sessão.</span>
+                </div>
+              )}
             </div>
 
             <Separator />
@@ -414,9 +430,9 @@ export function SessionManagementModal({
                 {/* Complete */}
                 <Button
                   variant="default"
-                  className="bg-primary"
                   onClick={handleComplete}
-                  disabled={isLoading}
+                  disabled={isLoading || !canFinalize}
+                  title={!canFinalize ? "Utente sem créditos disponíveis" : undefined}
                 >
                   <CheckCircle2 className="h-4 w-4 mr-2" />
                   Finalizar
