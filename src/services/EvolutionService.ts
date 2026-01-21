@@ -12,6 +12,9 @@ export interface Evolution {
   escala_dor: number | null;
   anexos_urls: string[] | null;
   created_at: string;
+  // New fields for dynamic specialty templates
+  specialty_id?: string | null;
+  structured_data?: Record<string, unknown> | null;
   profissional?: {
     id: string;
     full_name: string;
@@ -24,6 +27,9 @@ export interface CreateEvolutionData {
   descricao: string;
   escala_dor: number;
   sessao_id?: string;
+  // New fields for dynamic specialty templates
+  specialty_id?: string | null;
+  structured_data?: Record<string, unknown> | null;
 }
 
 export class EvolutionService {
@@ -71,6 +77,9 @@ export class EvolutionService {
       escala_dor: data.escala_dor,
       anexos_urls: null,
       created_at: new Date().toISOString(),
+      // New fields for specialty templates
+      specialty_id: data.specialty_id || null,
+      structured_data: data.structured_data || null,
       profissional: profissionalName
         ? { id: data.profissional_id, full_name: profissionalName }
         : undefined,

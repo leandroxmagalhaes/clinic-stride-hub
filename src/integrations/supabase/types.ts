@@ -132,6 +132,8 @@ export type Database = {
           profissional_id: string
           prontuario_id: string
           sessao_id: string | null
+          specialty_id: string | null
+          structured_data: Json | null
         }
         Insert: {
           anexos_urls?: string[] | null
@@ -143,6 +145,8 @@ export type Database = {
           profissional_id: string
           prontuario_id: string
           sessao_id?: string | null
+          specialty_id?: string | null
+          structured_data?: Json | null
         }
         Update: {
           anexos_urls?: string[] | null
@@ -154,6 +158,8 @@ export type Database = {
           profissional_id?: string
           prontuario_id?: string
           sessao_id?: string | null
+          specialty_id?: string | null
+          structured_data?: Json | null
         }
         Relationships: [
           {
@@ -182,6 +188,13 @@ export type Database = {
             columns: ["sessao_id"]
             isOneToOne: false
             referencedRelation: "sessoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evolucoes_clinicas_specialty_id_fkey"
+            columns: ["specialty_id"]
+            isOneToOne: false
+            referencedRelation: "specialty_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -498,6 +511,47 @@ export type Database = {
             columns: ["servico_id"]
             isOneToOne: false
             referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      specialty_templates: {
+        Row: {
+          clinic_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          schema: Json
+          updated_at: string
+        }
+        Insert: {
+          clinic_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          schema: Json
+          updated_at?: string
+        }
+        Update: {
+          clinic_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          schema?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "specialty_templates_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
         ]
