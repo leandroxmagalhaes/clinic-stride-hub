@@ -13,6 +13,8 @@ import { toast } from "sonner";
 // Services and Context (SRP Architecture)
 import { useData } from "@/contexts/DataContext";
 import { SessionService, Session } from "@/services/SessionService";
+import { Patient } from "@/services/PatientService";
+import { checkAppointmentCreatedTrigger, AutomationTriggerResult } from "@/services/AutomationEngine";
 
 // Components
 import { AgendaControls } from "@/components/agenda/AgendaControls";
@@ -20,6 +22,7 @@ import { AgendaDesktopGrid } from "@/components/agenda/AgendaDesktopGrid";
 import { AgendaMobileTimeline } from "@/components/agenda/AgendaMobileTimeline";
 import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
+import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
 
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
 
@@ -32,6 +35,9 @@ export default function Agenda() {
   const [selectedSlot, setSelectedSlot] = useState<{ date: Date; hour: number } | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
+  
+  // Automation trigger state
+  const [automationTrigger, setAutomationTrigger] = useState<AutomationTriggerResult | null>(null);
   
   // Form state
   const [selectedPaciente, setSelectedPaciente] = useState("");
@@ -105,7 +111,7 @@ export default function Agenda() {
     }
   }, [sessions, updateSession]);
 
-  const handleCreateSession = (data: {
+  const handleCreateSession = async (data: {
     pacienteId: string;
     profissionalId: string;
     servicoId: string;
@@ -123,6 +129,11 @@ export default function Agenda() {
     }
 
     try {
+      // Get lookup data for session creation
+      const selectedPatient = patients.find(p => p.id === data.pacienteId);
+      const selectedProfessional = professionals.find(p => p.id === data.profissionalId);
+      const selectedService = services.find(s => s.id === data.servicoId);
+
       // Create session using service (includes validation and conflict check)
       const newSession = SessionService.create(
         {
@@ -157,14 +168,34 @@ export default function Agenda() {
       // Update session payment status based on credit result
       if (!creditResult.success) {
         updateSession(newSession.id, { payment_status: "pendente" });
-        toast.warning("Sessão agendada com pagamento pendente (sem créditos)");
       } else {
         updateSession(newSession.id, { payment_status: "pago" });
-        toast.success("Sessão agendada e crédito descontado!");
       }
 
       setIsModalOpen(false);
       resetForm();
+
+      // Check for automation triggers AFTER successful session creation
+      const triggerResult = await checkAppointmentCreatedTrigger({
+        patientName: selectedPatient?.full_name || '',
+        patientPhone: selectedPatient?.phone || undefined,
+        professionalName: selectedProfessional?.full_name || '',
+        serviceName: selectedService?.name,
+        date: finalDate,
+        hour: finalHour,
+      });
+
+      if (triggerResult.shouldTrigger) {
+        // Show automation prompt
+        setAutomationTrigger(triggerResult);
+      } else {
+        // Just show success toast if no automation
+        toast.success(
+          creditResult.success 
+            ? "Sessão agendada e crédito descontado!" 
+            : "Sessão agendada com pagamento pendente"
+        );
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
     }
@@ -273,6 +304,12 @@ export default function Agenda() {
         onRefundCredit={refundCredit}
         onUseCredit={useCredit}
         wasCreditUsedForSession={wasCreditUsedForSession}
+      />
+
+      {/* Automation Trigger Toast/Modal */}
+      <AutomationTriggerToast
+        triggerResult={automationTrigger}
+        onDismiss={() => setAutomationTrigger(null)}
       />
     </AppLayout>
   );
