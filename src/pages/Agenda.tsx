@@ -12,23 +12,26 @@ import { toast } from "sonner";
 
 // Services and Context (SRP Architecture)
 import { useData } from "@/contexts/DataContext";
-import { SessionService } from "@/services/SessionService";
+import { SessionService, Session } from "@/services/SessionService";
 
 // Components
 import { AgendaControls } from "@/components/agenda/AgendaControls";
 import { AgendaDesktopGrid } from "@/components/agenda/AgendaDesktopGrid";
 import { AgendaMobileTimeline } from "@/components/agenda/AgendaMobileTimeline";
 import { NewSessionModal } from "@/components/agenda/NewSessionModal";
+import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
 
 export default function Agenda() {
-  const { sessions, addSession, updateSession, patients, professionals, services, getCreditBalance, useCredit } = useData();
+  const { sessions, addSession, updateSession, patients, professionals, services, getCreditBalance, useCredit, refundCredit, wasCreditUsedForSession } = useData();
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ date: Date; hour: number } | null>(null);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
   
   // Form state
   const [selectedPaciente, setSelectedPaciente] = useState("");
@@ -75,9 +78,14 @@ export default function Agenda() {
     setIsModalOpen(true);
   };
 
-  const handleSessionClick = (session: any) => {
-    // Future: Open session details/edit modal
-    toast.info(`Sessão: ${session.paciente?.full_name} - ${session.servico?.name}`);
+  const handleSessionClick = (session: Session) => {
+    setSelectedSession(session);
+    setIsSessionModalOpen(true);
+  };
+
+  const handleSessionModalClose = () => {
+    setIsSessionModalOpen(false);
+    setSelectedSession(null);
   };
 
   const handleSessionReschedule = useCallback((sessionId: string, newDate: Date, newHour: number) => {
@@ -240,6 +248,19 @@ export default function Agenda() {
         notes={notes}
         setNotes={setNotes}
         getCreditBalance={getCreditBalance}
+      />
+
+      {/* Session Management Modal */}
+      <SessionManagementModal
+        isOpen={isSessionModalOpen}
+        onClose={handleSessionModalClose}
+        session={selectedSession}
+        sessions={sessions}
+        getCreditBalance={getCreditBalance}
+        onUpdateSession={updateSession}
+        onRefundCredit={refundCredit}
+        onUseCredit={useCredit}
+        wasCreditUsedForSession={wasCreditUsedForSession}
       />
     </AppLayout>
   );
