@@ -133,7 +133,19 @@ export default function Agenda() {
           hour: finalHour,
           notes: data.notes,
         },
-        sessions
+        sessions,
+        {
+          services: services.map(s => ({
+            id: s.id,
+            name: s.name,
+            color: s.color,
+            duration_minutes: s.duration_minutes,
+            price: Number(s.price),
+            consumes_credit: s.consumes_credit,
+          })),
+          patients: patients.map(p => ({ id: p.id, full_name: p.full_name })),
+          professionals: professionals.map(p => ({ id: p.id, full_name: p.full_name })),
+        }
       );
 
       // Add to context (persists to localStorage)

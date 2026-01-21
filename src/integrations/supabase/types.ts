@@ -398,6 +398,7 @@ export type Database = {
         Row: {
           clinic_id: string
           color: string | null
+          consumes_credit: boolean
           created_at: string
           description: string | null
           duration_minutes: number
@@ -410,6 +411,7 @@ export type Database = {
         Insert: {
           clinic_id: string
           color?: string | null
+          consumes_credit?: boolean
           created_at?: string
           description?: string | null
           duration_minutes?: number
@@ -422,6 +424,7 @@ export type Database = {
         Update: {
           clinic_id?: string
           color?: string | null
+          consumes_credit?: boolean
           created_at?: string
           description?: string | null
           duration_minutes?: number

@@ -1,6 +1,6 @@
 // SessionService - Business logic for session/appointment operations (SRP)
 import { isSameDay, setHours, setMinutes, addMinutes } from "date-fns";
-import { DEMO_CLINIC_ID, mockServicos, mockPacientes, mockProfissionais } from "@/lib/mock-data";
+import { DEMO_CLINIC_ID } from "@/lib/mock-data";
 
 export interface Session {
   id: string;
@@ -29,6 +29,7 @@ export interface Session {
     name: string;
     color: string;
     duration_minutes: number;
+    consumes_credit?: boolean;
   };
 }
 
@@ -39,6 +40,25 @@ export interface CreateSessionData {
   date: Date;
   hour: number;
   notes?: string;
+}
+
+export interface ServiceData {
+  id: string;
+  name: string;
+  color: string | null;
+  duration_minutes: number;
+  price: number;
+  consumes_credit?: boolean;
+}
+
+export interface PatientData {
+  id: string;
+  full_name: string;
+}
+
+export interface ProfessionalData {
+  id: string;
+  full_name: string;
 }
 
 export interface ValidationResult {
@@ -91,8 +111,16 @@ export class SessionService {
     return { isValid: true };
   }
 
-  // Create a new session
-  static create(data: CreateSessionData, existingSessions: Session[]): Session {
+  // Create a new session with lookup data
+  static create(
+    data: CreateSessionData, 
+    existingSessions: Session[],
+    lookupData?: {
+      services?: ServiceData[];
+      patients?: PatientData[];
+      professionals?: ProfessionalData[];
+    }
+  ): Session {
     // Validate required fields
     const validation = this.validate(data);
     if (!validation.isValid) {
@@ -111,12 +139,13 @@ export class SessionService {
     }
 
     // Get service details for duration and price
-    const servico = mockServicos.find((s) => s.id === data.servicoId);
-    const paciente = mockPacientes.find((p) => p.id === data.pacienteId);
-    const profissional = mockProfissionais.find((p) => p.id === data.profissionalId);
+    const servico = lookupData?.services?.find((s) => s.id === data.servicoId);
+    const paciente = lookupData?.patients?.find((p) => p.id === data.pacienteId);
+    const profissional = lookupData?.professionals?.find((p) => p.id === data.profissionalId);
 
+    const durationMinutes = servico?.duration_minutes || 60;
     const startTime = setMinutes(setHours(new Date(data.date), data.hour), 0);
-    const endTime = addMinutes(startTime, servico?.duration_minutes || 60);
+    const endTime = addMinutes(startTime, durationMinutes);
 
     return {
       id: `sess-${Date.now()}`,
@@ -138,8 +167,9 @@ export class SessionService {
         ? {
             id: servico.id,
             name: servico.name,
-            color: servico.color,
+            color: servico.color || "#10B981",
             duration_minutes: servico.duration_minutes,
+            consumes_credit: servico.consumes_credit,
           }
         : undefined,
     };

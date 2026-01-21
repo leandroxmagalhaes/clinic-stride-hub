@@ -1,11 +1,11 @@
 // DataContext - Centralized state management with Supabase integration
-// Patients are fetched from the database; other entities use localStorage for demo purposes.
+// Patients and Services are fetched from the database; other entities use localStorage for demo purposes.
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
 import { Evolution } from "@/services/EvolutionService";
-import { mockSessoes, mockProfissionais, mockServicos, mockEvolucoes, mockCreditBalances } from "@/lib/mock-data";
+import { mockSessoes, mockProfissionais, mockEvolucoes, mockCreditBalances } from "@/lib/mock-data";
 import { supabase } from "@/integrations/supabase/client";
 
 const STORAGE_KEYS = {
@@ -14,6 +14,21 @@ const STORAGE_KEYS = {
   EVOLUTIONS: "physione_evolutions",
   CREDIT_BALANCES: "physione_credit_balances",
 };
+
+// Service type from Supabase
+export interface Service {
+  id: string;
+  name: string;
+  description: string | null;
+  duration_minutes: number;
+  price: number;
+  consumes_credit: boolean;
+  color: string | null;
+  is_active: boolean | null;
+  clinic_id: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface DataContextType {
   // Patients
@@ -45,8 +60,13 @@ interface DataContextType {
   refundCredit: (patientId: string) => void;
   wasCreditUsedForSession: (sessionId: string) => boolean;
   
-  // Static data (from mocks, read-only for now)
-  services: typeof mockServicos;
+  // Services (from Supabase)
+  services: Service[];
+  servicesLoading: boolean;
+  addService: (data: Partial<Service>) => Promise<void>;
+  updateService: (id: string, data: Partial<Service>) => Promise<void>;
+  deleteService: (id: string) => Promise<void>;
+  refreshServices: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -139,6 +159,10 @@ export function DataProvider({ children }: DataProviderProps) {
   const [evolutions, setEvolutions] = useState<Evolution[]>(loadInitialEvolutions);
   const [creditBalances, setCreditBalances] = useState<Record<string, number>>(loadInitialCreditBalances);
   
+  // Services state (from Supabase)
+  const [services, setServices] = useState<Service[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  
   // Track credit usage per session for idempotency (session_id -> boolean)
   const [creditUsageMap, setCreditUsageMap] = useState<Record<string, boolean>>({});
 
@@ -164,9 +188,89 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
-  // Load patients on mount and when auth changes
+  // Fetch services from Supabase
+  const fetchServices = async () => {
+    setServicesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("servicos")
+        .select("*")
+        .eq("is_active", true)
+        .order("name");
+
+      if (error) {
+        console.error("Error fetching services:", error);
+        return;
+      }
+
+      setServices(data as Service[]);
+    } catch (err) {
+      console.error("Exception fetching services:", err);
+    } finally {
+      setServicesLoading(false);
+    }
+  };
+
+  // Add new service
+  const addService = async (data: Partial<Service>): Promise<void> => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) throw new Error("User not authenticated");
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("clinic_id")
+      .eq("user_id", userData.user.id)
+      .single();
+
+    if (!profile?.clinic_id) throw new Error("User has no clinic");
+
+    const { error } = await supabase.from("servicos").insert({
+      name: data.name!,
+      description: data.description || null,
+      duration_minutes: data.duration_minutes || 60,
+      price: data.price || 0,
+      consumes_credit: data.consumes_credit ?? true,
+      color: data.color || "#10B981",
+      clinic_id: profile.clinic_id,
+    });
+
+    if (error) throw error;
+    await fetchServices();
+  };
+
+  // Update service
+  const updateService = async (id: string, data: Partial<Service>): Promise<void> => {
+    const { error } = await supabase
+      .from("servicos")
+      .update({
+        name: data.name,
+        description: data.description,
+        duration_minutes: data.duration_minutes,
+        price: data.price,
+        consumes_credit: data.consumes_credit,
+        color: data.color,
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+    await fetchServices();
+  };
+
+  // Delete service (soft delete - set inactive)
+  const deleteService = async (id: string): Promise<void> => {
+    const { error } = await supabase
+      .from("servicos")
+      .update({ is_active: false })
+      .eq("id", id);
+
+    if (error) throw error;
+    await fetchServices();
+  };
+
+  // Load data on mount
   useEffect(() => {
     fetchPatients();
+    fetchServices();
   }, []);
 
   // Clear localStorage on logout for security
@@ -176,14 +280,16 @@ export function DataProvider({ children }: DataProviderProps) {
         clearAllStoredData();
         // Reset state after logout
         setPatients([]);
+        setServices([]);
         setSessions(mockSessoes as unknown as Session[]);
         setProfessionals(mockProfissionais as Professional[]);
         setEvolutions(mockEvolucoes as Evolution[]);
         setCreditBalances({ ...mockCreditBalances });
         setCreditUsageMap({});
       } else if (event === 'SIGNED_IN') {
-        // Refresh patients when user signs in
+        // Refresh data when user signs in
         fetchPatients();
+        fetchServices();
       }
     });
 
@@ -330,7 +436,12 @@ export function DataProvider({ children }: DataProviderProps) {
     useCredit,
     refundCredit,
     wasCreditUsedForSession,
-    services: mockServicos,
+    services,
+    servicesLoading,
+    addService,
+    updateService,
+    deleteService,
+    refreshServices: fetchServices,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
