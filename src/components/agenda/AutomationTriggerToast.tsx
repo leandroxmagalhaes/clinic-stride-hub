@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MessageSquare, Send, X, Copy, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AutomationTriggerResult } from "@/services/AutomationEngine";
+import type { AutomationTriggerResult } from "@/services/AutomationEngine";
 
 interface AutomationTriggerToastProps {
   triggerResult: AutomationTriggerResult | null;
@@ -23,7 +23,6 @@ export function AutomationTriggerToast({
 }: AutomationTriggerToastProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [openAttempted, setOpenAttempted] = useState(false);
-  const anchorRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     if (triggerResult?.shouldTrigger) {
@@ -38,17 +37,7 @@ export function AutomationTriggerToast({
     console.debug('[WhatsApp] Attempting to open:', triggerResult.whatsappUrl);
     setOpenAttempted(true);
     
-    // Method 1: Anchor click (more compatible with browser security)
-    if (anchorRef.current) {
-      anchorRef.current.href = triggerResult.whatsappUrl;
-      anchorRef.current.click();
-      console.debug('[WhatsApp] Used anchor click method');
-      toast.success("Abrindo WhatsApp...", { duration: 3000 });
-      return;
-    }
-    
-    // Method 2: Fallback to window.open
-    console.debug('[WhatsApp] Anchor not available, trying window.open');
+    // Use window.open with noopener,noreferrer
     const newWindow = window.open(triggerResult.whatsappUrl, '_blank', 'noopener,noreferrer');
     
     if (newWindow) {
@@ -93,18 +82,6 @@ export function AutomationTriggerToast({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-md">
-        {/* Hidden anchor for reliable opening */}
-        <a
-          ref={anchorRef}
-          href="#"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="sr-only"
-          aria-hidden="true"
-        >
-          WhatsApp
-        </a>
-
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-primary">
             <MessageSquare className="h-5 w-5" />
@@ -128,7 +105,7 @@ export function AutomationTriggerToast({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Mensagem:
             </p>
-            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">
+            <div className="rounded-lg bg-accent/50 border border-accent p-3 text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">
               {triggerResult.processedMessage}
             </div>
           </div>
@@ -142,7 +119,7 @@ export function AutomationTriggerToast({
           <div className="grid grid-cols-1 gap-2">
             <Button 
               onClick={handleSendWhatsApp}
-              className="gap-2 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white w-full"
+              className="gap-2 min-h-[44px] w-full"
             >
               <Send className="h-4 w-4" />
               Abrir WhatsApp
