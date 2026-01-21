@@ -72,8 +72,10 @@ export default function Engajamento() {
   };
 
   useEffect(() => {
-    fetchAllData();
-  }, []);
+    if (user) {
+      fetchAllData();
+    }
+  }, [user]);
 
   const handleToggleFlow = async (id: string, isActive: boolean) => {
     const success = await AutomationService.toggleFlowStatus(id, isActive);
