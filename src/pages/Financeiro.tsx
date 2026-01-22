@@ -24,6 +24,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FinancialService, FinancialKPIs, PurchaseTransaction } from "@/services/FinancialService";
+import { TransactionMobileCards } from "@/components/financeiro/TransactionMobileCards";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Bar,
   BarChart,
@@ -48,6 +50,7 @@ const PAYMENT_STATUS_STYLES: Record<string, { label: string; variant: "default" 
 };
 
 export default function Financeiro() {
+  const isMobile = useIsMobile();
   const [kpis, setKpis] = useState<FinancialKPIs | null>(null);
   const [transactions, setTransactions] = useState<PurchaseTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -198,12 +201,19 @@ export default function Financeiro() {
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}
               </div>
+            ) : isMobile ? (
+              /* Mobile: Card-based layout */
+              <TransactionMobileCards 
+                transactions={transactions} 
+                formatCurrency={formatCurrency} 
+              />
             ) : transactions.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <DollarSign className="h-12 w-12 mx-auto mb-3 opacity-30" />
                 <p>Nenhuma venda registrada no período</p>
               </div>
             ) : (
+              /* Desktop: Table layout */
               <Table>
                 <TableHeader>
                   <TableRow>
