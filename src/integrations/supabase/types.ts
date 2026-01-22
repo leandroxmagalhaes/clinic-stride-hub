@@ -375,6 +375,50 @@ export type Database = {
           },
         ]
       }
+      patient_diary: {
+        Row: {
+          activity_description: string
+          clinic_id: string | null
+          created_at: string
+          entry_date: string
+          id: string
+          notes: string | null
+          pain_level: number
+          patient_id: string
+          updated_at: string
+        }
+        Insert: {
+          activity_description: string
+          clinic_id?: string | null
+          created_at?: string
+          entry_date?: string
+          id?: string
+          notes?: string | null
+          pain_level: number
+          patient_id: string
+          updated_at?: string
+        }
+        Update: {
+          activity_description?: string
+          clinic_id?: string | null
+          created_at?: string
+          entry_date?: string
+          id?: string
+          notes?: string | null
+          pain_level?: number
+          patient_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_diary_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       patient_feedback: {
         Row: {
           clinic_id: string
@@ -786,6 +830,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       patient_credit_balances: {
@@ -809,9 +874,16 @@ export type Database = {
     Functions: {
       get_patient_balance: { Args: { p_patient_id: string }; Returns: number }
       get_user_clinic_id: { Args: { p_user_id: string }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "professional" | "patient"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -938,6 +1010,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "professional", "patient"],
+    },
   },
 } as const

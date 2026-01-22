@@ -16,6 +16,7 @@ import Servicos from "./pages/Servicos";
 import Comercial from "./pages/Comercial";
 import Engajamento from "./pages/Engajamento";
 import Configuracoes from "./pages/Configuracoes";
+import PatientPortal from "./pages/PatientPortal";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
@@ -46,6 +47,9 @@ const App = () => (
               <Route path="/comercial" element={<ProtectedRoute><Comercial /></ProtectedRoute>} />
               <Route path="/engajamento" element={<ProtectedRoute><Engajamento /></ProtectedRoute>} />
               <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+              
+              {/* Patient Portal - role check is handled inside the component */}
+              <Route path="/patient-portal" element={<ProtectedRoute><PatientPortal /></ProtectedRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
