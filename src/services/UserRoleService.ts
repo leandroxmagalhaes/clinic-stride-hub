@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
-export type AppRole = 'admin' | 'professional' | 'patient';
+export type AppRole = Database['public']['Enums']['app_role'];
 
 export interface UserRole {
   id: string;
@@ -17,9 +18,8 @@ export class UserRoleService {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return [];
 
-    // Use 'as any' since types aren't generated yet for this new table
     const { data, error } = await supabase
-      .from('user_roles' as any)
+      .from('user_roles')
       .select('role')
       .eq('user_id', userData.user.id);
 
@@ -28,7 +28,7 @@ export class UserRoleService {
       return [];
     }
 
-    return ((data || []) as unknown as { role: AppRole }[]).map(r => r.role);
+    return (data || []).map(r => r.role);
   }
 
   /**
