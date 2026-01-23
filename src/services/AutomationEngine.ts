@@ -16,8 +16,24 @@ export interface MessageTemplateData {
 /**
  * Process a message template by replacing variables with actual data
  */
+/**
+ * Get the production base URL for patient portal links
+ */
+export function getPortalBaseUrl(): string {
+  // Use window.location.origin to get the current domain (works for both preview and production)
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  // Fallback for SSR or edge cases
+  return 'https://clinic-stride-hub.lovable.app';
+}
+
+/**
+ * Process a message template by replacing variables with actual data
+ */
 export function processMessageTemplate(template: string, data: MessageTemplateData): string {
   const formattedDate = format(data.date, "dd/MM/yyyy", { locale: ptBR });
+  const portalLink = `${getPortalBaseUrl()}/patient-portal`;
   
   return template
     .replace(/\{\{patient_name\}\}/gi, data.patientName)
@@ -26,7 +42,9 @@ export function processMessageTemplate(template: string, data: MessageTemplateDa
     .replace(/\{\{professional\}\}/gi, data.professionalName)
     .replace(/\{\{professional_name\}\}/gi, data.professionalName)
     .replace(/\{\{service\}\}/gi, data.serviceName || '')
-    .replace(/\{\{clinic_name\}\}/gi, data.clinicName);
+    .replace(/\{\{clinic_name\}\}/gi, data.clinicName)
+    .replace(/\{\{portal_link\}\}/gi, portalLink)
+    .replace(/\[LINK\]/gi, portalLink);
 }
 
 /**
