@@ -570,6 +570,69 @@ export type Database = {
           },
         ]
       }
+      professional_patient_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          clinic_id: string
+          id: string
+          patient_id: string
+          professional_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          clinic_id: string
+          id?: string
+          patient_id: string
+          professional_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          clinic_id?: string
+          id?: string
+          patient_id?: string
+          professional_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professional_patient_assignments_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_patient_assignments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_patient_assignments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "professional_patient_assignments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "professional_patient_assignments_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "profissionais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1171,6 +1234,14 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      professional_can_access_patient: {
+        Args: { p_patient_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      professional_can_access_session: {
+        Args: { p_session_id: string; p_user_id: string }
         Returns: boolean
       }
     }

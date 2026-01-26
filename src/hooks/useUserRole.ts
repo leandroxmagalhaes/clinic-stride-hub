@@ -30,6 +30,7 @@ export function useUserRole() {
     isPatient: roles.includes('patient'),
     isProfessional: roles.includes('professional'),
     isAdmin: roles.includes('admin'),
+    isSecretary: roles.includes('secretary'),
     hasRole: (role: AppRole) => roles.includes(role),
   };
 }
