@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
+import { usePermissions, PermissionModule } from "@/hooks/usePermissions";
 import { LOCALE_CONFIGS, Locale } from "@/lib/i18n";
 import { toast } from "sonner";
 
@@ -53,21 +54,22 @@ interface NavItem {
   icon: React.ElementType;
   disabled?: boolean;
   badge?: string;
+  module?: PermissionModule;
 }
 
 const mainNavItems: NavItem[] = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Agenda", url: "/agenda", icon: Calendar },
-  { title: "Pacientes", url: "/pacientes", icon: Users },
-  { title: "Prontuários", url: "/prontuarios", icon: FileText },
-  { title: "Profissionais", url: "/profissionais", icon: UserCog },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, module: "dashboard" },
+  { title: "Agenda", url: "/agenda", icon: Calendar, module: "agenda" },
+  { title: "Pacientes", url: "/pacientes", icon: Users, module: "pacientes" },
+  { title: "Prontuários", url: "/prontuarios", icon: FileText, module: "prontuarios" },
+  { title: "Profissionais", url: "/profissionais", icon: UserCog, module: "profissionais" },
 ];
 
 const managementNavItems: NavItem[] = [
-  { title: "Serviços", url: "/servicos", icon: Briefcase },
-  { title: "Comercial", url: "/comercial", icon: TrendingUp },
-  { title: "Financeiro", url: "/financeiro", icon: DollarSign },
-  { title: "Engajamento", url: "/engajamento", icon: Heart },
+  { title: "Serviços", url: "/servicos", icon: Briefcase, module: "servicos" },
+  { title: "Comercial", url: "/comercial", icon: TrendingUp, module: "comercial" },
+  { title: "Financeiro", url: "/financeiro", icon: DollarSign, module: "financeiro" },
+  { title: "Engajamento", url: "/engajamento", icon: Heart, module: "engajamento" },
   { title: "Clínicas", url: "/clinicas", icon: Building2, disabled: true, badge: "Em breve" },
 ];
 
@@ -76,6 +78,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { locale, setLocale } = useLocale();
+  const { canAccessModule, getRolesLabels } = usePermissions();
 
   const handleLogout = async () => {
     const { error } = await signOut();
@@ -95,6 +98,7 @@ export function AppSidebar() {
   // Get user display info
   const userEmail = user?.email || '';
   const userName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'Usuário';
+  const userRoles = getRolesLabels();
   const userInitials = userName
     .split(' ')
     .map((n: string) => n[0])
@@ -105,6 +109,11 @@ export function AppSidebar() {
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = location.pathname === item.url;
     const Icon = item.icon;
+
+    // Check permission if module is defined
+    if (item.module && !canAccessModule(item.module)) {
+      return null;
+    }
 
     return (
       <SidebarMenuItem>
@@ -138,6 +147,14 @@ export function AppSidebar() {
     );
   };
 
+  // Filter nav items based on permissions
+  const visibleMainNavItems = mainNavItems.filter(
+    item => !item.module || canAccessModule(item.module)
+  );
+  const visibleManagementNavItems = managementNavItems.filter(
+    item => !item.module || canAccessModule(item.module)
+  );
+
   return (
     <Sidebar className="border-r-0">
       <SidebarHeader className="p-4 border-b border-sidebar-border">
@@ -157,31 +174,35 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="scrollbar-thin">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-muted text-[10px] uppercase tracking-wider font-medium">
-            Principal
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <NavItemComponent key={item.title} item={item} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {visibleMainNavItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-sidebar-muted text-[10px] uppercase tracking-wider font-medium">
+              Principal
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleMainNavItems.map((item) => (
+                  <NavItemComponent key={item.title} item={item} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-        <SidebarGroup className="mt-2">
-          <SidebarGroupLabel className="text-sidebar-muted text-[10px] uppercase tracking-wider font-medium">
-            Gestão
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {managementNavItems.map((item) => (
-                <NavItemComponent key={item.title} item={item} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {visibleManagementNavItems.length > 0 && (
+          <SidebarGroup className="mt-2">
+            <SidebarGroupLabel className="text-sidebar-muted text-[10px] uppercase tracking-wider font-medium">
+              Gestão
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleManagementNavItems.map((item) => (
+                  <NavItemComponent key={item.title} item={item} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
@@ -199,7 +220,7 @@ export function AppSidebar() {
                   {userName}
                 </p>
                 <p className="text-[10px] text-sidebar-muted truncate">
-                  {userEmail}
+                  {userRoles.length > 0 ? userRoles.join(' • ') : userEmail}
                 </p>
               </div>
               <ChevronDown className="h-4 w-4 text-sidebar-muted shrink-0" />

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { DataProvider } from "@/contexts/DataContext";
 import { LocaleProvider } from "@/contexts/LocaleContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import Dashboard from "./pages/Dashboard";
 import Agenda from "./pages/Agenda";
 import Pacientes from "./pages/Pacientes";
@@ -36,17 +37,53 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               
-              {/* Protected routes */}
+              {/* Protected routes with permission checks */}
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
-              <Route path="/pacientes" element={<ProtectedRoute><Pacientes /></ProtectedRoute>} />
-              <Route path="/prontuarios" element={<ProtectedRoute><Prontuarios /></ProtectedRoute>} />
-              <Route path="/profissionais" element={<ProtectedRoute><Profissionais /></ProtectedRoute>} />
-              <Route path="/financeiro" element={<ProtectedRoute><Financeiro /></ProtectedRoute>} />
-              <Route path="/servicos" element={<ProtectedRoute><Servicos /></ProtectedRoute>} />
-              <Route path="/comercial" element={<ProtectedRoute><Comercial /></ProtectedRoute>} />
-              <Route path="/engajamento" element={<ProtectedRoute><Engajamento /></ProtectedRoute>} />
-              <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+              <Route path="/agenda" element={
+                <ProtectedRoute>
+                  <PermissionGuard module="agenda"><Agenda /></PermissionGuard>
+                </ProtectedRoute>
+              } />
+              <Route path="/pacientes" element={
+                <ProtectedRoute>
+                  <PermissionGuard module="pacientes"><Pacientes /></PermissionGuard>
+                </ProtectedRoute>
+              } />
+              <Route path="/prontuarios" element={
+                <ProtectedRoute>
+                  <PermissionGuard module="prontuarios"><Prontuarios /></PermissionGuard>
+                </ProtectedRoute>
+              } />
+              <Route path="/profissionais" element={
+                <ProtectedRoute>
+                  <PermissionGuard module="profissionais"><Profissionais /></PermissionGuard>
+                </ProtectedRoute>
+              } />
+              <Route path="/financeiro" element={
+                <ProtectedRoute>
+                  <PermissionGuard module="financeiro"><Financeiro /></PermissionGuard>
+                </ProtectedRoute>
+              } />
+              <Route path="/servicos" element={
+                <ProtectedRoute>
+                  <PermissionGuard module="servicos"><Servicos /></PermissionGuard>
+                </ProtectedRoute>
+              } />
+              <Route path="/comercial" element={
+                <ProtectedRoute>
+                  <PermissionGuard module="comercial"><Comercial /></PermissionGuard>
+                </ProtectedRoute>
+              } />
+              <Route path="/engajamento" element={
+                <ProtectedRoute>
+                  <PermissionGuard module="engajamento"><Engajamento /></PermissionGuard>
+                </ProtectedRoute>
+              } />
+              <Route path="/configuracoes" element={
+                <ProtectedRoute>
+                  <PermissionGuard module="configuracoes"><Configuracoes /></PermissionGuard>
+                </ProtectedRoute>
+              } />
               
               {/* Patient Portal - role check is handled inside the component */}
               <Route path="/patient-portal" element={<ProtectedRoute><PatientPortal /></ProtectedRoute>} />

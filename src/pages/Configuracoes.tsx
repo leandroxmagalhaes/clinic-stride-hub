@@ -2,11 +2,13 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Palette, Zap, Shield, Puzzle } from 'lucide-react';
+import { Building2, Palette, Zap, Shield, Puzzle, Users } from 'lucide-react';
 import { GeneralSettingsForm } from '@/components/settings/GeneralSettingsForm';
 import { AppearanceSettingsForm } from '@/components/settings/AppearanceSettingsForm';
 import { AutomationSettingsForm } from '@/components/settings/AutomationSettingsForm';
+import { TeamSettingsPanel } from '@/components/settings/TeamSettingsPanel';
 import { useSettings } from '@/hooks/useSettings';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { 
   GeneralSettingsFormData, 
   AppearanceSettingsFormData, 
@@ -15,6 +17,7 @@ import type {
 
 export default function Configuracoes() {
   const { settings, isLoading, isSaving, saveSettings, clinicInfo } = useSettings();
+  const { isAdminMaster, canAccessModule } = usePermissions();
 
   const handleSaveGeneral = (data: GeneralSettingsFormData) => {
     saveSettings(data);
@@ -38,7 +41,7 @@ export default function Configuracoes() {
     >
       <div className="max-w-4xl mx-auto">
         <Tabs defaultValue="geral" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
             <TabsTrigger value="geral" className="gap-2">
               <Building2 className="h-4 w-4 hidden sm:inline" />
               Geral
@@ -51,6 +54,12 @@ export default function Configuracoes() {
               <Zap className="h-4 w-4 hidden sm:inline" />
               Automação
             </TabsTrigger>
+            {canAccessModule('equipe') && (
+              <TabsTrigger value="equipe" className="gap-2">
+                <Users className="h-4 w-4 hidden sm:inline" />
+                Equipe
+              </TabsTrigger>
+            )}
             <TabsTrigger value="seguranca" className="gap-2" disabled>
               <Shield className="h-4 w-4 hidden sm:inline" />
               Segurança
@@ -91,6 +100,13 @@ export default function Configuracoes() {
               onSave={handleSaveAutomation}
             />
           </TabsContent>
+
+          {/* Team Tab */}
+          {canAccessModule('equipe') && (
+            <TabsContent value="equipe">
+              <TeamSettingsPanel />
+            </TabsContent>
+          )}
 
           {/* Security Tab (Coming Soon) */}
           <TabsContent value="seguranca">
