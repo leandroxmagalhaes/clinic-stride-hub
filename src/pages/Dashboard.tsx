@@ -76,7 +76,20 @@ export default function Dashboard() {
           hour: now.getHours(),
           notes: data.notes,
         },
-        sessions
+        sessions,
+        'clinic-id', // Will be set properly by backend
+        {
+          services: services.map(s => ({
+            id: s.id,
+            name: s.name,
+            color: s.color || '#10B981',
+            duration_minutes: s.duration_minutes,
+            price: Number(s.price),
+            consumes_credit: s.consumes_credit,
+          })),
+          patients: patients.map(p => ({ id: p.id, full_name: p.full_name })),
+          professionals: professionals.map(p => ({ id: p.id, full_name: p.full_name })),
+        }
       );
 
       // Try to use credit (idempotent operation)

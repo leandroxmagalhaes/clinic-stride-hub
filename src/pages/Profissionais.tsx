@@ -24,6 +24,7 @@ import { Plus, Search, Phone, Mail, Award, User } from "lucide-react";
 import { toast } from "sonner";
 import { useData } from "@/contexts/DataContext";
 import { ProfessionalService } from "@/services/ProfessionalService";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Profissionais() {
   const { professionals, addProfessional } = useData();
@@ -52,9 +53,49 @@ export default function Profissionais() {
     return roles[role] || role;
   };
 
-  const handleCreateProfessional = () => {
+  const handleCreateProfessional = async () => {
     try {
-      const newProfessional = ProfessionalService.create(formData, professionals);
+      // Get clinic_id from user profile
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error("Utilizador não autenticado");
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("clinic_id")
+        .eq("user_id", userData.user.id)
+        .maybeSingle();
+
+      if (!profile?.clinic_id) throw new Error("Clínica não identificada");
+
+      // Insert into database
+      const { data: newProf, error } = await supabase
+        .from("profissionais")
+        .insert({
+          clinic_id: profile.clinic_id,
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone?.trim() || null,
+          specialty: formData.specialty?.trim() || null,
+          council_number: formData.crefito?.trim() || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newProfessional = {
+        id: newProf.id,
+        clinic_id: newProf.clinic_id,
+        full_name: newProf.full_name,
+        email: newProf.email,
+        phone: newProf.phone,
+        role: formData.role,
+        specialty: newProf.specialty,
+        crefito: newProf.council_number,
+        avatar_url: newProf.avatar_url,
+        is_active: newProf.is_active,
+      };
+
       addProfessional(newProfessional);
       toast.success("Profissional cadastrado com sucesso!");
       setIsModalOpen(false);

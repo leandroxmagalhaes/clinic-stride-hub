@@ -1,19 +1,11 @@
-// DataContext - Centralized state management with Supabase integration
-// Patients and Services are fetched from the database; other entities use localStorage for demo purposes.
+// DataContext - Centralized state management with 100% Supabase integration
+// All data is fetched from the database - no localStorage or mock data
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
 import { Evolution } from "@/services/EvolutionService";
-import { mockSessoes, mockProfissionais, mockEvolucoes, mockCreditBalances } from "@/lib/mock-data";
 import { supabase } from "@/integrations/supabase/client";
-
-const STORAGE_KEYS = {
-  SESSIONS: "physione_sessions",
-  PROFESSIONALS: "physione_professionals",
-  EVOLUTIONS: "physione_evolutions",
-  CREDIT_BALANCES: "physione_credit_balances",
-};
 
 // Service type from Supabase
 export interface Service {
@@ -40,25 +32,32 @@ interface DataContextType {
   
   // Sessions
   sessions: Session[];
+  sessionsLoading: boolean;
   addSession: (session: Session) => void;
   updateSession: (id: string, data: Partial<Session>) => void;
+  refreshSessions: () => Promise<void>;
   
   // Professionals
   professionals: Professional[];
+  professionalsLoading: boolean;
   addProfessional: (professional: Professional) => void;
   updateProfessional: (id: string, data: Partial<Professional>) => void;
+  refreshProfessionals: () => Promise<void>;
   
   // Evolutions
   evolutions: Evolution[];
+  evolutionsLoading: boolean;
   addEvolution: (evolution: Evolution) => void;
+  refreshEvolutions: () => Promise<void>;
   
-  // Credit Balances (demo mode using localStorage)
+  // Credit Balances (from database view)
   creditBalances: Record<string, number>;
   getCreditBalance: (patientId: string) => number;
-  addCredits: (patientId: string, amount: number) => void;
+  addCredits: (patientId: string, amount: number) => Promise<void>;
   useCredit: (patientId: string, sessionId: string) => { success: boolean; error?: string };
   refundCredit: (patientId: string) => void;
   wasCreditUsedForSession: (sessionId: string) => boolean;
+  refreshCreditBalances: () => Promise<void>;
   
   // Services (from Supabase)
   services: Service[];
@@ -71,95 +70,26 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Serialize sessions (convert Date objects to strings)
-function serializeSessions(sessions: Session[]): string {
-  return JSON.stringify(
-    sessions.map((s) => ({
-      ...s,
-      start_time: s.start_time instanceof Date ? s.start_time.toISOString() : s.start_time,
-      end_time: s.end_time instanceof Date ? s.end_time.toISOString() : s.end_time,
-    }))
-  );
-}
-
-// Deserialize sessions (convert strings back to Date objects)
-function deserializeSessions(json: string): Session[] {
-  const parsed = JSON.parse(json);
-  return parsed.map((s: any) => ({
-    ...s,
-    start_time: new Date(s.start_time),
-    end_time: new Date(s.end_time),
-  }));
-}
-
-function loadInitialSessions(): Session[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEYS.SESSIONS);
-    if (stored) {
-      return deserializeSessions(stored);
-    }
-  } catch (e) {
-    console.error("Error loading sessions from localStorage:", e);
-  }
-  return mockSessoes as unknown as Session[];
-}
-
-function loadInitialProfessionals(): Professional[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEYS.PROFESSIONALS);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (e) {
-    console.error("Error loading professionals from localStorage:", e);
-  }
-  return mockProfissionais as Professional[];
-}
-
-function loadInitialEvolutions(): Evolution[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEYS.EVOLUTIONS);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (e) {
-    console.error("Error loading evolutions from localStorage:", e);
-  }
-  return mockEvolucoes as Evolution[];
-}
-
-function loadInitialCreditBalances(): Record<string, number> {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEYS.CREDIT_BALANCES);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (e) {
-    console.error("Error loading credit balances from localStorage:", e);
-  }
-  return { ...mockCreditBalances };
-}
-
 interface DataProviderProps {
   children: ReactNode;
 }
 
-// Clear all localStorage data
-function clearAllStoredData() {
-  Object.values(STORAGE_KEYS).forEach(key => {
-    localStorage.removeItem(key);
-  });
-}
-
 export function DataProvider({ children }: DataProviderProps) {
+  // Core state
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
-  const [sessions, setSessions] = useState<Session[]>(loadInitialSessions);
-  const [professionals, setProfessionals] = useState<Professional[]>(loadInitialProfessionals);
-  const [evolutions, setEvolutions] = useState<Evolution[]>(loadInitialEvolutions);
-  const [creditBalances, setCreditBalances] = useState<Record<string, number>>(loadInitialCreditBalances);
   
-  // Services state (from Supabase)
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [professionalsLoading, setProfessionalsLoading] = useState(true);
+  
+  const [evolutions, setEvolutions] = useState<Evolution[]>([]);
+  const [evolutionsLoading, setEvolutionsLoading] = useState(true);
+  
+  const [creditBalances, setCreditBalances] = useState<Record<string, number>>({});
+  
   const [services, setServices] = useState<Service[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
   
@@ -185,6 +115,155 @@ export function DataProvider({ children }: DataProviderProps) {
       console.error("Exception fetching patients:", err);
     } finally {
       setPatientsLoading(false);
+    }
+  };
+
+  // Fetch sessions from Supabase with relations
+  const fetchSessions = async () => {
+    setSessionsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("sessoes")
+        .select(`
+          *,
+          paciente:pacientes(id, full_name),
+          profissional:profissionais(id, full_name),
+          servico:servicos(id, name, color, duration_minutes, consumes_credit)
+        `)
+        .order("start_time", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching sessions:", error);
+        return;
+      }
+
+      // Transform data to match Session interface
+      const transformedSessions: Session[] = (data || []).map((s: any) => ({
+        id: s.id,
+        clinic_id: s.clinic_id,
+        paciente_id: s.paciente_id,
+        profissional_id: s.profissional_id,
+        servico_id: s.servico_id,
+        start_time: new Date(s.start_time),
+        end_time: new Date(s.end_time),
+        status: s.status,
+        price: s.price || 0,
+        payment_status: s.payment_status || 'pendente',
+        payment_method: s.payment_method,
+        notes: s.notes,
+        paciente: s.paciente,
+        profissional: s.profissional,
+        servico: s.servico,
+      }));
+
+      setSessions(transformedSessions);
+    } catch (err) {
+      console.error("Exception fetching sessions:", err);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  // Fetch professionals from Supabase
+  const fetchProfessionals = async () => {
+    setProfessionalsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("profissionais")
+        .select("*")
+        .eq("is_active", true)
+        .order("full_name");
+
+      if (error) {
+        console.error("Error fetching professionals:", error);
+        return;
+      }
+
+      // Map database fields to Professional interface
+      const transformed: Professional[] = (data || []).map((p: any) => ({
+        id: p.id,
+        clinic_id: p.clinic_id,
+        full_name: p.full_name,
+        email: p.email,
+        phone: p.phone,
+        role: 'fisioterapeuta', // Default role
+        specialty: p.specialty,
+        crefito: p.council_number,
+        avatar_url: p.avatar_url,
+        is_active: p.is_active,
+      }));
+
+      setProfessionals(transformed);
+    } catch (err) {
+      console.error("Exception fetching professionals:", err);
+    } finally {
+      setProfessionalsLoading(false);
+    }
+  };
+
+  // Fetch evolutions from Supabase
+  const fetchEvolutions = async () => {
+    setEvolutionsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("evolucoes_clinicas")
+        .select(`
+          *,
+          profissional:profissionais(id, full_name)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching evolutions:", error);
+        return;
+      }
+
+      // Map database fields to Evolution interface
+      const transformed: Evolution[] = (data || []).map((e: any) => ({
+        id: e.id,
+        clinic_id: e.clinic_id,
+        prontuario_id: e.prontuario_id,
+        sessao_id: e.sessao_id,
+        profissional_id: e.profissional_id,
+        descricao: e.descricao,
+        escala_dor: e.escala_dor,
+        anexos_urls: e.anexos_urls,
+        created_at: e.created_at,
+        specialty_id: e.specialty_id,
+        structured_data: e.structured_data,
+        profissional: e.profissional,
+      }));
+
+      setEvolutions(transformed);
+    } catch (err) {
+      console.error("Exception fetching evolutions:", err);
+    } finally {
+      setEvolutionsLoading(false);
+    }
+  };
+
+  // Fetch credit balances from the database view
+  const fetchCreditBalances = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("saldo_creditos")
+        .select("patient_id, saldo");
+
+      if (error) {
+        console.error("Error fetching credit balances:", error);
+        return;
+      }
+
+      const balances: Record<string, number> = {};
+      (data || []).forEach((row: any) => {
+        if (row.patient_id) {
+          balances[row.patient_id] = row.saldo || 0;
+        }
+      });
+
+      setCreditBalances(balances);
+    } catch (err) {
+      console.error("Exception fetching credit balances:", err);
     }
   };
 
@@ -220,7 +299,7 @@ export function DataProvider({ children }: DataProviderProps) {
       .from("profiles")
       .select("clinic_id")
       .eq("user_id", userData.user.id)
-      .single();
+      .maybeSingle();
 
     if (!profile?.clinic_id) throw new Error("User has no clinic");
 
@@ -267,74 +346,45 @@ export function DataProvider({ children }: DataProviderProps) {
     await fetchServices();
   };
 
-  // Load data on mount
+  // Load all data on mount
   useEffect(() => {
     fetchPatients();
     fetchServices();
+    fetchSessions();
+    fetchProfessionals();
+    fetchEvolutions();
+    fetchCreditBalances();
   }, []);
 
-  // Clear localStorage on logout for security
+  // Refresh data on auth state change
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
-        clearAllStoredData();
-        // Reset state after logout
+        // Clear all state on logout
         setPatients([]);
         setServices([]);
-        setSessions(mockSessoes as unknown as Session[]);
-        setProfessionals(mockProfissionais as Professional[]);
-        setEvolutions(mockEvolucoes as Evolution[]);
-        setCreditBalances({ ...mockCreditBalances });
+        setSessions([]);
+        setProfessionals([]);
+        setEvolutions([]);
+        setCreditBalances({});
         setCreditUsageMap({});
       } else if (event === 'SIGNED_IN') {
-        // Refresh data when user signs in
+        // Refresh all data when user signs in
         fetchPatients();
         fetchServices();
+        fetchSessions();
+        fetchProfessionals();
+        fetchEvolutions();
+        fetchCreditBalances();
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Persist sessions to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.SESSIONS, serializeSessions(sessions));
-    } catch (e) {
-      console.error("Error saving sessions to localStorage:", e);
-    }
-  }, [sessions]);
-
-  // Persist professionals to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.PROFESSIONALS, JSON.stringify(professionals));
-    } catch (e) {
-      console.error("Error saving professionals to localStorage:", e);
-    }
-  }, [professionals]);
-
-  // Persist evolutions to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.EVOLUTIONS, JSON.stringify(evolutions));
-    } catch (e) {
-      console.error("Error saving evolutions to localStorage:", e);
-    }
-  }, [evolutions]);
-
-  // Persist credit balances to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.CREDIT_BALANCES, JSON.stringify(creditBalances));
-    } catch (e) {
-      console.error("Error saving credit balances to localStorage:", e);
-    }
-  }, [creditBalances]);
-
+  // Local state handlers (optimistic updates)
   const addPatient = (patient: Patient) => {
     setPatients((prev) => [...prev, patient]);
-    // Initialize credit balance for new patient
     setCreditBalances((prev) => ({ ...prev, [patient.id]: 0 }));
   };
 
@@ -345,7 +395,7 @@ export function DataProvider({ children }: DataProviderProps) {
   };
 
   const addSession = (session: Session) => {
-    setSessions((prev) => [...prev, session]);
+    setSessions((prev) => [session, ...prev]);
   };
 
   const updateSession = (id: string, data: Partial<Session>) => {
@@ -368,17 +418,38 @@ export function DataProvider({ children }: DataProviderProps) {
     setEvolutions((prev) => [evolution, ...prev]);
   };
 
-  // Credit balance functions (Ledger model simulation in localStorage)
+  // Credit balance functions
   const getCreditBalance = (patientId: string): number => {
     return creditBalances[patientId] ?? 0;
   };
 
-  const addCredits = (patientId: string, amount: number): void => {
+  const addCredits = async (patientId: string, amount: number): Promise<void> => {
     if (amount <= 0) return;
-    setCreditBalances((prev) => ({
-      ...prev,
-      [patientId]: (prev[patientId] ?? 0) + amount,
-    }));
+    
+    // Get clinic_id
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) throw new Error("User not authenticated");
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("clinic_id")
+      .eq("user_id", userData.user.id)
+      .maybeSingle();
+
+    if (!profile?.clinic_id) throw new Error("User has no clinic");
+
+    // Insert credit transaction
+    const { error } = await supabase.from("transacoes_credito").insert({
+      patient_id: patientId,
+      clinic_id: profile.clinic_id,
+      tipo: 'compra',
+      quantidade: amount,
+    });
+
+    if (error) throw error;
+    
+    // Refresh balances
+    await fetchCreditBalances();
   };
 
   // Idempotent credit usage - returns error if already used for this session
@@ -393,11 +464,7 @@ export function DataProvider({ children }: DataProviderProps) {
       return { success: false, error: "Saldo de créditos insuficiente" };
     }
 
-    // Deduct credit and mark session as processed
-    setCreditBalances((prev) => ({
-      ...prev,
-      [patientId]: prev[patientId] - 1,
-    }));
+    // Mark session as processed (actual DB deduction happens in session creation)
     setCreditUsageMap((prev) => ({ ...prev, [sessionId]: true }));
 
     return { success: true };
@@ -423,19 +490,26 @@ export function DataProvider({ children }: DataProviderProps) {
     updatePatient,
     refreshPatients: fetchPatients,
     sessions,
+    sessionsLoading,
     addSession,
     updateSession,
+    refreshSessions: fetchSessions,
     professionals,
+    professionalsLoading,
     addProfessional,
     updateProfessional,
+    refreshProfessionals: fetchProfessionals,
     evolutions,
+    evolutionsLoading,
     addEvolution,
+    refreshEvolutions: fetchEvolutions,
     creditBalances,
     getCreditBalance,
     addCredits,
     useCredit,
     refundCredit,
     wasCreditUsedForSession,
+    refreshCreditBalances: fetchCreditBalances,
     services,
     servicesLoading,
     addService,

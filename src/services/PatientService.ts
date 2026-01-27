@@ -1,5 +1,4 @@
 // PatientService - Business logic for patient operations (SRP)
-import { DEMO_CLINIC_ID } from "@/lib/mock-data";
 import { HealthTag } from "@/services/HealthTagService";
 
 export interface Patient {
@@ -53,16 +52,15 @@ export class PatientService {
     return { isValid: true };
   }
 
-  // Create a new patient
-  static create(data: CreatePatientData): Patient {
+  // Create patient data object (clinic_id will be set by the caller)
+  static createData(data: CreatePatientData, clinicId: string): Omit<Patient, 'id'> {
     const validation = this.validate(data);
     if (!validation.isValid) {
       throw new Error(validation.error);
     }
 
     return {
-      id: `pac-${Date.now()}`,
-      clinic_id: DEMO_CLINIC_ID,
+      clinic_id: clinicId,
       full_name: data.full_name.trim(),
       cpf: data.cpf || null,
       birth_date: data.birth_date || null,
