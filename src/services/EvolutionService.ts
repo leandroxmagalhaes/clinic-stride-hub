@@ -1,7 +1,5 @@
 // EvolutionService - Business logic for clinical evolution operations (SRP)
 
-import { DEMO_CLINIC_ID } from "@/lib/mock-data";
-
 export interface Evolution {
   id: string;
   clinic_id: string;
@@ -55,10 +53,11 @@ export class EvolutionService {
   }
 
   /**
-   * Create a new evolution
+   * Create evolution data (clinic_id provided by caller)
    */
-  static create(
+  static createData(
     data: CreateEvolutionData,
+    clinicId: string,
     profissionalName?: string
   ): Evolution {
     // Validate
@@ -69,7 +68,7 @@ export class EvolutionService {
 
     return {
       id,
-      clinic_id: DEMO_CLINIC_ID,
+      clinic_id: clinicId,
       prontuario_id: data.prontuario_id,
       sessao_id: data.sessao_id || null,
       profissional_id: data.profissional_id,

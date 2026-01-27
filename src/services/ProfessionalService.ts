@@ -1,7 +1,5 @@
 // ProfessionalService - Business logic for professional operations (SRP)
 
-import { DEMO_CLINIC_ID } from "@/lib/mock-data";
-
 export interface Professional {
   id: string;
   clinic_id: string;
@@ -57,22 +55,19 @@ export class ProfessionalService {
   }
 
   /**
-   * Create a new professional
+   * Create professional data (clinic_id provided by caller)
    */
-  static create(
+  static createData(
     data: CreateProfessionalData,
+    clinicId: string,
     existingProfessionals: Professional[]
-  ): Professional {
+  ): Omit<Professional, 'id'> {
     // Validate
     this.validate(data);
     this.checkEmailConflict(data.email, existingProfessionals);
 
-    // Generate unique ID
-    const id = `prof-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
     return {
-      id,
-      clinic_id: DEMO_CLINIC_ID,
+      clinic_id: clinicId,
       full_name: data.full_name.trim(),
       email: data.email.trim(),
       phone: data.phone?.trim() || null,

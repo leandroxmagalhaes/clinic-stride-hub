@@ -1,6 +1,5 @@
 // SessionService - Business logic for session/appointment operations (SRP)
 import { isSameDay, setHours, setMinutes, addMinutes } from "date-fns";
-import { DEMO_CLINIC_ID } from "@/lib/mock-data";
 
 export interface Session {
   id: string;
@@ -111,10 +110,11 @@ export class SessionService {
     return { isValid: true };
   }
 
-  // Create a new session with lookup data
+  // Create session data (clinic_id provided by caller)
   static create(
     data: CreateSessionData, 
     existingSessions: Session[],
+    clinicId: string,
     lookupData?: {
       services?: ServiceData[];
       patients?: PatientData[];
@@ -149,7 +149,7 @@ export class SessionService {
 
     return {
       id: `sess-${Date.now()}`,
-      clinic_id: DEMO_CLINIC_ID,
+      clinic_id: clinicId,
       paciente_id: data.pacienteId,
       profissional_id: data.profissionalId,
       servico_id: data.servicoId,

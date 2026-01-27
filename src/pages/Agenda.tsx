@@ -145,11 +145,12 @@ export default function Agenda() {
           notes: data.notes,
         },
         sessions,
+        'clinic-id', // Will be set properly by backend
         {
           services: services.map(s => ({
             id: s.id,
             name: s.name,
-            color: s.color,
+            color: s.color || '#10B981',
             duration_minutes: s.duration_minutes,
             price: Number(s.price),
             consumes_credit: s.consumes_credit,
