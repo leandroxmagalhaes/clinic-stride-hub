@@ -127,7 +127,7 @@ export function DataProvider({ children }: DataProviderProps) {
         .select(`
           *,
           paciente:pacientes(id, full_name),
-          profissional:profissionais(id, full_name),
+          profissional:profiles!sessoes_profissional_id_fkey(id, full_name),
           servico:servicos(id, name, color, duration_minutes, consumes_credit)
         `)
         .order("start_time", { ascending: false });
@@ -209,7 +209,7 @@ export function DataProvider({ children }: DataProviderProps) {
         .from("evolucoes_clinicas")
         .select(`
           *,
-          profissional:profissionais(id, full_name)
+          profissional:profiles!evolucoes_clinicas_profissional_id_fkey(id, full_name)
         `)
         .order("created_at", { ascending: false });
 

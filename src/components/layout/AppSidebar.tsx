@@ -45,6 +45,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
 import { usePermissions, PermissionModule } from "@/hooks/usePermissions";
+import { useClinicInfo } from "@/hooks/useClinicInfo";
 import { LOCALE_CONFIGS, Locale } from "@/lib/i18n";
 import { toast } from "sonner";
 
@@ -79,6 +80,7 @@ export function AppSidebar() {
   const { user, signOut } = useAuth();
   const { locale, setLocale } = useLocale();
   const { canAccessModule, getRolesLabels } = usePermissions();
+  const { data: clinicInfo } = useClinicInfo();
 
   const handleLogout = async () => {
     const { error } = await signOut();
@@ -167,7 +169,7 @@ export function AppSidebar() {
               Physione
             </span>
             <span className="text-[10px] text-sidebar-muted leading-none">
-              Gestão de Clínicas
+              {clinicInfo?.name || 'Gestão de Clínicas'}
             </span>
           </div>
         </Link>
