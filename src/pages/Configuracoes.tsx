@@ -2,11 +2,12 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Palette, Zap, Shield, Puzzle, Users } from 'lucide-react';
+import { Building2, Palette, Zap, Shield, Puzzle, Users, Hospital } from 'lucide-react';
 import { GeneralSettingsForm } from '@/components/settings/GeneralSettingsForm';
 import { AppearanceSettingsForm } from '@/components/settings/AppearanceSettingsForm';
 import { AutomationSettingsForm } from '@/components/settings/AutomationSettingsForm';
 import { TeamSettingsPanel } from '@/components/settings/TeamSettingsPanel';
+import { ClinicDataForm } from '@/components/settings/ClinicDataForm';
 import { useSettings } from '@/hooks/useSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { 
@@ -40,8 +41,12 @@ export default function Configuracoes() {
       subtitle="Personalize o sistema para sua clínica"
     >
       <div className="max-w-4xl mx-auto">
-        <Tabs defaultValue="geral" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
+        <Tabs defaultValue="clinica" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-grid">
+            <TabsTrigger value="clinica" className="gap-2">
+              <Hospital className="h-4 w-4 hidden sm:inline" />
+              Clínica
+            </TabsTrigger>
             <TabsTrigger value="geral" className="gap-2">
               <Building2 className="h-4 w-4 hidden sm:inline" />
               Geral
@@ -69,6 +74,11 @@ export default function Configuracoes() {
               Integrações
             </TabsTrigger>
           </TabsList>
+
+          {/* Clinic Data Tab */}
+          <TabsContent value="clinica">
+            <ClinicDataForm />
+          </TabsContent>
 
           {/* General Settings Tab */}
           <TabsContent value="geral">
