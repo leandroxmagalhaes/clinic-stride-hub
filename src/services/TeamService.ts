@@ -116,9 +116,9 @@ export class TeamService {
   }
 
   /**
-   * Update a team member's roles
+   * Update a team member's roles and active status
    */
-  static async updateMemberRoles(userId: string, roles: AppRole[]): Promise<boolean> {
+  static async updateMemberRoles(userId: string, roles: AppRole[], isActive?: boolean): Promise<boolean> {
     try {
       // First, delete existing roles
       const { error: deleteError } = await supabase
@@ -135,6 +135,16 @@ export class TeamService {
           .insert(roles.map(role => ({ user_id: userId, role })));
 
         if (insertError) throw insertError;
+      }
+
+      // Update active status if provided
+      if (isActive !== undefined) {
+        const { error: statusError } = await supabase
+          .from('profiles')
+          .update({ is_active: isActive })
+          .eq('user_id', userId);
+
+        if (statusError) throw statusError;
       }
 
       return true;
