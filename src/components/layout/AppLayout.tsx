@@ -1,5 +1,6 @@
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
+import { AppFooter } from "./AppFooter";
 import { Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,8 @@ export function AppLayout({ children, title, subtitle, actions }: AppLayoutProps
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
           {children}
         </main>
+
+        <AppFooter />
       </SidebarInset>
     </SidebarProvider>
   );

@@ -21,8 +21,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Phone, Mail, AlertCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 
 // Services and Context (SRP Architecture)
 import { useData } from "@/contexts/DataContext";
@@ -87,6 +89,7 @@ export default function Pacientes() {
     emergency_phone: "",
     health_insurance: "",
     notes: "",
+    privacy_consent: false,
   });
 
   // Use service for filtering
@@ -145,6 +148,12 @@ export default function Pacientes() {
       return;
     }
 
+    // Check privacy consent
+    if (!formData.privacy_consent) {
+      toast.error("Você deve aceitar a Política de Privacidade para cadastrar o paciente.");
+      return;
+    }
+
     try {
       if (!clinicId) {
         toast.error("Clínica não identificada. Faça login novamente.");
@@ -166,6 +175,7 @@ export default function Pacientes() {
         notes: formData.notes || null,
         health_tags: [],
         is_active: true,
+        privacy_consent_at: new Date().toISOString(),
       };
 
       const { error } = await supabase
@@ -200,6 +210,7 @@ export default function Pacientes() {
       emergency_phone: "",
       health_insurance: "",
       notes: "",
+      privacy_consent: false,
     });
   };
 
@@ -428,6 +439,41 @@ export default function Pacientes() {
                   placeholder="Informações adicionais sobre o paciente..."
                   rows={3}
                 />
+              </div>
+
+              {/* Privacy Consent Checkbox */}
+              <div className="col-span-2 space-y-3 pt-4 border-t">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="privacy_consent"
+                    checked={formData.privacy_consent}
+                    onCheckedChange={(checked) => 
+                      setFormData({ ...formData, privacy_consent: checked === true })
+                    }
+                    className="mt-0.5"
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor="privacy_consent"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Aceito a Política de Privacidade *
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      O paciente foi informado e concorda com o tratamento dos seus dados pessoais 
+                      conforme descrito na{" "}
+                      <Link 
+                        to="/privacy" 
+                        target="_blank" 
+                        className="text-primary hover:underline inline-flex items-center gap-0.5"
+                      >
+                        Política de Privacidade
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                      .
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

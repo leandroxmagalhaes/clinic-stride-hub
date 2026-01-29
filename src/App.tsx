@@ -21,6 +21,8 @@ import PatientPortal from "./pages/PatientPortal";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +38,8 @@ const App = () => (
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
               
               {/* Protected routes with permission checks */}
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
