@@ -2,7 +2,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Palette, Zap, Shield, Puzzle, Users, Hospital, FileArchive, History } from 'lucide-react';
+import { Building2, Palette, Zap, Shield, Puzzle, Users, Hospital, FileArchive, History, Lock } from 'lucide-react';
 import { GeneralSettingsForm } from '@/components/settings/GeneralSettingsForm';
 import { AppearanceSettingsForm } from '@/components/settings/AppearanceSettingsForm';
 import { AutomationSettingsForm } from '@/components/settings/AutomationSettingsForm';
@@ -10,6 +10,7 @@ import { TeamSettingsPanel } from '@/components/settings/TeamSettingsPanel';
 import { ClinicDataForm } from '@/components/settings/ClinicDataForm';
 import { BackupSettingsPanel } from '@/components/settings/BackupSettingsPanel';
 import { AuditLogsPanel } from '@/components/settings/AuditLogsPanel';
+import { PermissionsSettingsPanel } from '@/components/settings/PermissionsSettingsPanel';
 import { useSettings } from '@/hooks/useSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { 
@@ -44,7 +45,7 @@ export default function Configuracoes() {
     >
       <div className="max-w-4xl mx-auto">
         <Tabs defaultValue="clinica" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-9 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-10 lg:w-auto lg:inline-grid">
             <TabsTrigger value="clinica" className="gap-2">
               <Hospital className="h-4 w-4 hidden sm:inline" />
               Clínica
@@ -75,6 +76,12 @@ export default function Configuracoes() {
               <History className="h-4 w-4 hidden sm:inline" />
               Auditoria
             </TabsTrigger>
+            {isAdminMaster && (
+              <TabsTrigger value="permissoes" className="gap-2">
+                <Lock className="h-4 w-4 hidden sm:inline" />
+                Permissões
+              </TabsTrigger>
+            )}
             <TabsTrigger value="seguranca" className="gap-2" disabled>
               <Shield className="h-4 w-4 hidden sm:inline" />
               Segurança
@@ -137,6 +144,13 @@ export default function Configuracoes() {
           <TabsContent value="auditoria">
             <AuditLogsPanel />
           </TabsContent>
+
+          {/* Permissions Tab */}
+          {isAdminMaster && (
+            <TabsContent value="permissoes">
+              <PermissionsSettingsPanel />
+            </TabsContent>
+          )}
 
           {/* Security Tab (Coming Soon) */}
           <TabsContent value="seguranca">

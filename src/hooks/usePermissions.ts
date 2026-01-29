@@ -12,7 +12,8 @@ export type PermissionModule =
   | 'financeiro'
   | 'engajamento'
   | 'configuracoes'
-  | 'equipe';
+  | 'equipe'
+  | 'permissoes';
 
 export interface ModulePermissions {
   canView: boolean;
@@ -110,6 +111,7 @@ export function usePermissions() {
       engajamento: getModulePermissions('engajamento'),
       configuracoes: getModulePermissions('configuracoes'),
       equipe: getModulePermissions('equipe'),
+      permissoes: getModulePermissions('permissoes'),
     };
   }, [isAdminMaster, isSecretary, isFisioterapeuta]);
 
