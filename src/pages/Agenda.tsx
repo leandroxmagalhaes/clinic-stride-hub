@@ -94,18 +94,22 @@ export default function Agenda() {
     setSelectedSession(null);
   };
 
-  const handleSessionReschedule = useCallback((sessionId: string, newDate: Date, newHour: number) => {
+  const handleSessionReschedule = useCallback(async (sessionId: string, newDate: Date, newHour: number) => {
     const session = sessions.find((s) => s.id === sessionId);
     if (!session) return;
 
     const result = SessionService.reschedule(session, newDate, newHour, sessions);
     
     if (result.success && result.updatedSession) {
-      updateSession(sessionId, {
-        start_time: result.updatedSession.start_time,
-        end_time: result.updatedSession.end_time,
-      });
-      toast.success("Sessão remarcada com sucesso!");
+      try {
+        await updateSession(sessionId, {
+          start_time: result.updatedSession.start_time,
+          end_time: result.updatedSession.end_time,
+        });
+        toast.success("Sessão remarcada com sucesso!");
+      } catch (error) {
+        toast.error("Erro ao guardar remarcação");
+      }
     } else {
       toast.error(result.error || "Erro ao remarcar sessão");
     }
@@ -160,17 +164,20 @@ export default function Agenda() {
         }
       );
 
-      // Add to context (persists to localStorage)
-      addSession(newSession);
+      // Add to context (persists to Supabase database)
+      await addSession(newSession);
+
+      // Get the session ID from state after insertion
+      // Note: addSession now uses real database ID
 
       // Deduct credit from patient balance (idempotent - uses session ID)
       const creditResult = useCredit(data.pacienteId, newSession.id);
       
       // Update session payment status based on credit result
       if (!creditResult.success) {
-        updateSession(newSession.id, { payment_status: "pendente" });
+        await updateSession(newSession.id, { payment_status: "pendente" });
       } else {
-        updateSession(newSession.id, { payment_status: "pago" });
+        await updateSession(newSession.id, { payment_status: "pago" });
       }
 
       setIsModalOpen(false);
