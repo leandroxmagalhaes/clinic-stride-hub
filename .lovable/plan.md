@@ -1,136 +1,98 @@
 
-
-# Correção: Agendamentos Não Persistem na Base de Dados
+# Correção: Erro ao Criar Agendamentos
 
 ## Problema Identificado
 
-Os agendamentos (sessões) estão a desaparecer após logout porque **nunca são guardados na base de dados**. O código atual apenas atualiza o estado local do React:
+O sistema está dando erro ao criar agendamentos porque existe uma **incompatibilidade de IDs** entre tabelas:
 
-```typescript
-// Linha 524-526 do DataContext.tsx
-const addSession = (session: Session) => {
-  setSessions((prev) => [session, ...prev]); // ❌ Apenas estado local!
-};
-```
+- A tabela `sessoes` tem uma **FK para `profiles.id`**:
+  ```sql
+  sessoes_profissional_id_fkey → FOREIGN KEY (profissional_id) REFERENCES profiles(id)
+  ```
 
-Quando o utilizador faz logout, o estado é limpo e, como os dados nunca foram para o Supabase, perdem-se.
+- Mas o frontend busca profissionais da tabela **`profissionais`** (que tem IDs diferentes):
+  | Tabela | ID da Camila |
+  |--------|--------------|
+  | `profiles` | `3ef68f68-0864-4635-846c-269e10ebe49d` |
+  | `profissionais` | `e159f8b3-4b5f-48ef-a421-7c4d8b0dacee` |
 
-## Solução
-
-Modificar o `DataContext` para que as operações de sessão façam INSERT/UPDATE na base de dados Supabase, além de atualizar o estado local.
+Quando você seleciona a Camila como profissional, o sistema envia o ID da tabela errada, causando violação de FK.
 
 ---
 
-## Alterações Necessárias
+## Solução
+
+Alterar o `fetchProfessionals()` no `DataContext.tsx` para buscar dados da tabela **`profiles`** (onde a FK aponta), filtrando por utilizadores ativos da clínica com roles de profissional.
+
+---
+
+## Alteração
 
 ### Ficheiro: `src/contexts/DataContext.tsx`
 
-#### 1. Modificar `addSession` para inserir na base de dados
-
+**Antes (linhas 172-206):**
 ```typescript
-const addSession = async (session: Session): Promise<void> => {
-  // Obter clinic_id do utilizador
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) throw new Error("User not authenticated");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("clinic_id")
-    .eq("user_id", userData.user.id)
-    .maybeSingle();
-
-  if (!profile?.clinic_id) throw new Error("User has no clinic");
-
-  // Inserir na base de dados
-  const { data, error } = await supabase.from("sessoes").insert({
-    clinic_id: profile.clinic_id,
-    paciente_id: session.paciente_id,
-    profissional_id: session.profissional_id,
-    servico_id: session.servico_id,
-    start_time: session.start_time.toISOString(),
-    end_time: session.end_time.toISOString(),
-    status: session.status,
-    notes: session.notes,
-    price: session.price,
-    payment_status: session.payment_status,
-  }).select(`
-    *,
-    paciente:pacientes(id, full_name),
-    profissional:profiles!sessoes_profissional_id_fkey(id, full_name),
-    servico:servicos(id, name, color, duration_minutes, consumes_credit)
-  `).single();
-
-  if (error) throw error;
-
-  // Atualizar estado local com o ID real da base de dados
-  const newSession: Session = {
-    ...session,
-    id: data.id,
-    clinic_id: data.clinic_id,
-    paciente: data.paciente,
-    profissional: data.profissional,
-    servico: data.servico,
-  };
-
-  setSessions((prev) => [newSession, ...prev]);
+const fetchProfessionals = async () => {
+  const { data, error } = await supabase
+    .from("profissionais")  // ❌ Tabela errada!
+    .select("*")
+    .eq("is_active", true)
+    .order("full_name");
+  // ...
 };
 ```
 
-#### 2. Modificar `updateSession` para fazer UPDATE na base de dados
-
+**Depois:**
 ```typescript
-const updateSession = async (id: string, data: Partial<Session>): Promise<void> => {
-  // Preparar dados para update
-  const updateData: Record<string, any> = {};
-  
-  if (data.start_time) updateData.start_time = data.start_time instanceof Date 
-    ? data.start_time.toISOString() : data.start_time;
-  if (data.end_time) updateData.end_time = data.end_time instanceof Date 
-    ? data.end_time.toISOString() : data.end_time;
-  if (data.status !== undefined) updateData.status = data.status;
-  if (data.notes !== undefined) updateData.notes = data.notes;
-  if (data.payment_status !== undefined) updateData.payment_status = data.payment_status;
-  if (data.payment_method !== undefined) updateData.payment_method = data.payment_method;
-  if (data.price !== undefined) updateData.price = data.price;
+const fetchProfessionals = async () => {
+  setProfessionalsLoading(true);
+  try {
+    // Buscar da tabela profiles (onde a FK de sessoes aponta)
+    // Filtrar por utilizadores ativos que são profissionais
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(`
+        id,
+        full_name,
+        email,
+        phone,
+        role,
+        specialty,
+        crefito,
+        avatar_url,
+        is_active,
+        clinic_id
+      `)
+      .eq("is_active", true)
+      .in("role", ['fisioterapeuta', 'admin', 'professional'])
+      .order("full_name");
 
-  // Atualizar na base de dados
-  const { error } = await supabase
-    .from("sessoes")
-    .update(updateData)
-    .eq("id", id);
+    if (error) {
+      console.error("Error fetching professionals:", error);
+      return;
+    }
 
-  if (error) throw error;
+    // Map to Professional interface
+    const transformed: Professional[] = (data || []).map((p: any) => ({
+      id: p.id,  // Este é o ID correto para a FK!
+      clinic_id: p.clinic_id,
+      full_name: p.full_name,
+      email: p.email,
+      phone: p.phone,
+      role: p.role,
+      specialty: p.specialty,
+      crefito: p.crefito,
+      avatar_url: p.avatar_url,
+      is_active: p.is_active,
+    }));
 
-  // Atualizar estado local
-  setSessions((prev) =>
-    prev.map((s) => (s.id === id ? { ...s, ...data } : s))
-  );
+    setProfessionals(transformed);
+  } catch (err) {
+    console.error("Exception fetching professionals:", err);
+  } finally {
+    setProfessionalsLoading(false);
+  }
 };
-```
-
-#### 3. Atualizar interface para funções async
-
-Alterar a tipagem em `DataContextType`:
-
-```typescript
-addSession: (session: Session) => Promise<void>;
-updateSession: (id: string, data: Partial<Session>) => Promise<void>;
-```
-
-### Ficheiro: `src/pages/Agenda.tsx`
-
-Adicionar `await` às chamadas de `addSession` e `updateSession`:
-
-```typescript
-// Linha 164
-await addSession(newSession);
-
-// Linha 171-174
-if (!creditResult.success) {
-  await updateSession(newSession.id, { payment_status: "pendente" });
-} else {
-  await updateSession(newSession.id, { payment_status: "pago" });
-}
 ```
 
 ---
@@ -138,56 +100,40 @@ if (!creditResult.success) {
 ## Fluxo Corrigido
 
 ```text
-Utilizador cria agendamento
+Modal de Novo Agendamento
         │
         ▼
-SessionService.create() gera objeto sessão
+Lista profissionais da tabela 'profiles'
+(ID: 3ef68f68-..., ex: Camila)
         │
         ▼
-addSession() é chamado
-        │
-        ├──► INSERT na tabela sessoes (Supabase) ✓
-        │           │
-        │           ▼
-        │    Retorna ID real da base de dados
+Utilizador seleciona profissional
         │
         ▼
-Estado local atualizado com dados persistidos
+INSERT em 'sessoes' com profissional_id = profiles.id ✓
         │
         ▼
-Utilizador faz logout e login
+FK validation passa ✓
         │
         ▼
-fetchSessions() carrega dados da base de dados ✓
-        │
-        ▼
-Agendamentos aparecem corretamente! ✓
+Agendamento criado com sucesso! ✓
 ```
 
 ---
 
-## Ficheiros a Modificar
+## Resumo
 
-| Ficheiro | Alteração |
-|----------|-----------|
-| `src/contexts/DataContext.tsx` | `addSession` e `updateSession` agora fazem INSERT/UPDATE no Supabase |
-| `src/pages/Agenda.tsx` | Adicionar `await` às chamadas assíncronas |
-
----
-
-## Verificações de Segurança
-
-- A tabela `sessoes` já tem RLS configurado por `clinic_id`
-- O INSERT usa o `clinic_id` do perfil do utilizador autenticado
-- Os dados são validados pelo `SessionService.create()` antes do INSERT
+| Item | Descrição |
+|------|-----------|
+| Causa | Busca de profissionais da tabela errada (`profissionais` vs `profiles`) |
+| Solução | Alterar `fetchProfessionals()` para buscar de `profiles` |
+| Impacto | Agendamentos passam a funcionar corretamente |
+| Risco | Baixo - apenas muda a fonte dos dados |
 
 ---
 
-## Resultado Esperado
+## Verificação Após Implementação
 
-Após esta correção:
-1. Os agendamentos serão guardados na base de dados
-2. Os dados persistirão entre sessões de login
-3. O fluxo de drag-and-drop para remarcar também será persistido
-4. O sistema funcionará corretamente em ambiente de produção
-
+1. Tentar criar um novo agendamento
+2. Verificar se a sessão persiste na base de dados
+3. Fazer logout e login para confirmar que os dados permanecem
