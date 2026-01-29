@@ -20,17 +20,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Phone, Mail, Award, User } from "lucide-react";
+import { Plus, Search, Phone, Mail, Award, User, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useData } from "@/contexts/DataContext";
 import { ProfessionalService } from "@/services/ProfessionalService";
 import { supabase } from "@/integrations/supabase/client";
+import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
 
 export default function Profissionais() {
-  const { professionals, addProfessional } = useData();
+  const { professionals, addProfessional, deleteProfessional } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState<typeof professionals[0] | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -116,6 +118,12 @@ export default function Profissionais() {
     });
   };
 
+  const handleDeleteProfessional = async () => {
+    if (!selectedProfessional) return;
+    await deleteProfessional(selectedProfessional.id);
+    toast.success("Profissional desativado com sucesso");
+    setSelectedProfessional(null);
+  };
   return (
     <AppLayout
       title="Profissionais"
@@ -272,14 +280,36 @@ export default function Profissionais() {
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedProfessional(null)}>
-              Fechar
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(true)}
+              className="gap-2 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+              Apagar
             </Button>
-            <Button>Editar</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setSelectedProfessional(null)}>
+                Fechar
+              </Button>
+              <Button>Editar</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      {selectedProfessional && (
+        <DeleteConfirmationDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onConfirm={handleDeleteProfessional}
+          title="Apagar Profissional"
+          description="O profissional será desativado e não aparecerá mais nas listagens, mas o histórico será mantido."
+          entityName={selectedProfessional.full_name}
+        />
+      )}
 
       {/* New Professional Modal */}
       <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if (!open) resetForm(); }}>

@@ -27,7 +27,7 @@ import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToa
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
 
 export default function Agenda() {
-  const { sessions, addSession, updateSession, patients, professionals, services, getCreditBalance, useCredit, refundCredit, wasCreditUsedForSession } = useData();
+  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, useCredit, refundCredit, wasCreditUsedForSession } = useData();
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
@@ -302,6 +302,7 @@ export default function Agenda() {
         sessions={sessions}
         getCreditBalance={getCreditBalance}
         onUpdateSession={updateSession}
+        onDeleteSession={deleteSession}
         onRefundCredit={refundCredit}
         onUseCredit={useCredit}
         wasCreditUsedForSession={wasCreditUsedForSession}

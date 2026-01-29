@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Phone, Coins, History, User, Tag, Mail, Loader2 } from "lucide-react";
+import { MapPin, Phone, Coins, History, User, Tag, Mail, Loader2, Trash2 } from "lucide-react";
 import { PatientStatementButton } from "./PatientStatementButton";
 import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
@@ -17,6 +17,7 @@ import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { AddCreditsModal, CreditPurchaseData } from "./AddCreditsModal";
 import { TransactionHistory, Transaction } from "./TransactionHistory";
+import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useClinicInfo } from "@/hooks/useClinicInfo";
@@ -28,6 +29,7 @@ interface PatientDetailModalProps {
   creditBalance: number;
   transactions: Transaction[];
   onAddCredits: (patientId: string, data: CreditPurchaseData) => void | Promise<void>;
+  onDeletePatient?: (patientId: string) => Promise<void>;
 }
 
 export function PatientDetailModal({
@@ -37,10 +39,12 @@ export function PatientDetailModal({
   creditBalance,
   transactions,
   onAddCredits,
+  onDeletePatient,
 }: PatientDetailModalProps) {
   const [isAddCreditsOpen, setIsAddCreditsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [isSendingPortalLink, setIsSendingPortalLink] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const { data: clinicInfo } = useClinicInfo();
 
   // Reset tab when modal opens
@@ -99,6 +103,12 @@ export function PatientDetailModal({
     }
   };
 
+  const handleDeletePatient = async () => {
+    if (!patient || !onDeletePatient) return;
+    await onDeletePatient(patient.id);
+    toast.success("Paciente desativado com sucesso");
+    onClose();
+  };
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -240,6 +250,16 @@ export function PatientDetailModal({
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <div className="flex gap-2 flex-wrap">
+              {onDeletePatient && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDeleteDialogOpen(true)}
+                  className="gap-2 text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Apagar
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={handleSendPortalLink}
@@ -275,6 +295,17 @@ export function PatientDetailModal({
         patientName={patient.full_name}
         patientId={patient.id}
         onAddCredits={handleAddCredits}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={handleDeletePatient}
+        title="Apagar Paciente"
+        description="O paciente não aparecerá mais nas listagens, mas os dados serão mantidos para histórico."
+        entityName={patient.full_name}
+        warnings={creditBalance > 0 ? [`Este paciente tem ${creditBalance} crédito(s) disponível(is)`] : []}
       />
     </>
   );
