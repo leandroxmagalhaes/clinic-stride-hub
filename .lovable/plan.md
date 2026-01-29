@@ -1,394 +1,299 @@
 
-# Plano de Implementação - Exclusão com Auditoria
+# Plano: Sistema de Convites de Equipe Funcional
 
-Funcionalidade para apagar clientes, agendamentos, serviços e profissionais, com registo completo de todas as ações para rastreabilidade.
+## Problema Atual
 
----
+O botão "Convidar" nas Configurações da Equipe não faz nada de concreto. Apenas mostra uma mensagem informando que "o convite será enviado quando o sistema de emails estiver configurado".
 
-## Resumo
-
-Implementar sistema de exclusão (soft delete) com log de auditoria que regista:
-- Quem fez a ação (utilizador)
-- Quando foi feita (timestamp)
-- O que foi afetado (entidade + ID)
-- Detalhes da ação (dados antes da exclusão)
+A boa notícia é que:
+- A chave **RESEND_API_KEY** já está configurada
+- O sistema já tem edge functions funcionais para envio de emails
 
 ---
 
-## Tabela de Auditoria (Nova)
+## Solução Proposta
 
-### `audit_logs`
+Implementar um sistema completo de convites com:
+
+1. **Tabela de convites pendentes** no banco de dados
+2. **Edge function** para envio de email de convite
+3. **Link de convite** que direciona para signup com dados pré-preenchidos
+4. **Associação automática** do novo utilizador à clínica ao fazer signup
+
+---
+
+## Fluxo do Utilizador
+
+```text
+Admin clica "Convidar"
+         │
+         ▼
+  Preenche nome, email, função
+         │
+         ▼
+  Sistema cria registo na tabela "team_invites"
+         │
+         ▼
+  Edge function envia email com link de convite
+         │
+         ▼
+  Convidado recebe email e clica no link
+         │
+         ▼
+  Página de signup com email pré-preenchido
+         │
+         ▼
+  Ao criar conta, sistema:
+    - Associa o utilizador à clínica do convite
+    - Atribui a função definida no convite
+    - Marca o convite como "aceito"
+```
+
+---
+
+## Alterações Necessárias
+
+### 1. Nova Tabela: `team_invites`
 
 | Coluna | Tipo | Descrição |
 |--------|------|-----------|
-| `id` | uuid | ID único do registo |
-| `clinic_id` | uuid | Clínica associada |
-| `user_id` | uuid | Utilizador que executou a ação |
-| `user_email` | text | Email do utilizador (para referência fácil) |
-| `action` | text | Tipo: create, update, delete, cancel, etc. |
-| `entity_type` | text | Tipo: patient, session, service, professional |
-| `entity_id` | uuid | ID da entidade afetada |
-| `entity_name` | text | Nome/descrição para referência rápida |
-| `details` | jsonb | Dados adicionais (estado anterior, motivo) |
-| `created_at` | timestamp | Data/hora da ação |
+| `id` | uuid | ID único |
+| `clinic_id` | uuid | Clínica que está a convidar |
+| `email` | text | Email do convidado |
+| `full_name` | text | Nome do convidado |
+| `role` | app_role | Função: admin, professional, secretary |
+| `invited_by` | uuid | ID do utilizador que convidou |
+| `status` | text | pending, accepted, expired |
+| `token` | text | Token único para validar o link |
+| `expires_at` | timestamp | Expiração (7 dias) |
+| `created_at` | timestamp | Data de criação |
+| `accepted_at` | timestamp | Data de aceitação |
 
----
+### 2. Nova Edge Function: `send-team-invite`
 
-## Funcionalidades por Entidade
+Responsabilidades:
+- Receber dados do convite
+- Criar registo na tabela `team_invites`
+- Gerar token único
+- Enviar email via Resend com link de convite
 
-### 1. Pacientes (Clientes)
+### 3. Atualização: Página de Signup
 
-| Ação | Comportamento |
-|------|---------------|
-| Apagar | Soft delete (`is_active = false`) |
-| Auditoria | Regista nome, NIF, email antes de desativar |
-| Validação | Alerta se tiver agendamentos futuros |
+Modificar para:
+- Aceitar parâmetro `?invite=TOKEN` na URL
+- Pré-preencher email e nome se vier de convite
+- Após criar conta, processar o convite automaticamente
 
-### 2. Agendamentos (Sessões)
+### 4. Atualização: TeamService.ts
 
-| Ação | Comportamento |
-|------|---------------|
-| Apagar | Delete efetivo (remove da tabela) |
-| Auditoria | Regista paciente, profissional, data, status |
-| Validação | Sessões finalizadas não podem ser apagadas |
+Substituir o método placeholder `inviteUser` por chamada real à edge function
 
-### 3. Serviços
+### 5. Atualização: TeamSettingsPanel.tsx
 
-| Ação | Comportamento |
-|------|---------------|
-| Apagar | Soft delete (`is_active = false`) - já implementado |
-| Auditoria | Regista nome, preço, duração |
-
-### 4. Profissionais
-
-| Ação | Comportamento |
-|------|---------------|
-| Apagar | Soft delete (`is_active = false`) |
-| Auditoria | Regista nome, email, especialidade |
-| Validação | Alerta se tiver agendamentos futuros |
-
----
-
-## Interface do Utilizador
-
-### Botão de Apagar
-
-Cada card/linha terá um botão de exclusão com confirmação:
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│                    Apagar Paciente?                        │
-├────────────────────────────────────────────────────────────┤
-│  Esta ação irá desativar o paciente "João Silva".          │
-│                                                            │
-│  O paciente não aparecerá mais nas listagens, mas          │
-│  os dados serão mantidos para histórico.                   │
-│                                                            │
-│  ⚠️ Este paciente tem 2 agendamentos futuros que serão     │
-│     automaticamente cancelados.                            │
-│                                                            │
-│  [Cancelar]                              [Confirmar Exclusão] │
-└────────────────────────────────────────────────────────────┘
-```
-
-### Visualização de Logs (Configurações)
-
-Nova tab ou secção em Configurações para ver o histórico de ações:
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  Logs de Auditoria                                          │
-├─────────────────────────────────────────────────────────────┤
-│  29/01/2025 14:32 │ admin@clinica.pt │ Apagou paciente      │
-│                   │                   │ "João Silva"          │
-├─────────────────────────────────────────────────────────────┤
-│  29/01/2025 14:30 │ admin@clinica.pt │ Cancelou sessão      │
-│                   │                   │ Maria Santos - 30/01  │
-├─────────────────────────────────────────────────────────────┤
-│  29/01/2025 14:25 │ admin@clinica.pt │ Apagou serviço       │
-│                   │                   │ "Pilates Individual"  │
-└─────────────────────────────────────────────────────────────┘
-```
+- Mostrar lista de convites pendentes
+- Permitir reenviar ou cancelar convites
 
 ---
 
 ## Ficheiros a Criar
 
-### 1. Serviço de Auditoria
-**`src/services/AuditService.ts`**
-
-Responsabilidades:
-- Registar ações no banco de dados
-- Formatar mensagens de log
-- Buscar histórico de logs para visualização
-
-### 2. Componente de Confirmação de Exclusão
-**`src/components/shared/DeleteConfirmationDialog.tsx`**
-
-Componente reutilizável com:
-- Título e descrição personalizáveis
-- Alertas de impacto (agendamentos futuros, etc.)
-- Botões de cancelar e confirmar
-- Estado de loading durante a operação
-
-### 3. Painel de Logs de Auditoria
-**`src/components/settings/AuditLogsPanel.tsx`**
-
-Componente para visualizar histórico:
-- Lista de ações com filtros
-- Paginação
-- Busca por utilizador ou entidade
-
----
+| Ficheiro | Propósito |
+|----------|-----------|
+| `supabase/functions/send-team-invite/index.ts` | Edge function para envio do convite |
 
 ## Ficheiros a Modificar
 
 | Ficheiro | Alteração |
 |----------|-----------|
-| `src/pages/Pacientes.tsx` | Adicionar botão de apagar no card/modal |
-| `src/pages/Profissionais.tsx` | Adicionar botão de apagar |
-| `src/pages/Servicos.tsx` | Integrar auditoria no delete existente |
-| `src/components/agenda/SessionManagementModal.tsx` | Adicionar opção de apagar sessão |
-| `src/components/patients/PatientDetailModal.tsx` | Adicionar botão de apagar paciente |
-| `src/contexts/DataContext.tsx` | Adicionar funções deletePatient, deleteSession, deleteProfessional |
-| `src/pages/Configuracoes.tsx` | Adicionar tab/secção de Logs de Auditoria |
-
----
-
-## Migração SQL
-
-```sql
--- Tabela de logs de auditoria
-CREATE TABLE public.audit_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  clinic_id UUID NOT NULL,
-  user_id UUID NOT NULL,
-  user_email TEXT,
-  action TEXT NOT NULL,
-  entity_type TEXT NOT NULL,
-  entity_id UUID,
-  entity_name TEXT,
-  details JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Índices para performance
-CREATE INDEX idx_audit_logs_clinic_id ON public.audit_logs(clinic_id);
-CREATE INDEX idx_audit_logs_created_at ON public.audit_logs(created_at DESC);
-CREATE INDEX idx_audit_logs_entity_type ON public.audit_logs(entity_type);
-
--- RLS
-ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
-
--- Políticas: usuários podem inserir e ver logs da própria clínica
-CREATE POLICY "Users can insert audit logs in own clinic"
-  ON public.audit_logs FOR INSERT
-  WITH CHECK (clinic_id = get_user_clinic_id(auth.uid()));
-
-CREATE POLICY "Users can view audit logs from own clinic"
-  ON public.audit_logs FOR SELECT
-  USING (clinic_id = get_user_clinic_id(auth.uid()));
-```
+| `src/services/TeamService.ts` | Chamar edge function real |
+| `src/pages/Signup.tsx` | Processar convites via URL |
+| `src/components/settings/TeamSettingsPanel.tsx` | Mostrar convites pendentes |
 
 ---
 
 ## Secção Técnica
 
-### Estrutura do Serviço de Auditoria
+### Migração SQL
 
-```typescript
-// src/services/AuditService.ts
+```sql
+-- Tabela de convites
+CREATE TABLE public.team_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  clinic_id UUID NOT NULL REFERENCES public.clinics(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  role public.app_role NOT NULL DEFAULT 'professional',
+  invited_by UUID NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired', 'cancelled')),
+  token TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex'),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '7 days'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  accepted_at TIMESTAMPTZ
+);
 
-export type AuditAction = 
-  | 'create' 
-  | 'update' 
-  | 'delete' 
-  | 'cancel' 
-  | 'complete' 
-  | 'reschedule';
+-- Índices
+CREATE INDEX idx_team_invites_clinic ON public.team_invites(clinic_id);
+CREATE INDEX idx_team_invites_email ON public.team_invites(email);
+CREATE INDEX idx_team_invites_token ON public.team_invites(token);
 
-export type EntityType = 
-  | 'patient' 
-  | 'session' 
-  | 'service' 
-  | 'professional'
-  | 'credit_transaction';
+-- RLS
+ALTER TABLE public.team_invites ENABLE ROW LEVEL SECURITY;
 
-export interface AuditLogEntry {
-  id: string;
-  clinic_id: string;
-  user_id: string;
-  user_email: string | null;
-  action: AuditAction;
-  entity_type: EntityType;
-  entity_id: string | null;
-  entity_name: string | null;
-  details: Record<string, any>;
-  created_at: string;
-}
+-- Política: membros da clínica podem ver convites
+CREATE POLICY "Users can view invites from their clinic"
+  ON public.team_invites FOR SELECT
+  USING (clinic_id = get_user_clinic_id(auth.uid()));
 
-export class AuditService {
-  // Registar uma ação
-  static async log(params: {
-    action: AuditAction;
-    entityType: EntityType;
-    entityId: string;
-    entityName: string;
-    details?: Record<string, any>;
-  }): Promise<void>;
+-- Política: admins podem criar convites
+CREATE POLICY "Admins can create invites"
+  ON public.team_invites FOR INSERT
+  WITH CHECK (clinic_id = get_user_clinic_id(auth.uid()));
 
-  // Buscar logs com filtros
-  static async getLogs(params: {
-    limit?: number;
-    offset?: number;
-    entityType?: EntityType;
-    action?: AuditAction;
-  }): Promise<AuditLogEntry[]>;
-}
+-- Política: admins podem atualizar convites
+CREATE POLICY "Admins can update invites"
+  ON public.team_invites FOR UPDATE
+  USING (clinic_id = get_user_clinic_id(auth.uid()));
+
+-- Função para processar convite após signup
+CREATE OR REPLACE FUNCTION public.process_team_invite(invite_token TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_invite RECORD;
+  v_user_id UUID;
+BEGIN
+  -- Buscar o convite
+  SELECT * INTO v_invite FROM public.team_invites
+  WHERE token = invite_token AND status = 'pending' AND expires_at > now();
+  
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Convite inválido ou expirado');
+  END IF;
+  
+  -- Obter user_id do utilizador atual
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Utilizador não autenticado');
+  END IF;
+  
+  -- Atualizar o perfil com a clínica
+  UPDATE public.profiles
+  SET clinic_id = v_invite.clinic_id
+  WHERE user_id = v_user_id;
+  
+  -- Adicionar o role
+  INSERT INTO public.user_roles (user_id, role)
+  VALUES (v_user_id, v_invite.role)
+  ON CONFLICT DO NOTHING;
+  
+  -- Marcar convite como aceito
+  UPDATE public.team_invites
+  SET status = 'accepted', accepted_at = now()
+  WHERE id = v_invite.id;
+  
+  RETURN jsonb_build_object('success', true, 'clinic_id', v_invite.clinic_id);
+END;
+$$;
 ```
 
-### Função de Delete Paciente
+### Edge Function: send-team-invite
 
 ```typescript
-// Em DataContext.tsx
+// supabase/functions/send-team-invite/index.ts
 
-const deletePatient = async (patientId: string, reason?: string): Promise<void> => {
-  const patient = patients.find(p => p.id === patientId);
-  if (!patient) throw new Error("Paciente não encontrado");
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { Resend } from "https://esm.sh/resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-  // Soft delete
-  const { error } = await supabase
-    .from("pacientes")
-    .update({ is_active: false })
-    .eq("id", patientId);
+interface InviteRequest {
+  email: string;
+  full_name: string;
+  role: 'admin' | 'professional' | 'secretary';
+  clinicName: string;
+  inviterName: string;
+}
 
-  if (error) throw error;
+serve(async (req) => {
+  // Criar convite na tabela
+  // Enviar email com link: {BASE_URL}/signup?invite={token}
+  // Retornar sucesso
+});
+```
 
-  // Registar auditoria
-  await AuditService.log({
-    action: 'delete',
-    entityType: 'patient',
-    entityId: patientId,
-    entityName: patient.full_name,
-    details: {
-      reason,
-      previousData: {
-        email: patient.email,
-        phone: patient.phone,
-        cpf: patient.cpf,
-      }
-    }
+### TeamService.ts Atualizado
+
+```typescript
+static async inviteUser(data: InviteUserData): Promise<{ success: boolean; error?: string }> {
+  // Chamar edge function
+  const response = await supabase.functions.invoke('send-team-invite', {
+    body: { ...data, clinicName, inviterName }
   });
-
-  // Atualizar estado local
-  await fetchPatients();
-};
-```
-
-### Função de Delete Sessão
-
-```typescript
-const deleteSession = async (sessionId: string, reason?: string): Promise<void> => {
-  const session = sessions.find(s => s.id === sessionId);
-  if (!session) throw new Error("Sessão não encontrada");
-
-  // Verificar se pode ser apagada
-  if (session.status === 'realizado') {
-    throw new Error("Sessões finalizadas não podem ser apagadas");
+  
+  if (response.error) {
+    return { success: false, error: response.error.message };
   }
-
-  // Delete efetivo (ou cancelar se preferir manter histórico)
-  const { error } = await supabase
-    .from("sessoes")
-    .delete()
-    .eq("id", sessionId);
-
-  if (error) throw error;
-
-  // Registar auditoria
-  await AuditService.log({
-    action: 'delete',
-    entityType: 'session',
-    entityId: sessionId,
-    entityName: `${session.paciente?.full_name} - ${format(session.start_time, 'dd/MM HH:mm')}`,
-    details: {
-      reason,
-      patient: session.paciente?.full_name,
-      professional: session.profissional?.full_name,
-      service: session.servico?.name,
-      date: session.start_time,
-      status: session.status,
-    }
-  });
-
-  // Atualizar estado local
-  await fetchSessions();
-};
+  
+  return { success: true };
+}
 ```
 
-### Componente DeleteConfirmationDialog
+### Signup.tsx Atualizado
 
 ```typescript
-interface DeleteConfirmationDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => Promise<void>;
-  title: string;
-  description: string;
-  entityName: string;
-  warnings?: string[]; // Alertas de impacto
-}
+// Verificar se há token de convite na URL
+const [searchParams] = useSearchParams();
+const inviteToken = searchParams.get('invite');
 
-// Uso:
-<DeleteConfirmationDialog
-  isOpen={showDeleteDialog}
-  onClose={() => setShowDeleteDialog(false)}
-  onConfirm={handleDeletePatient}
-  title="Apagar Paciente"
-  description="O paciente será desativado e não aparecerá mais nas listagens."
-  entityName={patient.full_name}
-  warnings={[
-    "Este paciente tem 2 agendamentos futuros",
-    "O histórico de sessões será mantido"
-  ]}
-/>
+// Se houver token, buscar dados do convite
+useEffect(() => {
+  if (inviteToken) {
+    fetchInviteDetails(inviteToken);
+  }
+}, [inviteToken]);
+
+// Após signup bem-sucedido, processar o convite
+if (inviteToken) {
+  await supabase.rpc('process_team_invite', { invite_token: inviteToken });
+}
 ```
 
 ---
 
-## Mapeamento de Ações para Log
+## Experiência do Convidado
 
-| Entidade | Ação UI | action | Descrição no Log |
-|----------|---------|--------|------------------|
-| Paciente | Apagar | delete | "Apagou paciente: João Silva" |
-| Sessão | Apagar | delete | "Apagou sessão: Maria - 30/01 10:00" |
-| Sessão | Cancelar | cancel | "Cancelou sessão: Maria - 30/01" |
-| Sessão | Remarcar | reschedule | "Remarcou sessão: Maria de 30/01 para 02/02" |
-| Sessão | Finalizar | complete | "Finalizou sessão: Maria - 30/01" |
-| Serviço | Apagar | delete | "Apagou serviço: Pilates Individual" |
-| Profissional | Apagar | delete | "Apagou profissional: Dr. Silva" |
-| Créditos | Adicionar | create | "Adicionou 10 créditos: João Silva" |
+### Email Recebido
+
+```text
+Assunto: Convite para juntar-se à Clínica ABC
+
+Olá João,
+
+Você foi convidado por Maria Silva para juntar-se à equipe 
+da Clínica ABC como Fisioterapeuta.
+
+[Aceitar Convite]
+
+Este convite expira em 7 dias.
+```
+
+### Página de Signup
+
+- Email já preenchido (não editável)
+- Nome já preenchido
+- Apenas precisa definir a senha
+- Mensagem: "Você foi convidado para a Clínica ABC"
 
 ---
 
-## Resumo de Novos Ficheiros
+## Resumo das Entregas
 
-| Ficheiro | Propósito |
-|----------|-----------|
-| `src/services/AuditService.ts` | Lógica de registo e consulta de logs |
-| `src/components/shared/DeleteConfirmationDialog.tsx` | Modal de confirmação reutilizável |
-| `src/components/settings/AuditLogsPanel.tsx` | Visualização de histórico de ações |
+| Item | Descrição |
+|------|-----------|
+| Tabela | `team_invites` com tokens e expiração |
+| Edge Function | `send-team-invite` para criar e enviar convites |
+| Signup | Processar convites automaticamente |
+| TeamService | Chamar edge function real |
+| UI | Lista de convites pendentes no painel |
 
----
-
-## Ordem de Implementação
-
-1. Criar tabela `audit_logs` com migração SQL
-2. Criar `AuditService.ts` com funções de log
-3. Criar `DeleteConfirmationDialog.tsx` reutilizável
-4. Adicionar `deletePatient` ao DataContext + integrar em Pacientes
-5. Adicionar `deleteSession` ao DataContext + integrar na Agenda
-6. Adicionar `deleteProfessional` ao DataContext + integrar em Profissionais
-7. Integrar auditoria no `deleteService` existente
-8. Criar `AuditLogsPanel.tsx` e adicionar em Configurações
-9. Testar fluxo completo de exclusão e verificar logs
