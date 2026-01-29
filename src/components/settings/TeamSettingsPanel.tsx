@@ -5,13 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UserPlus, Search, Users, Clock, Mail, RotateCcw, X } from 'lucide-react';
-import { TeamService, TeamMember, AppRole, PendingInvite } from '@/services/TeamService';
+import { UserPlus, Search, Users, Clock, Mail, RotateCcw, X, Copy, MessageCircle } from 'lucide-react';
+import { TeamService, TeamMember, AppRole, PendingInvite, CreateInviteResult } from '@/services/TeamService';
 import { TeamMemberCard } from './TeamMemberCard';
 import { InviteUserModal } from './InviteUserModal';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { format, formatDistanceToNow, isPast } from 'date-fns';
+import { formatDistanceToNow, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -70,16 +70,19 @@ export function TeamSettingsPanel() {
     }
   };
 
-  const handleInvite = async (data: { email: string; full_name: string; role: AppRole }) => {
-    const result = await TeamService.inviteUser(data);
-    if (result.success) {
-      toast.success('Convite enviado!', {
-        description: `Email enviado para ${data.email}`,
-      });
-      fetchInvites();
-    } else {
-      toast.error('Erro ao convidar', { description: result.error });
-    }
+  const handleCopyInviteLink = (invite: PendingInvite) => {
+    const url = TeamService.getInviteUrl(invite.token);
+    navigator.clipboard.writeText(url);
+    toast.success('Link copiado!');
+  };
+
+  const handleWhatsAppInvite = (invite: PendingInvite) => {
+    const url = TeamService.getInviteUrl(invite.token);
+    const message = encodeURIComponent(
+      `Olá ${invite.full_name}! Você foi convidado para se juntar à nossa clínica. ` +
+      `Clique no link para criar sua conta: ${url}`
+    );
+    window.open(`https://wa.me/?text=${message}`, '_blank');
   };
 
   const handleResendInvite = async (invite: PendingInvite) => {
@@ -87,13 +90,15 @@ export function TeamSettingsPanel() {
     const result = await TeamService.resendInvite(invite);
     setResendingId(null);
     
-    if (result.success) {
-      toast.success('Convite reenviado!', {
-        description: `Novo email enviado para ${invite.email}`,
+    if (result.success && result.inviteUrl) {
+      // Copy new link to clipboard
+      navigator.clipboard.writeText(result.inviteUrl);
+      toast.success('Novo convite criado!', {
+        description: 'Link copiado para a área de transferência',
       });
       fetchInvites();
     } else {
-      toast.error('Erro ao reenviar', { description: result.error });
+      toast.error('Erro ao recriar convite', { description: result.error });
     }
   };
 
@@ -243,21 +248,41 @@ export function TeamSettingsPanel() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 sm:gap-2">
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handleCopyInviteLink(invite)}
+                          title="Copiar link"
+                        >
+                          <Copy className="h-4 w-4" />
+                          <span className="sr-only sm:not-sr-only sm:ml-2">Copiar</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleWhatsAppInvite(invite)}
+                          title="Enviar por WhatsApp"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          <span className="sr-only">WhatsApp</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleResendInvite(invite)}
                           disabled={resendingId === invite.id}
+                          title="Gerar novo link"
                         >
                           <RotateCcw className={`h-4 w-4 ${resendingId === invite.id ? 'animate-spin' : ''}`} />
-                          <span className="sr-only sm:not-sr-only sm:ml-2">Reenviar</span>
+                          <span className="sr-only">Recriar</span>
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleCancelInvite(invite.id)}
                           disabled={cancellingId === invite.id}
+                          title="Cancelar convite"
                         >
                           <X className="h-4 w-4" />
                           <span className="sr-only">Cancelar</span>
@@ -281,7 +306,7 @@ export function TeamSettingsPanel() {
       <InviteUserModal
         open={isInviteModalOpen}
         onOpenChange={setIsInviteModalOpen}
-        onInvite={handleInvite}
+        onInviteCreated={fetchInvites}
       />
     </Card>
   );

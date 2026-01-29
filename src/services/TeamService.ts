@@ -27,8 +27,17 @@ export interface PendingInvite {
   full_name: string;
   role: AppRole;
   status: string;
+  token: string;
   created_at: string;
   expires_at: string;
+}
+
+export interface CreateInviteResult {
+  success: boolean;
+  error?: string;
+  inviteUrl?: string;
+  token?: string;
+  inviteName?: string;
 }
 
 export class TeamService {
@@ -100,6 +109,7 @@ export class TeamService {
       full_name: invite.full_name,
       role: invite.role as AppRole,
       status: invite.status,
+      token: invite.token,
       created_at: invite.created_at,
       expires_at: invite.expires_at,
     }));
@@ -152,32 +162,98 @@ export class TeamService {
   }
 
   /**
-   * Invite a new user to the clinic via email
+   * Create a new invite (without sending email) and return the invite URL
    */
-  static async inviteUser(data: InviteUserData): Promise<{ success: boolean; error?: string }> {
+  static async createInvite(data: InviteUserData): Promise<CreateInviteResult> {
     try {
-      const { data: response, error } = await supabase.functions.invoke('send-team-invite', {
-        body: {
-          email: data.email,
+      // Get current user's clinic_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('clinic_id')
+        .single();
+
+      if (!profile?.clinic_id) {
+        return { success: false, error: 'Clínica não encontrada' };
+      }
+
+      // Check if there's already a pending invite for this email in this clinic
+      const { data: existing } = await supabase
+        .from('team_invites')
+        .select('id')
+        .eq('clinic_id', profile.clinic_id)
+        .eq('email', data.email.toLowerCase())
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      if (existing) {
+        return { success: false, error: 'Já existe um convite pendente para este email' };
+      }
+
+      // Check if user already exists in this clinic
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('clinic_id', profile.clinic_id)
+        .eq('email', data.email.toLowerCase())
+        .maybeSingle();
+
+      if (existingProfile) {
+        return { success: false, error: 'Este email já está registado nesta clínica' };
+      }
+
+      // Get current user id
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return { success: false, error: 'Utilizador não autenticado' };
+      }
+
+      // Create the invite
+      const { data: invite, error } = await supabase
+        .from('team_invites')
+        .insert({
+          clinic_id: profile.clinic_id,
+          email: data.email.toLowerCase(),
           full_name: data.full_name,
           role: data.role,
-        },
-      });
+          invited_by: user.id,
+        })
+        .select('token')
+        .single();
 
       if (error) {
-        console.error('Error invoking send-team-invite:', error);
-        return { success: false, error: error.message || 'Erro ao enviar convite' };
+        return { success: false, error: error.message };
       }
 
-      if (!response?.success) {
-        return { success: false, error: response?.error || 'Erro desconhecido' };
-      }
+      // Build the invite URL
+      const baseUrl = window.location.origin;
+      const inviteUrl = `${baseUrl}/signup?invite=${invite.token}`;
 
-      return { success: true };
+      return { 
+        success: true, 
+        inviteUrl, 
+        token: invite.token,
+        inviteName: data.full_name,
+      };
     } catch (error: any) {
-      console.error('Error inviting user:', error);
-      return { success: false, error: error.message || 'Erro ao convidar utilizador' };
+      console.error('Error creating invite:', error);
+      return { success: false, error: error.message || 'Erro ao criar convite' };
     }
+  }
+
+  /**
+   * Get the invite URL for an existing invite
+   */
+  static getInviteUrl(token: string): string {
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/signup?invite=${token}`;
+  }
+
+  /**
+   * Legacy: Invite a new user to the clinic via email (kept for compatibility)
+   */
+  static async inviteUser(data: InviteUserData): Promise<{ success: boolean; error?: string }> {
+    const result = await this.createInvite(data);
+    return { success: result.success, error: result.error };
   }
 
   /**
@@ -200,12 +276,12 @@ export class TeamService {
   /**
    * Resend an invite (creates a new invite and cancels the old one)
    */
-  static async resendInvite(invite: PendingInvite): Promise<{ success: boolean; error?: string }> {
+  static async resendInvite(invite: PendingInvite): Promise<CreateInviteResult> {
     // Cancel the old invite
     await this.cancelInvite(invite.id);
 
-    // Send a new invite
-    return this.inviteUser({
+    // Create a new invite
+    return this.createInvite({
       email: invite.email,
       full_name: invite.full_name,
       role: invite.role,
