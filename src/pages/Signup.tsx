@@ -101,6 +101,20 @@ export default function Signup() {
     
     if (error) {
       setIsLoading(false);
+      
+      // Detectar se o utilizador já existe
+      if (error.message?.toLowerCase().includes('already registered') || 
+          error.message?.toLowerCase().includes('user already registered')) {
+        toast.error('Este email já está registado', {
+          description: 'Faça login com a sua conta existente e o convite será processado automaticamente.',
+          action: {
+            label: 'Ir para Login',
+            onClick: () => navigate('/login'),
+          },
+        });
+        return;
+      }
+      
       toast.error('Erro ao criar conta', {
         description: error.message,
       });
