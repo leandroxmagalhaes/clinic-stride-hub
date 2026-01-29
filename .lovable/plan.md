@@ -1,217 +1,180 @@
 
 
-# Plano: Corrigir Acesso da Fisioterapeuta e Melhorar Gestão de Permissões
+# Plano: Aba de Permissões nas Configurações
 
-## Problema Identificado
+## Objetivo
 
-A Camila fez login mas:
-- **Não tem `clinic_id`** associado ao seu perfil
-- **Tem apenas o role `patient`** (atribuído automaticamente na criação da conta)
-- **O convite continua "pending"** - nunca foi processado
+Criar uma nova aba "Permissões" dentro de Configurações que permite ao Admin Master:
+1. Ver todos os utilizadores da clínica numa lista
+2. Alterar o role de cada utilizador (Admin/Fisioterapeuta/Secretaria)
+3. Ativar/desativar utilizadores
+4. Consultar a matriz de permissões por role
 
-Isto aconteceu porque ela já tinha uma conta quando tentou aceitar o convite. O sistema mostrou "email já registado" mas não processou o convite automaticamente ao fazer login.
+---
 
-## Solução em Duas Partes
+## O que será criado
 
-### Parte 1: Correção Imediata (Processar Convite no Login)
+### 1. Nova Aba na Página de Configurações
 
-Quando um utilizador faz login, verificar se há convites pendentes para o seu email e processá-los automaticamente.
+Adicionar uma aba "Permissões" com ícone de escudo entre "Auditoria" e "Segurança" (que está desativada).
 
-**Ficheiro:** `src/pages/Login.tsx`
+### 2. Novo Componente: PermissionsSettingsPanel
 
-Após login bem-sucedido:
-```typescript
-// Verificar se há convites pendentes para este email
-const { data: pendingInvite } = await supabase
-  .from('team_invites')
-  .select('*')
-  .eq('email', email.toLowerCase())
-  .eq('status', 'pending')
-  .gt('expires_at', new Date().toISOString())
-  .maybeSingle();
+Uma interface visual com:
 
-if (pendingInvite) {
-  // Processar o convite
-  const { data: result } = await supabase.rpc('process_team_invite', {
-    invite_token: pendingInvite.token
-  });
-  
-  if (result?.success) {
-    toast.success('Convite aceito!', {
-      description: `Você agora faz parte da clínica como ${pendingInvite.role}`
-    });
-  }
-}
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  Permissões                                                     │
+│  Gerencie os acessos dos membros da sua clínica                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Matriz de Permissões por Função                          │  │
+│  │ [Admin Master] [Fisioterapeuta] [Secretaria]  (tabs)     │  │
+│  │                                                           │  │
+│  │  Módulo        │ Ver │ Editar │ Apagar │ Financeiro      │  │
+│  │  Dashboard     │  ✓  │   ✓    │   ✓    │     ✓           │  │
+│  │  Agenda        │  ✓  │   ✓    │   ✓    │     ✓           │  │
+│  │  Pacientes     │  ✓  │   ✓    │   ✓    │     ✓           │  │
+│  │  ...           │     │        │        │                 │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ Utilizadores                                    [Buscar]  │  │
+│  ├───────────────────────────────────────────────────────────┤  │
+│  │  👤 Leandro Magalhães    │ Admin Master      │ ✓ Ativo    │  │
+│  │     leandroxmagalhaes@gmail.com               [Editar]    │  │
+│  ├───────────────────────────────────────────────────────────┤  │
+│  │  👤 Camila Maria Oliveira│ Fisioterapeuta    │ ✓ Ativo    │  │
+│  │     te.camila@gmail.com                       [Editar]    │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-### Parte 2: Opção Manual no Painel de Equipe
-
-Adicionar opção para o Admin Master ver utilizadores com convites pendentes que já têm conta, e atribuir-lhes acesso manualmente.
-
-**Componente:** `src/components/settings/TeamSettingsPanel.tsx`
-
-Adicionar nova secção na aba "Pendentes" para mostrar:
-- Convites onde o email já tem conta registada
-- Botão "Processar Manualmente" que:
-  1. Associa o utilizador à clínica
-  2. Atribui o role do convite
-  3. Marca o convite como aceito
 
 ---
 
 ## Alterações Necessárias
 
-| Ficheiro | Alteração |
-|----------|-----------|
-| `src/pages/Login.tsx` | Verificar e processar convites pendentes após login |
-| `src/components/settings/TeamSettingsPanel.tsx` | Detectar convites com utilizador existente e permitir processamento manual |
-| `src/services/TeamService.ts` | Novo método `processInviteForExistingUser` |
-
----
-
-## Fluxo Corrigido
-
-```text
-Utilizador faz login
-       │
-       ▼
-Sistema verifica convites pendentes para este email
-       │
-       ├──► Encontrou convite válido?
-       │         │
-       │         ▼ Sim
-       │    Processa: atribui clinic_id + role
-       │         │
-       │         ▼
-       │    Mostra toast: "Você foi adicionado à clínica X"
-       │
-       ▼ Não
-Continua normalmente
-```
+| Ficheiro | Ação | Descrição |
+|----------|------|-----------|
+| `src/pages/Configuracoes.tsx` | Modificar | Adicionar nova aba "Permissões" com ícone Lock |
+| `src/components/settings/PermissionsSettingsPanel.tsx` | Criar | Novo painel com lista de utilizadores e matriz de permissões |
+| `src/hooks/usePermissions.ts` | Modificar | Adicionar módulo 'permissoes' à lista |
 
 ---
 
 ## Detalhes Técnicos
 
-### 1. Login.tsx - Processar Convite Após Login
+### Ficheiro 1: Configuracoes.tsx
+
+Adicionar o import e a nova aba:
 
 ```typescript
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setIsLoading(true);
-  setError(null);
+import { PermissionsSettingsPanel } from '@/components/settings/PermissionsSettingsPanel';
+import { Lock } from 'lucide-react';
 
-  const { error: signInError } = await signIn(email, password);
+// Na TabsList, adicionar entre "auditoria" e "seguranca":
+{isAdminMaster && (
+  <TabsTrigger value="permissoes" className="gap-2">
+    <Lock className="h-4 w-4 hidden sm:inline" />
+    Permissões
+  </TabsTrigger>
+)}
 
-  if (signInError) {
-    setIsLoading(false);
-    setError(signInError.message);
-    return;
-  }
-
-  // Verificar convites pendentes para este email
-  try {
-    const { data: pendingInvite } = await supabase
-      .from('team_invites')
-      .select('token, role')
-      .eq('email', email.toLowerCase())
-      .eq('status', 'pending')
-      .gt('expires_at', new Date().toISOString())
-      .maybeSingle();
-
-    if (pendingInvite) {
-      const { data: result } = await supabase.rpc('process_team_invite', {
-        invite_token: pendingInvite.token
-      });
-
-      if (result?.success) {
-        toast.success('Convite aceito automaticamente!', {
-          description: 'Você agora tem acesso à clínica'
-        });
-      }
-    }
-  } catch (err) {
-    console.error('Error processing pending invite:', err);
-    // Não bloquear o login se o processamento do convite falhar
-  }
-
-  setIsLoading(false);
-  toast.success('Login realizado com sucesso!');
-  navigate(from, { replace: true });
-};
+// Adicionar TabsContent:
+{isAdminMaster && (
+  <TabsContent value="permissoes">
+    <PermissionsSettingsPanel />
+  </TabsContent>
+)}
 ```
 
-### 2. TeamSettingsPanel - Detectar Convites com Utilizador Existente
+### Ficheiro 2: PermissionsSettingsPanel.tsx (novo)
 
-Na lista de convites pendentes, verificar se o email já tem conta:
-
-```typescript
-// Para cada convite, verificar se utilizador existe
-const { data: existingUser } = await supabase
-  .from('profiles')
-  .select('id, user_id, clinic_id')
-  .eq('email', invite.email)
-  .maybeSingle();
-
-// Se existir mas não tiver clinic_id, mostrar botão "Adicionar à Clínica"
-```
-
-### 3. TeamService - Método para Processar Convite Manualmente
+Estrutura do componente:
 
 ```typescript
-static async processInviteManually(inviteId: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc('process_team_invite_by_id', {
-    p_invite_id: inviteId
-  });
+export function PermissionsSettingsPanel() {
+  // 1. Buscar membros da equipe via TeamService.getTeamMembers()
+  // 2. Mostrar matriz de permissões (reutilizar lógica do EditPermissionsModal)
+  // 3. Lista de utilizadores com opção de editar role
 
-  if (error) {
-    console.error('Error processing invite:', error);
-    return false;
-  }
-
-  return data?.success ?? false;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Permissões</CardTitle>
+        <CardDescription>
+          Gerencie os acessos dos membros da sua clínica
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {/* Secção 1: Matriz de Permissões */}
+        <PermissionMatrixViewer />
+        
+        {/* Secção 2: Lista de Utilizadores */}
+        <UserPermissionsList 
+          members={members}
+          onEditMember={handleEditMember}
+        />
+      </CardContent>
+    </Card>
+  );
 }
 ```
 
+O componente irá:
+- Reutilizar a matriz de permissões já definida em `EditPermissionsModal.tsx`
+- Permitir alternar entre roles para ver as permissões de cada função
+- Listar todos os membros com opção de editar via modal existente
+
 ---
 
-## Interface Atualizada para Convites Pendentes
+## Fluxo de Utilização
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│ Convites Pendentes                                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ ┌─────────────────────────────────────────────────────────┐ │
-│ │ 📧 Camila Maria Oliveira                                │ │
-│ │    te.camila@gmail.com                                  │ │
-│ │    🏷️ Fisioterapeuta                                    │ │
-│ │                                                         │ │
-│ │ ⚠️ Este utilizador já tem conta registada               │ │
-│ │                                                         │ │
-│ │    [ Adicionar à Clínica ]  [ Cancelar Convite ]        │ │
-│ └─────────────────────────────────────────────────────────┘ │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+Admin acede a Configurações
+        │
+        ▼
+Clica na aba "Permissões"
+        │
+        ▼
+Vê a matriz de permissões por role
+(pode alternar entre Admin/Fisio/Secretaria)
+        │
+        ▼
+Vê lista de todos os utilizadores
+        │
+        ├──► Clica em "Editar" num utilizador
+        │           │
+        │           ▼
+        │    Abre modal EditPermissionsModal
+        │    (já existente)
+        │           │
+        │           ▼
+        │    Altera role e/ou status
+        │           │
+        │           ▼
+        │    Guarda alterações
+        │
+        ▼
+Lista atualiza automaticamente
 ```
 
 ---
 
-## Resumo das Entregas
+## Componentes Reutilizados
 
-| Item | Descrição |
-|------|-----------|
-| Processamento automático | Convites são processados automaticamente no login |
-| Detecção de utilizador existente | Painel mostra quando convite tem utilizador já registado |
-| Ação manual | Admin pode adicionar utilizador existente à clínica |
-| Atribuição de role | Role do convite é aplicado ao utilizador |
+- `EditPermissionsModal` - já existe, abre para editar permissões individuais
+- `TeamService` - já tem métodos para listar membros e atualizar roles
+- Matriz de permissões `PERMISSION_MATRIX` - já definida no modal
 
 ---
 
-## Benefícios
+## Resultado Final
 
-- Resolve imediatamente o problema da Camila
-- Previne situações similares no futuro
-- Admin tem controle total sobre quem entra na clínica
-- Mantém a segurança do sistema de convites
+O Admin Master terá acesso centralizado a:
+- Visão geral das permissões de cada função
+- Lista completa de utilizadores com seus roles atuais
+- Ação rápida para editar permissões de qualquer utilizador
 
