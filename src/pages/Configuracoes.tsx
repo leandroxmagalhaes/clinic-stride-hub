@@ -2,13 +2,14 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Palette, Zap, Shield, Puzzle, Users, Hospital, FileArchive } from 'lucide-react';
+import { Building2, Palette, Zap, Shield, Puzzle, Users, Hospital, FileArchive, History } from 'lucide-react';
 import { GeneralSettingsForm } from '@/components/settings/GeneralSettingsForm';
 import { AppearanceSettingsForm } from '@/components/settings/AppearanceSettingsForm';
 import { AutomationSettingsForm } from '@/components/settings/AutomationSettingsForm';
 import { TeamSettingsPanel } from '@/components/settings/TeamSettingsPanel';
 import { ClinicDataForm } from '@/components/settings/ClinicDataForm';
 import { BackupSettingsPanel } from '@/components/settings/BackupSettingsPanel';
+import { AuditLogsPanel } from '@/components/settings/AuditLogsPanel';
 import { useSettings } from '@/hooks/useSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { 
@@ -43,7 +44,7 @@ export default function Configuracoes() {
     >
       <div className="max-w-4xl mx-auto">
         <Tabs defaultValue="clinica" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-9 lg:w-auto lg:inline-grid">
             <TabsTrigger value="clinica" className="gap-2">
               <Hospital className="h-4 w-4 hidden sm:inline" />
               Clínica
@@ -69,6 +70,10 @@ export default function Configuracoes() {
             <TabsTrigger value="backup" className="gap-2">
               <FileArchive className="h-4 w-4 hidden sm:inline" />
               Backup
+            </TabsTrigger>
+            <TabsTrigger value="auditoria" className="gap-2">
+              <History className="h-4 w-4 hidden sm:inline" />
+              Auditoria
             </TabsTrigger>
             <TabsTrigger value="seguranca" className="gap-2" disabled>
               <Shield className="h-4 w-4 hidden sm:inline" />
@@ -126,6 +131,11 @@ export default function Configuracoes() {
           {/* Backup Tab */}
           <TabsContent value="backup">
             <BackupSettingsPanel />
+          </TabsContent>
+
+          {/* Audit Logs Tab */}
+          <TabsContent value="auditoria">
+            <AuditLogsPanel />
           </TabsContent>
 
           {/* Security Tab (Coming Soon) */}

@@ -5,7 +5,9 @@ import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
 import { Evolution } from "@/services/EvolutionService";
+import { AuditService } from "@/services/AuditService";
 import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 
 // Service type from Supabase
 export interface Service {
@@ -28,6 +30,7 @@ interface DataContextType {
   patientsLoading: boolean;
   addPatient: (patient: Patient) => void;
   updatePatient: (id: string, data: Partial<Patient>) => void;
+  deletePatient: (patientId: string, reason?: string) => Promise<void>;
   refreshPatients: () => Promise<void>;
   
   // Sessions
@@ -35,6 +38,7 @@ interface DataContextType {
   sessionsLoading: boolean;
   addSession: (session: Session) => void;
   updateSession: (id: string, data: Partial<Session>) => void;
+  deleteSession: (sessionId: string, reason?: string) => Promise<void>;
   refreshSessions: () => Promise<void>;
   
   // Professionals
@@ -42,6 +46,7 @@ interface DataContextType {
   professionalsLoading: boolean;
   addProfessional: (professional: Professional) => void;
   updateProfessional: (id: string, data: Partial<Professional>) => void;
+  deleteProfessional: (professionalId: string, reason?: string) => Promise<void>;
   refreshProfessionals: () => Promise<void>;
   
   // Evolutions
@@ -335,15 +340,137 @@ export function DataProvider({ children }: DataProviderProps) {
     await fetchServices();
   };
 
-  // Delete service (soft delete - set inactive)
-  const deleteService = async (id: string): Promise<void> => {
+  // Delete service (soft delete - set inactive) with audit
+  const deleteService = async (id: string, reason?: string): Promise<void> => {
+    const service = services.find(s => s.id === id);
+    
     const { error } = await supabase
       .from("servicos")
       .update({ is_active: false })
       .eq("id", id);
 
     if (error) throw error;
+
+    // Log audit
+    if (service) {
+      await AuditService.log({
+        action: 'delete',
+        entityType: 'service',
+        entityId: id,
+        entityName: service.name,
+        details: {
+          reason,
+          previousData: {
+            name: service.name,
+            price: service.price,
+            duration_minutes: service.duration_minutes,
+          }
+        }
+      });
+    }
+
     await fetchServices();
+  };
+
+  // Delete patient (soft delete - set inactive)
+  const deletePatient = async (patientId: string, reason?: string): Promise<void> => {
+    const patient = patients.find(p => p.id === patientId);
+    if (!patient) throw new Error("Paciente não encontrado");
+
+    // Soft delete
+    const { error } = await supabase
+      .from("pacientes")
+      .update({ is_active: false })
+      .eq("id", patientId);
+
+    if (error) throw error;
+
+    // Log audit
+    await AuditService.log({
+      action: 'delete',
+      entityType: 'patient',
+      entityId: patientId,
+      entityName: patient.full_name,
+      details: {
+        reason,
+        previousData: {
+          email: patient.email,
+          phone: patient.phone,
+          cpf: patient.cpf,
+        }
+      }
+    });
+
+    await fetchPatients();
+  };
+
+  // Delete session (hard delete for non-finalized)
+  const deleteSession = async (sessionId: string, reason?: string): Promise<void> => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) throw new Error("Sessão não encontrada");
+
+    // Cannot delete finalized sessions
+    if (session.status === 'realizado') {
+      throw new Error("Sessões finalizadas não podem ser apagadas");
+    }
+
+    // Delete session
+    const { error } = await supabase
+      .from("sessoes")
+      .delete()
+      .eq("id", sessionId);
+
+    if (error) throw error;
+
+    // Log audit
+    await AuditService.log({
+      action: 'delete',
+      entityType: 'session',
+      entityId: sessionId,
+      entityName: `${session.paciente?.full_name || 'Paciente'} - ${format(new Date(session.start_time), 'dd/MM HH:mm')}`,
+      details: {
+        reason,
+        patient: session.paciente?.full_name,
+        professional: session.profissional?.full_name,
+        service: session.servico?.name,
+        date: session.start_time.toString(),
+        status: session.status,
+      }
+    });
+
+    await fetchSessions();
+  };
+
+  // Delete professional (soft delete - set inactive)
+  const deleteProfessional = async (professionalId: string, reason?: string): Promise<void> => {
+    const professional = professionals.find(p => p.id === professionalId);
+    if (!professional) throw new Error("Profissional não encontrado");
+
+    // Soft delete
+    const { error } = await supabase
+      .from("profissionais")
+      .update({ is_active: false })
+      .eq("id", professionalId);
+
+    if (error) throw error;
+
+    // Log audit
+    await AuditService.log({
+      action: 'delete',
+      entityType: 'professional',
+      entityId: professionalId,
+      entityName: professional.full_name,
+      details: {
+        reason,
+        previousData: {
+          email: professional.email,
+          phone: professional.phone,
+          specialty: professional.specialty,
+        }
+      }
+    });
+
+    await fetchProfessionals();
   };
 
   // Load all data on mount
@@ -488,16 +615,19 @@ export function DataProvider({ children }: DataProviderProps) {
     patientsLoading,
     addPatient,
     updatePatient,
+    deletePatient,
     refreshPatients: fetchPatients,
     sessions,
     sessionsLoading,
     addSession,
     updateSession,
+    deleteSession,
     refreshSessions: fetchSessions,
     professionals,
     professionalsLoading,
     addProfessional,
     updateProfessional,
+    deleteProfessional,
     refreshProfessionals: fetchProfessionals,
     evolutions,
     evolutionsLoading,

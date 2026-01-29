@@ -40,7 +40,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Pacientes() {
-  const { patients, refreshPatients, getCreditBalance, addCredits } = useData();
+  const { patients, refreshPatients, getCreditBalance, addCredits, deletePatient } = useData();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [clinicId, setClinicId] = useState<string | null>(null);
@@ -331,6 +331,7 @@ export default function Pacientes() {
         creditBalance={selectedPatient ? getCreditBalance(selectedPatient.id) : 0}
         transactions={patientTransactions}
         onAddCredits={handleAddCredits}
+        onDeletePatient={deletePatient}
       />
 
       {/* New Patient Modal */}

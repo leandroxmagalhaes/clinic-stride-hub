@@ -51,8 +51,10 @@ import {
   CreditCard,
   FileText,
   Edit3,
+  Trash2,
 } from "lucide-react";
 import { Session, SessionService } from "@/services/SessionService";
+import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
 
 // Session status types matching business rules
 export type SessionStatus = "agendado" | "confirmado" | "realizado" | "cancelado" | "falta";
@@ -81,6 +83,7 @@ interface SessionManagementModalProps {
   sessions: Session[];
   getCreditBalance: (patientId: string) => number;
   onUpdateSession: (id: string, data: Partial<Session>) => void;
+  onDeleteSession?: (sessionId: string, reason?: string) => Promise<void>;
   onRefundCredit: (patientId: string) => void;
   onUseCredit: (patientId: string, sessionId: string) => { success: boolean; error?: string };
   wasCreditUsedForSession: (sessionId: string) => boolean;
@@ -93,6 +96,7 @@ export function SessionManagementModal({
   sessions,
   getCreditBalance,
   onUpdateSession,
+  onDeleteSession,
   onRefundCredit,
   onUseCredit,
   wasCreditUsedForSession,
@@ -103,6 +107,7 @@ export function SessionManagementModal({
   const [isLoading, setIsLoading] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showNoShowDialog, setShowNoShowDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState<string>("");
   const [noShowRefund, setNoShowRefund] = useState(false);
   const [showEvolutionPrompt, setShowEvolutionPrompt] = useState(false);
@@ -260,6 +265,13 @@ export function SessionManagementModal({
     onClose();
     // Navigate to prontuarios with patient context
     navigate(`/prontuarios?paciente=${session.paciente_id}`);
+  };
+
+  const handleDeleteSession = async () => {
+    if (!onDeleteSession) return;
+    await onDeleteSession(session.id, "Sessão apagada pelo utilizador");
+    toast.success("Sessão apagada com sucesso");
+    onClose();
   };
 
   const isTerminalStatus = currentStatus === "realizado" || currentStatus === "cancelado" || currentStatus === "falta";
@@ -459,6 +471,19 @@ export function SessionManagementModal({
                   <AlertTriangle className="h-4 w-4 mr-2" />
                   Falta
                 </Button>
+
+                {/* Delete Session Button */}
+                {onDeleteSession && (
+                  <Button
+                    variant="outline"
+                    className="border-destructive text-destructive hover:bg-destructive/10"
+                    onClick={() => setShowDeleteDialog(true)}
+                    disabled={isLoading}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Apagar
+                  </Button>
+                )}
               </div>
             )}
 
@@ -576,6 +601,17 @@ export function SessionManagementModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete Session Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={handleDeleteSession}
+        title="Apagar Sessão"
+        description="A sessão será removida permanentemente do sistema."
+        entityName={`${patientName} - ${format(new Date(session.start_time), 'dd/MM HH:mm')}`}
+        warnings={creditWasUsed ? ["O crédito já foi descontado desta sessão"] : []}
+      />
     </>
   );
 }
