@@ -2,3 +2,12 @@ project_id = "efzxtildgdawcplykbdc"
 
 [functions.export-clinic-data]
 verify_jwt = false
+
+[functions.send-appointment-confirmation]
+verify_jwt = false
+
+[functions.send-appointment-reminder]
+verify_jwt = false
+
+[functions.send-patient-portal-link]
+verify_jwt = false

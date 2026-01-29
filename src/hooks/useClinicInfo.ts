@@ -5,6 +5,9 @@ interface ClinicInfo {
   id: string;
   name: string;
   logo_url: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
 }
 
 /**
@@ -29,7 +32,7 @@ export function useClinicInfo() {
       // Get clinic info
       const { data: clinic } = await supabase
         .from('clinics')
-        .select('id, name, logo_url')
+        .select('id, name, logo_url, phone, email, address')
         .eq('id', profile.clinic_id)
         .maybeSingle();
 

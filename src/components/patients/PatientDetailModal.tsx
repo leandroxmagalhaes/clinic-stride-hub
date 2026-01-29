@@ -9,13 +9,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Phone, Coins, History, User, Tag } from "lucide-react";
+import { MapPin, Phone, Coins, History, User, Tag, Mail, Loader2 } from "lucide-react";
 import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { AddCreditsModal, CreditPurchaseData } from "./AddCreditsModal";
 import { TransactionHistory, Transaction } from "./TransactionHistory";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useClinicInfo } from "@/hooks/useClinicInfo";
 
 interface PatientDetailModalProps {
   patient: Patient | null;
@@ -36,6 +39,8 @@ export function PatientDetailModal({
 }: PatientDetailModalProps) {
   const [isAddCreditsOpen, setIsAddCreditsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
+  const [isSendingPortalLink, setIsSendingPortalLink] = useState(false);
+  const { data: clinicInfo } = useClinicInfo();
 
   // Reset tab when modal opens
   useEffect(() => {
@@ -55,6 +60,42 @@ export function PatientDetailModal({
 
   const handleAddCredits = async (data: CreditPurchaseData) => {
     await onAddCredits(patient.id, data);
+  };
+
+  const handleSendPortalLink = async () => {
+    if (!patient.email) {
+      toast.error("Este paciente não possui email cadastrado.");
+      return;
+    }
+
+    setIsSendingPortalLink(true);
+    try {
+      const portalUrl = `${window.location.origin}/patient-portal`;
+
+      const { data, error } = await supabase.functions.invoke("send-patient-portal-link", {
+        body: {
+          patientEmail: patient.email,
+          patientName: patient.full_name,
+          portalUrl: portalUrl,
+          clinicName: clinicInfo?.name || "Clínica",
+          clinicPhone: clinicInfo?.phone,
+          clinicEmail: clinicInfo?.email,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(`Link do portal enviado para ${patient.email}`);
+      } else {
+        throw new Error(data?.error || "Erro ao enviar email");
+      }
+    } catch (error) {
+      console.error("Error sending portal link:", error);
+      toast.error(error instanceof Error ? error.message : "Erro ao enviar link do portal");
+    } finally {
+      setIsSendingPortalLink(false);
+    }
   };
 
   return (
@@ -196,11 +237,26 @@ export function PatientDetailModal({
             </TabsContent>
           </Tabs>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
-              Fechar
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={handleSendPortalLink}
+              disabled={!patient.email || isSendingPortalLink}
+              className="gap-2"
+            >
+              {isSendingPortalLink ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Mail className="h-4 w-4" />
+              )}
+              Enviar Link do Portal
             </Button>
-            <Button>Ver Prontuário</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Fechar
+              </Button>
+              <Button>Ver Prontuário</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
