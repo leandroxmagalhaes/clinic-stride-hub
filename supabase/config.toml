@@ -1,1 +1,4 @@
 project_id = "efzxtildgdawcplykbdc"
+
+[functions.export-clinic-data]
+verify_jwt = false
