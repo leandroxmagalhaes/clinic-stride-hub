@@ -1,97 +1,81 @@
 
-# Plano: Sistema de Convites de Equipe Funcional
+# Plano: Sistema de Acesso Exclusivo por Convite + Editor de Permissões
 
 ## Problema Atual
 
-O botão "Convidar" nas Configurações da Equipe não faz nada de concreto. Apenas mostra uma mensagem informando que "o convite será enviado quando o sistema de emails estiver configurado".
-
-A boa notícia é que:
-- A chave **RESEND_API_KEY** já está configurada
-- O sistema já tem edge functions funcionais para envio de emails
+1. **Cadastro aberto**: Qualquer pessoa pode acessar `/signup` e criar uma conta, mesmo sem convite
+2. **Edição de permissões limitada**: O menu dropdown do TeamMemberCard permite alterar funções, mas não há um modal dedicado com visão clara das permissões
 
 ---
 
 ## Solução Proposta
 
-Implementar um sistema completo de convites com:
+### Parte 1: Bloquear Cadastro Sem Convite
 
-1. **Tabela de convites pendentes** no banco de dados
-2. **Edge function** para envio de email de convite
-3. **Link de convite** que direciona para signup com dados pré-preenchidos
-4. **Associação automática** do novo utilizador à clínica ao fazer signup
+Modificar a página de Signup para:
+- **Exigir token de convite** na URL (`/signup?invite=TOKEN`)
+- **Mostrar mensagem de acesso negado** se acessar sem token
+- **Remover link "Cadastre-se"** da página de Login
+- **Manter o link para Login** na página de Signup (para quem já tem conta)
+
+### Parte 2: Modal de Edição de Permissões
+
+Criar um modal dedicado para editar permissões de cada utilizador, acessível pelo Admin Master:
+- **Lista visual de todas as permissões** por módulo
+- **Seleção clara da função** (Admin, Fisioterapeuta, Secretaria)
+- **Preview das permissões** baseado na função selecionada
 
 ---
 
-## Fluxo do Utilizador
+## Fluxo de Acesso
 
 ```text
-Admin clica "Convidar"
-         │
-         ▼
-  Preenche nome, email, função
-         │
-         ▼
-  Sistema cria registo na tabela "team_invites"
-         │
-         ▼
-  Edge function envia email com link de convite
-         │
-         ▼
-  Convidado recebe email e clica no link
-         │
-         ▼
-  Página de signup com email pré-preenchido
-         │
-         ▼
-  Ao criar conta, sistema:
-    - Associa o utilizador à clínica do convite
-    - Atribui a função definida no convite
-    - Marca o convite como "aceito"
+Página de Login
+      │
+      ├── Tem conta? → Login normal
+      │
+      └── Não tem conta? → Precisa de convite do Admin
+                                │
+                                ▼
+                   Admin envia convite por email
+                                │
+                                ▼
+                   Convidado recebe link /signup?invite=TOKEN
+                                │
+                                ▼
+                   Cria conta e é associado à clínica
 ```
 
 ---
 
 ## Alterações Necessárias
 
-### 1. Nova Tabela: `team_invites`
+### 1. Modificar Signup.tsx
 
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| `id` | uuid | ID único |
-| `clinic_id` | uuid | Clínica que está a convidar |
-| `email` | text | Email do convidado |
-| `full_name` | text | Nome do convidado |
-| `role` | app_role | Função: admin, professional, secretary |
-| `invited_by` | uuid | ID do utilizador que convidou |
-| `status` | text | pending, accepted, expired |
-| `token` | text | Token único para validar o link |
-| `expires_at` | timestamp | Expiração (7 dias) |
-| `created_at` | timestamp | Data de criação |
-| `accepted_at` | timestamp | Data de aceitação |
+| Antes | Depois |
+|-------|--------|
+| Permite acesso sem token | Bloqueia acesso sem token |
+| Mostra formulário sempre | Mostra mensagem "Acesso por convite apenas" |
 
-### 2. Nova Edge Function: `send-team-invite`
+### 2. Modificar Login.tsx
 
-Responsabilidades:
-- Receber dados do convite
-- Criar registo na tabela `team_invites`
-- Gerar token único
-- Enviar email via Resend com link de convite
+| Antes | Depois |
+|-------|--------|
+| Link "Cadastre-se" visível | Link removido ou oculto |
+| - | Texto: "Para criar conta, solicite um convite" |
 
-### 3. Atualização: Página de Signup
+### 3. Criar EditPermissionsModal.tsx
 
-Modificar para:
-- Aceitar parâmetro `?invite=TOKEN` na URL
-- Pré-preencher email e nome se vier de convite
-- Após criar conta, processar o convite automaticamente
+Novo componente com:
+- Seletor de função (Radio Group)
+- Tabela de permissões por módulo (readonly, informativo)
+- Opção de ativar/desativar utilizador
+- Botões Cancelar/Guardar
 
-### 4. Atualização: TeamService.ts
+### 4. Atualizar TeamMemberCard.tsx
 
-Substituir o método placeholder `inviteUser` por chamada real à edge function
-
-### 5. Atualização: TeamSettingsPanel.tsx
-
-- Mostrar lista de convites pendentes
-- Permitir reenviar ou cancelar convites
+- Substituir dropdown por botão "Editar Permissões"
+- Abrir modal ao clicar
 
 ---
 
@@ -99,191 +83,179 @@ Substituir o método placeholder `inviteUser` por chamada real à edge function
 
 | Ficheiro | Propósito |
 |----------|-----------|
-| `supabase/functions/send-team-invite/index.ts` | Edge function para envio do convite |
+| `src/components/settings/EditPermissionsModal.tsx` | Modal para editar funções e ver permissões |
 
 ## Ficheiros a Modificar
 
 | Ficheiro | Alteração |
 |----------|-----------|
-| `src/services/TeamService.ts` | Chamar edge function real |
-| `src/pages/Signup.tsx` | Processar convites via URL |
-| `src/components/settings/TeamSettingsPanel.tsx` | Mostrar convites pendentes |
+| `src/pages/Signup.tsx` | Bloquear acesso sem token de convite |
+| `src/pages/Login.tsx` | Remover link de cadastro, adicionar texto informativo |
+| `src/components/settings/TeamMemberCard.tsx` | Usar botão para abrir modal de permissões |
+| `src/components/settings/TeamSettingsPanel.tsx` | Integrar o novo modal |
+
+---
+
+## Experiência do Utilizador
+
+### Acesso Sem Convite
+
+Ao acessar `/signup` diretamente:
+
+```text
+┌────────────────────────────────────────┐
+│                                        │
+│          🔒 Acesso Restrito            │
+│                                        │
+│   O cadastro neste sistema é feito     │
+│   exclusivamente através de convite.   │
+│                                        │
+│   Solicite um convite ao administrador │
+│   da sua clínica.                      │
+│                                        │
+│        [ Ir para Login ]               │
+│                                        │
+└────────────────────────────────────────┘
+```
+
+### Página de Login (Atualizada)
+
+```text
+┌────────────────────────────────────────┐
+│           PhysioNE                     │
+│                                        │
+│   Email: [___________________]         │
+│   Senha: [___________________]         │
+│                                        │
+│        [ Entrar ]                      │
+│                                        │
+│   ────────────────────────────────     │
+│   Para criar uma conta, solicite       │
+│   um convite ao administrador.         │
+│                                        │
+└────────────────────────────────────────┘
+```
+
+### Modal de Edição de Permissões
+
+```text
+┌──────────────────────────────────────────────────────────┐
+│  Editar Permissões - João Silva                      [X] │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  FUNÇÃO                                                  │
+│  ○ Admin Master - Acesso total ao sistema               │
+│  ● Fisioterapeuta - Vê apenas seus pacientes e sessões  │
+│  ○ Secretaria - Acesso admin sem financeiro completo    │
+│                                                          │
+│  ─────────────────────────────────────────────────────   │
+│                                                          │
+│  PERMISSÕES (baseado na função selecionada)             │
+│                                                          │
+│  │ Módulo       │ Ver │ Editar │ Apagar │ Financeiro │  │
+│  │──────────────│─────│────────│────────│────────────│  │
+│  │ Dashboard    │ ✓   │ ✓      │ ✗      │ ✗          │  │
+│  │ Agenda       │ ✓   │ ✓      │ ✗      │ ✗          │  │
+│  │ Pacientes    │ ✓*  │ ✓*     │ ✗      │ ✗          │  │
+│  │ Prontuários  │ ✓*  │ ✓*     │ ✗      │ ✗          │  │
+│  │ Profissionais│ ✗   │ ✗      │ ✗      │ ✗          │  │
+│  │ Financeiro   │ ✗   │ ✗      │ ✗      │ ✗          │  │
+│  │ Comercial    │ ✗   │ ✗      │ ✗      │ ✗          │  │
+│  │ Configurações│ ✗   │ ✗      │ ✗      │ ✗          │  │
+│                                                          │
+│  * Apenas pacientes/sessões atribuídos                   │
+│                                                          │
+│  ─────────────────────────────────────────────────────   │
+│                                                          │
+│  STATUS DO UTILIZADOR                                    │
+│  [═══════●] Ativo                                        │
+│                                                          │
+├──────────────────────────────────────────────────────────┤
+│                          [ Cancelar ]  [ Guardar ]       │
+└──────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Secção Técnica
 
-### Migração SQL
-
-```sql
--- Tabela de convites
-CREATE TABLE public.team_invites (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  clinic_id UUID NOT NULL REFERENCES public.clinics(id) ON DELETE CASCADE,
-  email TEXT NOT NULL,
-  full_name TEXT NOT NULL,
-  role public.app_role NOT NULL DEFAULT 'professional',
-  invited_by UUID NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired', 'cancelled')),
-  token TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex'),
-  expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '7 days'),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  accepted_at TIMESTAMPTZ
-);
-
--- Índices
-CREATE INDEX idx_team_invites_clinic ON public.team_invites(clinic_id);
-CREATE INDEX idx_team_invites_email ON public.team_invites(email);
-CREATE INDEX idx_team_invites_token ON public.team_invites(token);
-
--- RLS
-ALTER TABLE public.team_invites ENABLE ROW LEVEL SECURITY;
-
--- Política: membros da clínica podem ver convites
-CREATE POLICY "Users can view invites from their clinic"
-  ON public.team_invites FOR SELECT
-  USING (clinic_id = get_user_clinic_id(auth.uid()));
-
--- Política: admins podem criar convites
-CREATE POLICY "Admins can create invites"
-  ON public.team_invites FOR INSERT
-  WITH CHECK (clinic_id = get_user_clinic_id(auth.uid()));
-
--- Política: admins podem atualizar convites
-CREATE POLICY "Admins can update invites"
-  ON public.team_invites FOR UPDATE
-  USING (clinic_id = get_user_clinic_id(auth.uid()));
-
--- Função para processar convite após signup
-CREATE OR REPLACE FUNCTION public.process_team_invite(invite_token TEXT)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_invite RECORD;
-  v_user_id UUID;
-BEGIN
-  -- Buscar o convite
-  SELECT * INTO v_invite FROM public.team_invites
-  WHERE token = invite_token AND status = 'pending' AND expires_at > now();
-  
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Convite inválido ou expirado');
-  END IF;
-  
-  -- Obter user_id do utilizador atual
-  v_user_id := auth.uid();
-  IF v_user_id IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Utilizador não autenticado');
-  END IF;
-  
-  -- Atualizar o perfil com a clínica
-  UPDATE public.profiles
-  SET clinic_id = v_invite.clinic_id
-  WHERE user_id = v_user_id;
-  
-  -- Adicionar o role
-  INSERT INTO public.user_roles (user_id, role)
-  VALUES (v_user_id, v_invite.role)
-  ON CONFLICT DO NOTHING;
-  
-  -- Marcar convite como aceito
-  UPDATE public.team_invites
-  SET status = 'accepted', accepted_at = now()
-  WHERE id = v_invite.id;
-  
-  RETURN jsonb_build_object('success', true, 'clinic_id', v_invite.clinic_id);
-END;
-$$;
-```
-
-### Edge Function: send-team-invite
+### Signup.tsx - Bloquear Acesso
 
 ```typescript
-// supabase/functions/send-team-invite/index.ts
-
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "https://esm.sh/resend@2.0.0";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-interface InviteRequest {
-  email: string;
-  full_name: string;
-  role: 'admin' | 'professional' | 'secretary';
-  clinicName: string;
-  inviterName: string;
-}
-
-serve(async (req) => {
-  // Criar convite na tabela
-  // Enviar email com link: {BASE_URL}/signup?invite={token}
-  // Retornar sucesso
-});
-```
-
-### TeamService.ts Atualizado
-
-```typescript
-static async inviteUser(data: InviteUserData): Promise<{ success: boolean; error?: string }> {
-  // Chamar edge function
-  const response = await supabase.functions.invoke('send-team-invite', {
-    body: { ...data, clinicName, inviterName }
-  });
-  
-  if (response.error) {
-    return { success: false, error: response.error.message };
-  }
-  
-  return { success: true };
+// Se não há token de convite, mostrar mensagem de acesso restrito
+if (!inviteToken) {
+  return (
+    <Card>
+      <CardHeader>
+        <Lock className="h-8 w-8 text-primary" />
+        <CardTitle>Acesso Restrito</CardTitle>
+        <CardDescription>
+          O cadastro neste sistema é feito exclusivamente através de convite.
+          Solicite um convite ao administrador da sua clínica.
+        </CardDescription>
+      </CardHeader>
+      <CardFooter>
+        <Link to="/login">
+          <Button variant="outline">Ir para Login</Button>
+        </Link>
+      </CardFooter>
+    </Card>
+  );
 }
 ```
 
-### Signup.tsx Atualizado
+### Login.tsx - Remover Cadastro
 
 ```typescript
-// Verificar se há token de convite na URL
-const [searchParams] = useSearchParams();
-const inviteToken = searchParams.get('invite');
+// Antes
+<p>
+  Não tem uma conta?{' '}
+  <Link to="/signup">Cadastre-se</Link>
+</p>
 
-// Se houver token, buscar dados do convite
-useEffect(() => {
-  if (inviteToken) {
-    fetchInviteDetails(inviteToken);
-  }
-}, [inviteToken]);
+// Depois
+<p className="text-muted-foreground text-center text-sm">
+  Para criar uma conta, solicite um convite ao administrador.
+</p>
+```
 
-// Após signup bem-sucedido, processar o convite
-if (inviteToken) {
-  await supabase.rpc('process_team_invite', { invite_token: inviteToken });
+### EditPermissionsModal.tsx - Estrutura
+
+```typescript
+interface EditPermissionsModalProps {
+  member: TeamMember;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (userId: string, roles: AppRole[], isActive: boolean) => Promise<void>;
 }
+
+// Componente usa:
+// - RadioGroup para seleção de função
+// - Tabela de permissões (readonly) calculada a partir da função
+// - Switch para status ativo/inativo
+// - Botões de ação
 ```
 
----
+### Tabela de Permissões por Função
 
-## Experiência do Convidado
-
-### Email Recebido
-
-```text
-Assunto: Convite para juntar-se à Clínica ABC
-
-Olá João,
-
-Você foi convidado por Maria Silva para juntar-se à equipe 
-da Clínica ABC como Fisioterapeuta.
-
-[Aceitar Convite]
-
-Este convite expira em 7 dias.
+```typescript
+const PERMISSION_MATRIX = {
+  admin: {
+    dashboard: { view: true, edit: true, delete: true, financial: true },
+    agenda: { view: true, edit: true, delete: true, financial: true },
+    // ... todos os módulos com acesso total
+  },
+  professional: {
+    dashboard: { view: true, edit: true, delete: false, financial: false },
+    pacientes: { view: 'own', edit: 'own', delete: false, financial: false },
+    // ... acesso restrito
+  },
+  secretary: {
+    dashboard: { view: true, edit: true, delete: true, financial: false },
+    // ... acesso sem financeiro
+  },
+};
 ```
-
-### Página de Signup
-
-- Email já preenchido (não editável)
-- Nome já preenchido
-- Apenas precisa definir a senha
-- Mensagem: "Você foi convidado para a Clínica ABC"
 
 ---
 
@@ -291,9 +263,7 @@ Este convite expira em 7 dias.
 
 | Item | Descrição |
 |------|-----------|
-| Tabela | `team_invites` com tokens e expiração |
-| Edge Function | `send-team-invite` para criar e enviar convites |
-| Signup | Processar convites automaticamente |
-| TeamService | Chamar edge function real |
-| UI | Lista de convites pendentes no painel |
-
+| Signup bloqueado | Acesso apenas com token de convite válido |
+| Login atualizado | Sem link de cadastro, com texto informativo |
+| Modal de permissões | Interface clara para editar funções e ver permissões |
+| Segurança reforçada | Apenas admin master pode enviar convites e editar permissões |
