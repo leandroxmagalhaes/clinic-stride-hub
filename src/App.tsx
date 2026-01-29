@@ -7,6 +7,7 @@ import { DataProvider } from "@/contexts/DataContext";
 import { LocaleProvider } from "@/contexts/LocaleContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { ThemeApplicator } from "@/components/ThemeApplicator";
 import Dashboard from "./pages/Dashboard";
 import Agenda from "./pages/Agenda";
 import Pacientes from "./pages/Pacientes";
@@ -31,6 +32,7 @@ const App = () => (
     <TooltipProvider>
       <LocaleProvider>
         <DataProvider>
+          <ThemeApplicator />
           <Toaster />
           <Sonner />
           <BrowserRouter>
