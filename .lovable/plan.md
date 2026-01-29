@@ -1,180 +1,193 @@
 
 
-# Plano: Aba de Permissões nas Configurações
+# Correção: Agendamentos Não Persistem na Base de Dados
 
-## Objetivo
+## Problema Identificado
 
-Criar uma nova aba "Permissões" dentro de Configurações que permite ao Admin Master:
-1. Ver todos os utilizadores da clínica numa lista
-2. Alterar o role de cada utilizador (Admin/Fisioterapeuta/Secretaria)
-3. Ativar/desativar utilizadores
-4. Consultar a matriz de permissões por role
+Os agendamentos (sessões) estão a desaparecer após logout porque **nunca são guardados na base de dados**. O código atual apenas atualiza o estado local do React:
 
----
-
-## O que será criado
-
-### 1. Nova Aba na Página de Configurações
-
-Adicionar uma aba "Permissões" com ícone de escudo entre "Auditoria" e "Segurança" (que está desativada).
-
-### 2. Novo Componente: PermissionsSettingsPanel
-
-Uma interface visual com:
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Permissões                                                     │
-│  Gerencie os acessos dos membros da sua clínica                 │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Matriz de Permissões por Função                          │  │
-│  │ [Admin Master] [Fisioterapeuta] [Secretaria]  (tabs)     │  │
-│  │                                                           │  │
-│  │  Módulo        │ Ver │ Editar │ Apagar │ Financeiro      │  │
-│  │  Dashboard     │  ✓  │   ✓    │   ✓    │     ✓           │  │
-│  │  Agenda        │  ✓  │   ✓    │   ✓    │     ✓           │  │
-│  │  Pacientes     │  ✓  │   ✓    │   ✓    │     ✓           │  │
-│  │  ...           │     │        │        │                 │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ Utilizadores                                    [Buscar]  │  │
-│  ├───────────────────────────────────────────────────────────┤  │
-│  │  👤 Leandro Magalhães    │ Admin Master      │ ✓ Ativo    │  │
-│  │     leandroxmagalhaes@gmail.com               [Editar]    │  │
-│  ├───────────────────────────────────────────────────────────┤  │
-│  │  👤 Camila Maria Oliveira│ Fisioterapeuta    │ ✓ Ativo    │  │
-│  │     te.camila@gmail.com                       [Editar]    │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```typescript
+// Linha 524-526 do DataContext.tsx
+const addSession = (session: Session) => {
+  setSessions((prev) => [session, ...prev]); // ❌ Apenas estado local!
+};
 ```
+
+Quando o utilizador faz logout, o estado é limpo e, como os dados nunca foram para o Supabase, perdem-se.
+
+## Solução
+
+Modificar o `DataContext` para que as operações de sessão façam INSERT/UPDATE na base de dados Supabase, além de atualizar o estado local.
 
 ---
 
 ## Alterações Necessárias
 
-| Ficheiro | Ação | Descrição |
-|----------|------|-----------|
-| `src/pages/Configuracoes.tsx` | Modificar | Adicionar nova aba "Permissões" com ícone Lock |
-| `src/components/settings/PermissionsSettingsPanel.tsx` | Criar | Novo painel com lista de utilizadores e matriz de permissões |
-| `src/hooks/usePermissions.ts` | Modificar | Adicionar módulo 'permissoes' à lista |
+### Ficheiro: `src/contexts/DataContext.tsx`
 
----
-
-## Detalhes Técnicos
-
-### Ficheiro 1: Configuracoes.tsx
-
-Adicionar o import e a nova aba:
+#### 1. Modificar `addSession` para inserir na base de dados
 
 ```typescript
-import { PermissionsSettingsPanel } from '@/components/settings/PermissionsSettingsPanel';
-import { Lock } from 'lucide-react';
+const addSession = async (session: Session): Promise<void> => {
+  // Obter clinic_id do utilizador
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) throw new Error("User not authenticated");
 
-// Na TabsList, adicionar entre "auditoria" e "seguranca":
-{isAdminMaster && (
-  <TabsTrigger value="permissoes" className="gap-2">
-    <Lock className="h-4 w-4 hidden sm:inline" />
-    Permissões
-  </TabsTrigger>
-)}
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("clinic_id")
+    .eq("user_id", userData.user.id)
+    .maybeSingle();
 
-// Adicionar TabsContent:
-{isAdminMaster && (
-  <TabsContent value="permissoes">
-    <PermissionsSettingsPanel />
-  </TabsContent>
-)}
+  if (!profile?.clinic_id) throw new Error("User has no clinic");
+
+  // Inserir na base de dados
+  const { data, error } = await supabase.from("sessoes").insert({
+    clinic_id: profile.clinic_id,
+    paciente_id: session.paciente_id,
+    profissional_id: session.profissional_id,
+    servico_id: session.servico_id,
+    start_time: session.start_time.toISOString(),
+    end_time: session.end_time.toISOString(),
+    status: session.status,
+    notes: session.notes,
+    price: session.price,
+    payment_status: session.payment_status,
+  }).select(`
+    *,
+    paciente:pacientes(id, full_name),
+    profissional:profiles!sessoes_profissional_id_fkey(id, full_name),
+    servico:servicos(id, name, color, duration_minutes, consumes_credit)
+  `).single();
+
+  if (error) throw error;
+
+  // Atualizar estado local com o ID real da base de dados
+  const newSession: Session = {
+    ...session,
+    id: data.id,
+    clinic_id: data.clinic_id,
+    paciente: data.paciente,
+    profissional: data.profissional,
+    servico: data.servico,
+  };
+
+  setSessions((prev) => [newSession, ...prev]);
+};
 ```
 
-### Ficheiro 2: PermissionsSettingsPanel.tsx (novo)
-
-Estrutura do componente:
+#### 2. Modificar `updateSession` para fazer UPDATE na base de dados
 
 ```typescript
-export function PermissionsSettingsPanel() {
-  // 1. Buscar membros da equipe via TeamService.getTeamMembers()
-  // 2. Mostrar matriz de permissões (reutilizar lógica do EditPermissionsModal)
-  // 3. Lista de utilizadores com opção de editar role
+const updateSession = async (id: string, data: Partial<Session>): Promise<void> => {
+  // Preparar dados para update
+  const updateData: Record<string, any> = {};
+  
+  if (data.start_time) updateData.start_time = data.start_time instanceof Date 
+    ? data.start_time.toISOString() : data.start_time;
+  if (data.end_time) updateData.end_time = data.end_time instanceof Date 
+    ? data.end_time.toISOString() : data.end_time;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.notes !== undefined) updateData.notes = data.notes;
+  if (data.payment_status !== undefined) updateData.payment_status = data.payment_status;
+  if (data.payment_method !== undefined) updateData.payment_method = data.payment_method;
+  if (data.price !== undefined) updateData.price = data.price;
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Permissões</CardTitle>
-        <CardDescription>
-          Gerencie os acessos dos membros da sua clínica
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {/* Secção 1: Matriz de Permissões */}
-        <PermissionMatrixViewer />
-        
-        {/* Secção 2: Lista de Utilizadores */}
-        <UserPermissionsList 
-          members={members}
-          onEditMember={handleEditMember}
-        />
-      </CardContent>
-    </Card>
+  // Atualizar na base de dados
+  const { error } = await supabase
+    .from("sessoes")
+    .update(updateData)
+    .eq("id", id);
+
+  if (error) throw error;
+
+  // Atualizar estado local
+  setSessions((prev) =>
+    prev.map((s) => (s.id === id ? { ...s, ...data } : s))
   );
+};
+```
+
+#### 3. Atualizar interface para funções async
+
+Alterar a tipagem em `DataContextType`:
+
+```typescript
+addSession: (session: Session) => Promise<void>;
+updateSession: (id: string, data: Partial<Session>) => Promise<void>;
+```
+
+### Ficheiro: `src/pages/Agenda.tsx`
+
+Adicionar `await` às chamadas de `addSession` e `updateSession`:
+
+```typescript
+// Linha 164
+await addSession(newSession);
+
+// Linha 171-174
+if (!creditResult.success) {
+  await updateSession(newSession.id, { payment_status: "pendente" });
+} else {
+  await updateSession(newSession.id, { payment_status: "pago" });
 }
 ```
 
-O componente irá:
-- Reutilizar a matriz de permissões já definida em `EditPermissionsModal.tsx`
-- Permitir alternar entre roles para ver as permissões de cada função
-- Listar todos os membros com opção de editar via modal existente
-
 ---
 
-## Fluxo de Utilização
+## Fluxo Corrigido
 
 ```text
-Admin acede a Configurações
+Utilizador cria agendamento
         │
         ▼
-Clica na aba "Permissões"
+SessionService.create() gera objeto sessão
         │
         ▼
-Vê a matriz de permissões por role
-(pode alternar entre Admin/Fisio/Secretaria)
+addSession() é chamado
         │
-        ▼
-Vê lista de todos os utilizadores
-        │
-        ├──► Clica em "Editar" num utilizador
+        ├──► INSERT na tabela sessoes (Supabase) ✓
         │           │
         │           ▼
-        │    Abre modal EditPermissionsModal
-        │    (já existente)
-        │           │
-        │           ▼
-        │    Altera role e/ou status
-        │           │
-        │           ▼
-        │    Guarda alterações
+        │    Retorna ID real da base de dados
         │
         ▼
-Lista atualiza automaticamente
+Estado local atualizado com dados persistidos
+        │
+        ▼
+Utilizador faz logout e login
+        │
+        ▼
+fetchSessions() carrega dados da base de dados ✓
+        │
+        ▼
+Agendamentos aparecem corretamente! ✓
 ```
 
 ---
 
-## Componentes Reutilizados
+## Ficheiros a Modificar
 
-- `EditPermissionsModal` - já existe, abre para editar permissões individuais
-- `TeamService` - já tem métodos para listar membros e atualizar roles
-- Matriz de permissões `PERMISSION_MATRIX` - já definida no modal
+| Ficheiro | Alteração |
+|----------|-----------|
+| `src/contexts/DataContext.tsx` | `addSession` e `updateSession` agora fazem INSERT/UPDATE no Supabase |
+| `src/pages/Agenda.tsx` | Adicionar `await` às chamadas assíncronas |
 
 ---
 
-## Resultado Final
+## Verificações de Segurança
 
-O Admin Master terá acesso centralizado a:
-- Visão geral das permissões de cada função
-- Lista completa de utilizadores com seus roles atuais
-- Ação rápida para editar permissões de qualquer utilizador
+- A tabela `sessoes` já tem RLS configurado por `clinic_id`
+- O INSERT usa o `clinic_id` do perfil do utilizador autenticado
+- Os dados são validados pelo `SessionService.create()` antes do INSERT
+
+---
+
+## Resultado Esperado
+
+Após esta correção:
+1. Os agendamentos serão guardados na base de dados
+2. Os dados persistirão entre sessões de login
+3. O fluxo de drag-and-drop para remarcar também será persistido
+4. O sistema funcionará corretamente em ambiente de produção
 
