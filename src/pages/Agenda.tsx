@@ -27,7 +27,7 @@ import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToa
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
 
 export default function Agenda() {
-  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, useCredit, refundCredit, wasCreditUsedForSession } = useData();
+  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession } = useData();
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
@@ -138,6 +138,13 @@ export default function Agenda() {
       const selectedProfessional = professionals.find(p => p.id === data.profissionalId);
       const selectedService = services.find(s => s.id === data.servicoId);
 
+      // Determine payment_status BEFORE creating session (no credit consumption on scheduling)
+      const balance = getCreditBalance(data.pacienteId);
+      const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
+      // If service consumes credit and patient has credits, mark as "reservado"
+      // Otherwise mark as "pendente"
+      const paymentStatus = (serviceConsumesCredit && balance > 0) ? "reservado" : "pendente";
+
       // Create session using service (includes validation and conflict check)
       const newSession = SessionService.create(
         {
@@ -164,21 +171,11 @@ export default function Agenda() {
         }
       );
 
+      // Set the payment_status before insert (NO credit deduction on scheduling)
+      newSession.payment_status = paymentStatus;
+
       // Add to context (persists to Supabase database)
       await addSession(newSession);
-
-      // Get the session ID from state after insertion
-      // Note: addSession now uses real database ID
-
-      // Deduct credit from patient balance (idempotent - uses session ID)
-      const creditResult = useCredit(data.pacienteId, newSession.id);
-      
-      // Update session payment status based on credit result
-      if (!creditResult.success) {
-        await updateSession(newSession.id, { payment_status: "pendente" });
-      } else {
-        await updateSession(newSession.id, { payment_status: "pago" });
-      }
 
       setIsModalOpen(false);
       resetForm();
@@ -197,11 +194,11 @@ export default function Agenda() {
         // Show automation prompt
         setAutomationTrigger(triggerResult);
       } else {
-        // Just show success toast if no automation
+        // Show success toast
         toast.success(
-          creditResult.success 
-            ? "Sessão agendada e crédito descontado!" 
-            : "Sessão agendada com pagamento pendente"
+          paymentStatus === "pendente"
+            ? "Sessão agendada com pagamento pendente"
+            : "Sessão agendada com sucesso!"
         );
       }
     } catch (error) {

@@ -59,8 +59,8 @@ interface DataContextType {
   creditBalances: Record<string, number>;
   getCreditBalance: (patientId: string) => number;
   addCredits: (patientId: string, amount: number) => Promise<void>;
-  useCredit: (patientId: string, sessionId: string) => { success: boolean; error?: string };
-  refundCredit: (patientId: string) => void;
+  useCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }>;
+  refundCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
   wasCreditUsedForSession: (sessionId: string) => boolean;
   refreshCreditBalances: () => Promise<void>;
   
@@ -486,6 +486,33 @@ export function DataProvider({ children }: DataProviderProps) {
     await fetchProfessionals();
   };
 
+  // Fetch credit usage map from backend (which sessions already had credits deducted)
+  const fetchCreditUsageMap = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("transacoes_credito")
+        .select("session_id")
+        .eq("tipo", "uso")
+        .not("session_id", "is", null);
+
+      if (error) {
+        console.error("Error fetching credit usage map:", error);
+        return;
+      }
+
+      const map: Record<string, boolean> = {};
+      (data || []).forEach((row: { session_id: string | null }) => {
+        if (row.session_id) {
+          map[row.session_id] = true;
+        }
+      });
+
+      setCreditUsageMap(map);
+    } catch (err) {
+      console.error("Exception fetching credit usage map:", err);
+    }
+  };
+
   // Load all data on mount
   useEffect(() => {
     fetchPatients();
@@ -494,6 +521,7 @@ export function DataProvider({ children }: DataProviderProps) {
     fetchProfessionals();
     fetchEvolutions();
     fetchCreditBalances();
+    fetchCreditUsageMap();
   }, []);
 
   // Refresh data on auth state change
@@ -516,6 +544,7 @@ export function DataProvider({ children }: DataProviderProps) {
         fetchProfessionals();
         fetchEvolutions();
         fetchCreditBalances();
+        fetchCreditUsageMap();
       }
     });
 
@@ -678,30 +707,118 @@ export function DataProvider({ children }: DataProviderProps) {
     await fetchCreditBalances();
   };
 
-  // Idempotent credit usage - returns error if already used for this session
-  const useCredit = (patientId: string, sessionId: string): { success: boolean; error?: string } => {
-    // Check idempotency - credit already used for this session?
-    if (creditUsageMap[sessionId]) {
-      return { success: true }; // Already processed - idempotent success
+  // Idempotent credit usage - persists to transacoes_credito table
+  const useCredit = async (
+    patientId: string,
+    sessionId: string
+  ): Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }> => {
+    try {
+      // Check idempotency - credit already used for this session?
+      const { data: existing } = await supabase
+        .from("transacoes_credito")
+        .select("id")
+        .eq("session_id", sessionId)
+        .eq("tipo", "uso")
+        .maybeSingle();
+
+      if (existing) {
+        return { success: true, alreadyDeducted: true };
+      }
+
+      // Check current balance
+      const currentBalance = creditBalances[patientId] ?? 0;
+      if (currentBalance <= 0) {
+        return { success: false, error: "Saldo de créditos insuficiente" };
+      }
+
+      // Get clinic_id
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("clinic_id")
+        .eq("user_id", userData?.user?.id)
+        .maybeSingle();
+
+      if (!profile?.clinic_id) {
+        return { success: false, error: "Clínica não encontrada" };
+      }
+
+      // Insert usage transaction (quantidade is negative for usage)
+      const { error } = await supabase.from("transacoes_credito").insert({
+        patient_id: patientId,
+        clinic_id: profile.clinic_id,
+        tipo: "uso",
+        quantidade: -1,
+        session_id: sessionId,
+        motivo: "Uso de crédito para sessão",
+      });
+
+      if (error) {
+        // Handle idempotency constraint
+        if (error.message.includes("idempotência") || error.code === "23505") {
+          return { success: true, alreadyDeducted: true };
+        }
+        console.error("Error inserting credit usage:", error);
+        return { success: false, error: "Erro ao descontar crédito" };
+      }
+
+      // Update local state
+      setCreditUsageMap((prev) => ({ ...prev, [sessionId]: true }));
+      await fetchCreditBalances();
+
+      return { success: true };
+    } catch (err) {
+      console.error("Exception in useCredit:", err);
+      return { success: false, error: "Erro inesperado ao descontar crédito" };
     }
-
-    const currentBalance = creditBalances[patientId] ?? 0;
-    if (currentBalance <= 0) {
-      return { success: false, error: "Saldo de créditos insuficiente" };
-    }
-
-    // Mark session as processed (actual DB deduction happens in session creation)
-    setCreditUsageMap((prev) => ({ ...prev, [sessionId]: true }));
-
-    return { success: true };
   };
 
-  // Refund credit (add 1 back to balance)
-  const refundCredit = (patientId: string): void => {
-    setCreditBalances((prev) => ({
-      ...prev,
-      [patientId]: (prev[patientId] ?? 0) + 1,
-    }));
+  // Refund credit - persists to transacoes_credito table
+  const refundCredit = async (
+    patientId: string,
+    sessionId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // Get clinic_id
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("clinic_id")
+        .eq("user_id", userData?.user?.id)
+        .maybeSingle();
+
+      if (!profile?.clinic_id) {
+        return { success: false, error: "Clínica não encontrada" };
+      }
+
+      // Insert refund transaction (quantidade is positive for refund)
+      const { error } = await supabase.from("transacoes_credito").insert({
+        patient_id: patientId,
+        clinic_id: profile.clinic_id,
+        tipo: "estorno",
+        quantidade: 1,
+        session_id: sessionId,
+        motivo: "Estorno de crédito por cancelamento",
+      });
+
+      if (error) {
+        console.error("Error inserting credit refund:", error);
+        return { success: false, error: "Erro ao estornar crédito" };
+      }
+
+      // Update local state - remove from usage map
+      setCreditUsageMap((prev) => {
+        const updated = { ...prev };
+        delete updated[sessionId];
+        return updated;
+      });
+      await fetchCreditBalances();
+
+      return { success: true };
+    } catch (err) {
+      console.error("Exception in refundCredit:", err);
+      return { success: false, error: "Erro inesperado ao estornar crédito" };
+    }
   };
 
   // Check if credit was already used for a session

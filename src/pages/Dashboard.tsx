@@ -15,7 +15,7 @@ import { SessionService } from "@/services/SessionService";
 import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 
 export default function Dashboard() {
-  const { sessions, patients, professionals, services, addSession, getCreditBalance, useCredit } = useData();
+  const { sessions, patients, professionals, services, addSession, getCreditBalance } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form state for new session modal
@@ -59,7 +59,7 @@ export default function Dashboard() {
     setNotes("");
   };
 
-  const handleSubmitSession = (data: {
+  const handleSubmitSession = async (data: {
     pacienteId: string;
     profissionalId: string;
     servicoId: string;
@@ -67,6 +67,13 @@ export default function Dashboard() {
   }) => {
     try {
       const now = new Date();
+      const selectedService = services.find(s => s.id === data.servicoId);
+      
+      // Determine payment_status BEFORE creating session (no credit consumption on scheduling)
+      const balance = getCreditBalance(data.pacienteId);
+      const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
+      const paymentStatus = (serviceConsumesCredit && balance > 0) ? "reservado" : "pendente";
+
       const newSession = SessionService.create(
         {
           pacienteId: data.pacienteId,
@@ -92,19 +99,15 @@ export default function Dashboard() {
         }
       );
 
-      // Try to use credit (idempotent operation)
-      const creditResult = useCredit(data.pacienteId, newSession.id);
-      if (!creditResult.success) {
-        // Mark session as payment pending
-        newSession.payment_status = 'pendente';
-      } else {
-        newSession.payment_status = 'pago';
-      }
+      // Set payment_status before insert (NO credit deduction on scheduling)
+      newSession.payment_status = paymentStatus;
 
-      addSession(newSession);
-      toast.success(creditResult.success 
-        ? "Sessão agendada com sucesso! Crédito utilizado." 
-        : "Sessão agendada com pagamento pendente.");
+      await addSession(newSession);
+      toast.success(
+        paymentStatus === "pendente"
+          ? "Sessão agendada com pagamento pendente"
+          : "Sessão agendada com sucesso!"
+      );
       handleCloseModal();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
