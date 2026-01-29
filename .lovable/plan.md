@@ -1,260 +1,287 @@
 
-# Plano: Sistema de Acesso Exclusivo por Convite + Editor de Permissões
+# Plano: Sistema de Convite com Link Manual (Copiável)
 
 ## Problema Atual
 
-1. **Cadastro aberto**: Qualquer pessoa pode acessar `/signup` e criar uma conta, mesmo sem convite
-2. **Edição de permissões limitada**: O menu dropdown do TeamMemberCard permite alterar funções, mas não há um modal dedicado com visão clara das permissões
-
----
+O envio de emails via Resend está bloqueado porque o domínio `@resend.dev` só permite enviar para o email do proprietário da conta. Configurar um domínio próprio requer passos adicionais de DNS.
 
 ## Solução Proposta
 
-### Parte 1: Bloquear Cadastro Sem Convite
-
-Modificar a página de Signup para:
-- **Exigir token de convite** na URL (`/signup?invite=TOKEN`)
-- **Mostrar mensagem de acesso negado** se acessar sem token
-- **Remover link "Cadastre-se"** da página de Login
-- **Manter o link para Login** na página de Signup (para quem já tem conta)
-
-### Parte 2: Modal de Edição de Permissões
-
-Criar um modal dedicado para editar permissões de cada utilizador, acessível pelo Admin Master:
-- **Lista visual de todas as permissões** por módulo
-- **Seleção clara da função** (Admin, Fisioterapeuta, Secretaria)
-- **Preview das permissões** baseado na função selecionada
+Criar um fluxo alternativo onde o Admin:
+1. Preenche os dados do convidado (nome, email, função)
+2. O sistema gera o convite no banco de dados (sem enviar email)
+3. Um link de convite é exibido para o Admin copiar
+4. O Admin envia o link manualmente (WhatsApp, email pessoal, etc.)
 
 ---
 
-## Fluxo de Acesso
+## Fluxo do Utilizador
 
 ```text
-Página de Login
-      │
-      ├── Tem conta? → Login normal
-      │
-      └── Não tem conta? → Precisa de convite do Admin
-                                │
-                                ▼
-                   Admin envia convite por email
-                                │
-                                ▼
-                   Convidado recebe link /signup?invite=TOKEN
-                                │
-                                ▼
-                   Cria conta e é associado à clínica
+Admin clica "Convidar"
+        │
+        ▼
+Preenche nome, email, função
+        │
+        ▼
+Sistema cria registo na tabela team_invites
+        │
+        ▼
+Modal exibe link copiável: /signup?invite=TOKEN
+        │
+        ▼
+Admin clica "Copiar Link"
+        │
+        ▼
+Admin envia link pelo WhatsApp/Email pessoal
+        │
+        ▼
+Convidado acessa o link e cria conta
 ```
 
 ---
 
-## Alterações Necessárias
+## Alterações na Interface
 
-### 1. Modificar Signup.tsx
+### InviteUserModal - Novo Estado "Link Gerado"
 
-| Antes | Depois |
-|-------|--------|
-| Permite acesso sem token | Bloqueia acesso sem token |
-| Mostra formulário sempre | Mostra mensagem "Acesso por convite apenas" |
+Após criar o convite com sucesso, em vez de fechar o modal, mostrar uma tela com:
 
-### 2. Modificar Login.tsx
+```text
+┌──────────────────────────────────────────────────────────┐
+│  ✓ Convite Criado                                    [X] │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  O convite para João Silva foi criado com sucesso!       │
+│                                                          │
+│  Copie o link abaixo e envie para o convidado:           │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ https://clinic-stride-hub.lovable.app/signup?      │  │
+│  │ invite=abc123...                                   │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│         [ Copiar Link ]  [ Enviar por WhatsApp ]         │
+│                                                          │
+│  ─────────────────────────────────────────────────────   │
+│  Este link expira em 7 dias.                             │
+│                                                          │
+├──────────────────────────────────────────────────────────┤
+│                                      [ Fechar ]          │
+└──────────────────────────────────────────────────────────┘
+```
 
-| Antes | Depois |
-|-------|--------|
-| Link "Cadastre-se" visível | Link removido ou oculto |
-| - | Texto: "Para criar conta, solicite um convite" |
+### Aba de Convites Pendentes
 
-### 3. Criar EditPermissionsModal.tsx
-
-Novo componente com:
-- Seletor de função (Radio Group)
-- Tabela de permissões por módulo (readonly, informativo)
-- Opção de ativar/desativar utilizador
-- Botões Cancelar/Guardar
-
-### 4. Atualizar TeamMemberCard.tsx
-
-- Substituir dropdown por botão "Editar Permissões"
-- Abrir modal ao clicar
+Adicionar botão "Copiar Link" em cada convite pendente, permitindo recopiar o link se necessário.
 
 ---
-
-## Ficheiros a Criar
-
-| Ficheiro | Propósito |
-|----------|-----------|
-| `src/components/settings/EditPermissionsModal.tsx` | Modal para editar funções e ver permissões |
 
 ## Ficheiros a Modificar
 
 | Ficheiro | Alteração |
 |----------|-----------|
-| `src/pages/Signup.tsx` | Bloquear acesso sem token de convite |
-| `src/pages/Login.tsx` | Remover link de cadastro, adicionar texto informativo |
-| `src/components/settings/TeamMemberCard.tsx` | Usar botão para abrir modal de permissões |
-| `src/components/settings/TeamSettingsPanel.tsx` | Integrar o novo modal |
-
----
-
-## Experiência do Utilizador
-
-### Acesso Sem Convite
-
-Ao acessar `/signup` diretamente:
-
-```text
-┌────────────────────────────────────────┐
-│                                        │
-│          🔒 Acesso Restrito            │
-│                                        │
-│   O cadastro neste sistema é feito     │
-│   exclusivamente através de convite.   │
-│                                        │
-│   Solicite um convite ao administrador │
-│   da sua clínica.                      │
-│                                        │
-│        [ Ir para Login ]               │
-│                                        │
-└────────────────────────────────────────┘
-```
-
-### Página de Login (Atualizada)
-
-```text
-┌────────────────────────────────────────┐
-│           PhysioNE                     │
-│                                        │
-│   Email: [___________________]         │
-│   Senha: [___________________]         │
-│                                        │
-│        [ Entrar ]                      │
-│                                        │
-│   ────────────────────────────────     │
-│   Para criar uma conta, solicite       │
-│   um convite ao administrador.         │
-│                                        │
-└────────────────────────────────────────┘
-```
-
-### Modal de Edição de Permissões
-
-```text
-┌──────────────────────────────────────────────────────────┐
-│  Editar Permissões - João Silva                      [X] │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  FUNÇÃO                                                  │
-│  ○ Admin Master - Acesso total ao sistema               │
-│  ● Fisioterapeuta - Vê apenas seus pacientes e sessões  │
-│  ○ Secretaria - Acesso admin sem financeiro completo    │
-│                                                          │
-│  ─────────────────────────────────────────────────────   │
-│                                                          │
-│  PERMISSÕES (baseado na função selecionada)             │
-│                                                          │
-│  │ Módulo       │ Ver │ Editar │ Apagar │ Financeiro │  │
-│  │──────────────│─────│────────│────────│────────────│  │
-│  │ Dashboard    │ ✓   │ ✓      │ ✗      │ ✗          │  │
-│  │ Agenda       │ ✓   │ ✓      │ ✗      │ ✗          │  │
-│  │ Pacientes    │ ✓*  │ ✓*     │ ✗      │ ✗          │  │
-│  │ Prontuários  │ ✓*  │ ✓*     │ ✗      │ ✗          │  │
-│  │ Profissionais│ ✗   │ ✗      │ ✗      │ ✗          │  │
-│  │ Financeiro   │ ✗   │ ✗      │ ✗      │ ✗          │  │
-│  │ Comercial    │ ✗   │ ✗      │ ✗      │ ✗          │  │
-│  │ Configurações│ ✗   │ ✗      │ ✗      │ ✗          │  │
-│                                                          │
-│  * Apenas pacientes/sessões atribuídos                   │
-│                                                          │
-│  ─────────────────────────────────────────────────────   │
-│                                                          │
-│  STATUS DO UTILIZADOR                                    │
-│  [═══════●] Ativo                                        │
-│                                                          │
-├──────────────────────────────────────────────────────────┤
-│                          [ Cancelar ]  [ Guardar ]       │
-└──────────────────────────────────────────────────────────┘
-```
+| `src/services/TeamService.ts` | Novo método `createInvite` que só cria o convite (sem enviar email) e retorna o token |
+| `src/components/settings/InviteUserModal.tsx` | Adicionar estado de "sucesso" com link copiável |
+| `src/components/settings/TeamSettingsPanel.tsx` | Adicionar botão "Copiar Link" nos convites pendentes |
+| `supabase/functions/send-team-invite/index.ts` | (opcional) Simplificar para não tentar enviar email |
 
 ---
 
 ## Secção Técnica
 
-### Signup.tsx - Bloquear Acesso
+### TeamService.ts - Novo Método
 
 ```typescript
-// Se não há token de convite, mostrar mensagem de acesso restrito
-if (!inviteToken) {
-  return (
-    <Card>
-      <CardHeader>
-        <Lock className="h-8 w-8 text-primary" />
-        <CardTitle>Acesso Restrito</CardTitle>
-        <CardDescription>
-          O cadastro neste sistema é feito exclusivamente através de convite.
-          Solicite um convite ao administrador da sua clínica.
-        </CardDescription>
-      </CardHeader>
-      <CardFooter>
-        <Link to="/login">
-          <Button variant="outline">Ir para Login</Button>
-        </Link>
-      </CardFooter>
-    </Card>
-  );
+interface CreateInviteResult {
+  success: boolean;
+  error?: string;
+  inviteUrl?: string;
+  token?: string;
+}
+
+static async createInvite(data: InviteUserData): Promise<CreateInviteResult> {
+  // Obter clinic_id do utilizador atual
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .single();
+
+  if (!profile?.clinic_id) {
+    return { success: false, error: 'Clínica não encontrada' };
+  }
+
+  // Verificar se já existe convite pendente
+  const { data: existing } = await supabase
+    .from('team_invites')
+    .select('id')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('email', data.email.toLowerCase())
+    .eq('status', 'pending')
+    .maybeSingle();
+
+  if (existing) {
+    return { success: false, error: 'Já existe um convite pendente para este email' };
+  }
+
+  // Criar o convite (o token é gerado automaticamente pelo default da coluna)
+  const { data: invite, error } = await supabase
+    .from('team_invites')
+    .insert({
+      clinic_id: profile.clinic_id,
+      email: data.email.toLowerCase(),
+      full_name: data.full_name,
+      role: data.role,
+      invited_by: (await supabase.auth.getUser()).data.user?.id,
+    })
+    .select('token')
+    .single();
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  // Construir a URL de convite
+  const baseUrl = window.location.origin;
+  const inviteUrl = `${baseUrl}/signup?invite=${invite.token}`;
+
+  return { success: true, inviteUrl, token: invite.token };
+}
+
+// Método para obter URL de um convite existente
+static async getInviteUrl(inviteId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('team_invites')
+    .select('token')
+    .eq('id', inviteId)
+    .single();
+
+  if (!data?.token) return null;
+
+  const baseUrl = window.location.origin;
+  return `${baseUrl}/signup?invite=${data.token}`;
 }
 ```
 
-### Login.tsx - Remover Cadastro
+### InviteUserModal.tsx - Estados do Modal
 
 ```typescript
-// Antes
-<p>
-  Não tem uma conta?{' '}
-  <Link to="/signup">Cadastre-se</Link>
-</p>
+type ModalState = 'form' | 'success';
 
-// Depois
-<p className="text-muted-foreground text-center text-sm">
-  Para criar uma conta, solicite um convite ao administrador.
-</p>
-```
+const [modalState, setModalState] = useState<ModalState>('form');
+const [generatedLink, setGeneratedLink] = useState<string>('');
 
-### EditPermissionsModal.tsx - Estrutura
+const handleSubmit = async (values: FormData) => {
+  setIsSubmitting(true);
+  const result = await TeamService.createInvite({
+    email: values.email,
+    full_name: values.full_name,
+    role: values.role,
+  });
+  setIsSubmitting(false);
 
-```typescript
-interface EditPermissionsModalProps {
-  member: TeamMember;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave: (userId: string, roles: AppRole[], isActive: boolean) => Promise<void>;
-}
-
-// Componente usa:
-// - RadioGroup para seleção de função
-// - Tabela de permissões (readonly) calculada a partir da função
-// - Switch para status ativo/inativo
-// - Botões de ação
-```
-
-### Tabela de Permissões por Função
-
-```typescript
-const PERMISSION_MATRIX = {
-  admin: {
-    dashboard: { view: true, edit: true, delete: true, financial: true },
-    agenda: { view: true, edit: true, delete: true, financial: true },
-    // ... todos os módulos com acesso total
-  },
-  professional: {
-    dashboard: { view: true, edit: true, delete: false, financial: false },
-    pacientes: { view: 'own', edit: 'own', delete: false, financial: false },
-    // ... acesso restrito
-  },
-  secretary: {
-    dashboard: { view: true, edit: true, delete: true, financial: false },
-    // ... acesso sem financeiro
-  },
+  if (result.success && result.inviteUrl) {
+    setGeneratedLink(result.inviteUrl);
+    setModalState('success');
+  } else {
+    toast.error(result.error || 'Erro ao criar convite');
+  }
 };
+
+const handleCopyLink = () => {
+  navigator.clipboard.writeText(generatedLink);
+  toast.success('Link copiado!');
+};
+
+const handleWhatsApp = () => {
+  const message = encodeURIComponent(
+    `Olá! Você foi convidado para se juntar à nossa clínica. ` +
+    `Clique no link para criar sua conta: ${generatedLink}`
+  );
+  window.open(`https://wa.me/?text=${message}`, '_blank');
+};
+```
+
+### Visualização do Estado de Sucesso
+
+```tsx
+{modalState === 'success' && (
+  <div className="space-y-4">
+    <div className="flex items-center gap-2 text-green-600">
+      <CheckCircle className="h-5 w-5" />
+      <span className="font-medium">Convite criado com sucesso!</span>
+    </div>
+    
+    <p className="text-sm text-muted-foreground">
+      Copie o link abaixo e envie para {form.getValues('full_name')}:
+    </p>
+    
+    <div className="flex gap-2">
+      <Input 
+        value={generatedLink} 
+        readOnly 
+        className="font-mono text-xs"
+      />
+      <Button onClick={handleCopyLink} variant="outline">
+        <Copy className="h-4 w-4" />
+      </Button>
+    </div>
+    
+    <div className="flex gap-2">
+      <Button onClick={handleCopyLink} className="flex-1">
+        <Copy className="h-4 w-4 mr-2" />
+        Copiar Link
+      </Button>
+      <Button onClick={handleWhatsApp} variant="outline" className="flex-1">
+        <MessageCircle className="h-4 w-4 mr-2" />
+        WhatsApp
+      </Button>
+    </div>
+    
+    <p className="text-xs text-muted-foreground text-center">
+      Este link expira em 7 dias
+    </p>
+  </div>
+)}
+```
+
+### TeamSettingsPanel - Botão Copiar em Convites Pendentes
+
+```tsx
+// Adicionar no card de cada convite pendente
+<Button
+  variant="outline"
+  size="sm"
+  onClick={async () => {
+    const url = await TeamService.getInviteUrl(invite.id);
+    if (url) {
+      navigator.clipboard.writeText(url);
+      toast.success('Link copiado!');
+    }
+  }}
+>
+  <Copy className="h-4 w-4" />
+  <span className="sr-only sm:not-sr-only sm:ml-2">Copiar</span>
+</Button>
+```
+
+---
+
+## Interface da PendingInvite Atualizada
+
+Adicionar `token` ao tipo para facilitar a cópia:
+
+```typescript
+export interface PendingInvite {
+  id: string;
+  email: string;
+  full_name: string;
+  role: AppRole;
+  status: string;
+  token: string;  // Adicionar
+  created_at: string;
+  expires_at: string;
+}
 ```
 
 ---
@@ -263,7 +290,16 @@ const PERMISSION_MATRIX = {
 
 | Item | Descrição |
 |------|-----------|
-| Signup bloqueado | Acesso apenas com token de convite válido |
-| Login atualizado | Sem link de cadastro, com texto informativo |
-| Modal de permissões | Interface clara para editar funções e ver permissões |
-| Segurança reforçada | Apenas admin master pode enviar convites e editar permissões |
+| Modal atualizado | Mostra link copiável após criar convite |
+| Botão WhatsApp | Abre WhatsApp com mensagem pré-formatada |
+| Botão Copiar | Em convites pendentes para recopiar link |
+| Sem dependência de email | Funciona sem configurar domínio Resend |
+
+---
+
+## Benefícios
+
+- Funciona imediatamente sem configuração de domínio
+- Admin tem controle total sobre como enviar o convite
+- Ideal para clínicas que usam WhatsApp como canal principal
+- Mantém a estrutura de tokens e expiração já implementada
