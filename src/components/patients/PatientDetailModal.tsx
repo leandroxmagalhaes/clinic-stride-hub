@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Phone, Coins, History, User, Tag, Mail, Loader2 } from "lucide-react";
+import { PatientStatementButton } from "./PatientStatementButton";
 import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
@@ -238,19 +239,25 @@ export function PatientDetailModal({
           </Tabs>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              onClick={handleSendPortalLink}
-              disabled={!patient.email || isSendingPortalLink}
-              className="gap-2"
-            >
-              {isSendingPortalLink ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Mail className="h-4 w-4" />
-              )}
-              Enviar Link do Portal
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={handleSendPortalLink}
+                disabled={!patient.email || isSendingPortalLink}
+                className="gap-2"
+              >
+                {isSendingPortalLink ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+                Enviar Link do Portal
+              </Button>
+              <PatientStatementButton
+                patientId={patient.id}
+                patientName={patient.full_name}
+              />
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose}>
                 Fechar
