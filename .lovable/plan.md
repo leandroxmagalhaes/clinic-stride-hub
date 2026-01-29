@@ -1,64 +1,52 @@
 
-# Plano de Implementação - Importação de Pacientes em Lote
+# Plano de Implementação - Extrato do Paciente
 
-Funcionalidade para importar múltiplos pacientes através de ficheiro Excel (.xlsx) ou CSV, com **Nome** e **NIF** como campos obrigatórios.
+Funcionalidade para gerar e descarregar um extrato completo de cada paciente, incluindo todo o histórico de agendamentos, consultas e pagamentos.
 
 ---
 
-## Regras de Validação
+## O que será incluído no Extrato
 
-| Campo | Obrigatório | Validação |
-|-------|-------------|-----------|
-| nome | Sim | Mínimo 3 caracteres |
-| nif | Sim | Presente e não vazio |
-| telefone | Não | Se preenchido, mínimo 9 dígitos |
-| email | Não | Se preenchido, formato válido |
-| nascimento | Não | Se preenchido, formato DD/MM/AAAA |
-| genero | Não | M, F ou O |
-| morada | Não | Texto livre |
-| contato_emergencia | Não | Texto livre |
-| telefone_emergencia | Não | Texto livre |
-| seguradora | Não | Texto livre |
-| observacoes | Não | Texto livre |
-
-Campos não preenchidos são importados como `null`.
+| Categoria | Dados |
+|-----------|-------|
+| **Agendamentos** | Sessões agendadas (data, hora, profissional, serviço) |
+| **Confirmações** | Sessões confirmadas |
+| **Remarcações** | Sessões que mudaram de horário |
+| **Cancelamentos** | Sessões canceladas (com motivo, se disponível) |
+| **Faltas** | Sessões marcadas como falta |
+| **Finalizadas** | Consultas realizadas com sucesso |
+| **Pagamentos** | Compras de créditos (valor, método, status) |
+| **Uso de Créditos** | Débitos e reembolsos |
 
 ---
 
 ## Fluxo do Utilizador
 
-1. Página Pacientes → botão "Importar Planilha"
-2. Modal abre com zona de upload
-3. Arrastar ficheiro ou clicar para selecionar
-4. Sistema valida e mostra pré-visualização
-5. Linhas válidas em verde, inválidas em vermelho com motivo
-6. Confirmar importação
-7. Relatório final com sucessos e erros
+1. Abrir o modal de detalhes de um paciente
+2. Clicar no botão "Descarregar Extrato"
+3. Sistema gera ficheiro CSV com todo o histórico
+4. Download automático do ficheiro
 
 ---
 
 ## Ficheiros a Criar
 
-### 1. Serviço de Importação
-**`src/services/PatientImportService.ts`**
+### 1. Serviço de Geração de Extrato
+**`src/services/PatientStatementService.ts`**
 
 Responsabilidades:
-- Parsear ficheiros .xlsx e .csv com SheetJS
-- Validar cada linha (nome + NIF obrigatórios)
-- Mapear colunas da planilha para campos do banco
-- Gerar template de exemplo para download
-- Executar inserção em lote no Supabase
+- Buscar todas as sessões do paciente (qualquer status)
+- Buscar todas as transações de crédito do paciente
+- Combinar e ordenar por data
+- Gerar CSV formatado para download
 
-### 2. Modal de Importação
-**`src/components/patients/ImportPatientsModal.tsx`**
+### 2. Componente de Botão de Extrato
+**`src/components/patients/PatientStatementButton.tsx`**
 
-Componentes:
-- Zona de drag & drop para upload
-- Botão para descarregar template
-- Tabela de pré-visualização com status por linha
-- Contadores de válidos/inválidos
-- Botão de confirmação
-- Toast com resultado final
+Componente leve que:
+- Mostra botão "Descarregar Extrato"
+- Gerencia estado de loading
+- Dispara geração e download
 
 ---
 
@@ -66,55 +54,55 @@ Componentes:
 
 | Ficheiro | Alteração |
 |----------|-----------|
-| `src/pages/Pacientes.tsx` | Adicionar botão "Importar" e integrar modal |
-| `package.json` | Adicionar dependência `xlsx` |
+| `src/components/patients/PatientDetailModal.tsx` | Adicionar botão de extrato no footer |
 
 ---
 
-## Dependência a Instalar
+## Formato do Extrato (CSV)
 
-**xlsx (SheetJS)** - Biblioteca para leitura de Excel/CSV no navegador
-- Suporta .xlsx, .xls, .csv
-- Processamento 100% client-side
-- Sem necessidade de backend adicional
-
----
-
-## Template de Planilha
-
-Ficheiro .xlsx pré-formatado com:
-- Cabeçalhos: nome, nif, telefone, email, nascimento, genero, morada, contato_emergencia, telefone_emergencia, seguradora, observacoes
-- Linha de exemplo preenchida
-- Nome e NIF destacados como obrigatórios
+```csv
+Data,Hora,Tipo,Descrição,Profissional,Serviço,Créditos,Valor
+15/01/2025,10:00,Agendamento,Sessão agendada,Dr. Silva,Fisioterapia,,
+15/01/2025,10:00,Confirmação,Sessão confirmada,Dr. Silva,Fisioterapia,,
+15/01/2025,11:00,Consulta Finalizada,Sessão realizada,Dr. Silva,Fisioterapia,-1,
+12/01/2025,14:30,Compra de Créditos,Pack de 10 sessões,,,+10,€1.200,00
+10/01/2025,09:00,Cancelamento,Cancelado pelo paciente,Dr. Silva,Pilates,,
+08/01/2025,15:00,Falta,Paciente não compareceu,Dra. Santos,RPG,-1,
+```
 
 ---
 
-## Interface do Modal
+## Dados das Sessões
+
+Para cada sessão, buscar:
+- `id`, `start_time`, `end_time`
+- `status`: agendado, confirmado, em_atendimento, finalizado, realizado, cancelado, faltou, falta
+- `profissional_id` → Nome do profissional
+- `servico_id` → Nome do serviço
+- `notes` (motivo de cancelamento, se houver)
+- `payment_method`, `payment_status`, `price`
+
+---
+
+## Dados das Transações de Crédito
+
+Para cada transação, buscar:
+- `created_at`
+- `transaction_type`: purchase, usage, refund, adjustment
+- `amount` (positivo = entrada, negativo = saída)
+- `monetary_value` (valor em €)
+- `payment_method`, `payment_status`
+- `description`
+
+---
+
+## Interface do Botão
+
+Localização: Footer do `PatientDetailModal`, junto aos botões existentes.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Importar Pacientes                           │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │     📁 Arraste o ficheiro aqui ou clique para            │  │
-│  │        selecionar (.xlsx ou .csv)                         │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  📥 Descarregar modelo de planilha                             │
-│                                                                 │
-│  ─────────────────────────────────────────────────────────────  │
-│                                                                 │
-│  Pré-visualização:                                             │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ # │ Nome          │ NIF        │ Telefone    │ Status      ││
-│  │ 1 │ João Silva    │ 123456789  │ +351912...  │ ✅ Válido   ││
-│  │ 2 │ Maria Santos  │ 987654321  │             │ ✅ Válido   ││
-│  │ 3 │ Pedro         │            │ 123         │ ❌ NIF vazio││
-│  └─────────────────────────────────────────────────────────────┘│
-│                                                                 │
-│  ✅ 2 válidos   ❌ 1 com erros                                 │
-│                                                                 │
-│  [Cancelar]                              [Importar 2 pacientes] │
+│  [📧 Enviar Link do Portal]    [📥 Extrato]   [Fechar] [Ver Prontuário] │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -125,96 +113,133 @@ Ficheiro .xlsx pré-formatado com:
 ### Estrutura do Serviço
 
 ```typescript
-interface ImportRow {
-  nome: string;
-  nif: string;
-  telefone?: string;
-  email?: string;
-  nascimento?: string;
-  genero?: string;
-  morada?: string;
-  contato_emergencia?: string;
-  telefone_emergencia?: string;
-  seguradora?: string;
-  observacoes?: string;
+// src/services/PatientStatementService.ts
+
+interface StatementLine {
+  date: Date;
+  time: string;
+  type: string;
+  description: string;
+  professional: string | null;
+  service: string | null;
+  credits: number | null;
+  monetaryValue: number | null;
+  paymentMethod: string | null;
+  paymentStatus: string | null;
 }
 
-interface ValidationResult {
-  row: number;
-  valid: boolean;
-  errors: string[];
-  data?: CreatePatientData;
-}
-
-interface ImportResult {
-  total: number;
-  success: number;
-  failed: number;
-  errors: { row: number; message: string }[];
+export class PatientStatementService {
+  static async generateStatement(patientId: string): Promise<StatementLine[]>;
+  static formatAsCSV(lines: StatementLine[]): string;
+  static downloadCSV(csv: string, patientName: string): void;
 }
 ```
 
-### Validação Principal
+### Busca de Sessões
 
 ```typescript
-static validateRow(row: ImportRow, rowNumber: number): ValidationResult {
-  const errors: string[] = [];
+const { data: sessions } = await supabase
+  .from('sessoes')
+  .select(`
+    id, start_time, end_time, status, notes, price,
+    payment_method, payment_status,
+    profissional:profiles!profissional_id(full_name),
+    servico:servicos!servico_id(name)
+  `)
+  .eq('paciente_id', patientId)
+  .order('start_time', { ascending: false });
+```
+
+### Busca de Transações
+
+```typescript
+const { data: transactions } = await supabase
+  .from('credit_transactions')
+  .select('*')
+  .eq('patient_id', patientId)
+  .order('created_at', { ascending: false });
+```
+
+### Mapeamento de Status para Tipo
+
+```typescript
+const STATUS_LABELS: Record<string, string> = {
+  'agendado': 'Agendamento',
+  'confirmado': 'Confirmação',
+  'em_atendimento': 'Em Atendimento',
+  'finalizado': 'Consulta Finalizada',
+  'realizado': 'Consulta Realizada',
+  'cancelado': 'Cancelamento',
+  'faltou': 'Falta',
+  'falta': 'Falta',
+};
+
+const TRANSACTION_LABELS: Record<string, string> = {
+  'purchase': 'Compra de Créditos',
+  'usage': 'Uso de Crédito',
+  'refund': 'Reembolso',
+  'adjustment': 'Ajuste de Créditos',
+};
+```
+
+### Geração do CSV
+
+```typescript
+static formatAsCSV(lines: StatementLine[]): string {
+  const headers = [
+    'Data', 'Hora', 'Tipo', 'Descrição', 
+    'Profissional', 'Serviço', 'Créditos', 'Valor (€)'
+  ];
   
-  // Campos obrigatórios
-  if (!row.nome || row.nome.trim().length < 3) {
-    errors.push("Nome deve ter pelo menos 3 caracteres");
-  }
-  if (!row.nif || row.nif.trim() === '') {
-    errors.push("NIF é obrigatório");
-  }
+  const rows = lines.map(line => [
+    format(line.date, 'dd/MM/yyyy'),
+    line.time,
+    line.type,
+    line.description,
+    line.professional || '',
+    line.service || '',
+    line.credits ? String(line.credits) : '',
+    line.monetaryValue ? line.monetaryValue.toFixed(2).replace('.', ',') : '',
+  ]);
   
-  // Campos opcionais com validação condicional
-  if (row.telefone && row.telefone.replace(/\D/g, '').length < 9) {
-    errors.push("Telefone inválido");
-  }
-  if (row.email && !isValidEmail(row.email)) {
-    errors.push("Email inválido");
-  }
-  
-  return {
-    row: rowNumber,
-    valid: errors.length === 0,
-    errors,
-    data: errors.length === 0 ? mapToPatientData(row) : undefined
-  };
+  return [headers, ...rows]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n');
 }
 ```
 
-### Inserção em Lote
+### Download do Ficheiro
 
 ```typescript
-const { data, error } = await supabase
-  .from('pacientes')
-  .insert(validPatients.map(p => ({
-    clinic_id: clinicId,
-    full_name: p.nome,
-    cpf: p.nif,  // NIF vai para o campo cpf
-    phone: p.telefone || null,
-    email: p.email || null,
-    birth_date: p.nascimento ? parseDate(p.nascimento) : null,
-    gender: p.genero || null,
-    address: p.morada || null,
-    emergency_contact: p.contato_emergencia || null,
-    emergency_phone: p.telefone_emergencia || null,
-    health_insurance: p.seguradora || null,
-    notes: p.observacoes || null,
-    privacy_consent_at: new Date().toISOString(),
-    is_active: true
-  })))
-  .select();
+static downloadCSV(csv: string, patientName: string): void {
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const timestamp = format(new Date(), 'yyyyMMdd_HHmm');
+  const safeName = patientName.replace(/[^a-zA-Z0-9]/g, '_');
+  
+  link.href = url;
+  link.download = `extrato_${safeName}_${timestamp}.csv`;
+  link.click();
+  
+  URL.revokeObjectURL(url);
+}
 ```
+
+---
+
+## Resumo de Novos Ficheiros
+
+| Ficheiro | Propósito |
+|----------|-----------|
+| `src/services/PatientStatementService.ts` | Lógica de busca, formatação e download |
+| `src/components/patients/PatientStatementButton.tsx` | Botão com loading state |
 
 ---
 
 ## Ordem de Implementação
 
-1. Instalar dependência `xlsx`
-2. Criar `PatientImportService.ts`
-3. Criar `ImportPatientsModal.tsx`
-4. Integrar em `Pacientes.tsx`
-5. Testar com ficheiro de exemplo
+1. Criar `PatientStatementService.ts` com lógica de busca e formatação
+2. Criar `PatientStatementButton.tsx` com UI do botão
+3. Integrar botão no `PatientDetailModal.tsx`
+4. Testar com paciente que tenha histórico variado
