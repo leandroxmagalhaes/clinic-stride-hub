@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,9 +32,8 @@ export default function Login() {
     
     const { error } = await signIn(email, password);
     
-    setIsLoading(false);
-    
     if (error) {
+      setIsLoading(false);
       toast.error('Erro ao fazer login', {
         description: error.message === 'Invalid login credentials' 
           ? 'Email ou senha incorretos' 
@@ -42,6 +42,34 @@ export default function Login() {
       return;
     }
 
+    // Check for pending invites for this email and process them
+    try {
+      const { data: pendingInvite } = await supabase
+        .from('team_invites')
+        .select('token, role, full_name')
+        .eq('email', email.toLowerCase())
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle();
+
+      if (pendingInvite) {
+        const { data: result } = await supabase.rpc('process_team_invite', {
+          invite_token: pendingInvite.token
+        });
+
+        const resultData = result as { success?: boolean; error?: string } | null;
+        if (resultData?.success) {
+          toast.success('Convite aceito automaticamente!', {
+            description: `Você agora faz parte da clínica como ${pendingInvite.role === 'professional' ? 'Fisioterapeuta' : pendingInvite.role}`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error processing pending invite:', err);
+      // Don't block login if invite processing fails
+    }
+
+    setIsLoading(false);
     toast.success('Login realizado com sucesso!');
     navigate(from, { replace: true });
   };

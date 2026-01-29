@@ -287,4 +287,47 @@ export class TeamService {
       role: invite.role,
     });
   }
+
+  /**
+   * Process an invite manually for a user that already has an account
+   */
+  static async processInviteManually(token: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { data, error } = await supabase.rpc('process_team_invite', {
+        invite_token: token
+      });
+
+      if (error) {
+        console.error('Error processing invite manually:', error);
+        return { success: false, error: error.message };
+      }
+
+      const resultData = data as { success?: boolean; error?: string } | null;
+      return { success: resultData?.success ?? false, error: resultData?.error };
+    } catch (err: any) {
+      console.error('Error processing invite:', err);
+      return { success: false, error: err.message || 'Erro ao processar convite' };
+    }
+  }
+
+  /**
+   * Check if an email has an existing profile (user already registered)
+   */
+  static async checkExistingProfile(email: string): Promise<{ exists: boolean; hasClinic: boolean }> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, clinic_id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error checking existing profile:', error);
+      return { exists: false, hasClinic: false };
+    }
+
+    return {
+      exists: !!data,
+      hasClinic: !!data?.clinic_id,
+    };
+  }
 }

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UserPlus, Search, Users, Clock, Mail, RotateCcw, X, Copy, MessageCircle } from 'lucide-react';
+import { UserPlus, Search, Users, Clock, Mail, RotateCcw, X, Copy, MessageCircle, AlertTriangle, UserCheck } from 'lucide-react';
 import { TeamService, TeamMember, AppRole, PendingInvite, CreateInviteResult } from '@/services/TeamService';
 import { TeamMemberCard } from './TeamMemberCard';
 import { InviteUserModal } from './InviteUserModal';
@@ -20,15 +20,21 @@ const ROLE_LABELS: Record<string, string> = {
   secretary: 'Secretaria',
 };
 
+interface InviteWithStatus extends PendingInvite {
+  hasExistingUser?: boolean;
+  hasClinic?: boolean;
+}
+
 export function TeamSettingsPanel() {
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<InviteWithStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingInvites, setIsLoadingInvites] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const { user } = useAuth();
 
   const fetchMembers = async () => {
@@ -40,8 +46,21 @@ export function TeamSettingsPanel() {
 
   const fetchInvites = async () => {
     setIsLoadingInvites(true);
-    const data = await TeamService.getPendingInvites();
-    setPendingInvites(data);
+    const invites = await TeamService.getPendingInvites();
+    
+    // Check which invites have existing users
+    const invitesWithStatus: InviteWithStatus[] = await Promise.all(
+      invites.map(async (invite) => {
+        const { exists, hasClinic } = await TeamService.checkExistingProfile(invite.email);
+        return {
+          ...invite,
+          hasExistingUser: exists,
+          hasClinic: hasClinic,
+        };
+      })
+    );
+    
+    setPendingInvites(invitesWithStatus);
     setIsLoadingInvites(false);
   };
 
@@ -112,6 +131,22 @@ export function TeamSettingsPanel() {
       fetchInvites();
     } else {
       toast.error('Erro ao cancelar convite');
+    }
+  };
+
+  const handleProcessManually = async (invite: InviteWithStatus) => {
+    setProcessingId(invite.id);
+    const result = await TeamService.processInviteManually(invite.token);
+    setProcessingId(null);
+    
+    if (result.success) {
+      toast.success('Utilizador adicionado à clínica!', {
+        description: `${invite.full_name} agora tem acesso como ${ROLE_LABELS[invite.role] || invite.role}`,
+      });
+      fetchInvites();
+      fetchMembers();
+    } else {
+      toast.error('Erro ao processar convite', { description: result.error });
     }
   };
 
@@ -225,69 +260,91 @@ export function TeamSettingsPanel() {
               ))
             ) : validInvites.length > 0 ? (
               validInvites.map(invite => (
-                <Card key={invite.id}>
+                <Card key={invite.id} className={invite.hasExistingUser && !invite.hasClinic ? 'border-warning' : ''}>
                   <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Mail className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-medium">{invite.full_name}</p>
-                          <p className="text-sm text-muted-foreground">{invite.email}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline">
-                              {ROLE_LABELS[invite.role] || invite.role}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              Expira {formatDistanceToNow(new Date(invite.expires_at), { 
-                                addSuffix: true, 
-                                locale: ptBR 
-                              })}
-                            </span>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Mail className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="font-medium">{invite.full_name}</p>
+                            <p className="text-sm text-muted-foreground">{invite.email}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline">
+                                {ROLE_LABELS[invite.role] || invite.role}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                Expira {formatDistanceToNow(new Date(invite.expires_at), { 
+                                  addSuffix: true, 
+                                  locale: ptBR 
+                                })}
+                              </span>
+                            </div>
                           </div>
                         </div>
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCopyInviteLink(invite)}
+                            title="Copiar link"
+                          >
+                            <Copy className="h-4 w-4" />
+                            <span className="sr-only sm:not-sr-only sm:ml-2">Copiar</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleWhatsAppInvite(invite)}
+                            title="Enviar por WhatsApp"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                            <span className="sr-only">WhatsApp</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleResendInvite(invite)}
+                            disabled={resendingId === invite.id}
+                            title="Gerar novo link"
+                          >
+                            <RotateCcw className={`h-4 w-4 ${resendingId === invite.id ? 'animate-spin' : ''}`} />
+                            <span className="sr-only">Recriar</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCancelInvite(invite.id)}
+                            disabled={cancellingId === invite.id}
+                            title="Cancelar convite"
+                          >
+                            <X className="h-4 w-4" />
+                            <span className="sr-only">Cancelar</span>
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 sm:gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCopyInviteLink(invite)}
-                          title="Copiar link"
-                        >
-                          <Copy className="h-4 w-4" />
-                          <span className="sr-only sm:not-sr-only sm:ml-2">Copiar</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleWhatsAppInvite(invite)}
-                          title="Enviar por WhatsApp"
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                          <span className="sr-only">WhatsApp</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleResendInvite(invite)}
-                          disabled={resendingId === invite.id}
-                          title="Gerar novo link"
-                        >
-                          <RotateCcw className={`h-4 w-4 ${resendingId === invite.id ? 'animate-spin' : ''}`} />
-                          <span className="sr-only">Recriar</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCancelInvite(invite.id)}
-                          disabled={cancellingId === invite.id}
-                          title="Cancelar convite"
-                        >
-                          <X className="h-4 w-4" />
-                          <span className="sr-only">Cancelar</span>
-                        </Button>
-                      </div>
+                      
+                      {/* Alert for existing user without clinic */}
+                      {invite.hasExistingUser && !invite.hasClinic && (
+                        <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded-lg p-3 mt-2">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-warning" />
+                            <span className="text-sm text-warning">
+                              Este utilizador já tem conta registada
+                            </span>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleProcessManually(invite)}
+                            disabled={processingId === invite.id}
+                          >
+                            <UserCheck className="h-4 w-4 mr-2" />
+                            {processingId === invite.id ? 'A processar...' : 'Adicionar à Clínica'}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
