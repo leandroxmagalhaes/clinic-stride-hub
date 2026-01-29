@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink } from "lucide-react";
+import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink, FileUp } from "lucide-react";
+import { ImportPatientsModal } from "@/components/patients/ImportPatientsModal";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
@@ -74,6 +75,7 @@ export default function Pacientes() {
     fetchClinicId();
   }, [user]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   // Form state
@@ -219,10 +221,18 @@ export default function Pacientes() {
       title="Pacientes"
       subtitle={`${patients.length} pacientes cadastrados`}
       actions={
-        <Button onClick={() => setIsModalOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Paciente
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="gap-2">
+            <FileUp className="h-4 w-4" />
+            <span className="hidden sm:inline">Importar Planilha</span>
+            <span className="sm:hidden">Importar</span>
+          </Button>
+          <Button onClick={() => setIsModalOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Novo Paciente</span>
+            <span className="sm:hidden">Novo</span>
+          </Button>
+        </div>
       }
     >
       <div className="space-y-4 animate-fade-in">
@@ -488,6 +498,19 @@ export default function Pacientes() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import Patients Modal */}
+      {clinicId && (
+        <ImportPatientsModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          clinicId={clinicId}
+          onImportComplete={() => {
+            refreshPatients();
+            toast.success("Pacientes importados com sucesso!");
+          }}
+        />
+      )}
     </AppLayout>
   );
 }
