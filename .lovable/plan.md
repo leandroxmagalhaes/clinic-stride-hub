@@ -1,245 +1,121 @@
 
-# Plano de Implementação - Extrato do Paciente
 
-Funcionalidade para gerar e descarregar um extrato completo de cada paciente, incluindo todo o histórico de agendamentos, consultas e pagamentos.
+# Plano de Correção - Menu Lateral na Página Comercial
 
----
+## Problema Identificado
 
-## O que será incluído no Extrato
+A página **Comercial** não possui o menu lateral porque não está a utilizar o componente `AppLayout`, que é responsável por renderizar a sidebar em todas as outras páginas.
 
-| Categoria | Dados |
-|-----------|-------|
-| **Agendamentos** | Sessões agendadas (data, hora, profissional, serviço) |
-| **Confirmações** | Sessões confirmadas |
-| **Remarcações** | Sessões que mudaram de horário |
-| **Cancelamentos** | Sessões canceladas (com motivo, se disponível) |
-| **Faltas** | Sessões marcadas como falta |
-| **Finalizadas** | Consultas realizadas com sucesso |
-| **Pagamentos** | Compras de créditos (valor, método, status) |
-| **Uso de Créditos** | Débitos e reembolsos |
+## Comparação
 
----
+| Página | Usa AppLayout | Menu Lateral |
+|--------|---------------|--------------|
+| Dashboard | Sim | Visível |
+| Agenda | Sim | Visível |
+| Pacientes | Sim | Visível |
+| Engajamento | Sim | Visível |
+| **Comercial** | **Não** | **Ausente** |
 
-## Fluxo do Utilizador
+## Solução
 
-1. Abrir o modal de detalhes de um paciente
-2. Clicar no botão "Descarregar Extrato"
-3. Sistema gera ficheiro CSV com todo o histórico
-4. Download automático do ficheiro
+Envolver o conteúdo da página Comercial com o componente `AppLayout`, seguindo o mesmo padrão das demais páginas.
 
 ---
 
-## Ficheiros a Criar
+## Ficheiro a Modificar
 
-### 1. Serviço de Geração de Extrato
-**`src/services/PatientStatementService.ts`**
+**`src/pages/Comercial.tsx`**
 
-Responsabilidades:
-- Buscar todas as sessões do paciente (qualquer status)
-- Buscar todas as transações de crédito do paciente
-- Combinar e ordenar por data
-- Gerar CSV formatado para download
+### Alterações Necessárias
 
-### 2. Componente de Botão de Extrato
-**`src/components/patients/PatientStatementButton.tsx`**
-
-Componente leve que:
-- Mostra botão "Descarregar Extrato"
-- Gerencia estado de loading
-- Dispara geração e download
+1. Adicionar import do `AppLayout`
+2. Envolver o conteúdo existente com `<AppLayout>`
+3. Mover título e subtítulo para as props do AppLayout (opcional, para consistência)
 
 ---
 
-## Ficheiros a Modificar
+## Antes vs Depois
 
-| Ficheiro | Alteração |
-|----------|-----------|
-| `src/components/patients/PatientDetailModal.tsx` | Adicionar botão de extrato no footer |
+### Antes (atual)
+```tsx
+export default function Comercial() {
+  // ... código do componente ...
+  
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold font-display">Comercial (CRM)</h1>
+          ...
+```
 
----
+### Depois (corrigido)
+```tsx
+import { AppLayout } from "@/components/layout/AppLayout";
 
-## Formato do Extrato (CSV)
-
-```csv
-Data,Hora,Tipo,Descrição,Profissional,Serviço,Créditos,Valor
-15/01/2025,10:00,Agendamento,Sessão agendada,Dr. Silva,Fisioterapia,,
-15/01/2025,10:00,Confirmação,Sessão confirmada,Dr. Silva,Fisioterapia,,
-15/01/2025,11:00,Consulta Finalizada,Sessão realizada,Dr. Silva,Fisioterapia,-1,
-12/01/2025,14:30,Compra de Créditos,Pack de 10 sessões,,,+10,€1.200,00
-10/01/2025,09:00,Cancelamento,Cancelado pelo paciente,Dr. Silva,Pilates,,
-08/01/2025,15:00,Falta,Paciente não compareceu,Dra. Santos,RPG,-1,
+export default function Comercial() {
+  // ... código do componente ...
+  
+  return (
+    <AppLayout 
+      title="Comercial (CRM)" 
+      subtitle="Gerencie seus leads e funil de vendas"
+    >
+      <div className="space-y-6">
+        {/* Resto do conteúdo */}
+        ...
 ```
 
 ---
 
-## Dados das Sessões
+## Resultado Esperado
 
-Para cada sessão, buscar:
-- `id`, `start_time`, `end_time`
-- `status`: agendado, confirmado, em_atendimento, finalizado, realizado, cancelado, faltou, falta
-- `profissional_id` → Nome do profissional
-- `servico_id` → Nome do serviço
-- `notes` (motivo de cancelamento, se houver)
-- `payment_method`, `payment_status`, `price`
-
----
-
-## Dados das Transações de Crédito
-
-Para cada transação, buscar:
-- `created_at`
-- `transaction_type`: purchase, usage, refund, adjustment
-- `amount` (positivo = entrada, negativo = saída)
-- `monetary_value` (valor em €)
-- `payment_method`, `payment_status`
-- `description`
-
----
-
-## Interface do Botão
-
-Localização: Footer do `PatientDetailModal`, junto aos botões existentes.
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  [📧 Enviar Link do Portal]    [📥 Extrato]   [Fechar] [Ver Prontuário] │
-└─────────────────────────────────────────────────────────────────┘
-```
+Após a correção:
+- Menu lateral aparecerá na página Comercial
+- Layout consistente com todas as outras páginas
+- Header com título será gerido pelo AppLayout (padrão do sistema)
 
 ---
 
 ## Secção Técnica
 
-### Estrutura do Serviço
+### Alteração Específica
 
 ```typescript
-// src/services/PatientStatementService.ts
+// Linha 1: Adicionar import
+import { AppLayout } from "@/components/layout/AppLayout";
 
-interface StatementLine {
-  date: Date;
-  time: string;
-  type: string;
-  description: string;
-  professional: string | null;
-  service: string | null;
-  credits: number | null;
-  monetaryValue: number | null;
-  paymentMethod: string | null;
-  paymentStatus: string | null;
-}
-
-export class PatientStatementService {
-  static async generateStatement(patientId: string): Promise<StatementLine[]>;
-  static formatAsCSV(lines: StatementLine[]): string;
-  static downloadCSV(csv: string, patientName: string): void;
-}
+// Linha 172-174: Trocar div por AppLayout
+return (
+  <AppLayout 
+    title="Comercial (CRM)" 
+    subtitle="Gerencie seus leads e funil de vendas"
+  >
+    <div className="space-y-6">
+      {/* Remover o header manual pois AppLayout já gerencia o título */}
+      
+      {/* Dashboard Stats */}
+      <CRMDashboard leads={leads} />
+      
+      {/* Resto do conteúdo permanece igual */}
+      ...
+    </div>
+  </AppLayout>
+);
 ```
 
-### Busca de Sessões
+### Header Ajustado
 
-```typescript
-const { data: sessions } = await supabase
-  .from('sessoes')
-  .select(`
-    id, start_time, end_time, status, notes, price,
-    payment_method, payment_status,
-    profissional:profiles!profissional_id(full_name),
-    servico:servicos!servico_id(name)
-  `)
-  .eq('paciente_id', patientId)
-  .order('start_time', { ascending: false });
-```
-
-### Busca de Transações
-
-```typescript
-const { data: transactions } = await supabase
-  .from('credit_transactions')
-  .select('*')
-  .eq('patient_id', patientId)
-  .order('created_at', { ascending: false });
-```
-
-### Mapeamento de Status para Tipo
-
-```typescript
-const STATUS_LABELS: Record<string, string> = {
-  'agendado': 'Agendamento',
-  'confirmado': 'Confirmação',
-  'em_atendimento': 'Em Atendimento',
-  'finalizado': 'Consulta Finalizada',
-  'realizado': 'Consulta Realizada',
-  'cancelado': 'Cancelamento',
-  'faltou': 'Falta',
-  'falta': 'Falta',
-};
-
-const TRANSACTION_LABELS: Record<string, string> = {
-  'purchase': 'Compra de Créditos',
-  'usage': 'Uso de Crédito',
-  'refund': 'Reembolso',
-  'adjustment': 'Ajuste de Créditos',
-};
-```
-
-### Geração do CSV
-
-```typescript
-static formatAsCSV(lines: StatementLine[]): string {
-  const headers = [
-    'Data', 'Hora', 'Tipo', 'Descrição', 
-    'Profissional', 'Serviço', 'Créditos', 'Valor (€)'
-  ];
-  
-  const rows = lines.map(line => [
-    format(line.date, 'dd/MM/yyyy'),
-    line.time,
-    line.type,
-    line.description,
-    line.professional || '',
-    line.service || '',
-    line.credits ? String(line.credits) : '',
-    line.monetaryValue ? line.monetaryValue.toFixed(2).replace('.', ',') : '',
-  ]);
-  
-  return [headers, ...rows]
-    .map(row => row.map(cell => `"${cell}"`).join(','))
-    .join('\n');
-}
-```
-
-### Download do Ficheiro
-
-```typescript
-static downloadCSV(csv: string, patientName: string): void {
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  const timestamp = format(new Date(), 'yyyyMMdd_HHmm');
-  const safeName = patientName.replace(/[^a-zA-Z0-9]/g, '_');
-  
-  link.href = url;
-  link.download = `extrato_${safeName}_${timestamp}.csv`;
-  link.click();
-  
-  URL.revokeObjectURL(url);
-}
-```
+O header manual com `<h1>` pode ser simplificado, mantendo apenas os botões de ação, já que o `AppLayout` exibe o título na barra superior. Porém, para manter consistência visual com as demais páginas que têm headers próprios, podemos manter apenas os botões no header interno.
 
 ---
 
-## Resumo de Novos Ficheiros
+## Resumo
 
-| Ficheiro | Propósito |
-|----------|-----------|
-| `src/services/PatientStatementService.ts` | Lógica de busca, formatação e download |
-| `src/components/patients/PatientStatementButton.tsx` | Botão com loading state |
+| Ação | Detalhe |
+|------|---------|
+| Import | Adicionar `AppLayout` |
+| Wrapper | Envolver conteúdo com `<AppLayout>` |
+| Props | `title="Comercial (CRM)"`, `subtitle="Gerencie seus leads e funil de vendas"` |
 
----
-
-## Ordem de Implementação
-
-1. Criar `PatientStatementService.ts` com lógica de busca e formatação
-2. Criar `PatientStatementButton.tsx` com UI do botão
-3. Integrar botão no `PatientDetailModal.tsx`
-4. Testar com paciente que tenha histórico variado
