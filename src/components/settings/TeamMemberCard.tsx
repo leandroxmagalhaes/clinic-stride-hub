@@ -3,17 +3,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
-import { MoreVertical, Shield, User, Briefcase } from 'lucide-react';
+import { Shield, User, Briefcase, Settings } from 'lucide-react';
 import { TeamMember, AppRole } from '@/services/TeamService';
 import { usePermissions } from '@/hooks/usePermissions';
+import { EditPermissionsModal } from './EditPermissionsModal';
 
 interface TeamMemberCardProps {
   member: TeamMember;
@@ -30,7 +23,7 @@ const ROLE_CONFIG: Record<AppRole, { label: string; color: string; icon: React.E
 };
 
 export function TeamMemberCard({ member, onUpdateRoles, onToggleStatus, isCurrentUser }: TeamMemberCardProps) {
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const { isAdminMaster } = usePermissions();
 
   const initials = member.full_name
@@ -40,126 +33,87 @@ export function TeamMemberCard({ member, onUpdateRoles, onToggleStatus, isCurren
     .join('')
     .toUpperCase();
 
-  const handleRoleChange = async (role: AppRole) => {
-    if (isCurrentUser) return;
-    setIsUpdating(true);
-    
-    // Toggle role
-    const currentRoles = member.roles;
-    const hasRole = currentRoles.includes(role);
-    const newRoles = hasRole 
-      ? currentRoles.filter(r => r !== role)
-      : [...currentRoles, role];
-    
-    await onUpdateRoles(member.user_id, newRoles);
-    setIsUpdating(false);
-  };
-
-  const handleStatusToggle = async () => {
-    if (isCurrentUser) return;
-    setIsUpdating(true);
-    await onToggleStatus(member.profile_id, !member.is_active);
-    setIsUpdating(false);
+  const handleSave = async (userId: string, roles: AppRole[], isActive: boolean) => {
+    await onUpdateRoles(userId, roles);
+    if (member.is_active !== isActive) {
+      await onToggleStatus(member.profile_id, isActive);
+    }
   };
 
   // Filter out 'patient' role for display in team management
   const displayRoles = member.roles.filter(r => r !== 'patient');
 
   return (
-    <Card className={`transition-opacity ${!member.is_active ? 'opacity-60' : ''}`}>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-4">
-          <Avatar className="h-12 w-12">
-            <AvatarImage src={member.avatar_url || ''} />
-            <AvatarFallback className="bg-primary/10 text-primary font-medium">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+    <>
+      <Card className={`transition-opacity ${!member.is_active ? 'opacity-60' : ''}`}>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-12 w-12">
+              <AvatarImage src={member.avatar_url || ''} />
+              <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium text-foreground truncate">
-                {member.full_name}
-              </h3>
-              {isCurrentUser && (
-                <Badge variant="outline" className="text-xs">Você</Badge>
-              )}
-              {!member.is_active && (
-                <Badge variant="secondary" className="text-xs">Inativo</Badge>
-              )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium text-foreground truncate">
+                  {member.full_name}
+                </h3>
+                {isCurrentUser && (
+                  <Badge variant="outline" className="text-xs">Você</Badge>
+                )}
+                {!member.is_active && (
+                  <Badge variant="secondary" className="text-xs">Inativo</Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground truncate">
+                {member.email}
+              </p>
+              <div className="flex flex-wrap gap-1 mt-2">
+                {displayRoles.length > 0 ? (
+                  displayRoles.map(role => {
+                    const config = ROLE_CONFIG[role];
+                    const Icon = config.icon;
+                    return (
+                      <Badge 
+                        key={role} 
+                        variant="outline" 
+                        className={`text-xs ${config.color}`}
+                      >
+                        <Icon className="h-3 w-3 mr-1" />
+                        {config.label}
+                      </Badge>
+                    );
+                  })
+                ) : (
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
+                    Sem função definida
+                  </Badge>
+                )}
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground truncate">
-              {member.email}
-            </p>
-            <div className="flex flex-wrap gap-1 mt-2">
-              {displayRoles.length > 0 ? (
-                displayRoles.map(role => {
-                  const config = ROLE_CONFIG[role];
-                  const Icon = config.icon;
-                  return (
-                    <Badge 
-                      key={role} 
-                      variant="outline" 
-                      className={`text-xs ${config.color}`}
-                    >
-                      <Icon className="h-3 w-3 mr-1" />
-                      {config.label}
-                    </Badge>
-                  );
-                })
-              ) : (
-                <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Sem função definida
-                </Badge>
-              )}
-            </div>
+
+            {isAdminMaster && !isCurrentUser && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsEditModalOpen(true)}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Editar Permissões
+              </Button>
+            )}
           </div>
+        </CardContent>
+      </Card>
 
-          {isAdminMaster && !isCurrentUser && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" disabled={isUpdating}>
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                  Funções
-                </div>
-                {(['admin', 'professional', 'secretary'] as AppRole[]).map(role => {
-                  const config = ROLE_CONFIG[role];
-                  const hasRole = member.roles.includes(role);
-                  return (
-                    <DropdownMenuItem 
-                      key={role}
-                      onClick={() => handleRoleChange(role)}
-                      className="flex items-center justify-between"
-                    >
-                      <span>{config.label}</span>
-                      {hasRole && (
-                        <Badge variant="default" className="text-xs h-5">
-                          ✓
-                        </Badge>
-                      )}
-                    </DropdownMenuItem>
-                  );
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={handleStatusToggle}
-                  className="flex items-center justify-between"
-                >
-                  <span>{member.is_active ? 'Desativar' : 'Ativar'}</span>
-                  <Switch 
-                    checked={member.is_active ?? true} 
-                    className="pointer-events-none"
-                  />
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      <EditPermissionsModal
+        member={isEditModalOpen ? member : null}
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        onSave={handleSave}
+      />
+    </>
   );
 }

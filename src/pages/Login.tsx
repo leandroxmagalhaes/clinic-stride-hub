@@ -97,10 +97,7 @@ export default function Login() {
               )}
             </Button>
             <p className="text-sm text-muted-foreground text-center">
-              Não tem uma conta?{' '}
-              <Link to="/signup" className="text-primary hover:underline font-medium">
-                Cadastre-se
-              </Link>
+              Para criar uma conta, solicite um convite ao administrador.
             </p>
           </CardFooter>
         </form>
