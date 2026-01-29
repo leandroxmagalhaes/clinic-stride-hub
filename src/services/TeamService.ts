@@ -21,6 +21,16 @@ export interface InviteUserData {
   role: AppRole;
 }
 
+export interface PendingInvite {
+  id: string;
+  email: string;
+  full_name: string;
+  role: AppRole;
+  status: string;
+  created_at: string;
+  expires_at: string;
+}
+
 export class TeamService {
   /**
    * Get all team members for the current clinic
@@ -70,6 +80,32 @@ export class TeamService {
   }
 
   /**
+   * Get pending invites for the current clinic
+   */
+  static async getPendingInvites(): Promise<PendingInvite[]> {
+    const { data, error } = await supabase
+      .from('team_invites')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching pending invites:', error);
+      return [];
+    }
+
+    return (data || []).map(invite => ({
+      id: invite.id,
+      email: invite.email,
+      full_name: invite.full_name,
+      role: invite.role as AppRole,
+      status: invite.status,
+      created_at: invite.created_at,
+      expires_at: invite.expires_at,
+    }));
+  }
+
+  /**
    * Update a team member's roles
    */
   static async updateMemberRoles(userId: string, roles: AppRole[]): Promise<boolean> {
@@ -116,41 +152,63 @@ export class TeamService {
   }
 
   /**
-   * Invite a new user to the clinic
-   * Note: This creates a profile entry. The user will need to sign up with this email.
+   * Invite a new user to the clinic via email
    */
   static async inviteUser(data: InviteUserData): Promise<{ success: boolean; error?: string }> {
     try {
-      // Get current user's clinic
-      const { data: currentProfile } = await supabase
-        .from('profiles')
-        .select('clinic_id')
-        .single();
+      const { data: response, error } = await supabase.functions.invoke('send-team-invite', {
+        body: {
+          email: data.email,
+          full_name: data.full_name,
+          role: data.role,
+        },
+      });
 
-      if (!currentProfile?.clinic_id) {
-        return { success: false, error: 'Clínica não encontrada' };
+      if (error) {
+        console.error('Error invoking send-team-invite:', error);
+        return { success: false, error: error.message || 'Erro ao enviar convite' };
       }
 
-      // Check if email already exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', data.email)
-        .maybeSingle();
-
-      if (existingProfile) {
-        return { success: false, error: 'Este email já está cadastrado' };
+      if (!response?.success) {
+        return { success: false, error: response?.error || 'Erro desconhecido' };
       }
 
-      // For now, we'll just create a placeholder that will be linked when user signs up
-      // In production, you'd want to use Supabase Auth invites or an edge function
-      return { 
-        success: true,
-        error: 'Convite será enviado quando o sistema de emails estiver configurado. Por enquanto, peça ao usuário para se cadastrar com este email.'
-      };
-    } catch (error) {
+      return { success: true };
+    } catch (error: any) {
       console.error('Error inviting user:', error);
-      return { success: false, error: 'Erro ao convidar usuário' };
+      return { success: false, error: error.message || 'Erro ao convidar utilizador' };
     }
+  }
+
+  /**
+   * Cancel a pending invite
+   */
+  static async cancelInvite(inviteId: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('team_invites')
+      .update({ status: 'cancelled' })
+      .eq('id', inviteId);
+
+    if (error) {
+      console.error('Error cancelling invite:', error);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Resend an invite (creates a new invite and cancels the old one)
+   */
+  static async resendInvite(invite: PendingInvite): Promise<{ success: boolean; error?: string }> {
+    // Cancel the old invite
+    await this.cancelInvite(invite.id);
+
+    // Send a new invite
+    return this.inviteUser({
+      email: invite.email,
+      full_name: invite.full_name,
+      role: invite.role,
+    });
   }
 }

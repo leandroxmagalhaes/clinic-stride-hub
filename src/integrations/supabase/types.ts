@@ -1131,6 +1131,56 @@ export type Database = {
           },
         ]
       }
+      team_invites: {
+        Row: {
+          accepted_at: string | null
+          clinic_id: string
+          created_at: string
+          email: string
+          expires_at: string
+          full_name: string
+          id: string
+          invited_by: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: string
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          clinic_id: string
+          created_at?: string
+          email: string
+          expires_at?: string
+          full_name: string
+          id?: string
+          invited_by: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: string
+          token?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          clinic_id?: string
+          created_at?: string
+          email?: string
+          expires_at?: string
+          full_name?: string
+          id?: string
+          invited_by?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_invites_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transacoes_credito: {
         Row: {
           clinic_id: string
@@ -1276,6 +1326,7 @@ export type Database = {
       }
     }
     Functions: {
+      get_invite_details: { Args: { invite_token: string }; Returns: Json }
       get_patient_balance: { Args: { p_patient_id: string }; Returns: number }
       get_patient_credit_balance: {
         Args: { p_patient_id: string }
@@ -1289,6 +1340,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      process_team_invite: { Args: { invite_token: string }; Returns: Json }
       professional_can_access_patient: {
         Args: { p_patient_id: string; p_user_id: string }
         Returns: boolean
