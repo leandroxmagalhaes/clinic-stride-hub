@@ -10,6 +10,7 @@ import {
   closestCorners,
 } from "@dnd-kit/core";
 import { Plus, RefreshCw } from "lucide-react";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { KanbanColumn } from "@/components/comercial/KanbanColumn";
@@ -170,15 +171,10 @@ export default function Comercial() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold font-display">Comercial (CRM)</h1>
-          <p className="text-muted-foreground">
-            Gerencie seus leads e funil de vendas
-          </p>
-        </div>
+    <AppLayout 
+      title="Comercial (CRM)" 
+      subtitle="Gerencie seus leads e funil de vendas"
+      actions={
         <div className="flex gap-2">
           <Button variant="outline" size="icon" onClick={fetchLeads} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -191,10 +187,11 @@ export default function Comercial() {
             Novo Lead
           </Button>
         </div>
-      </div>
-
-      {/* Dashboard Stats */}
-      <CRMDashboard leads={leads} />
+      }
+    >
+      <div className="space-y-6">
+        {/* Dashboard Stats */}
+        <CRMDashboard leads={leads} />
 
       {/* Kanban Board */}
       <div className="overflow-x-auto pb-4">
@@ -248,6 +245,7 @@ export default function Comercial() {
         onConfirm={handleConvertConfirm}
         onSkip={handleConvertSkip}
       />
-    </div>
+      </div>
+    </AppLayout>
   );
 }
