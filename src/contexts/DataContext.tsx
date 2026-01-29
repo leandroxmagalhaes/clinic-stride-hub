@@ -169,14 +169,27 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
-  // Fetch professionals from Supabase
+  // Fetch professionals from profiles table (sessoes FK points here)
   const fetchProfessionals = async () => {
     setProfessionalsLoading(true);
     try {
+      // Must fetch from profiles table because sessoes.profissional_id references profiles.id
       const { data, error } = await supabase
-        .from("profissionais")
-        .select("*")
+        .from("profiles")
+        .select(`
+          id,
+          full_name,
+          email,
+          phone,
+          role,
+          specialty,
+          crefito,
+          avatar_url,
+          is_active,
+          clinic_id
+        `)
         .eq("is_active", true)
+        .in("role", ['fisioterapeuta', 'admin', 'professional'])
         .order("full_name");
 
       if (error) {
@@ -184,16 +197,16 @@ export function DataProvider({ children }: DataProviderProps) {
         return;
       }
 
-      // Map database fields to Professional interface
+      // Map to Professional interface - IDs now match profiles table
       const transformed: Professional[] = (data || []).map((p: any) => ({
         id: p.id,
         clinic_id: p.clinic_id,
         full_name: p.full_name,
         email: p.email,
         phone: p.phone,
-        role: 'fisioterapeuta', // Default role
+        role: p.role,
         specialty: p.specialty,
-        crefito: p.council_number,
+        crefito: p.crefito,
         avatar_url: p.avatar_url,
         is_active: p.is_active,
       }));
