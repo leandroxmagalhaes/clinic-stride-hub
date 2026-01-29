@@ -1,257 +1,220 @@
 
-# Plano de Implementação - Funcionalidades Adicionais
+# Plano de Implementação - Importação de Pacientes em Lote
 
-Este plano aborda 4 módulos independentes que serão implementados com cuidado para não impactar a estrutura existente.
-
----
-
-## 1. Sistema de Envio de Emails (Resend)
-
-### Objetivo
-Enviar emails transacionais para pacientes: confirmação de agendamento, lembrete 24h antes, e link do portal.
-
-### Pré-requisitos
-- Criar conta em resend.com
-- Validar domínio de email em resend.com/domains
-- Gerar API key em resend.com/api-keys
-
-### Implementação
-
-**Passo 1 - Configurar Secret**
-- Adicionar `RESEND_API_KEY` como secret do projeto
-
-**Passo 2 - Edge Functions**
-Criar 3 funções backend:
-
-| Função | Trigger | Descrição |
-|--------|---------|-----------|
-| `send-appointment-confirmation` | Manual (ao criar sessão) | Envia confirmação imediata |
-| `send-appointment-reminder` | Agendado (Cron) | Envia 24h antes da sessão |
-| `send-patient-portal-link` | Manual | Envia link de acesso ao portal |
-
-**Passo 3 - Templates de Email**
-Usar React Email para templates bonitos com:
-- Logo da clínica
-- Dados da sessão (data, hora, profissional, serviço)
-- Link para confirmar/cancelar
-- Dados de contato da clínica
-
-**Passo 4 - Integração no Frontend**
-- Chamar edge function após criar sessão em `Agenda.tsx`
-- Adicionar botão "Enviar Link do Portal" em `PatientDetailModal.tsx`
+Funcionalidade para importar múltiplos pacientes através de ficheiro Excel (.xlsx) ou CSV, com **Nome** e **NIF** como campos obrigatórios.
 
 ---
 
-## 2. Páginas Legais (LGPD/GDPR)
+## Regras de Validação
 
-### Objetivo
-Conformidade legal com proteção de dados para Portugal e Brasil.
+| Campo | Obrigatório | Validação |
+|-------|-------------|-----------|
+| nome | Sim | Mínimo 3 caracteres |
+| nif | Sim | Presente e não vazio |
+| telefone | Não | Se preenchido, mínimo 9 dígitos |
+| email | Não | Se preenchido, formato válido |
+| nascimento | Não | Se preenchido, formato DD/MM/AAAA |
+| genero | Não | M, F ou O |
+| morada | Não | Texto livre |
+| contato_emergencia | Não | Texto livre |
+| telefone_emergencia | Não | Texto livre |
+| seguradora | Não | Texto livre |
+| observacoes | Não | Texto livre |
 
-### Implementação
-
-**Passo 1 - Migração de Banco de Dados**
-Adicionar campo `privacy_consent_at` na tabela `pacientes`:
-```
-ALTER TABLE public.pacientes 
-ADD COLUMN privacy_consent_at timestamptz DEFAULT NULL;
-```
-
-**Passo 2 - Páginas Públicas**
-Criar 2 novas páginas em `src/pages/`:
-
-| Rota | Arquivo | Conteúdo |
-|------|---------|----------|
-| `/privacy` | `PrivacyPolicy.tsx` | Política de Privacidade |
-| `/terms` | `TermsOfService.tsx` | Termos de Uso |
-
-**Conteúdo da Política de Privacidade:**
-- Dados coletados (nome, email, telefone, dados de saúde)
-- Finalidade do tratamento
-- Base legal (consentimento, contrato)
-- Tempo de retenção
-- Direitos do titular (acesso, retificação, exclusão, portabilidade)
-- Medidas de segurança
-- Contacto do responsável
-
-**Passo 3 - Checkbox de Consentimento**
-Atualizar `Pacientes.tsx` para incluir checkbox obrigatório:
-```
-[ ] Li e aceito a Política de Privacidade
-```
-
-**Passo 4 - Footer Global**
-Criar componente `AppFooter.tsx` com links para `/privacy` e `/terms`
+Campos não preenchidos são importados como `null`.
 
 ---
 
-## 3. Sistema de Backup/Exportação
+## Fluxo do Utilizador
 
-### Objetivo
-Permitir exportação manual de dados em formato CSV compactado.
-
-### Implementação
-
-**Passo 1 - Nova Aba em Configurações**
-Adicionar aba "Backup" em `Configuracoes.tsx`
-
-**Passo 2 - Componente de Backup**
-Criar `BackupSettingsPanel.tsx` com:
-- Botão "Exportar Dados"
-- Lista do que será exportado
-- Aviso de recomendação semanal
-- Histórico de últimos backups (opcional)
-
-**Passo 3 - Edge Function de Export**
-Criar `export-clinic-data`:
-- Gera CSV de pacientes
-- Gera CSV de agendamentos (sessões)
-- Gera CSV de transações de crédito
-- Empacota em ZIP
-- Nome: `backup_YYYY-MM-DD_HH-mm.zip`
-
-**Passo 4 - Download no Frontend**
-- Chamar edge function
-- Converter resposta em blob
-- Disparar download automático
-
-**Dependências:**
-- JSZip ou similar (pode ser feito no edge function com Deno)
+1. Página Pacientes → botão "Importar Planilha"
+2. Modal abre com zona de upload
+3. Arrastar ficheiro ou clicar para selecionar
+4. Sistema valida e mostra pré-visualização
+5. Linhas válidas em verde, inválidas em vermelho com motivo
+6. Confirmar importação
+7. Relatório final com sucessos e erros
 
 ---
 
-## 4. Integração Sentry (Monitoramento de Erros)
+## Ficheiros a Criar
 
-### Objetivo
-Capturar e reportar erros JavaScript e de API automaticamente.
+### 1. Serviço de Importação
+**`src/services/PatientImportService.ts`**
 
-### Pré-requisitos
-- Criar conta em sentry.io
-- Criar projeto React
-- Obter DSN
+Responsabilidades:
+- Parsear ficheiros .xlsx e .csv com SheetJS
+- Validar cada linha (nome + NIF obrigatórios)
+- Mapear colunas da planilha para campos do banco
+- Gerar template de exemplo para download
+- Executar inserção em lote no Supabase
 
-### Implementação
+### 2. Modal de Importação
+**`src/components/patients/ImportPatientsModal.tsx`**
 
-**Passo 1 - Instalar SDK**
-Adicionar `@sentry/react` como dependência
+Componentes:
+- Zona de drag & drop para upload
+- Botão para descarregar template
+- Tabela de pré-visualização com status por linha
+- Contadores de válidos/inválidos
+- Botão de confirmação
+- Toast com resultado final
 
-**Passo 2 - Configurar Secret**
-- Adicionar `VITE_SENTRY_DSN` como variável de ambiente (público, pode estar no código)
+---
 
-**Passo 3 - Inicializar Sentry**
-Atualizar `main.tsx`:
-```tsx
-import * as Sentry from "@sentry/react";
+## Ficheiros a Modificar
 
-Sentry.init({
-  dsn: import.meta.env.VITE_SENTRY_DSN,
-  environment: import.meta.env.MODE,
-  tracesSampleRate: 0.1,
-});
+| Ficheiro | Alteração |
+|----------|-----------|
+| `src/pages/Pacientes.tsx` | Adicionar botão "Importar" e integrar modal |
+| `package.json` | Adicionar dependência `xlsx` |
+
+---
+
+## Dependência a Instalar
+
+**xlsx (SheetJS)** - Biblioteca para leitura de Excel/CSV no navegador
+- Suporta .xlsx, .xls, .csv
+- Processamento 100% client-side
+- Sem necessidade de backend adicional
+
+---
+
+## Template de Planilha
+
+Ficheiro .xlsx pré-formatado com:
+- Cabeçalhos: nome, nif, telefone, email, nascimento, genero, morada, contato_emergencia, telefone_emergencia, seguradora, observacoes
+- Linha de exemplo preenchida
+- Nome e NIF destacados como obrigatórios
+
+---
+
+## Interface do Modal
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                    Importar Pacientes                           │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │     📁 Arraste o ficheiro aqui ou clique para            │  │
+│  │        selecionar (.xlsx ou .csv)                         │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  📥 Descarregar modelo de planilha                             │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Pré-visualização:                                             │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ # │ Nome          │ NIF        │ Telefone    │ Status      ││
+│  │ 1 │ João Silva    │ 123456789  │ +351912...  │ ✅ Válido   ││
+│  │ 2 │ Maria Santos  │ 987654321  │             │ ✅ Válido   ││
+│  │ 3 │ Pedro         │            │ 123         │ ❌ NIF vazio││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  ✅ 2 válidos   ❌ 1 com erros                                 │
+│                                                                 │
+│  [Cancelar]                              [Importar 2 pacientes] │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-**Passo 4 - Error Boundary**
-Envolver app com `Sentry.ErrorBoundary` para capturar erros React
-
-**Passo 5 - Captura de Erros de API**
-Adicionar interceptor no cliente Supabase para reportar erros
-
-**Passo 6 - Configurar Alertas**
-No dashboard do Sentry, configurar alertas por email para erros críticos
-
----
-
-## Resumo de Arquivos
-
-### Novos Arquivos
-| Arquivo | Propósito |
-|---------|-----------|
-| `supabase/functions/send-appointment-confirmation/index.ts` | Email de confirmação |
-| `supabase/functions/send-appointment-reminder/index.ts` | Email de lembrete |
-| `supabase/functions/send-patient-portal-link/index.ts` | Email com link do portal |
-| `supabase/functions/send-appointment-confirmation/_templates/confirmation.tsx` | Template React Email |
-| `supabase/functions/export-clinic-data/index.ts` | Exportar dados em ZIP |
-| `src/pages/PrivacyPolicy.tsx` | Página de privacidade |
-| `src/pages/TermsOfService.tsx` | Página de termos |
-| `src/components/layout/AppFooter.tsx` | Footer com links legais |
-| `src/components/settings/BackupSettingsPanel.tsx` | Painel de backup |
-
-### Arquivos Modificados
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/App.tsx` | Adicionar rotas `/privacy`, `/terms`, Sentry |
-| `src/main.tsx` | Inicializar Sentry |
-| `src/pages/Pacientes.tsx` | Checkbox de consentimento |
-| `src/pages/Configuracoes.tsx` | Aba de Backup |
-| `src/pages/Agenda.tsx` | Chamar email de confirmação |
-
-### Migrações de Banco
-```sql
--- Adicionar campo de consentimento
-ALTER TABLE public.pacientes 
-ADD COLUMN IF NOT EXISTS privacy_consent_at timestamptz DEFAULT NULL;
-```
-
----
-
-## Ordem de Implementação Recomendada
-
-1. **Páginas Legais** (sem dependências externas)
-2. **Sistema de Backup** (sem dependências externas)
-3. **Sentry** (requer DSN)
-4. **Emails com Resend** (requer API key + domínio validado)
 
 ---
 
 ## Secção Técnica
 
-### Estrutura Edge Function (Email)
+### Estrutura do Serviço
+
 ```typescript
-// supabase/functions/send-appointment-confirmation/index.ts
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "npm:resend@2.0.0";
+interface ImportRow {
+  nome: string;
+  nif: string;
+  telefone?: string;
+  email?: string;
+  nascimento?: string;
+  genero?: string;
+  morada?: string;
+  contato_emergencia?: string;
+  telefone_emergencia?: string;
+  seguradora?: string;
+  observacoes?: string;
+}
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+interface ValidationResult {
+  row: number;
+  valid: boolean;
+  errors: string[];
+  data?: CreatePatientData;
+}
 
-serve(async (req) => {
-  const { patientEmail, patientName, appointmentDate, ... } = await req.json();
+interface ImportResult {
+  total: number;
+  success: number;
+  failed: number;
+  errors: { row: number; message: string }[];
+}
+```
+
+### Validação Principal
+
+```typescript
+static validateRow(row: ImportRow, rowNumber: number): ValidationResult {
+  const errors: string[] = [];
   
-  await resend.emails.send({
-    from: "Respira & Desenvolve <noreply@seu-dominio.pt>",
-    to: [patientEmail],
-    subject: "Confirmação de Agendamento",
-    html: "..." // Template
-  });
-});
+  // Campos obrigatórios
+  if (!row.nome || row.nome.trim().length < 3) {
+    errors.push("Nome deve ter pelo menos 3 caracteres");
+  }
+  if (!row.nif || row.nif.trim() === '') {
+    errors.push("NIF é obrigatório");
+  }
+  
+  // Campos opcionais com validação condicional
+  if (row.telefone && row.telefone.replace(/\D/g, '').length < 9) {
+    errors.push("Telefone inválido");
+  }
+  if (row.email && !isValidEmail(row.email)) {
+    errors.push("Email inválido");
+  }
+  
+  return {
+    row: rowNumber,
+    valid: errors.length === 0,
+    errors,
+    data: errors.length === 0 ? mapToPatientData(row) : undefined
+  };
+}
 ```
 
-### Estrutura Export (CSV + ZIP)
+### Inserção em Lote
+
 ```typescript
-// supabase/functions/export-clinic-data/index.ts
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js";
-import JSZip from "npm:jszip";
-
-serve(async (req) => {
-  // Fetch data from DB
-  // Convert to CSV
-  // Create ZIP
-  // Return as download
-});
+const { data, error } = await supabase
+  .from('pacientes')
+  .insert(validPatients.map(p => ({
+    clinic_id: clinicId,
+    full_name: p.nome,
+    cpf: p.nif,  // NIF vai para o campo cpf
+    phone: p.telefone || null,
+    email: p.email || null,
+    birth_date: p.nascimento ? parseDate(p.nascimento) : null,
+    gender: p.genero || null,
+    address: p.morada || null,
+    emergency_contact: p.contato_emergencia || null,
+    emergency_phone: p.telefone_emergencia || null,
+    health_insurance: p.seguradora || null,
+    notes: p.observacoes || null,
+    privacy_consent_at: new Date().toISOString(),
+    is_active: true
+  })))
+  .select();
 ```
 
-### Sentry Config
-```typescript
-// main.tsx
-import * as Sentry from "@sentry/react";
+---
 
-Sentry.init({
-  dsn: import.meta.env.VITE_SENTRY_DSN,
-  integrations: [
-    Sentry.browserTracingIntegration(),
-    Sentry.replayIntegration(),
-  ],
-  tracesSampleRate: 0.1,
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1.0,
-});
-```
+## Ordem de Implementação
+
+1. Instalar dependência `xlsx`
+2. Criar `PatientImportService.ts`
+3. Criar `ImportPatientsModal.tsx`
+4. Integrar em `Pacientes.tsx`
+5. Testar com ficheiro de exemplo
