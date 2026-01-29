@@ -36,8 +36,8 @@ interface DataContextType {
   // Sessions
   sessions: Session[];
   sessionsLoading: boolean;
-  addSession: (session: Session) => void;
-  updateSession: (id: string, data: Partial<Session>) => void;
+  addSession: (session: Session) => Promise<void>;
+  updateSession: (id: string, data: Partial<Session>) => Promise<void>;
   deleteSession: (sessionId: string, reason?: string) => Promise<void>;
   refreshSessions: () => Promise<void>;
   
@@ -521,11 +521,97 @@ export function DataProvider({ children }: DataProviderProps) {
     );
   };
 
-  const addSession = (session: Session) => {
-    setSessions((prev) => [session, ...prev]);
+  // Add session - persists to Supabase database
+  const addSession = async (session: Session): Promise<void> => {
+    // Get clinic_id from authenticated user
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) throw new Error("User not authenticated");
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("clinic_id")
+      .eq("user_id", userData.user.id)
+      .maybeSingle();
+
+    if (!profile?.clinic_id) throw new Error("User has no clinic");
+
+    // Insert into database
+    const { data, error } = await supabase.from("sessoes").insert({
+      clinic_id: profile.clinic_id,
+      paciente_id: session.paciente_id,
+      profissional_id: session.profissional_id,
+      servico_id: session.servico_id,
+      start_time: session.start_time instanceof Date 
+        ? session.start_time.toISOString() 
+        : session.start_time,
+      end_time: session.end_time instanceof Date 
+        ? session.end_time.toISOString() 
+        : session.end_time,
+      status: session.status,
+      notes: session.notes,
+      price: session.price,
+      payment_status: session.payment_status,
+    }).select(`
+      *,
+      paciente:pacientes(id, full_name),
+      profissional:profiles!sessoes_profissional_id_fkey(id, full_name),
+      servico:servicos(id, name, color, duration_minutes, consumes_credit)
+    `).single();
+
+    if (error) throw error;
+
+    // Transform and add to local state with real database ID
+    const newSession: Session = {
+      id: data.id,
+      clinic_id: data.clinic_id,
+      paciente_id: data.paciente_id,
+      profissional_id: data.profissional_id,
+      servico_id: data.servico_id,
+      start_time: new Date(data.start_time),
+      end_time: new Date(data.end_time),
+      status: data.status,
+      price: data.price || 0,
+      payment_status: data.payment_status || 'pendente',
+      payment_method: data.payment_method,
+      notes: data.notes,
+      paciente: data.paciente,
+      profissional: data.profissional,
+      servico: data.servico,
+    };
+
+    setSessions((prev) => [newSession, ...prev]);
   };
 
-  const updateSession = (id: string, data: Partial<Session>) => {
+  // Update session - persists to Supabase database
+  const updateSession = async (id: string, data: Partial<Session>): Promise<void> => {
+    // Prepare update data
+    const updateData: Record<string, unknown> = {};
+    
+    if (data.start_time !== undefined) {
+      updateData.start_time = data.start_time instanceof Date 
+        ? data.start_time.toISOString() 
+        : data.start_time;
+    }
+    if (data.end_time !== undefined) {
+      updateData.end_time = data.end_time instanceof Date 
+        ? data.end_time.toISOString() 
+        : data.end_time;
+    }
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.payment_status !== undefined) updateData.payment_status = data.payment_status;
+    if (data.payment_method !== undefined) updateData.payment_method = data.payment_method;
+    if (data.price !== undefined) updateData.price = data.price;
+
+    // Update in database
+    const { error } = await supabase
+      .from("sessoes")
+      .update(updateData)
+      .eq("id", id);
+
+    if (error) throw error;
+
+    // Update local state
     setSessions((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...data } : s))
     );
