@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { Loader2, Activity, UserPlus, Building2 } from 'lucide-react';
+import { Loader2, Activity, UserPlus, Building2, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface InviteDetails {
@@ -144,6 +144,33 @@ export default function Signup() {
     navigate('/login');
   };
 
+  // If no invite token, show restricted access message
+  if (!inviteToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <Lock className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <CardTitle className="text-2xl">Acesso Restrito</CardTitle>
+            <CardDescription className="text-base">
+              O cadastro neste sistema é feito exclusivamente através de convite.
+              Solicite um convite ao administrador da sua clínica.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="flex flex-col gap-4">
+            <Link to="/login" className="w-full">
+              <Button variant="outline" className="w-full">
+                Ir para Login
+              </Button>
+            </Link>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
   if (isLoadingInvite) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
@@ -156,7 +183,7 @@ export default function Signup() {
   }
 
   // Show error if invite is invalid
-  if (inviteToken && inviteDetails && !inviteDetails.valid) {
+  if (inviteDetails && !inviteDetails.valid) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
         <Card className="w-full max-w-md">
