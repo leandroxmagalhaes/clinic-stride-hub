@@ -82,10 +82,10 @@ interface SessionManagementModalProps {
   session: Session | null;
   sessions: Session[];
   getCreditBalance: (patientId: string) => number;
-  onUpdateSession: (id: string, data: Partial<Session>) => void;
+  onUpdateSession: (id: string, data: Partial<Session>) => Promise<void>;
   onDeleteSession?: (sessionId: string, reason?: string) => Promise<void>;
-  onRefundCredit: (patientId: string) => void;
-  onUseCredit: (patientId: string, sessionId: string) => { success: boolean; error?: string };
+  onRefundCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
+  onUseCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }>;
   wasCreditUsedForSession: (sessionId: string) => boolean;
 }
 
@@ -141,10 +141,10 @@ export function SessionManagementModal({
 
   // ========== ACTION HANDLERS ==========
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setIsLoading(true);
     try {
-      onUpdateSession(session.id, { status: "confirmado" });
+      await onUpdateSession(session.id, { status: "confirmado" });
       toast.success("Sessão confirmada!");
       onClose();
     } finally {
@@ -152,7 +152,7 @@ export function SessionManagementModal({
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!cancelReason) {
       toast.error("Selecione um motivo para o cancelamento");
       return;
@@ -162,11 +162,15 @@ export function SessionManagementModal({
     try {
       // If credit was used, refund it
       if (creditWasUsed) {
-        onRefundCredit(session.paciente_id);
-        toast.info("Crédito estornado ao utente");
+        const refundResult = await onRefundCredit(session.paciente_id, session.id);
+        if (refundResult.success) {
+          toast.info("Crédito estornado ao utente");
+        } else {
+          toast.error(refundResult.error || "Erro ao estornar crédito");
+        }
       }
 
-      onUpdateSession(session.id, {
+      await onUpdateSession(session.id, {
         status: "cancelado",
         notes: `${session.notes || ""}\n[CANCELADO] ${cancelReason}`.trim(),
       });
@@ -181,7 +185,7 @@ export function SessionManagementModal({
   // Check if session can be finalized (has credits or credit already used)
   const canFinalize = creditWasUsed || creditBalance > 0;
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     // Block if no credits available
     if (!canFinalize) {
       toast.error("Não é possível finalizar: o utente não possui créditos. Adicione créditos antes de finalizar.");
@@ -192,18 +196,21 @@ export function SessionManagementModal({
     try {
       // Check if credit was already deducted
       if (!creditWasUsed) {
-        // Deduct credit now
-        const result = onUseCredit(session.paciente_id, session.id);
+        // Deduct credit now (persisted to database)
+        const result = await onUseCredit(session.paciente_id, session.id);
         if (!result.success) {
-          toast.error("Erro ao descontar crédito");
+          toast.error(result.error || "Erro ao descontar crédito");
           return;
         }
-        toast.success("Sessão finalizada e crédito descontado!");
-        onUpdateSession(session.id, { status: "realizado", payment_status: "pago" });
-      } else {
-        onUpdateSession(session.id, { status: "realizado" });
-        toast.success("Sessão finalizada!");
+        if (result.alreadyDeducted) {
+          toast.info("Crédito já havia sido descontado");
+        } else {
+          toast.success("Crédito descontado!");
+        }
       }
+
+      await onUpdateSession(session.id, { status: "realizado", payment_status: "pago" });
+      toast.success("Sessão finalizada!");
 
       // Show evolution prompt
       setShowEvolutionPrompt(true);
@@ -212,18 +219,20 @@ export function SessionManagementModal({
     }
   };
 
-  const handleNoShow = () => {
+  const handleNoShow = async () => {
     setIsLoading(true);
     try {
       // Optionally refund based on clinic policy
       if (noShowRefund && creditWasUsed) {
-        onRefundCredit(session.paciente_id);
-        toast.info("Crédito estornado (política da clínica)");
+        const refundResult = await onRefundCredit(session.paciente_id, session.id);
+        if (refundResult.success) {
+          toast.info("Crédito estornado (política da clínica)");
+        }
       } else if (creditWasUsed) {
         toast.info("Crédito mantido (política da clínica)");
       }
 
-      onUpdateSession(session.id, {
+      await onUpdateSession(session.id, {
         status: "falta",
         notes: `${session.notes || ""}\n[FALTA] Utente não compareceu`.trim(),
       });
@@ -235,7 +244,7 @@ export function SessionManagementModal({
     }
   };
 
-  const handleReschedule = () => {
+  const handleReschedule = async () => {
     if (!newDate || newHour === undefined) {
       toast.error("Selecione data e hora");
       return;
@@ -246,7 +255,7 @@ export function SessionManagementModal({
       const result = SessionService.reschedule(session, newDate, newHour, sessions);
       
       if (result.success && result.updatedSession) {
-        onUpdateSession(session.id, {
+        await onUpdateSession(session.id, {
           start_time: result.updatedSession.start_time,
           end_time: result.updatedSession.end_time,
         });
