@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Pencil,
   Loader2,
+  ClipboardList,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -27,8 +28,10 @@ import { EvolutionService } from "@/services/EvolutionService";
 import { EditClinicalDataModal } from "@/components/prontuarios/EditClinicalDataModal";
 import { NewEvolutionModal } from "@/components/prontuarios/NewEvolutionModal";
 import { StructuredDataViewer } from "@/components/prontuarios/StructuredDataViewer";
+import { ClinicalReportsList } from "@/components/prontuarios/ClinicalReportsList";
 import { SpecialtyService, type SpecialtyTemplate, type StructuredData } from "@/services/SpecialtyService";
 import { supabase } from "@/integrations/supabase/client";
+import { useClinicInfo } from "@/hooks/useClinicInfo";
 
 // Prontuario data interface
 interface ProntuarioData {
@@ -52,6 +55,7 @@ interface ProntuarioData {
 
 export default function Prontuarios() {
   const { patients, patientsLoading, professionals, evolutions, addEvolution } = useData();
+  const { data: clinicInfo } = useClinicInfo();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProntuario, setSelectedProntuario] = useState<ProntuarioData | null>(null);
@@ -464,6 +468,10 @@ export default function Prontuarios() {
                     <Activity className="h-4 w-4" />
                     Evoluções
                   </TabsTrigger>
+                  <TabsTrigger value="relatorios" className="gap-2">
+                    <ClipboardList className="h-4 w-4" />
+                    Relatórios
+                  </TabsTrigger>
                   <TabsTrigger value="prontuario" className="gap-2">
                     <FileText className="h-4 w-4" />
                     Prontuário
@@ -547,6 +555,22 @@ export default function Prontuarios() {
                       )}
                     </CardContent>
                   </Card>
+                </TabsContent>
+
+                <TabsContent value="relatorios">
+                  {clinicInfo && (
+                    <ClinicalReportsList
+                      patientId={selectedProntuario.paciente_id}
+                      prontuarioId={selectedProntuario.id}
+                      clinicId={selectedProntuario.clinic_id}
+                      clinicInfo={{
+                        name: clinicInfo.name,
+                        address: clinicInfo.address || undefined,
+                        phone: clinicInfo.phone || undefined,
+                        email: clinicInfo.email || undefined,
+                      }}
+                    />
+                  )}
                 </TabsContent>
 
                 <TabsContent value="prontuario">
