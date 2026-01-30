@@ -47,7 +47,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime }: 
       style={style}
       className={cn(
         "p-2 rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative",
-        "flex-1 min-w-0", // Divide espaço igualmente no layout lado a lado
+        "flex-1 min-w-0 max-w-full overflow-hidden", // Contém conteúdo na largura da coluna
         isDragging && "opacity-50 shadow-lg z-50 ring-2 ring-primary",
         // Credit status borders
         isPendingPayment && "ring-2 ring-warning/50",
@@ -73,29 +73,29 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime }: 
         </div>
       )}
       
-      <div className="flex items-center justify-between gap-1 mb-1">
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-1 mb-1 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
           <div
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing touch-none"
+            className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
           >
             <GripVertical className="h-3 w-3 text-muted-foreground opacity-60 group-hover/session:opacity-100 transition-opacity" />
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
             {displayTime && (
-              <span className="text-[10px] text-muted-foreground font-medium">
+              <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
                 {displayTime}
               </span>
             )}
-            <p className="font-medium truncate">
+            <p className="font-medium truncate min-w-0">
               {session.paciente?.full_name.split(' ')[0]}
             </p>
           </div>
         </div>
-        <StatusBadge status={session.status as any} className="scale-90" />
+        <StatusBadge status={session.status as any} className="scale-90 flex-shrink-0" />
       </div>
-      <p className="text-muted-foreground truncate text-[10px]">
+      <p className="text-muted-foreground truncate text-[10px] w-full">
         {session.servico?.name} • {session.profissional?.full_name.split(' ')[0]}
       </p>
     </div>
