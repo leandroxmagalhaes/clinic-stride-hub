@@ -52,9 +52,11 @@ import {
   FileText,
   Edit3,
   Trash2,
+  Coins,
 } from "lucide-react";
 import { Session, SessionService } from "@/services/SessionService";
 import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
+import { AddCreditsModal, CreditPurchaseData } from "@/components/patients/AddCreditsModal";
 
 // Session status types matching business rules
 export type SessionStatus = "agendado" | "confirmado" | "realizado" | "cancelado" | "falta";
@@ -87,6 +89,7 @@ interface SessionManagementModalProps {
   onRefundCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
   onUseCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }>;
   wasCreditUsedForSession: (sessionId: string) => boolean;
+  onAddCredits?: (patientId: string, data: CreditPurchaseData) => Promise<void>;
 }
 
 export function SessionManagementModal({
@@ -100,6 +103,7 @@ export function SessionManagementModal({
   onRefundCredit,
   onUseCredit,
   wasCreditUsedForSession,
+  onAddCredits,
 }: SessionManagementModalProps) {
   const navigate = useNavigate();
   
@@ -108,6 +112,7 @@ export function SessionManagementModal({
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showNoShowDialog, setShowNoShowDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showAddCreditsModal, setShowAddCreditsModal] = useState(false);
   const [cancelReason, setCancelReason] = useState<string>("");
   const [noShowRefund, setNoShowRefund] = useState(false);
   const [showEvolutionPrompt, setShowEvolutionPrompt] = useState(false);
@@ -334,11 +339,24 @@ export function SessionManagementModal({
                 )}
               </div>
 
-              {/* No credits warning */}
+              {/* No credits warning with Add Credits button */}
               {!canFinalize && !isTerminalStatus && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span>Este utente não possui créditos. Adicione créditos antes de finalizar a sessão.</span>
+                <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>Este utente não possui créditos. Adicione créditos antes de finalizar a sessão.</span>
+                  </div>
+                  {onAddCredits && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 border-primary text-primary hover:bg-primary/10"
+                      onClick={() => setShowAddCreditsModal(true)}
+                    >
+                      <Coins className="h-4 w-4 mr-1" />
+                      Adicionar
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -621,6 +639,20 @@ export function SessionManagementModal({
         entityName={`${patientName} - ${format(new Date(session.start_time), 'dd/MM HH:mm')}`}
         warnings={creditWasUsed ? ["O crédito já foi descontado desta sessão"] : []}
       />
+
+      {/* Add Credits Modal */}
+      {onAddCredits && (
+        <AddCreditsModal
+          isOpen={showAddCreditsModal}
+          onClose={() => setShowAddCreditsModal(false)}
+          patientName={patientName}
+          patientId={session.paciente_id}
+          onAddCredits={async (data) => {
+            await onAddCredits(session.paciente_id, data);
+            setShowAddCreditsModal(false);
+          }}
+        />
+      )}
     </>
   );
 }
