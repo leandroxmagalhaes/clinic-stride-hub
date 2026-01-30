@@ -13,9 +13,10 @@ import { toast } from "sonner";
 import { useData } from "@/contexts/DataContext";
 import { SessionService } from "@/services/SessionService";
 import { NewSessionModal } from "@/components/agenda/NewSessionModal";
+import { DashboardSkeleton } from "@/components/skeletons/PageSkeletons";
 
 export default function Dashboard() {
-  const { sessions, patients, professionals, services, addSession, getCreditBalance } = useData();
+  const { sessions, patients, professionals, services, addSession, getCreditBalance, isLoading } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form state for new session modal
@@ -113,6 +114,18 @@ export default function Dashboard() {
       toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
     }
   };
+
+  // Show skeleton while loading
+  if (isLoading) {
+    return (
+      <AppLayout 
+        title="Dashboard" 
+        subtitle={format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
+      >
+        <DashboardSkeleton />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout 
