@@ -28,11 +28,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
 
 export default function Profissionais() {
-  const { professionals, addProfessional, deleteProfessional } = useData();
+  const { professionals, addProfessional, deleteProfessional, updateProfessional } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState<typeof professionals[0] | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingProfessionalId, setEditingProfessionalId] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -116,6 +118,60 @@ export default function Profissionais() {
       specialty: "",
       crefito: "",
     });
+    setIsEditing(false);
+    setEditingProfessionalId(null);
+  };
+
+  const handleEditClick = () => {
+    if (!selectedProfessional) return;
+    
+    setFormData({
+      full_name: selectedProfessional.full_name,
+      email: selectedProfessional.email || "",
+      phone: selectedProfessional.phone || "",
+      role: selectedProfessional.role,
+      specialty: selectedProfessional.specialty || "",
+      crefito: selectedProfessional.crefito || "",
+    });
+    
+    setEditingProfessionalId(selectedProfessional.id);
+    setIsEditing(true);
+    setIsModalOpen(true);
+    setSelectedProfessional(null);
+  };
+
+  const handleUpdateProfessional = async () => {
+    if (!editingProfessionalId) return;
+    
+    try {
+      const { error } = await supabase
+        .from("profissionais")
+        .update({
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone?.trim() || null,
+          specialty: formData.specialty?.trim() || null,
+          council_number: formData.crefito?.trim() || null,
+        })
+        .eq("id", editingProfessionalId);
+
+      if (error) throw error;
+
+      updateProfessional(editingProfessionalId, {
+        full_name: formData.full_name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone?.trim() || null,
+        specialty: formData.specialty?.trim() || null,
+        crefito: formData.crefito?.trim() || null,
+        role: formData.role,
+      });
+
+      toast.success("Profissional atualizado com sucesso!");
+      setIsModalOpen(false);
+      resetForm();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao atualizar profissional");
+    }
   };
 
   const handleDeleteProfessional = async () => {
@@ -293,7 +349,7 @@ export default function Profissionais() {
               <Button variant="outline" onClick={() => setSelectedProfessional(null)}>
                 Fechar
               </Button>
-              <Button>Editar</Button>
+              <Button onClick={handleEditClick}>Editar</Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -311,11 +367,13 @@ export default function Profissionais() {
         />
       )}
 
-      {/* New Professional Modal */}
+      {/* New/Edit Professional Modal */}
       <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="font-display">Novo Profissional</DialogTitle>
+            <DialogTitle className="font-display">
+              {isEditing ? "Editar Profissional" : "Novo Profissional"}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
@@ -391,8 +449,8 @@ export default function Profissionais() {
             <Button variant="outline" onClick={() => { setIsModalOpen(false); resetForm(); }}>
               Cancelar
             </Button>
-            <Button onClick={handleCreateProfessional}>
-              Cadastrar
+            <Button onClick={isEditing ? handleUpdateProfessional : handleCreateProfessional}>
+              {isEditing ? "Salvar" : "Cadastrar"}
             </Button>
           </DialogFooter>
         </DialogContent>
