@@ -25,6 +25,9 @@ export interface Service {
 }
 
 interface DataContextType {
+  // Global loading state
+  isLoading: boolean;
+  
   // Patients
   patients: Patient[];
   patientsLoading: boolean;
@@ -826,7 +829,11 @@ export function DataProvider({ children }: DataProviderProps) {
     return creditUsageMap[sessionId] ?? false;
   };
 
+  // Compute overall loading state
+  const isLoading = patientsLoading || sessionsLoading || professionalsLoading || servicesLoading;
+
   const value: DataContextType = {
+    isLoading,
     patients,
     patientsLoading,
     addPatient,

@@ -8,24 +8,68 @@ import { LocaleProvider } from "@/contexts/LocaleContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { ThemeApplicator } from "@/components/ThemeApplicator";
-import Dashboard from "./pages/Dashboard";
-import Agenda from "./pages/Agenda";
-import Pacientes from "./pages/Pacientes";
-import Prontuarios from "./pages/Prontuarios";
-import Profissionais from "./pages/Profissionais";
-import Financeiro from "./pages/Financeiro";
-import Servicos from "./pages/Servicos";
-import Comercial from "./pages/Comercial";
-import Engajamento from "./pages/Engajamento";
-import Configuracoes from "./pages/Configuracoes";
-import PatientPortal from "./pages/PatientPortal";
+import { PersistentLayout } from "@/components/layout/PersistentLayout";
+import { Suspense, lazy } from "react";
+import { PageLoadingFallback } from "@/components/layout/PageLoadingFallback";
+import type { PermissionModule } from "@/hooks/usePermissions";
+
+// Lazy load all page components
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Agenda = lazy(() => import("./pages/Agenda"));
+const Pacientes = lazy(() => import("./pages/Pacientes"));
+const Prontuarios = lazy(() => import("./pages/Prontuarios"));
+const Profissionais = lazy(() => import("./pages/Profissionais"));
+const Financeiro = lazy(() => import("./pages/Financeiro"));
+const Servicos = lazy(() => import("./pages/Servicos"));
+const Comercial = lazy(() => import("./pages/Comercial"));
+const Engajamento = lazy(() => import("./pages/Engajamento"));
+const Configuracoes = lazy(() => import("./pages/Configuracoes"));
+const PatientPortal = lazy(() => import("./pages/PatientPortal"));
+
+// Non-lazy pages (auth/static - load immediately)
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 
-const queryClient = new QueryClient();
+// Optimized QueryClient with intelligent caching
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,      // 5 minutes before data is considered stale
+      gcTime: 30 * 60 * 1000,        // 30 minutes before garbage collection
+      retry: 1,
+      refetchOnWindowFocus: false,   // Prevent refetch when switching tabs
+      refetchOnReconnect: false,     // Prevent refetch on reconnect
+    },
+  },
+});
+
+// Wrapper component for protected routes with Suspense
+function ProtectedPage({ 
+  children, 
+  module 
+}: { 
+  children: React.ReactNode; 
+  module?: PermissionModule;
+}) {
+  const content = module ? (
+    <PermissionGuard module={module}>{children}</PermissionGuard>
+  ) : (
+    children
+  );
+
+  return (
+    <ProtectedRoute>
+      <PersistentLayout>
+        <Suspense fallback={<PageLoadingFallback />}>
+          {content}
+        </Suspense>
+      </PersistentLayout>
+    </ProtectedRoute>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -43,56 +87,66 @@ const App = () => (
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsOfService />} />
               
-              {/* Protected routes with permission checks */}
-              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              {/* Protected routes with persistent layout */}
+              <Route path="/" element={
+                <ProtectedPage>
+                  <Dashboard />
+                </ProtectedPage>
+              } />
               <Route path="/agenda" element={
-                <ProtectedRoute>
-                  <PermissionGuard module="agenda"><Agenda /></PermissionGuard>
-                </ProtectedRoute>
+                <ProtectedPage module="agenda">
+                  <Agenda />
+                </ProtectedPage>
               } />
               <Route path="/pacientes" element={
-                <ProtectedRoute>
-                  <PermissionGuard module="pacientes"><Pacientes /></PermissionGuard>
-                </ProtectedRoute>
+                <ProtectedPage module="pacientes">
+                  <Pacientes />
+                </ProtectedPage>
               } />
               <Route path="/prontuarios" element={
-                <ProtectedRoute>
-                  <PermissionGuard module="prontuarios"><Prontuarios /></PermissionGuard>
-                </ProtectedRoute>
+                <ProtectedPage module="prontuarios">
+                  <Prontuarios />
+                </ProtectedPage>
               } />
               <Route path="/profissionais" element={
-                <ProtectedRoute>
-                  <PermissionGuard module="profissionais"><Profissionais /></PermissionGuard>
-                </ProtectedRoute>
+                <ProtectedPage module="profissionais">
+                  <Profissionais />
+                </ProtectedPage>
               } />
               <Route path="/financeiro" element={
-                <ProtectedRoute>
-                  <PermissionGuard module="financeiro"><Financeiro /></PermissionGuard>
-                </ProtectedRoute>
+                <ProtectedPage module="financeiro">
+                  <Financeiro />
+                </ProtectedPage>
               } />
               <Route path="/servicos" element={
-                <ProtectedRoute>
-                  <PermissionGuard module="servicos"><Servicos /></PermissionGuard>
-                </ProtectedRoute>
+                <ProtectedPage module="servicos">
+                  <Servicos />
+                </ProtectedPage>
               } />
               <Route path="/comercial" element={
-                <ProtectedRoute>
-                  <PermissionGuard module="comercial"><Comercial /></PermissionGuard>
-                </ProtectedRoute>
+                <ProtectedPage module="comercial">
+                  <Comercial />
+                </ProtectedPage>
               } />
               <Route path="/engajamento" element={
-                <ProtectedRoute>
-                  <PermissionGuard module="engajamento"><Engajamento /></PermissionGuard>
-                </ProtectedRoute>
+                <ProtectedPage module="engajamento">
+                  <Engajamento />
+                </ProtectedPage>
               } />
               <Route path="/configuracoes" element={
-                <ProtectedRoute>
-                  <PermissionGuard module="configuracoes"><Configuracoes /></PermissionGuard>
-                </ProtectedRoute>
+                <ProtectedPage module="configuracoes">
+                  <Configuracoes />
+                </ProtectedPage>
               } />
               
-              {/* Patient Portal - role check is handled inside the component */}
-              <Route path="/patient-portal" element={<ProtectedRoute><PatientPortal /></ProtectedRoute>} />
+              {/* Patient Portal - special handling */}
+              <Route path="/patient-portal" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <PatientPortal />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
               
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -19,6 +19,7 @@ import { NewLeadModal } from "@/components/comercial/NewLeadModal";
 import { ConvertToPatientModal } from "@/components/comercial/ConvertToPatientModal";
 import { CRMDashboard } from "@/components/comercial/CRMDashboard";
 import { LeadService, SalesLead, LeadStatus, CreateLeadData } from "@/services/LeadService";
+import { KanbanSkeleton } from "@/components/skeletons/PageSkeletons";
 
 const COLUMNS: { id: LeadStatus; title: string; color: string }[] = [
   { id: "novo", title: "Novos Contatos", color: "bg-blue-500" },
@@ -169,6 +170,29 @@ export default function Comercial() {
     setConvertModalOpen(false);
     toast.success("Lead marcado como ganho");
   };
+
+  // Show skeleton while loading
+  if (isLoading && leads.length === 0) {
+    return (
+      <AppLayout 
+        title="Comercial (CRM)" 
+        subtitle="Gerencie seus leads e funil de vendas"
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" size="icon" disabled>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button disabled>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Lead
+            </Button>
+          </div>
+        }
+      >
+        <KanbanSkeleton />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout 

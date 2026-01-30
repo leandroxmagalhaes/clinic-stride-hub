@@ -27,12 +27,13 @@ import { AgendaMobileTimeline } from "@/components/agenda/AgendaMobileTimeline";
 import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
+import { AgendaSkeleton } from "@/components/skeletons/PageSkeletons";
 
 // Full range of available hours (06:00 to 23:00)
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
 export default function Agenda() {
-  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession, addCredits, refreshCreditBalances } = useData();
+  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession, addCredits, refreshCreditBalances, isLoading } = useData();
   const { user } = useAuth();
   
   const [clinicId, setClinicId] = useState<string | null>(null);
@@ -290,6 +291,24 @@ export default function Agenda() {
     await addCredits(patientId, data.amount);
     await refreshCreditBalances();
   };
+
+  // Show skeleton while loading
+  if (isLoading) {
+    return (
+      <AppLayout 
+        title="Agenda" 
+        subtitle="Gerencie os agendamentos da clínica"
+        actions={
+          <Button disabled className="gap-2 min-h-[44px]">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Nova Sessão</span>
+          </Button>
+        }
+      >
+        <AgendaSkeleton />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout 

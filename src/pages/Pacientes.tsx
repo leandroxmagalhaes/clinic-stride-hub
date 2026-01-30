@@ -38,9 +38,10 @@ import { CreditPurchaseData } from "@/components/patients/AddCreditsModal";
 import { HealthTag } from "@/services/HealthTagService";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { TableSkeleton } from "@/components/skeletons/PageSkeletons";
 
 export default function Pacientes() {
-  const { patients, refreshPatients, getCreditBalance, addCredits, deletePatient, updatePatient } = useData();
+  const { patients, refreshPatients, getCreditBalance, addCredits, deletePatient, updatePatient, isLoading } = useData();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
@@ -242,6 +243,30 @@ export default function Pacientes() {
       privacy_consent: false,
     });
   };
+
+  // Show skeleton while loading
+  if (isLoading) {
+    return (
+      <AppLayout
+        title="Pacientes"
+        subtitle="Carregando..."
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" disabled className="gap-2">
+              <FileUp className="h-4 w-4" />
+              <span className="hidden sm:inline">Importar Planilha</span>
+            </Button>
+            <Button disabled className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Novo Paciente</span>
+            </Button>
+          </div>
+        }
+      >
+        <TableSkeleton rows={6} />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout
