@@ -38,6 +38,7 @@ export interface CreateSessionData {
   servicoId: string;
   date: Date;
   hour: number;
+  minute?: number; // 0-59, defaults to 0
   notes?: string;
 }
 
@@ -84,26 +85,33 @@ export class SessionService {
     return { isValid: true };
   }
 
-  // Check for scheduling conflicts
+  // Check for scheduling conflicts (interval overlap)
   static checkConflict(
     sessions: Session[],
     profissionalId: string,
     date: Date,
-    hour: number
+    hour: number,
+    minute: number = 0,
+    durationMinutes: number = 60
   ): ValidationResult {
-    const slotStart = setMinutes(setHours(new Date(date), hour), 0);
+    const newStart = setMinutes(setHours(new Date(date), hour), minute);
+    const newEnd = addMinutes(newStart, durationMinutes);
 
-    const hasConflict = sessions.some(
-      (s) =>
-        s.profissional_id === profissionalId &&
-        isSameDay(new Date(s.start_time), slotStart) &&
-        new Date(s.start_time).getHours() === hour
-    );
+    const hasConflict = sessions.some((s) => {
+      if (s.profissional_id !== profissionalId) return false;
+      if (!isSameDay(new Date(s.start_time), newStart)) return false;
+      
+      const existingStart = new Date(s.start_time);
+      const existingEnd = new Date(s.end_time);
+      
+      // Check for overlap: newStart < existingEnd AND newEnd > existingStart
+      return newStart < existingEnd && newEnd > existingStart;
+    });
 
     if (hasConflict) {
       return {
         isValid: false,
-        error: "Conflito de horário: já existe um agendamento para este profissional neste horário",
+        error: "Conflito de horário: já existe um agendamento para este profissional neste intervalo",
       };
     }
 
@@ -127,24 +135,28 @@ export class SessionService {
       throw new Error(validation.error);
     }
 
-    // Check for conflicts
+    // Get service details for duration
+    const servico = lookupData?.services?.find((s) => s.id === data.servicoId);
+    const durationMinutes = servico?.duration_minutes || 60;
+
+    // Check for conflicts with interval overlap
     const conflictCheck = this.checkConflict(
       existingSessions,
       data.profissionalId,
       data.date,
-      data.hour
+      data.hour,
+      data.minute ?? 0,
+      durationMinutes
     );
     if (!conflictCheck.isValid) {
       throw new Error(conflictCheck.error);
     }
 
-    // Get service details for duration and price
-    const servico = lookupData?.services?.find((s) => s.id === data.servicoId);
+    // Get patient and professional details
     const paciente = lookupData?.patients?.find((p) => p.id === data.pacienteId);
     const profissional = lookupData?.professionals?.find((p) => p.id === data.profissionalId);
 
-    const durationMinutes = servico?.duration_minutes || 60;
-    const startTime = setMinutes(setHours(new Date(data.date), data.hour), 0);
+    const startTime = setMinutes(setHours(new Date(data.date), data.hour), data.minute ?? 0);
     const endTime = addMinutes(startTime, durationMinutes);
 
     return {

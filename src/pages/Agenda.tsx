@@ -24,13 +24,18 @@ import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
 
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
+// Full range of available hours (06:00 to 23:00)
+const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
 export default function Agenda() {
   const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession } = useData();
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
+  
+  // Hour filter for visualization (default: 07:00 to 19:00)
+  const [hourFilter, setHourFilter] = useState({ start: 7, end: 19 });
+  const displayedHours = ALL_HOURS.filter(h => h >= hourFilter.start && h <= hourFilter.end);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ date: Date; hour: number } | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
@@ -122,10 +127,12 @@ export default function Agenda() {
     notes: string;
     date?: Date;
     hour?: number;
+    minute?: number;
   }) => {
     // Use provided date/hour or fall back to selectedSlot
     const finalDate = data.date || selectedSlot?.date;
     const finalHour = data.hour ?? selectedSlot?.hour;
+    const finalMinute = data.minute ?? 0;
 
     if (!finalDate || finalHour === undefined) {
       toast.error("Selecione um horário");
@@ -153,6 +160,7 @@ export default function Agenda() {
           servicoId: data.servicoId,
           date: finalDate,
           hour: finalHour,
+          minute: finalMinute,
           notes: data.notes,
         },
         sessions,
@@ -241,6 +249,8 @@ export default function Agenda() {
             onNext={goToNext}
             onToday={goToToday}
             onViewModeChange={setViewMode}
+            hourFilter={hourFilter}
+            onHourFilterChange={setHourFilter}
           />
         </div>
 
@@ -253,13 +263,15 @@ export default function Agenda() {
             onNext={goToNextMobile}
             onToday={goToToday}
             onViewModeChange={() => {}} // No-op on mobile
+            hourFilter={hourFilter}
+            onHourFilterChange={setHourFilter}
           />
         </div>
 
         {/* Desktop: Weekly/Daily Grid */}
         <AgendaDesktopGrid
           weekDays={weekDays}
-          hours={HOURS}
+          hours={displayedHours}
           sessions={sessions}
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
@@ -270,7 +282,7 @@ export default function Agenda() {
         {/* Mobile: Timeline View */}
         <AgendaMobileTimeline
           currentDate={currentDate}
-          hours={HOURS}
+          hours={displayedHours}
           sessions={sessions}
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
