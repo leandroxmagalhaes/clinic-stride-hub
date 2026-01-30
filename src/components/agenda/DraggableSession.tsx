@@ -46,7 +46,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime }: 
       ref={setNodeRef}
       style={style}
       className={cn(
-        "p-2 rounded-md text-xs mb-1 cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative",
+        "p-2 rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative",
+        "flex-1 min-w-0", // Divide espaço igualmente no layout lado a lado
         isDragging && "opacity-50 shadow-lg z-50 ring-2 ring-primary",
         // Credit status borders
         isPendingPayment && "ring-2 ring-warning/50",
