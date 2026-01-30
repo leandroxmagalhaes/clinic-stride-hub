@@ -20,11 +20,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Clock, CalendarIcon } from "lucide-react";
+import { Clock, CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { ScheduleWarningAlert } from "@/components/agenda/ScheduleWarningAlert";
@@ -104,6 +112,7 @@ export function NewSessionModal({
   // Local state for date/time when no slot is pre-selected
   const [manualDate, setManualDate] = useState<Date | undefined>(undefined);
   const [manualHour, setManualHour] = useState<string>("");
+  const [patientSearchOpen, setPatientSearchOpen] = useState(false);
   const [manualMinute, setManualMinute] = useState<string>("0");
 
   // Reset manual selections when modal opens/closes or slot changes
@@ -280,18 +289,50 @@ export function NewSessionModal({
 
           <div className="space-y-2">
             <Label>Paciente *</Label>
-            <Select value={selectedPaciente} onValueChange={setSelectedPaciente}>
-              <SelectTrigger className="min-h-[44px]">
-                <SelectValue placeholder="Selecione o paciente" />
-              </SelectTrigger>
-              <SelectContent>
-                {patients.map((p) => (
-                  <SelectItem key={p.id} value={p.id} className="min-h-[44px]">
-                    {p.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={patientSearchOpen}
+                  className="w-full justify-between min-h-[44px] font-normal"
+                >
+                  {selectedPaciente
+                    ? patients.find((p) => p.id === selectedPaciente)?.full_name
+                    : "Selecione o paciente"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Pesquisar paciente..." className="h-10" />
+                  <CommandList>
+                    <CommandEmpty>Nenhum paciente encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {patients.map((p) => (
+                        <CommandItem
+                          key={p.id}
+                          value={p.full_name}
+                          onSelect={() => {
+                            setSelectedPaciente(p.id);
+                            setPatientSearchOpen(false);
+                          }}
+                          className="min-h-[44px]"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedPaciente === p.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {p.full_name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             
             {/* Patient info: Health Tags + Credit Balance */}
             {selectedPatientData && (
