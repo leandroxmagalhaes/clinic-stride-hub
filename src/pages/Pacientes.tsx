@@ -25,7 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink, FileUp } from "lucide-react";
 import { ImportPatientsModal } from "@/components/patients/ImportPatientsModal";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 // Services and Context (SRP Architecture)
 import { useData } from "@/contexts/DataContext";
@@ -40,8 +40,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Pacientes() {
-  const { patients, refreshPatients, getCreditBalance, addCredits, deletePatient } = useData();
+  const { patients, refreshPatients, getCreditBalance, addCredits, deletePatient, updatePatient } = useData();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [clinicId, setClinicId] = useState<string | null>(null);
   
@@ -141,6 +142,32 @@ export default function Pacientes() {
 
     // Also update local state for immediate UI feedback
     addCredits(patientId, data.amount);
+  };
+
+  const handleUpdatePatient = async (patientId: string, data: Partial<Patient>) => {
+    const { error } = await supabase
+      .from("pacientes")
+      .update(data)
+      .eq("id", patientId);
+
+    if (error) {
+      toast.error(`Erro ao atualizar paciente: ${error.message}`);
+      throw error;
+    }
+
+    updatePatient(patientId, data);
+    
+    // Also update selectedPatient if it's the one being edited
+    if (selectedPatient?.id === patientId) {
+      setSelectedPatient({ ...selectedPatient, ...data } as Patient);
+    }
+    
+    toast.success("Dados do paciente atualizados!");
+  };
+
+  const handleNavigateToProntuario = (patientId: string) => {
+    setSelectedPatient(null);
+    navigate(`/prontuarios?paciente=${patientId}`);
   };
 
   const handleCreatePatient = async () => {
@@ -332,6 +359,8 @@ export default function Pacientes() {
         transactions={patientTransactions}
         onAddCredits={handleAddCredits}
         onDeletePatient={deletePatient}
+        onUpdatePatient={handleUpdatePatient}
+        onNavigateToProntuario={handleNavigateToProntuario}
       />
 
       {/* New Patient Modal */}

@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Phone, Coins, History, User, Tag, Mail, Loader2, Trash2 } from "lucide-react";
+import { MapPin, Phone, Coins, History, User, Tag, Mail, Loader2, Trash2, Pencil } from "lucide-react";
 import { PatientStatementButton } from "./PatientStatementButton";
 import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
@@ -18,6 +18,7 @@ import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { AddCreditsModal, CreditPurchaseData } from "./AddCreditsModal";
 import { TransactionHistory, Transaction } from "./TransactionHistory";
 import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
+import { EditPatientModal } from "./EditPatientModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useClinicInfo } from "@/hooks/useClinicInfo";
@@ -30,6 +31,8 @@ interface PatientDetailModalProps {
   transactions: Transaction[];
   onAddCredits: (patientId: string, data: CreditPurchaseData) => void | Promise<void>;
   onDeletePatient?: (patientId: string) => Promise<void>;
+  onUpdatePatient?: (patientId: string, data: Partial<Patient>) => Promise<void>;
+  onNavigateToProntuario?: (patientId: string) => void;
 }
 
 export function PatientDetailModal({
@@ -40,8 +43,11 @@ export function PatientDetailModal({
   transactions,
   onAddCredits,
   onDeletePatient,
+  onUpdatePatient,
+  onNavigateToProntuario,
 }: PatientDetailModalProps) {
   const [isAddCreditsOpen, setIsAddCreditsOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [isSendingPortalLink, setIsSendingPortalLink] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -147,6 +153,19 @@ export function PatientDetailModal({
 
             {/* Info Tab */}
             <TabsContent value="info" className="space-y-4 py-4">
+              {onUpdatePatient && (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="gap-2"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Editar Dados
+                  </Button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">NIF / CPF</p>
@@ -282,7 +301,17 @@ export function PatientDetailModal({
               <Button variant="outline" onClick={onClose}>
                 Fechar
               </Button>
-              <Button>Ver Prontuário</Button>
+              <Button
+                onClick={() => {
+                  if (onNavigateToProntuario && patient) {
+                    onClose();
+                    onNavigateToProntuario(patient.id);
+                  }
+                }}
+                disabled={!onNavigateToProntuario}
+              >
+                Ver Prontuário
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -307,6 +336,16 @@ export function PatientDetailModal({
         entityName={patient.full_name}
         warnings={creditBalance > 0 ? [`Este paciente tem ${creditBalance} crédito(s) disponível(is)`] : []}
       />
+
+      {/* Edit Patient Modal */}
+      {onUpdatePatient && (
+        <EditPatientModal
+          patient={patient}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onSave={onUpdatePatient}
+        />
+      )}
     </>
   );
 }

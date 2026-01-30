@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +52,7 @@ interface ProntuarioData {
 
 export default function Prontuarios() {
   const { patients, patientsLoading, professionals, evolutions, addEvolution } = useData();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProntuario, setSelectedProntuario] = useState<ProntuarioData | null>(null);
   const [isNewEvolucaoOpen, setIsNewEvolucaoOpen] = useState(false);
@@ -108,6 +110,16 @@ export default function Prontuarios() {
 
     fetchProntuarios();
   }, []);
+
+  // Auto-select patient from URL query param
+  useEffect(() => {
+    const pacienteId = searchParams.get("paciente");
+    if (pacienteId && patients.length > 0 && !prontuariosLoading && !selectedProntuario) {
+      handleSelectPatient(pacienteId);
+      // Clear the query param after selecting
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, patients, prontuariosLoading]);
 
   const filteredPacientes = patients.filter((p) =>
     p.full_name.toLowerCase().includes(searchTerm.toLowerCase())
