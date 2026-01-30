@@ -11,7 +11,6 @@ import {
   TrendingUp,
   DollarSign,
   Heart,
-  Building2,
   LogOut,
   ChevronDown,
   Globe,
@@ -113,7 +112,6 @@ const managementNavItems: NavItem[] = [
   { title: "Comercial", url: "/comercial", icon: TrendingUp, module: "comercial" },
   { title: "Financeiro", url: "/financeiro", icon: DollarSign, module: "financeiro" },
   { title: "Engajamento", url: "/engajamento", icon: Heart, module: "engajamento" },
-  { title: "Clínicas", url: "/clinicas", icon: Building2, disabled: true, badge: "Em breve" },
 ];
 
 export function AppSidebar() {
