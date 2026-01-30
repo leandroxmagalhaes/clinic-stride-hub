@@ -863,6 +863,129 @@ export type Database = {
           },
         ]
       }
+      relatorios_clinicos: {
+        Row: {
+          clinic_id: string
+          created_at: string | null
+          created_by: string | null
+          data_validade: string | null
+          destinatario_especialidade: string | null
+          destinatario_identificacao: string | null
+          destinatario_nome: string | null
+          diagnostico_clinico: string | null
+          dias_aviso_antecedencia: number | null
+          entregue_em: string | null
+          enviado_em: string | null
+          evolucao_paciente: string | null
+          id: string
+          objetivo_tratamento: string | null
+          observacoes: string | null
+          patient_id: string
+          periodo_fim: string
+          periodo_inicio: string
+          professional_id: string
+          recomendacoes: string | null
+          resultados_obtidos: string | null
+          sessoes_realizadas: number | null
+          status: string | null
+          tipo: string
+          titulo: string
+          updated_at: string | null
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string | null
+          created_by?: string | null
+          data_validade?: string | null
+          destinatario_especialidade?: string | null
+          destinatario_identificacao?: string | null
+          destinatario_nome?: string | null
+          diagnostico_clinico?: string | null
+          dias_aviso_antecedencia?: number | null
+          entregue_em?: string | null
+          enviado_em?: string | null
+          evolucao_paciente?: string | null
+          id?: string
+          objetivo_tratamento?: string | null
+          observacoes?: string | null
+          patient_id: string
+          periodo_fim: string
+          periodo_inicio: string
+          professional_id: string
+          recomendacoes?: string | null
+          resultados_obtidos?: string | null
+          sessoes_realizadas?: number | null
+          status?: string | null
+          tipo: string
+          titulo: string
+          updated_at?: string | null
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          data_validade?: string | null
+          destinatario_especialidade?: string | null
+          destinatario_identificacao?: string | null
+          destinatario_nome?: string | null
+          diagnostico_clinico?: string | null
+          dias_aviso_antecedencia?: number | null
+          entregue_em?: string | null
+          enviado_em?: string | null
+          evolucao_paciente?: string | null
+          id?: string
+          objetivo_tratamento?: string | null
+          observacoes?: string | null
+          patient_id?: string
+          periodo_fim?: string
+          periodo_inicio?: string
+          professional_id?: string
+          recomendacoes?: string | null
+          resultados_obtidos?: string | null
+          sessoes_realizadas?: number | null
+          status?: string | null
+          tipo?: string
+          titulo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "relatorios_clinicos_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relatorios_clinicos_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relatorios_clinicos_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "relatorios_clinicos_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "relatorios_clinicos_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "profissionais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_leads: {
         Row: {
           clinic_id: string
