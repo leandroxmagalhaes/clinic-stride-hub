@@ -1,169 +1,138 @@
 
 
-# Adicionar Especialidades: Fisioterapia Motora e Reabilitação Vestibular
+# Alinhamento Google Calendar - Sessões Lado a Lado
 
-## O que será feito
+## Objetivo
 
-Inserir 2 novos templates de especialidade na tabela `specialty_templates` com formulários dinâmicos completos para evoluções clínicas.
-
----
-
-## 1. Fisioterapia Motora
-
-**Descrição**: Avaliação musculoesquelética com foco em ADM, força, funcionalidade e dor
-
-### Secções do formulário:
-
-| Secção | Campo | Tipo | Opções |
-|--------|-------|------|--------|
-| **Avaliação de ADM e Força** | Amplitude de Movimento | Select | Normal, Limitada Leve, Limitada Moderada, Limitada Grave |
-| | Região Afetada | Multiselect | Ombro, Cotovelo, Punho, Quadril, Joelho, Tornozelo, Coluna Cervical, Coluna Lombar |
-| | Força Muscular (0-5) | Range | min: 0, max: 5 |
-| | Tônus Muscular | Select | Normal, Hipotonia, Hipertonia, Espasticidade |
-| **Dor e Pontos Gatilho** | Escala de Dor (EVA) | Range | min: 0, max: 10 |
-| | Localização da Dor | Tags | Cervical, Dorsal, Lombar, Sacral, MMSS, MMII |
-| | Pontos de Tensão | Multiselect | Trapézio, Romboides, Paravertebrais, Piriforme, Quadrado Lombar, ITB |
-| **Avaliação Funcional** | Marcha | Select | Normal, Claudicante, Com Auxílio, Não Deambula |
-| | Equilíbrio | Select | Normal, Alterado Leve, Alterado Moderado, Alterado Grave |
-| | AVDs | Multiselect | Independente, Auxílio Parcial, Dependente |
+Quando há múltiplos agendamentos no mesmo slot horário, exibi-los lado a lado (como no Google Calendar) em vez de empilhados verticalmente.
 
 ---
 
-## 2. Reabilitação Vestibular
+## Comportamento Atual vs. Desejado
 
-**Descrição**: Avaliação e tratamento de distúrbios do equilíbrio e tontura
+```text
+ATUAL (empilhado)               DESEJADO (lado a lado - Google Style)
+┌─────────────────┐             ┌─────────────────────────┐
+│ 09:00 João      │             │ 09:00 João │ 09:00 Maria│
+├─────────────────┤             │ Fisio      │ Pilates    │
+│ 09:00 Maria     │             └─────────────────────────┘
+│ Pilates         │
+└─────────────────┘
+```
 
-### Secções do formulário:
+---
 
-| Secção | Campo | Tipo | Opções |
-|--------|-------|------|--------|
-| **Sintomas e Tontura** | Tipo de Tontura | Select | Rotatória (Vertigem), Flutuação, Desequilíbrio, Pré-síncope |
-| | Intensidade (0-10) | Range | min: 0, max: 10 |
-| | Sintomas Associados | Multiselect | Náuseas, Vômitos, Cefaleia, Zumbido, Hipoacusia, Fotofobia |
-| | Gatilhos | Tags | Mudança Posição, Movimento Cabeça, Ambientes Visuais, Estresse |
-| **Testes Clínicos** | Dix-Hallpike | Select | Negativo, Positivo D, Positivo E, Positivo Bilateral |
-| | Head Impulse Test | Select | Normal, Sacada D, Sacada E |
-| | Romberg | Select | Negativo, Positivo |
-| | Fukuda | Select | Normal, Desvio D, Desvio E |
-| | Nistagmo | Multiselect | Ausente, Espontâneo, Posicional, Evocado |
-| **Avaliação Funcional** | Escala DHI (0-100) | Range | min: 0, max: 100 |
-| | Risco de Quedas | Select | Baixo, Moderado, Alto |
-| | Limitação AVDs | Tags | Conduzir, Ler, Caminhar, Trabalhar, Atividades Domésticas |
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/agenda/DroppableSlot.tsx` | Adicionar layout flex horizontal para conter múltiplas sessões |
+| `src/components/agenda/DraggableSession.tsx` | Remover margin-bottom, adaptar para dividir largura igualmente |
 
 ---
 
 ## Implementação Técnica
 
-### Migration SQL necessária
+### 1. DroppableSlot.tsx
 
-```sql
-INSERT INTO public.specialty_templates (clinic_id, name, description, schema) VALUES
+Adicionar uma prop `sessionCount` para saber quantas sessões há no slot, e usar `flex` horizontal:
 
--- Fisioterapia Motora
-(NULL, 'Fisioterapia Motora', 
- 'Avaliação musculoesquelética com foco em ADM, força, funcionalidade e dor',
- '[
-   {
-     "section": "Avaliação de ADM e Força",
-     "fields": [
-       {"key": "adm", "label": "Amplitude de Movimento", "type": "select", 
-        "options": ["Normal", "Limitada Leve", "Limitada Moderada", "Limitada Grave"]},
-       {"key": "regiao_afetada", "label": "Região Afetada", "type": "multiselect", 
-        "options": ["Ombro", "Cotovelo", "Punho", "Quadril", "Joelho", "Tornozelo", "Coluna Cervical", "Coluna Lombar"]},
-       {"key": "forca_muscular", "label": "Força Muscular (0-5)", "type": "range", "min": 0, "max": 5},
-       {"key": "tonus", "label": "Tônus Muscular", "type": "select", 
-        "options": ["Normal", "Hipotonia", "Hipertonia", "Espasticidade"]}
-     ]
-   },
-   {
-     "section": "Dor e Pontos Gatilho",
-     "fields": [
-       {"key": "eva", "label": "Escala de Dor (EVA)", "type": "range", "min": 0, "max": 10},
-       {"key": "localizacao_dor", "label": "Localização da Dor", "type": "tags", 
-        "options": ["Cervical", "Dorsal", "Lombar", "Sacral", "MMSS", "MMII"]},
-       {"key": "pontos_tensao", "label": "Pontos de Tensão", "type": "multiselect", 
-        "options": ["Trapézio", "Romboides", "Paravertebrais", "Piriforme", "Quadrado Lombar", "ITB"]}
-     ]
-   },
-   {
-     "section": "Avaliação Funcional",
-     "fields": [
-       {"key": "marcha", "label": "Marcha", "type": "select", 
-        "options": ["Normal", "Claudicante", "Com Auxílio", "Não Deambula"]},
-       {"key": "equilibrio", "label": "Equilíbrio", "type": "select", 
-        "options": ["Normal", "Alterado Leve", "Alterado Moderado", "Alterado Grave"]},
-       {"key": "avds", "label": "AVDs", "type": "multiselect", 
-        "options": ["Independente", "Auxílio Parcial", "Dependente"]}
-     ]
-   }
- ]'::jsonb),
+```typescript
+// Nova prop
+sessionCount: number;
 
--- Reabilitação Vestibular
-(NULL, 'Reabilitação Vestibular', 
- 'Avaliação e tratamento de distúrbios do equilíbrio e tontura',
- '[
-   {
-     "section": "Sintomas e Tontura",
-     "fields": [
-       {"key": "tipo_tontura", "label": "Tipo de Tontura", "type": "select", 
-        "options": ["Rotatória (Vertigem)", "Flutuação", "Desequilíbrio", "Pré-síncope"]},
-       {"key": "intensidade", "label": "Intensidade (0-10)", "type": "range", "min": 0, "max": 10},
-       {"key": "sintomas_associados", "label": "Sintomas Associados", "type": "multiselect", 
-        "options": ["Náuseas", "Vômitos", "Cefaleia", "Zumbido", "Hipoacusia", "Fotofobia"]},
-       {"key": "gatilhos", "label": "Gatilhos", "type": "tags", 
-        "options": ["Mudança Posição", "Movimento Cabeça", "Ambientes Visuais", "Estresse"]}
-     ]
-   },
-   {
-     "section": "Testes Clínicos",
-     "fields": [
-       {"key": "dix_hallpike", "label": "Dix-Hallpike", "type": "select", 
-        "options": ["Negativo", "Positivo D", "Positivo E", "Positivo Bilateral"]},
-       {"key": "head_impulse", "label": "Head Impulse Test", "type": "select", 
-        "options": ["Normal", "Sacada D", "Sacada E"]},
-       {"key": "romberg", "label": "Romberg", "type": "select", 
-        "options": ["Negativo", "Positivo"]},
-       {"key": "fukuda", "label": "Fukuda", "type": "select", 
-        "options": ["Normal", "Desvio D", "Desvio E"]},
-       {"key": "nistagmo", "label": "Nistagmo", "type": "multiselect", 
-        "options": ["Ausente", "Espontâneo", "Posicional", "Evocado"]}
-     ]
-   },
-   {
-     "section": "Avaliação Funcional",
-     "fields": [
-       {"key": "dhi", "label": "Escala DHI (0-100)", "type": "range", "min": 0, "max": 100},
-       {"key": "risco_quedas", "label": "Risco de Quedas", "type": "select", 
-        "options": ["Baixo", "Moderado", "Alto"]},
-       {"key": "limitacao_avds", "label": "Limitação AVDs", "type": "tags", 
-        "options": ["Conduzir", "Ler", "Caminhar", "Trabalhar", "Atividades Domésticas"]}
-     ]
-   }
- ]'::jsonb);
+// Container com flex horizontal
+<div className={cn(
+  "min-h-[70px] p-1 border-r last:border-r-0 transition-colors",
+  "flex gap-0.5", // NOVO: layout horizontal
+  // ... outras classes
+)}>
+  {children}
+</div>
+```
+
+### 2. DraggableSession.tsx
+
+Remover `mb-1` e ajustar para preencher espaço disponível:
+
+```typescript
+// De:
+className="... mb-1 ..."
+
+// Para:
+className="... flex-1 min-w-0 ..." // Divide espaço igualmente
 ```
 
 ---
 
-## Arquivos Afetados
+## Detalhes de Implementação
 
-| Arquivo | Alteração |
-|---------|-----------|
-| **Nova migration SQL** | INSERT das 2 novas especialidades |
+### Divisão de Espaço
 
-**Nenhuma alteração de código necessária** - o sistema já carrega dinamicamente os templates da tabela `specialty_templates`.
+- **1 sessão**: ocupa 100% da largura
+- **2 sessões**: cada uma ocupa ~50%
+- **3+ sessões**: divide igualmente, com `min-width` para não ficarem muito pequenas
+
+### CSS Flexbox
+
+```css
+/* Container (DroppableSlot) */
+display: flex;
+gap: 2px;
+flex-wrap: nowrap; /* Não quebra linha */
+
+/* Item (DraggableSession) */
+flex: 1 1 0; /* Cresce e encolhe igualmente */
+min-width: 0; /* Permite truncar texto */
+```
+
+### Comportamento Visual
+
+1. Sessões simultâneas aparecem lado a lado
+2. Cada sessão reduz sua largura proporcionalmente
+3. Texto trunca com `...` quando necessário
+4. Mantém arrasto funcional (drag & drop)
 
 ---
 
-## Resultado Esperado
+## Fluxo Visual
 
-Após a implementação, o dropdown de especialidades mostrará:
+```text
+SLOT COM 1 SESSÃO
+┌───────────────────────────────────────┐
+│ 09:00 • João Silva                    │
+│ Fisioterapia • Dr. Pedro              │
+└───────────────────────────────────────┘
 
-1. Sem especialidade definida
-2. Fisioterapia Motora *(novo)*
-3. Fisioterapia Respiratória
-4. Neurofuncional Pediátrica
-5. Pilates
-6. Reabilitação Vestibular *(novo)*
+SLOT COM 2 SESSÕES
+┌──────────────────┬──────────────────┐
+│ 09:00 • João     │ 09:15 • Maria    │
+│ Fisio • Pedro    │ Pilates • Ana    │
+└──────────────────┴──────────────────┘
 
-Os formulários dinâmicos serão renderizados automaticamente nas evoluções clínicas.
+SLOT COM 3 SESSÕES
+┌────────────┬────────────┬────────────┐
+│ 09:00 João │ 09:15 Mari │ 09:30 José │
+│ Fisio      │ Pilates    │ RPG        │
+└────────────┴────────────┴────────────┘
+```
+
+---
+
+## Considerações Especiais
+
+1. **Mobile**: Manter comportamento empilhado no mobile (tela menor)
+2. **Truncamento**: Nomes e serviços truncam automaticamente
+3. **Status Badge**: Pode ser escondido quando há 3+ sessões para economizar espaço
+4. **Drag & Drop**: Continua funcionando normalmente
+
+---
+
+## Risco e Complexidade
+
+| Aspecto | Avaliação |
+|---------|-----------|
+| Complexidade | **Baixa** - apenas CSS/layout |
+| Risco | **Mínimo** - mudanças visuais localizadas |
+| Compatibilidade | Total com sessões existentes |
 
