@@ -1,164 +1,218 @@
 
-# Editar Dados do Paciente e Navegar para Prontuário
+# Corrigir Delay no Menu Lateral
 
-## Problemas Identificados
+## Problema Identificado
 
-1. **Botão "Ver Prontuário"** na modal de detalhes não faz nada (linha 285 de `PatientDetailModal.tsx`)
-2. **Não existe funcionalidade de editar** os dados cadastrais do paciente
-3. **Página Prontuários** não recebe o parâmetro `?paciente=` da URL para pré-selecionar o paciente
+Ao clicar em itens do menu, há um delay de vários segundos porque:
+
+1. **NavItemComponent recriado a cada render** - O componente está definido dentro de `AppSidebar`, causando recriação constante
+2. **Warnings de refs não tratados** - React mostra warnings sobre refs em componentes funcionais sem `forwardRef`
+3. **Carregamento de permissões síncrono** - O hook `useUserRole` faz query ao banco a cada mudança de auth
+4. **Re-renderização desnecessária** - Quando o usuário navega, todo o sidebar é re-renderizado com checks de permissão
 
 ---
 
 ## Solução Proposta
 
-### 1. Criar Modal de Edição do Paciente
+### 1. Extrair NavItemComponent para fora do AppSidebar
 
-Um novo componente `EditPatientModal.tsx` que:
-- Recebe os dados atuais do paciente
-- Permite editar todos os campos (nome, CPF, telefone, email, etc.)
-- Salva as alterações no banco de dados via Supabase
-- Atualiza o estado local via `updatePatient` do DataContext
+Mover o componente para fora da função principal e usar `React.memo` para evitar re-renders:
 
-### 2. Adicionar Botão "Editar" na Modal de Detalhes
+```typescript
+// Antes: definido DENTRO de AppSidebar
+const NavItemComponent = ({ item }: { item: NavItem }) => { ... }
 
-- Novo botão "Editar" com ícone de lápis na aba "Dados"
-- Abre a modal de edição quando clicado
+// Depois: definido FORA e memoizado
+const NavItemComponent = React.memo(({ item, isActive, canAccess }: NavItemProps) => {
+  if (!canAccess) return null;
+  // ... resto do código
+});
+```
 
-### 3. Corrigir Botão "Ver Prontuário"
+### 2. Adicionar forwardRef ao AppFooter
 
-- Adicionar navegação para `/prontuarios?paciente={patientId}`
-- Fechar a modal de detalhes antes de navegar
+```typescript
+// Antes
+export function AppFooter() { ... }
 
-### 4. Atualizar Página Prontuários
+// Depois
+export const AppFooter = React.forwardRef<HTMLElement>((props, ref) => {
+  return <footer ref={ref} ...>...</footer>
+});
+```
 
-- Ler o parâmetro `paciente` da URL
-- Auto-selecionar o paciente correspondente quando a página carrega
+### 3. Otimizar useUserRole com cache local
+
+Adicionar cache para evitar queries repetidas ao banco:
+
+```typescript
+// Usar useMemo e useCallback para evitar recálculos
+const cachedRoles = useMemo(() => roles, [roles.join(',')]);
+```
+
+### 4. Simplificar verificação de permissões no sidebar
+
+Em vez de chamar `canAccessModule` em cada render, pré-calcular os itens visíveis:
+
+```typescript
+// Usar useMemo para calcular uma vez
+const visibleItems = useMemo(() => ({
+  main: mainNavItems.filter(item => !item.module || canAccessModule(item.module)),
+  management: managementNavItems.filter(item => !item.module || canAccessModule(item.module)),
+}), [canAccessModule]);
+```
 
 ---
-
-## Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/patients/EditPatientModal.tsx` | Modal com formulário de edição do paciente |
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/patients/PatientDetailModal.tsx` | Adicionar botão "Editar", funcionalidade do "Ver Prontuário", e callback `onUpdatePatient` |
-| `src/pages/Pacientes.tsx` | Passar `onUpdatePatient` e `onNavigateToProntuario` para o modal |
-| `src/pages/Prontuarios.tsx` | Ler `?paciente=` da URL e pré-selecionar paciente |
+| `src/components/layout/AppSidebar.tsx` | Extrair NavItemComponent, usar memo, otimizar |
+| `src/components/layout/AppFooter.tsx` | Adicionar forwardRef |
+| `src/hooks/useUserRole.ts` | Adicionar cache para roles |
 
 ---
 
 ## Detalhes Técnicos
 
-### EditPatientModal.tsx
+### AppSidebar.tsx - Mudanças Principais
 
 ```typescript
-interface EditPatientModalProps {
-  patient: Patient;
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (patientId: string, data: Partial<Patient>) => Promise<void>;
+import React, { memo, useMemo } from "react";
+
+// FORA do componente principal
+interface NavItemProps {
+  item: NavItem;
+  isActive: boolean;
+}
+
+const NavItem = memo(function NavItem({ item, isActive }: NavItemProps) {
+  const Icon = item.icon;
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild={!item.disabled}
+        isActive={isActive}
+        disabled={item.disabled}
+        className={cn(
+          "transition-all duration-200",
+          item.disabled && "opacity-50 cursor-not-allowed"
+        )}
+      >
+        {item.disabled ? (
+          <div className="flex items-center gap-3 w-full">
+            <Icon className="h-4 w-4" />
+            <span className="flex-1">{item.title}</span>
+            {item.badge && (
+              <Badge variant="secondary" className="...">
+                {item.badge}
+              </Badge>
+            )}
+          </div>
+        ) : (
+          <Link to={item.url} className="flex items-center gap-3 w-full">
+            <Icon className="h-4 w-4" />
+            <span>{item.title}</span>
+          </Link>
+        )}
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+});
+
+export function AppSidebar() {
+  const location = useLocation();
+  // ...
+
+  // Memoizar itens visíveis
+  const visibleItems = useMemo(() => ({
+    main: mainNavItems.filter(item => !item.module || canAccessModule(item.module)),
+    management: managementNavItems.filter(item => !item.module || canAccessModule(item.module)),
+  }), [canAccessModule]);
+
+  return (
+    <Sidebar>
+      {/* ... */}
+      <SidebarMenu>
+        {visibleItems.main.map((item) => (
+          <NavItem 
+            key={item.title} 
+            item={item} 
+            isActive={location.pathname === item.url}
+          />
+        ))}
+      </SidebarMenu>
+    </Sidebar>
+  );
 }
 ```
 
-Campos editáveis:
-- Nome Completo*
-- NIF / CPF
-- Data de Nascimento
-- Gênero
-- Telefone*
-- Email
-- Morada
-- Contato de Emergência
-- Telefone de Emergência
-- Seguradora / Entidade
-- Observações
+### AppFooter.tsx - Adicionar forwardRef
 
-### PatientDetailModal.tsx
-
-Novas props:
 ```typescript
-onUpdatePatient?: (patientId: string, data: Partial<Patient>) => Promise<void>;
-onNavigateToProntuario?: (patientId: string) => void;
-```
+import React, { forwardRef } from "react";
 
-Modificações:
-1. Adicionar estado `isEditModalOpen`
-2. Botão "Editar" na aba "Dados" que abre `EditPatientModal`
-3. Botão "Ver Prontuário" chama `onNavigateToProntuario`
-
-### Pacientes.tsx
-
-Adicionar:
-```typescript
-const navigate = useNavigate();
-
-const handleUpdatePatient = async (patientId: string, data: Partial<Patient>) => {
-  const { error } = await supabase
-    .from("pacientes")
-    .update(data)
-    .eq("id", patientId);
-  
-  if (error) throw error;
-  
-  updatePatient(patientId, data);
-  // Atualizar selectedPatient para refletir mudanças
-};
-
-const handleNavigateToProntuario = (patientId: string) => {
-  setSelectedPatient(null);
-  navigate(`/prontuarios?paciente=${patientId}`);
-};
-```
-
-### Prontuarios.tsx
-
-Adicionar:
-```typescript
-import { useSearchParams } from "react-router-dom";
-
-// Dentro do componente:
-const [searchParams] = useSearchParams();
-
-useEffect(() => {
-  const pacienteId = searchParams.get("paciente");
-  if (pacienteId && patients.length > 0 && !prontuariosLoading) {
-    handleSelectPatient(pacienteId);
+export const AppFooter = forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>(
+  function AppFooter(props, ref) {
+    return (
+      <footer ref={ref} className="border-t bg-muted/30 py-4 px-6 mt-auto" {...props}>
+        {/* conteúdo existente */}
+      </footer>
+    );
   }
-}, [searchParams, patients, prontuariosLoading]);
+);
+```
+
+### useUserRole.ts - Cache de Roles
+
+```typescript
+import { useState, useEffect, useRef, useCallback } from "react";
+
+export function useUserRole() {
+  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const cachedUserId = useRef<string | null>(null);
+
+  const fetchRoles = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // Só busca se o usuário mudou
+    if (user?.id === cachedUserId.current && roles.length > 0) {
+      setIsLoading(false);
+      return;
+    }
+    
+    cachedUserId.current = user?.id || null;
+    setIsLoading(true);
+    const userRoles = await UserRoleService.getUserRoles();
+    setRoles(userRoles);
+    setIsLoading(false);
+  }, [roles.length]);
+
+  // ...
+}
 ```
 
 ---
 
-## Fluxo do Utilizador
+## Resultado Esperado
 
-```text
-1. Utilizador abre modal de detalhes do paciente
-2. Na aba "Dados", clica em "Editar"
-3. Modal de edição abre com dados pré-preenchidos
-4. Utilizador altera dados e clica "Guardar"
-5. Dados são salvos no Supabase
-6. Modal de edição fecha, detalhes atualizados
-
-OU
-
-1. Utilizador abre modal de detalhes do paciente
-2. Clica em "Ver Prontuário"
-3. Modal fecha, navega para /prontuarios?paciente=xxx
-4. Página Prontuários abre com paciente pré-selecionado
-```
+| Antes | Depois |
+|-------|--------|
+| Delay de 2-3s ao clicar no menu | Navegação instantânea |
+| Warnings de refs no console | Console limpo |
+| Re-render completo a cada navegação | Apenas item ativo muda |
+| Query ao banco a cada click | Cache de permissões |
 
 ---
 
-## Resumo de Complexidade
+## Resumo Técnico
 
 | Aspecto | Avaliação |
 |---------|-----------|
 | Complexidade | Média |
-| Arquivos novos | 1 |
 | Arquivos modificados | 3 |
-| Risco | Baixo - usa padrões existentes |
+| Risco | Baixo - otimizações de performance |
+| Impacto | Alto - melhoria significativa na UX |
