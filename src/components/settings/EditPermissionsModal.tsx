@@ -14,8 +14,19 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Shield, Briefcase, User, Check, X, Minus } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, Shield, Briefcase, User, RotateCcw } from 'lucide-react';
 import { TeamMember, AppRole } from '@/services/TeamService';
+import { 
+  UserPermissionService, 
+  UserPermissions, 
+  ModulePermission,
+  MODULE_KEYS,
+  MODULE_LABELS,
+  DEFAULT_PERMISSIONS,
+  PermissionValue,
+} from '@/services/UserPermissionService';
+import { toast } from 'sonner';
 
 interface EditPermissionsModalProps {
   member: TeamMember | null;
@@ -23,33 +34,6 @@ interface EditPermissionsModalProps {
   onOpenChange: (open: boolean) => void;
   onSave: (userId: string, roles: AppRole[], isActive: boolean) => Promise<void>;
 }
-
-type PermissionValue = boolean | 'own';
-
-interface ModulePermission {
-  view: PermissionValue;
-  edit: PermissionValue;
-  delete: PermissionValue;
-  financial: boolean;
-}
-
-interface PermissionMatrix {
-  [module: string]: ModulePermission;
-}
-
-const MODULE_LABELS: Record<string, string> = {
-  dashboard: 'Dashboard',
-  agenda: 'Agenda',
-  pacientes: 'Pacientes',
-  prontuarios: 'Prontuários',
-  profissionais: 'Profissionais',
-  servicos: 'Serviços',
-  comercial: 'Comercial',
-  financeiro: 'Financeiro',
-  engajamento: 'Engajamento',
-  configuracoes: 'Configurações',
-  equipe: 'Equipe',
-};
 
 const ROLE_CONFIG: Record<AppRole, { label: string; description: string; icon: React.ElementType }> = {
   admin: {
@@ -74,99 +58,156 @@ const ROLE_CONFIG: Record<AppRole, { label: string; description: string; icon: R
   },
 };
 
-const PERMISSION_MATRIX: Record<Exclude<AppRole, 'patient'>, PermissionMatrix> = {
-  admin: {
-    dashboard: { view: true, edit: true, delete: true, financial: true },
-    agenda: { view: true, edit: true, delete: true, financial: true },
-    pacientes: { view: true, edit: true, delete: true, financial: true },
-    prontuarios: { view: true, edit: true, delete: true, financial: true },
-    profissionais: { view: true, edit: true, delete: true, financial: true },
-    servicos: { view: true, edit: true, delete: true, financial: true },
-    comercial: { view: true, edit: true, delete: true, financial: true },
-    financeiro: { view: true, edit: true, delete: true, financial: true },
-    engajamento: { view: true, edit: true, delete: true, financial: true },
-    configuracoes: { view: true, edit: true, delete: true, financial: true },
-    equipe: { view: true, edit: true, delete: true, financial: true },
-  },
-  secretary: {
-    dashboard: { view: true, edit: true, delete: true, financial: false },
-    agenda: { view: true, edit: true, delete: true, financial: false },
-    pacientes: { view: true, edit: true, delete: true, financial: false },
-    prontuarios: { view: true, edit: true, delete: true, financial: false },
-    profissionais: { view: true, edit: true, delete: true, financial: false },
-    servicos: { view: true, edit: true, delete: true, financial: false },
-    comercial: { view: true, edit: true, delete: true, financial: false },
-    financeiro: { view: true, edit: true, delete: false, financial: false },
-    engajamento: { view: true, edit: true, delete: true, financial: false },
-    configuracoes: { view: false, edit: false, delete: false, financial: false },
-    equipe: { view: false, edit: false, delete: false, financial: false },
-  },
-  professional: {
-    dashboard: { view: true, edit: false, delete: false, financial: false },
-    agenda: { view: true, edit: true, delete: false, financial: false },
-    pacientes: { view: 'own', edit: 'own', delete: false, financial: false },
-    prontuarios: { view: 'own', edit: 'own', delete: false, financial: false },
-    profissionais: { view: false, edit: false, delete: false, financial: false },
-    servicos: { view: true, edit: false, delete: false, financial: false },
-    comercial: { view: false, edit: false, delete: false, financial: false },
-    financeiro: { view: false, edit: false, delete: false, financial: false },
-    engajamento: { view: true, edit: false, delete: false, financial: false },
-    configuracoes: { view: false, edit: false, delete: false, financial: false },
-    equipe: { view: false, edit: false, delete: false, financial: false },
-  },
-};
-
-function PermissionIcon({ value }: { value: PermissionValue }) {
-  if (value === true) {
-    return <Check className="h-4 w-4 text-green-600" />;
-  }
-  if (value === 'own') {
-    return (
-      <Badge variant="outline" className="text-xs px-1.5 py-0 text-amber-600 border-amber-300">
-        Próprio
-      </Badge>
-    );
-  }
-  return <X className="h-4 w-4 text-muted-foreground/50" />;
-}
-
 export function EditPermissionsModal({ member, open, onOpenChange, onSave }: EditPermissionsModalProps) {
   const [selectedRole, setSelectedRole] = useState<Exclude<AppRole, 'patient'>>('professional');
   const [isActive, setIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [customPermissions, setCustomPermissions] = useState<UserPermissions | null>(null);
+  const [hasCustomPermissions, setHasCustomPermissions] = useState(false);
 
   useEffect(() => {
-    if (member) {
+    if (member && open) {
       // Get the main role (exclude patient)
       const mainRole = member.roles.find(r => r !== 'patient') as Exclude<AppRole, 'patient'> | undefined;
       setSelectedRole(mainRole || 'professional');
       setIsActive(member.is_active ?? true);
+      
+      // Load custom permissions
+      loadCustomPermissions();
     }
-  }, [member]);
+  }, [member, open]);
+
+  const loadCustomPermissions = async () => {
+    if (!member) return;
+    
+    setIsLoading(true);
+    try {
+      const permissions = await UserPermissionService.getUserPermissions(member.user_id);
+      if (permissions && Object.keys(permissions).length > 0) {
+        setCustomPermissions(permissions);
+        setHasCustomPermissions(true);
+      } else {
+        // Use role defaults
+        const mainRole = member.roles.find(r => r !== 'patient') as Exclude<AppRole, 'patient'> | undefined;
+        setCustomPermissions(UserPermissionService.getDefaultPermissionsForRole(mainRole || 'professional'));
+        setHasCustomPermissions(false);
+      }
+    } catch (error) {
+      console.error('Error loading permissions:', error);
+      const mainRole = member.roles.find(r => r !== 'patient') as Exclude<AppRole, 'patient'> | undefined;
+      setCustomPermissions(UserPermissionService.getDefaultPermissionsForRole(mainRole || 'professional'));
+      setHasCustomPermissions(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRoleChange = (role: Exclude<AppRole, 'patient'>) => {
+    setSelectedRole(role);
+    // Reset to role defaults when changing role
+    setCustomPermissions(UserPermissionService.getDefaultPermissionsForRole(role));
+    setHasCustomPermissions(false);
+  };
+
+  const handlePermissionChange = (
+    module: string, 
+    permission: keyof ModulePermission, 
+    checked: boolean
+  ) => {
+    if (!customPermissions) return;
+    
+    setCustomPermissions(prev => {
+      if (!prev) return prev;
+      
+      const newPerms = { ...prev };
+      if (!newPerms[module]) {
+        newPerms[module] = { view: false, edit: false, delete: false, financial: false };
+      }
+      
+      newPerms[module] = {
+        ...newPerms[module],
+        [permission]: checked,
+      };
+      
+      // If disabling view, also disable edit, delete, financial
+      if (permission === 'view' && !checked) {
+        newPerms[module].edit = false;
+        newPerms[module].delete = false;
+        newPerms[module].financial = false;
+      }
+      
+      // If enabling edit/delete/financial, also enable view
+      if ((permission === 'edit' || permission === 'delete' || permission === 'financial') && checked) {
+        newPerms[module].view = true;
+      }
+      
+      return newPerms;
+    });
+    setHasCustomPermissions(true);
+  };
+
+  const handleResetToDefaults = () => {
+    setCustomPermissions(UserPermissionService.getDefaultPermissionsForRole(selectedRole));
+    setHasCustomPermissions(false);
+    toast.info('Permissões restauradas para o padrão da função');
+  };
 
   const handleSave = async () => {
     if (!member) return;
     
     setIsSaving(true);
     try {
+      // Save role and status
       await onSave(member.user_id, [selectedRole], isActive);
+      
+      // Save custom permissions if they differ from defaults
+      if (hasCustomPermissions && customPermissions) {
+        const result = await UserPermissionService.saveUserPermissions(
+          member.user_id,
+          customPermissions
+        );
+        
+        if (!result.success) {
+          toast.error('Erro ao guardar permissões customizadas');
+          return;
+        }
+      } else {
+        // Reset to defaults (delete custom permissions)
+        await UserPermissionService.resetToRoleDefaults(member.user_id);
+      }
+      
+      toast.success('Permissões atualizadas com sucesso');
       onOpenChange(false);
+    } catch (error) {
+      console.error('Error saving permissions:', error);
+      toast.error('Erro ao guardar permissões');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const currentPermissions = PERMISSION_MATRIX[selectedRole];
+  const getPermissionValue = (module: string, permission: keyof ModulePermission): boolean => {
+    if (!customPermissions?.[module]) return false;
+    const value = customPermissions[module][permission];
+    // Convert 'own' to true for checkbox display
+    return value === true || value === 'own';
+  };
+
+  const isOwnPermission = (module: string, permission: keyof ModulePermission): boolean => {
+    if (!customPermissions?.[module]) return false;
+    return customPermissions[module][permission] === 'own';
+  };
 
   if (!member) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Editar Permissões - {member.full_name}</DialogTitle>
           <DialogDescription>
-            Altere a função e veja as permissões associadas a este utilizador.
+            Altere a função e personalize as permissões deste utilizador.
           </DialogDescription>
         </DialogHeader>
 
@@ -174,10 +215,10 @@ export function EditPermissionsModal({ member, open, onOpenChange, onSave }: Edi
           <div className="space-y-6 py-4">
             {/* Role Selection */}
             <div className="space-y-3">
-              <Label className="text-base font-semibold">Função</Label>
+              <Label className="text-base font-semibold">Função Base</Label>
               <RadioGroup
                 value={selectedRole}
-                onValueChange={(value) => setSelectedRole(value as Exclude<AppRole, 'patient'>)}
+                onValueChange={(value) => handleRoleChange(value as Exclude<AppRole, 'patient'>)}
                 className="space-y-3"
               >
                 {(['admin', 'professional', 'secretary'] as const).map((role) => {
@@ -211,59 +252,104 @@ export function EditPermissionsModal({ member, open, onOpenChange, onSave }: Edi
             {/* Permissions Table */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-base font-semibold">Permissões</Label>
-                <span className="text-xs text-muted-foreground">
-                  Baseado na função selecionada
-                </span>
+                <div>
+                  <Label className="text-base font-semibold">Permissões Personalizadas</Label>
+                  {hasCustomPermissions && (
+                    <Badge variant="secondary" className="ml-2 text-xs">Customizado</Badge>
+                  )}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleResetToDefaults}
+                  disabled={!hasCustomPermissions || isLoading}
+                >
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Restaurar Padrão
+                </Button>
               </div>
 
-              <div className="rounded-lg border overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left p-3 font-medium">Módulo</th>
-                      <th className="text-center p-3 font-medium w-16">Ver</th>
-                      <th className="text-center p-3 font-medium w-16">Editar</th>
-                      <th className="text-center p-3 font-medium w-16">Apagar</th>
-                      <th className="text-center p-3 font-medium w-20">Financeiro</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {Object.entries(currentPermissions).map(([module, perms]) => (
-                      <tr key={module} className="hover:bg-muted/30">
-                        <td className="p-3 font-medium">{MODULE_LABELS[module] || module}</td>
-                        <td className="p-3 text-center">
-                          <div className="flex justify-center">
-                            <PermissionIcon value={perms.view} />
-                          </div>
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex justify-center">
-                            <PermissionIcon value={perms.edit} />
-                          </div>
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex justify-center">
-                            <PermissionIcon value={perms.delete} />
-                          </div>
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex justify-center">
-                            <PermissionIcon value={perms.financial} />
-                          </div>
-                        </td>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left p-3 font-medium">Módulo</th>
+                        <th className="text-center p-3 font-medium w-20">Ver</th>
+                        <th className="text-center p-3 font-medium w-20">Editar</th>
+                        <th className="text-center p-3 font-medium w-20">Apagar</th>
+                        <th className="text-center p-3 font-medium w-24">Financeiro</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y">
+                      {MODULE_KEYS.map((module) => (
+                        <tr key={module} className="hover:bg-muted/30">
+                          <td className="p-3 font-medium">
+                            {MODULE_LABELS[module]}
+                            {isOwnPermission(module, 'view') && (
+                              <Badge variant="outline" className="ml-2 text-xs px-1.5 py-0 text-amber-600 border-amber-300">
+                                Próprio
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex justify-center">
+                              <Checkbox
+                                checked={getPermissionValue(module, 'view')}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(module, 'view', checked as boolean)
+                                }
+                                disabled={selectedRole === 'admin'}
+                              />
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex justify-center">
+                              <Checkbox
+                                checked={getPermissionValue(module, 'edit')}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(module, 'edit', checked as boolean)
+                                }
+                                disabled={selectedRole === 'admin'}
+                              />
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex justify-center">
+                              <Checkbox
+                                checked={getPermissionValue(module, 'delete')}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(module, 'delete', checked as boolean)
+                                }
+                                disabled={selectedRole === 'admin'}
+                              />
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex justify-center">
+                              <Checkbox
+                                checked={getPermissionValue(module, 'financial')}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(module, 'financial', checked as boolean)
+                                }
+                                disabled={selectedRole === 'admin'}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-              {selectedRole === 'professional' && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Badge variant="outline" className="text-xs px-1.5 py-0 text-amber-600 border-amber-300">
-                    Próprio
-                  </Badge>
-                  = Apenas pacientes/sessões atribuídos a este profissional
+              {selectedRole === 'admin' && (
+                <p className="text-xs text-muted-foreground">
+                  Admin Master possui acesso total. Para restringir permissões, altere a função.
                 </p>
               )}
             </div>
@@ -292,7 +378,7 @@ export function EditPermissionsModal({ member, open, onOpenChange, onSave }: Edi
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={isSaving}>
+          <Button onClick={handleSave} disabled={isSaving || isLoading}>
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
