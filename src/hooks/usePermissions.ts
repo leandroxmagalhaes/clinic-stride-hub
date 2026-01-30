@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useUserRole } from "./useUserRole";
+import { UserPermissionService, UserPermissions, ModulePermission } from "@/services/UserPermissionService";
 
 export type PermissionModule = 
   | 'dashboard'
@@ -30,15 +31,35 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export function usePermissions() {
-  const { roles, isLoading, isAdmin, isProfessional, hasRole } = useUserRole();
+  const { roles, isLoading: rolesLoading, isAdmin, isProfessional, hasRole } = useUserRole();
+  const [customPermissions, setCustomPermissions] = useState<UserPermissions | null>(null);
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
 
   const isSecretary = hasRole('secretary');
   const isAdminMaster = isAdmin;
   const isFisioterapeuta = isProfessional && !isAdmin && !isSecretary;
 
+  // Load custom permissions from database
+  useEffect(() => {
+    const loadPermissions = async () => {
+      try {
+        const permissions = await UserPermissionService.getCurrentUserPermissions();
+        setCustomPermissions(permissions);
+      } catch (error) {
+        console.error('Error loading custom permissions:', error);
+      } finally {
+        setIsLoadingPermissions(false);
+      }
+    };
+
+    if (!rolesLoading) {
+      loadPermissions();
+    }
+  }, [rolesLoading]);
+
   const permissions = useMemo(() => {
     const getModulePermissions = (module: PermissionModule): ModulePermissions => {
-      // Admin Master: full access to everything
+      // Admin Master: full access to everything (cannot be customized)
       if (isAdminMaster) {
         return {
           canView: true,
@@ -48,6 +69,18 @@ export function usePermissions() {
         };
       }
 
+      // Check for custom permissions first
+      if (customPermissions && customPermissions[module]) {
+        const customPerms = customPermissions[module] as ModulePermission;
+        return {
+          canView: customPerms.view === true || customPerms.view === 'own',
+          canEdit: customPerms.edit === true || customPerms.edit === 'own',
+          canDelete: customPerms.delete === true || customPerms.delete === 'own',
+          canViewFinancialDetails: customPerms.financial === true,
+        };
+      }
+
+      // Fall back to role-based defaults
       // Secretary: access to everything except financial reports/totals
       if (isSecretary) {
         return {
@@ -113,7 +146,7 @@ export function usePermissions() {
       equipe: getModulePermissions('equipe'),
       permissoes: getModulePermissions('permissoes'),
     };
-  }, [isAdminMaster, isSecretary, isFisioterapeuta]);
+  }, [isAdminMaster, isSecretary, isFisioterapeuta, customPermissions]);
 
   const getRoleLabel = (role: string): string => {
     return ROLE_LABELS[role] || role;
@@ -122,6 +155,8 @@ export function usePermissions() {
   const getRolesLabels = (): string[] => {
     return roles.map(getRoleLabel);
   };
+
+  const isLoading = rolesLoading || isLoadingPermissions;
 
   return {
     permissions,
@@ -132,6 +167,8 @@ export function usePermissions() {
     roles,
     getRoleLabel,
     getRolesLabels,
+    customPermissions,
+    hasCustomPermissions: customPermissions !== null && Object.keys(customPermissions).length > 0,
     canAccessModule: (module: PermissionModule) => permissions[module]?.canView ?? false,
     canEditModule: (module: PermissionModule) => permissions[module]?.canEdit ?? false,
     canViewFinancialDetails: permissions.financeiro?.canViewFinancialDetails ?? false,
