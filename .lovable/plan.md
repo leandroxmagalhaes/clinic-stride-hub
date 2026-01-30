@@ -1,339 +1,157 @@
 
-# Plano: Correção Completa do Agendamento e Sistema de Créditos
+# Horários Flexíveis na Agenda
 
-## Resumo do Problema
+## Análise do Código Atual
 
-O erro ao agendar sessões ocorre porque:
-1. O `addSession()` cria a sessão no banco e retorna o **UUID real**
-2. Mas o código depois usa o **ID falso** (`sess-${Date.now()}`) para chamar `updateSession()` e `useCredit()`
-3. Resultado: UPDATE falha (ID não existe) → toast "Erro ao agendar sessão"
-4. Sessão foi criada mas UI mostra erro → utilizador tenta novamente → duplicados
+O sistema atual está "amarrado" porque:
 
-Além disso, o sistema de créditos está inconsistente:
-- `useCredit()` e `refundCredit()` só atualizam estado local (não persistem no banco)
-- Logout → créditos "voltam" porque não foram gravados
+1. **`Agenda.tsx` (linha 27)**: Define slots fixos de hora em hora
+   ```typescript
+   const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
+   ```
+
+2. **`NewSessionModal.tsx` (linha 80)**: Lista de horários no dropdown
+   ```typescript
+   const AVAILABLE_HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
+   ```
+
+3. **`SessionService.ts` (linha 147)**: Sempre define minutos como 0
+   ```typescript
+   const startTime = setMinutes(setHours(new Date(data.date), data.hour), 0);
+   ```
 
 ---
 
 ## Solução Proposta
 
-### Regra de Negócio Confirmada
-- **Agendar** → Não consome crédito (apenas cria sessão)
-- **Finalizar** → Consome crédito (com persistência e idempotência)
-- **Cancelar** → Estorna crédito se já foi consumido
+### Mudança 1: Expandir horários de visualização (filtro)
+
+Alterar o array `HOURS` para cobrir 06:00–23:00, mas permitir **filtrar a visualização** sem limitar o agendamento.
+
+```typescript
+// Horário completo disponível (para agendamento)
+const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 06:00 to 23:00
+
+// Filtro de visualização padrão (ajustável pelo utilizador)
+const [hourFilter, setHourFilter] = useState({ start: 7, end: 19 });
+const displayedHours = ALL_HOURS.filter(h => h >= hourFilter.start && h <= hourFilter.end);
+```
+
+### Mudança 2: Permitir minutos flexíveis no modal
+
+Trocar o seletor de hora por um **input de texto** ou **dois selects** (hora + minutos):
+
+```typescript
+// Estado para hora e minutos separados
+const [selectedHour, setSelectedHour] = useState<number | undefined>();
+const [selectedMinute, setSelectedMinute] = useState<number>(0);
+
+// Opções de minutos
+const MINUTE_OPTIONS = [0, 15, 30, 45]; // Ou livre: 0-59
+```
+
+### Mudança 3: Adaptar SessionService para aceitar minutos
+
+Alterar `CreateSessionData` para aceitar `hour` como número decimal ou adicionar campo `minute`:
+
+```typescript
+interface CreateSessionData {
+  // ... campos existentes
+  hour: number;
+  minute?: number; // NOVO: 0-59
+}
+
+// Na criação:
+const startTime = setMinutes(setHours(new Date(data.date), data.hour), data.minute ?? 0);
+```
+
+### Mudança 4: Mostrar sessões no slot correto (grid)
+
+Atualmente, sessões com minutos != 0 aparecem no slot da hora. Isso já funciona (14:30 aparece no slot das 14h). Basta ajustar o texto para mostrar o horário real.
 
 ---
 
-## Alterações por Arquivo
+## Arquivos a Modificar
 
-### 1. `src/pages/Agenda.tsx`
-
-**Remover do fluxo de criação:**
-- `useCredit(data.pacienteId, newSession.id)` (linha 174)
-- `updateSession(newSession.id, { payment_status: ... })` (linhas 177-181)
-
-**Determinar `payment_status` ANTES do INSERT:**
-```typescript
-// Determinar status de pagamento baseado no saldo
-const balance = getCreditBalance(data.pacienteId);
-const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
-const paymentStatus = (serviceConsumesCredit && balance <= 0) ? "pendente" : "reservado";
-
-// Criar sessão com status correto
-const newSession = SessionService.create({
-  ...
-  payment_status: paymentStatus, // Já definido antes do INSERT
-});
-
-await addSession(newSession);
-setIsModalOpen(false);
-resetForm();
-
-// Toast de sucesso
-toast.success(paymentStatus === "pendente" 
-  ? "Sessão agendada com pagamento pendente" 
-  : "Sessão agendada!");
-```
+| Arquivo | Alteração | Impacto |
+|---------|-----------|---------|
+| `src/pages/Agenda.tsx` | Expandir `HOURS`, adicionar filtro de visualização | Baixo |
+| `src/components/agenda/NewSessionModal.tsx` | Adicionar seletor de minutos (15min intervalos) | Baixo |
+| `src/services/SessionService.ts` | Aceitar minutos no `CreateSessionData` | Baixo |
+| `src/components/agenda/AgendaDesktopGrid.tsx` | Mostrar hora:minuto nas sessões | Mínimo |
+| `src/components/agenda/AgendaMobileTimeline.tsx` | Mostrar hora:minuto nas sessões | Mínimo |
+| `src/components/agenda/AgendaControls.tsx` | Adicionar filtro de horário (opcional, UI simples) | Baixo |
 
 ---
 
-### 2. `src/pages/Dashboard.tsx`
+## Como Vai Funcionar
 
-**Mesmo ajuste:**
-- Remover `useCredit()` na criação
-- Determinar `payment_status` antes do INSERT
-- Usar `await addSession()` (já é async)
+### Agendamento
+1. No modal, você escolhe **hora** (06-23) + **minutos** (00, 15, 30, 45)
+2. Exemplo: 14:45, 16:15, 12:30 — tudo válido
+3. O sistema grava com precisão de minutos
 
----
+### Visualização
+1. Por padrão, mostra slots de 07:00 às 19:00
+2. Você pode expandir/reduzir o filtro (ex: ver 06:00 às 23:00)
+3. Sessões fora do filtro continuam existindo, só não aparecem no grid
+4. Sessão às 14:45 aparece no slot das 14h, com o horário correto visível
 
-### 3. `src/contexts/DataContext.tsx`
-
-**A) Adicionar função `fetchCreditUsageMap()`** para buscar sessões que já tiveram crédito consumido:
-```typescript
-const fetchCreditUsageMap = async () => {
-  const { data, error } = await supabase
-    .from("transacoes_credito")
-    .select("session_id")
-    .eq("tipo", "uso")
-    .not("session_id", "is", null);
-
-  if (!error && data) {
-    const map: Record<string, boolean> = {};
-    data.forEach((row) => {
-      if (row.session_id) map[row.session_id] = true;
-    });
-    setCreditUsageMap(map);
-  }
-};
-```
-
-Chamar no mount e no SIGNED_IN.
-
-**B) Alterar `useCredit()` para ser async e persistir:**
-```typescript
-const useCredit = async (
-  patientId: string, 
-  sessionId: string
-): Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }> => {
-  // Verificar idempotência no backend primeiro
-  const { data: existing } = await supabase
-    .from("transacoes_credito")
-    .select("id")
-    .eq("session_id", sessionId)
-    .eq("tipo", "uso")
-    .maybeSingle();
-
-  if (existing) {
-    return { success: true, alreadyDeducted: true };
-  }
-
-  // Verificar saldo
-  const balance = creditBalances[patientId] ?? 0;
-  if (balance <= 0) {
-    return { success: false, error: "Saldo de créditos insuficiente" };
-  }
-
-  // Obter clinic_id
-  const { data: userData } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("clinic_id")
-    .eq("user_id", userData?.user?.id)
-    .maybeSingle();
-
-  if (!profile?.clinic_id) {
-    return { success: false, error: "Clínica não encontrada" };
-  }
-
-  // Inserir transação de uso
-  const { error } = await supabase.from("transacoes_credito").insert({
-    patient_id: patientId,
-    clinic_id: profile.clinic_id,
-    tipo: "uso",
-    quantidade: -1,
-    session_id: sessionId,
-    motivo: "Uso de crédito para sessão",
-  });
-
-  if (error) {
-    // Idempotency check via constraint
-    if (error.message.includes("idempotência") || error.code === "23505") {
-      return { success: true, alreadyDeducted: true };
-    }
-    return { success: false, error: "Erro ao descontar crédito" };
-  }
-
-  // Atualizar estado local e map
-  setCreditUsageMap((prev) => ({ ...prev, [sessionId]: true }));
-  await fetchCreditBalances();
-
-  return { success: true };
-};
-```
-
-**C) Alterar `refundCredit()` para ser async e persistir:**
-```typescript
-const refundCredit = async (
-  patientId: string,
-  sessionId: string
-): Promise<{ success: boolean; error?: string }> => {
-  const { data: userData } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("clinic_id")
-    .eq("user_id", userData?.user?.id)
-    .maybeSingle();
-
-  if (!profile?.clinic_id) {
-    return { success: false, error: "Clínica não encontrada" };
-  }
-
-  const { error } = await supabase.from("transacoes_credito").insert({
-    patient_id: patientId,
-    clinic_id: profile.clinic_id,
-    tipo: "estorno",
-    quantidade: 1,
-    session_id: sessionId,
-    motivo: "Estorno de crédito por cancelamento",
-  });
-
-  if (error) {
-    return { success: false, error: "Erro ao estornar crédito" };
-  }
-
-  // Remover do mapa e atualizar saldos
-  setCreditUsageMap((prev) => {
-    const updated = { ...prev };
-    delete updated[sessionId];
-    return updated;
-  });
-  await fetchCreditBalances();
-
-  return { success: true };
-};
-```
-
-**D) Atualizar interface `DataContextType`:**
-```typescript
-useCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }>;
-refundCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
-```
+### Conflitos
+O `checkConflict` atual compara hora exata. Vou ajustar para verificar **sobreposição de intervalos** (start_time/end_time) em vez de apenas a hora, evitando:
+- 14:00-15:00 conflitar com 14:30-15:30 ✓
 
 ---
 
-### 4. `src/components/agenda/SessionManagementModal.tsx`
-
-**Atualizar props para async:**
-```typescript
-onUseCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
-onRefundCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
-```
-
-**Handlers async:**
-```typescript
-const handleComplete = async () => {
-  if (!canFinalize) {
-    toast.error("Utente sem créditos disponíveis");
-    return;
-  }
-
-  setIsLoading(true);
-  try {
-    if (!creditWasUsed) {
-      const result = await onUseCredit(session.paciente_id, session.id);
-      if (!result.success) {
-        toast.error(result.error || "Erro ao descontar crédito");
-        return;
-      }
-    }
-    
-    await onUpdateSession(session.id, { status: "realizado", payment_status: "pago" });
-    toast.success("Sessão finalizada!");
-    setShowEvolutionPrompt(true);
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-const handleCancel = async () => {
-  if (!cancelReason) {
-    toast.error("Selecione um motivo");
-    return;
-  }
-
-  setIsLoading(true);
-  try {
-    if (creditWasUsed) {
-      const result = await onRefundCredit(session.paciente_id, session.id);
-      if (result.success) {
-        toast.info("Crédito estornado");
-      }
-    }
-
-    await onUpdateSession(session.id, {
-      status: "cancelado",
-      notes: `${session.notes || ""}\n[CANCELADO] ${cancelReason}`.trim(),
-    });
-    toast.success("Sessão cancelada");
-    setShowCancelDialog(false);
-    onClose();
-  } finally {
-    setIsLoading(false);
-  }
-};
-```
-
----
-
-### 5. Migration: Trigger de Idempotência
-
-Adicionar trigger para impedir duplo débito na mesma sessão:
-
-```sql
--- Criar trigger de idempotência em transacoes_credito
-CREATE TRIGGER trigger_check_credit_usage_idempotency
-  BEFORE INSERT ON public.transacoes_credito
-  FOR EACH ROW
-  EXECUTE FUNCTION public.check_credit_usage_idempotency_v2();
-```
-
-A função `check_credit_usage_idempotency_v2()` já existe no banco e impede dois registos de `tipo='uso'` para o mesmo `session_id`.
-
----
-
-## Fluxo Corrigido
+## Fluxo Visual
 
 ```text
-AGENDAR SESSÃO
-    │
-    ├─ Verificar saldo → determinar payment_status
-    │   (pendente ou reservado)
-    │
-    ├─ INSERT em sessoes com status correto
-    │
-    └─ Toast: "Sessão agendada!" ✓
+FILTRO DE VISUALIZAÇÃO (cabeçalho da agenda)
+┌─────────────────────────────────────┐
+│  Das [07:00 ▼] às [19:00 ▼]         │
+└─────────────────────────────────────┘
 
+MODAL DE AGENDAMENTO
+┌─────────────────────────────────────┐
+│  Hora: [14 ▼]  Minutos: [45 ▼]      │
+│                                     │
+│  → 14:45 - 15:45 (60min)            │
+└─────────────────────────────────────┘
 
-FINALIZAR SESSÃO
-    │
-    ├─ Verificar se crédito já foi usado (idempotência)
-    │
-    ├─ INSERT em transacoes_credito (tipo=uso, quantidade=-1)
-    │   └─ Trigger impede duplicado
-    │
-    ├─ UPDATE sessao.status = "realizado"
-    │
-    └─ Toast: "Sessão finalizada!" ✓
-
-
-CANCELAR SESSÃO
-    │
-    ├─ Se crédito usado: INSERT transacoes_credito (tipo=estorno, +1)
-    │
-    ├─ UPDATE sessao.status = "cancelado"
-    │
-    └─ Toast: "Sessão cancelada!" ✓
+GRID (slot das 14h)
+┌─────────────────────────────────────┐
+│  14:45 • João Silva                 │
+│  Fisioterapia                       │
+└─────────────────────────────────────┘
 ```
 
 ---
 
-## Ficheiros a Modificar
+## Risco e Complexidade
 
-| Ficheiro | Alteração |
-|----------|-----------|
-| `src/pages/Agenda.tsx` | Remover useCredit/updateSession no agendamento; definir payment_status antes do INSERT |
-| `src/pages/Dashboard.tsx` | Mesmo ajuste |
-| `src/contexts/DataContext.tsx` | useCredit/refundCredit async + persistentes; fetchCreditUsageMap |
-| `src/components/agenda/SessionManagementModal.tsx` | Handlers async para Finalizar/Cancelar |
-| Migration SQL | Trigger de idempotência em transacoes_credito |
+| Aspecto | Avaliação |
+|---------|-----------|
+| Complexidade | **Baixa** - mudanças localizadas em 6 arquivos |
+| Risco de quebrar algo | **Mínimo** - lógica principal não muda |
+| Tempo estimado | ~15-20 minutos de implementação |
+| Compatibilidade | Sessões existentes continuam funcionando |
 
 ---
 
-## Validação Após Implementação
+## Alternativa Mais Simples (se preferir)
 
-1. **Agendar com 0 créditos** → Deve criar sessão (payment_status=pendente), sem erro
-2. **Agendar com créditos** → Deve criar sessão (payment_status=reservado), sem erro
-3. **Finalizar sessão** → Deve descontar 1 crédito no banco
-4. **Finalizar 2x** → Segundo clique não desconta novamente (idempotência)
-5. **Cancelar sessão finalizada** → Deve estornar crédito
-6. **Logout/login** → Sessões e saldos persistem corretamente
+Se quiser ainda mais simples:
+- Manter grid de hora em hora
+- Só adicionar campo de minutos no modal
+- Sessões com minutos aparecem no slot da hora inteira
+
+Isso resolve 90% do seu problema com menos mudanças.
+
+---
+
+## Recomendação
+
+Implementar a **solução completa** com filtro de visualização, porque:
+1. Você ganha flexibilidade total (06:00–23:00)
+2. Evita poluição visual (filtra o que não precisa ver)
+3. Permite crescimento futuro (diferentes horários para diferentes dias)
