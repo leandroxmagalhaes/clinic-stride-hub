@@ -1,157 +1,169 @@
 
-# Horários Flexíveis na Agenda
 
-## Análise do Código Atual
+# Adicionar Especialidades: Fisioterapia Motora e Reabilitação Vestibular
 
-O sistema atual está "amarrado" porque:
+## O que será feito
 
-1. **`Agenda.tsx` (linha 27)**: Define slots fixos de hora em hora
-   ```typescript
-   const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
-   ```
-
-2. **`NewSessionModal.tsx` (linha 80)**: Lista de horários no dropdown
-   ```typescript
-   const AVAILABLE_HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
-   ```
-
-3. **`SessionService.ts` (linha 147)**: Sempre define minutos como 0
-   ```typescript
-   const startTime = setMinutes(setHours(new Date(data.date), data.hour), 0);
-   ```
+Inserir 2 novos templates de especialidade na tabela `specialty_templates` com formulários dinâmicos completos para evoluções clínicas.
 
 ---
 
-## Solução Proposta
+## 1. Fisioterapia Motora
 
-### Mudança 1: Expandir horários de visualização (filtro)
+**Descrição**: Avaliação musculoesquelética com foco em ADM, força, funcionalidade e dor
 
-Alterar o array `HOURS` para cobrir 06:00–23:00, mas permitir **filtrar a visualização** sem limitar o agendamento.
+### Secções do formulário:
 
-```typescript
-// Horário completo disponível (para agendamento)
-const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 06:00 to 23:00
+| Secção | Campo | Tipo | Opções |
+|--------|-------|------|--------|
+| **Avaliação de ADM e Força** | Amplitude de Movimento | Select | Normal, Limitada Leve, Limitada Moderada, Limitada Grave |
+| | Região Afetada | Multiselect | Ombro, Cotovelo, Punho, Quadril, Joelho, Tornozelo, Coluna Cervical, Coluna Lombar |
+| | Força Muscular (0-5) | Range | min: 0, max: 5 |
+| | Tônus Muscular | Select | Normal, Hipotonia, Hipertonia, Espasticidade |
+| **Dor e Pontos Gatilho** | Escala de Dor (EVA) | Range | min: 0, max: 10 |
+| | Localização da Dor | Tags | Cervical, Dorsal, Lombar, Sacral, MMSS, MMII |
+| | Pontos de Tensão | Multiselect | Trapézio, Romboides, Paravertebrais, Piriforme, Quadrado Lombar, ITB |
+| **Avaliação Funcional** | Marcha | Select | Normal, Claudicante, Com Auxílio, Não Deambula |
+| | Equilíbrio | Select | Normal, Alterado Leve, Alterado Moderado, Alterado Grave |
+| | AVDs | Multiselect | Independente, Auxílio Parcial, Dependente |
 
-// Filtro de visualização padrão (ajustável pelo utilizador)
-const [hourFilter, setHourFilter] = useState({ start: 7, end: 19 });
-const displayedHours = ALL_HOURS.filter(h => h >= hourFilter.start && h <= hourFilter.end);
+---
+
+## 2. Reabilitação Vestibular
+
+**Descrição**: Avaliação e tratamento de distúrbios do equilíbrio e tontura
+
+### Secções do formulário:
+
+| Secção | Campo | Tipo | Opções |
+|--------|-------|------|--------|
+| **Sintomas e Tontura** | Tipo de Tontura | Select | Rotatória (Vertigem), Flutuação, Desequilíbrio, Pré-síncope |
+| | Intensidade (0-10) | Range | min: 0, max: 10 |
+| | Sintomas Associados | Multiselect | Náuseas, Vômitos, Cefaleia, Zumbido, Hipoacusia, Fotofobia |
+| | Gatilhos | Tags | Mudança Posição, Movimento Cabeça, Ambientes Visuais, Estresse |
+| **Testes Clínicos** | Dix-Hallpike | Select | Negativo, Positivo D, Positivo E, Positivo Bilateral |
+| | Head Impulse Test | Select | Normal, Sacada D, Sacada E |
+| | Romberg | Select | Negativo, Positivo |
+| | Fukuda | Select | Normal, Desvio D, Desvio E |
+| | Nistagmo | Multiselect | Ausente, Espontâneo, Posicional, Evocado |
+| **Avaliação Funcional** | Escala DHI (0-100) | Range | min: 0, max: 100 |
+| | Risco de Quedas | Select | Baixo, Moderado, Alto |
+| | Limitação AVDs | Tags | Conduzir, Ler, Caminhar, Trabalhar, Atividades Domésticas |
+
+---
+
+## Implementação Técnica
+
+### Migration SQL necessária
+
+```sql
+INSERT INTO public.specialty_templates (clinic_id, name, description, schema) VALUES
+
+-- Fisioterapia Motora
+(NULL, 'Fisioterapia Motora', 
+ 'Avaliação musculoesquelética com foco em ADM, força, funcionalidade e dor',
+ '[
+   {
+     "section": "Avaliação de ADM e Força",
+     "fields": [
+       {"key": "adm", "label": "Amplitude de Movimento", "type": "select", 
+        "options": ["Normal", "Limitada Leve", "Limitada Moderada", "Limitada Grave"]},
+       {"key": "regiao_afetada", "label": "Região Afetada", "type": "multiselect", 
+        "options": ["Ombro", "Cotovelo", "Punho", "Quadril", "Joelho", "Tornozelo", "Coluna Cervical", "Coluna Lombar"]},
+       {"key": "forca_muscular", "label": "Força Muscular (0-5)", "type": "range", "min": 0, "max": 5},
+       {"key": "tonus", "label": "Tônus Muscular", "type": "select", 
+        "options": ["Normal", "Hipotonia", "Hipertonia", "Espasticidade"]}
+     ]
+   },
+   {
+     "section": "Dor e Pontos Gatilho",
+     "fields": [
+       {"key": "eva", "label": "Escala de Dor (EVA)", "type": "range", "min": 0, "max": 10},
+       {"key": "localizacao_dor", "label": "Localização da Dor", "type": "tags", 
+        "options": ["Cervical", "Dorsal", "Lombar", "Sacral", "MMSS", "MMII"]},
+       {"key": "pontos_tensao", "label": "Pontos de Tensão", "type": "multiselect", 
+        "options": ["Trapézio", "Romboides", "Paravertebrais", "Piriforme", "Quadrado Lombar", "ITB"]}
+     ]
+   },
+   {
+     "section": "Avaliação Funcional",
+     "fields": [
+       {"key": "marcha", "label": "Marcha", "type": "select", 
+        "options": ["Normal", "Claudicante", "Com Auxílio", "Não Deambula"]},
+       {"key": "equilibrio", "label": "Equilíbrio", "type": "select", 
+        "options": ["Normal", "Alterado Leve", "Alterado Moderado", "Alterado Grave"]},
+       {"key": "avds", "label": "AVDs", "type": "multiselect", 
+        "options": ["Independente", "Auxílio Parcial", "Dependente"]}
+     ]
+   }
+ ]'::jsonb),
+
+-- Reabilitação Vestibular
+(NULL, 'Reabilitação Vestibular', 
+ 'Avaliação e tratamento de distúrbios do equilíbrio e tontura',
+ '[
+   {
+     "section": "Sintomas e Tontura",
+     "fields": [
+       {"key": "tipo_tontura", "label": "Tipo de Tontura", "type": "select", 
+        "options": ["Rotatória (Vertigem)", "Flutuação", "Desequilíbrio", "Pré-síncope"]},
+       {"key": "intensidade", "label": "Intensidade (0-10)", "type": "range", "min": 0, "max": 10},
+       {"key": "sintomas_associados", "label": "Sintomas Associados", "type": "multiselect", 
+        "options": ["Náuseas", "Vômitos", "Cefaleia", "Zumbido", "Hipoacusia", "Fotofobia"]},
+       {"key": "gatilhos", "label": "Gatilhos", "type": "tags", 
+        "options": ["Mudança Posição", "Movimento Cabeça", "Ambientes Visuais", "Estresse"]}
+     ]
+   },
+   {
+     "section": "Testes Clínicos",
+     "fields": [
+       {"key": "dix_hallpike", "label": "Dix-Hallpike", "type": "select", 
+        "options": ["Negativo", "Positivo D", "Positivo E", "Positivo Bilateral"]},
+       {"key": "head_impulse", "label": "Head Impulse Test", "type": "select", 
+        "options": ["Normal", "Sacada D", "Sacada E"]},
+       {"key": "romberg", "label": "Romberg", "type": "select", 
+        "options": ["Negativo", "Positivo"]},
+       {"key": "fukuda", "label": "Fukuda", "type": "select", 
+        "options": ["Normal", "Desvio D", "Desvio E"]},
+       {"key": "nistagmo", "label": "Nistagmo", "type": "multiselect", 
+        "options": ["Ausente", "Espontâneo", "Posicional", "Evocado"]}
+     ]
+   },
+   {
+     "section": "Avaliação Funcional",
+     "fields": [
+       {"key": "dhi", "label": "Escala DHI (0-100)", "type": "range", "min": 0, "max": 100},
+       {"key": "risco_quedas", "label": "Risco de Quedas", "type": "select", 
+        "options": ["Baixo", "Moderado", "Alto"]},
+       {"key": "limitacao_avds", "label": "Limitação AVDs", "type": "tags", 
+        "options": ["Conduzir", "Ler", "Caminhar", "Trabalhar", "Atividades Domésticas"]}
+     ]
+   }
+ ]'::jsonb);
 ```
 
-### Mudança 2: Permitir minutos flexíveis no modal
-
-Trocar o seletor de hora por um **input de texto** ou **dois selects** (hora + minutos):
-
-```typescript
-// Estado para hora e minutos separados
-const [selectedHour, setSelectedHour] = useState<number | undefined>();
-const [selectedMinute, setSelectedMinute] = useState<number>(0);
-
-// Opções de minutos
-const MINUTE_OPTIONS = [0, 15, 30, 45]; // Ou livre: 0-59
-```
-
-### Mudança 3: Adaptar SessionService para aceitar minutos
-
-Alterar `CreateSessionData` para aceitar `hour` como número decimal ou adicionar campo `minute`:
-
-```typescript
-interface CreateSessionData {
-  // ... campos existentes
-  hour: number;
-  minute?: number; // NOVO: 0-59
-}
-
-// Na criação:
-const startTime = setMinutes(setHours(new Date(data.date), data.hour), data.minute ?? 0);
-```
-
-### Mudança 4: Mostrar sessões no slot correto (grid)
-
-Atualmente, sessões com minutos != 0 aparecem no slot da hora. Isso já funciona (14:30 aparece no slot das 14h). Basta ajustar o texto para mostrar o horário real.
-
 ---
 
-## Arquivos a Modificar
+## Arquivos Afetados
 
-| Arquivo | Alteração | Impacto |
-|---------|-----------|---------|
-| `src/pages/Agenda.tsx` | Expandir `HOURS`, adicionar filtro de visualização | Baixo |
-| `src/components/agenda/NewSessionModal.tsx` | Adicionar seletor de minutos (15min intervalos) | Baixo |
-| `src/services/SessionService.ts` | Aceitar minutos no `CreateSessionData` | Baixo |
-| `src/components/agenda/AgendaDesktopGrid.tsx` | Mostrar hora:minuto nas sessões | Mínimo |
-| `src/components/agenda/AgendaMobileTimeline.tsx` | Mostrar hora:minuto nas sessões | Mínimo |
-| `src/components/agenda/AgendaControls.tsx` | Adicionar filtro de horário (opcional, UI simples) | Baixo |
-
----
-
-## Como Vai Funcionar
-
-### Agendamento
-1. No modal, você escolhe **hora** (06-23) + **minutos** (00, 15, 30, 45)
-2. Exemplo: 14:45, 16:15, 12:30 — tudo válido
-3. O sistema grava com precisão de minutos
-
-### Visualização
-1. Por padrão, mostra slots de 07:00 às 19:00
-2. Você pode expandir/reduzir o filtro (ex: ver 06:00 às 23:00)
-3. Sessões fora do filtro continuam existindo, só não aparecem no grid
-4. Sessão às 14:45 aparece no slot das 14h, com o horário correto visível
-
-### Conflitos
-O `checkConflict` atual compara hora exata. Vou ajustar para verificar **sobreposição de intervalos** (start_time/end_time) em vez de apenas a hora, evitando:
-- 14:00-15:00 conflitar com 14:30-15:30 ✓
-
----
-
-## Fluxo Visual
-
-```text
-FILTRO DE VISUALIZAÇÃO (cabeçalho da agenda)
-┌─────────────────────────────────────┐
-│  Das [07:00 ▼] às [19:00 ▼]         │
-└─────────────────────────────────────┘
-
-MODAL DE AGENDAMENTO
-┌─────────────────────────────────────┐
-│  Hora: [14 ▼]  Minutos: [45 ▼]      │
-│                                     │
-│  → 14:45 - 15:45 (60min)            │
-└─────────────────────────────────────┘
-
-GRID (slot das 14h)
-┌─────────────────────────────────────┐
-│  14:45 • João Silva                 │
-│  Fisioterapia                       │
-└─────────────────────────────────────┘
-```
-
----
-
-## Risco e Complexidade
-
-| Aspecto | Avaliação |
+| Arquivo | Alteração |
 |---------|-----------|
-| Complexidade | **Baixa** - mudanças localizadas em 6 arquivos |
-| Risco de quebrar algo | **Mínimo** - lógica principal não muda |
-| Tempo estimado | ~15-20 minutos de implementação |
-| Compatibilidade | Sessões existentes continuam funcionando |
+| **Nova migration SQL** | INSERT das 2 novas especialidades |
+
+**Nenhuma alteração de código necessária** - o sistema já carrega dinamicamente os templates da tabela `specialty_templates`.
 
 ---
 
-## Alternativa Mais Simples (se preferir)
+## Resultado Esperado
 
-Se quiser ainda mais simples:
-- Manter grid de hora em hora
-- Só adicionar campo de minutos no modal
-- Sessões com minutos aparecem no slot da hora inteira
+Após a implementação, o dropdown de especialidades mostrará:
 
-Isso resolve 90% do seu problema com menos mudanças.
+1. Sem especialidade definida
+2. Fisioterapia Motora *(novo)*
+3. Fisioterapia Respiratória
+4. Neurofuncional Pediátrica
+5. Pilates
+6. Reabilitação Vestibular *(novo)*
 
----
+Os formulários dinâmicos serão renderizados automaticamente nas evoluções clínicas.
 
-## Recomendação
-
-Implementar a **solução completa** com filtro de visualização, porque:
-1. Você ganha flexibilidade total (06:00–23:00)
-2. Evita poluição visual (filtra o que não precisa ver)
-3. Permite crescimento futuro (diferentes horários para diferentes dias)
