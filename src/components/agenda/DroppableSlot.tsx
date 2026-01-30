@@ -32,7 +32,7 @@ export function DroppableSlot({
       ref={setNodeRef}
       className={cn(
         "min-h-[70px] p-1 border-r last:border-r-0 transition-colors",
-        "flex gap-0.5 flex-nowrap", // Layout horizontal para sessões lado a lado
+        "flex gap-0.5 flex-nowrap overflow-hidden", // Layout horizontal + contém sessões na célula
         isToday && "bg-primary/[0.02]",
         isOver && "bg-primary/10 ring-2 ring-primary/50 ring-inset",
         !hasSession && "hover:bg-muted/30 cursor-pointer"
