@@ -1,101 +1,164 @@
 
+# Editar Dados do Paciente e Navegar para Prontuário
 
-# Corrigir Alinhamento das Colunas da Agenda
+## Problemas Identificados
 
-## Problema Identificado
-
-Os cartões de sessão estão transbordando para fora dos limites das colunas dos dias, criando um visual desorganizado. Isso acontece porque:
-
-1. O `DroppableSlot` não tem `overflow: hidden`
-2. O texto longo (nome do serviço) não está sendo truncado corretamente
-3. O conteúdo não respeita a largura máxima da célula
+1. **Botão "Ver Prontuário"** na modal de detalhes não faz nada (linha 285 de `PatientDetailModal.tsx`)
+2. **Não existe funcionalidade de editar** os dados cadastrais do paciente
+3. **Página Prontuários** não recebe o parâmetro `?paciente=` da URL para pré-selecionar o paciente
 
 ---
 
-## Solução
+## Solução Proposta
 
-Garantir que cada sessão fique **contida dentro dos limites da sua coluna**, com truncamento adequado do texto.
+### 1. Criar Modal de Edição do Paciente
+
+Um novo componente `EditPatientModal.tsx` que:
+- Recebe os dados atuais do paciente
+- Permite editar todos os campos (nome, CPF, telefone, email, etc.)
+- Salva as alterações no banco de dados via Supabase
+- Atualiza o estado local via `updatePatient` do DataContext
+
+### 2. Adicionar Botão "Editar" na Modal de Detalhes
+
+- Novo botão "Editar" com ícone de lápis na aba "Dados"
+- Abre a modal de edição quando clicado
+
+### 3. Corrigir Botão "Ver Prontuário"
+
+- Adicionar navegação para `/prontuarios?paciente={patientId}`
+- Fechar a modal de detalhes antes de navegar
+
+### 4. Atualizar Página Prontuários
+
+- Ler o parâmetro `paciente` da URL
+- Auto-selecionar o paciente correspondente quando a página carrega
 
 ---
 
-## Alterações Necessárias
+## Arquivos a Criar
 
-### 1. DroppableSlot.tsx
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/patients/EditPatientModal.tsx` | Modal com formulário de edição do paciente |
 
-Adicionar `overflow-hidden` para conter as sessões dentro da célula:
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/patients/PatientDetailModal.tsx` | Adicionar botão "Editar", funcionalidade do "Ver Prontuário", e callback `onUpdatePatient` |
+| `src/pages/Pacientes.tsx` | Passar `onUpdatePatient` e `onNavigateToProntuario` para o modal |
+| `src/pages/Prontuarios.tsx` | Ler `?paciente=` da URL e pré-selecionar paciente |
+
+---
+
+## Detalhes Técnicos
+
+### EditPatientModal.tsx
 
 ```typescript
-className={cn(
-  "min-h-[70px] p-1 border-r last:border-r-0 transition-colors",
-  "flex gap-0.5 flex-nowrap overflow-hidden", // Adicionar overflow-hidden
-  // ...
-)}
+interface EditPatientModalProps {
+  patient: Patient;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (patientId: string, data: Partial<Patient>) => Promise<void>;
+}
 ```
 
-### 2. DraggableSession.tsx
+Campos editáveis:
+- Nome Completo*
+- NIF / CPF
+- Data de Nascimento
+- Gênero
+- Telefone*
+- Email
+- Morada
+- Contato de Emergência
+- Telefone de Emergência
+- Seguradora / Entidade
+- Observações
 
-Garantir que o card respeite a largura e trunce o texto corretamente:
+### PatientDetailModal.tsx
 
+Novas props:
 ```typescript
-// Container principal
-className={cn(
-  "p-2 rounded-md text-xs cursor-grab hover:opacity-90 transition-all",
-  "flex-1 min-w-0 max-w-full overflow-hidden", // Adicionar max-w-full e overflow-hidden
-  // ...
-)}
+onUpdatePatient?: (patientId: string, data: Partial<Patient>) => Promise<void>;
+onNavigateToProntuario?: (patientId: string) => void;
+```
 
-// Linha do nome - garantir truncamento
-<div className="flex items-center gap-1 min-w-0 flex-1">
-  <p className="font-medium truncate min-w-0">
-    {session.paciente?.full_name.split(' ')[0]}
-  </p>
-</div>
+Modificações:
+1. Adicionar estado `isEditModalOpen`
+2. Botão "Editar" na aba "Dados" que abre `EditPatientModal`
+3. Botão "Ver Prontuário" chama `onNavigateToProntuario`
 
-// Linha do serviço - garantir truncamento
-<p className="text-muted-foreground truncate text-[10px] w-full">
-  {session.servico?.name} • {session.profissional?.full_name.split(' ')[0]}
-</p>
+### Pacientes.tsx
+
+Adicionar:
+```typescript
+const navigate = useNavigate();
+
+const handleUpdatePatient = async (patientId: string, data: Partial<Patient>) => {
+  const { error } = await supabase
+    .from("pacientes")
+    .update(data)
+    .eq("id", patientId);
+  
+  if (error) throw error;
+  
+  updatePatient(patientId, data);
+  // Atualizar selectedPatient para refletir mudanças
+};
+
+const handleNavigateToProntuario = (patientId: string) => {
+  setSelectedPatient(null);
+  navigate(`/prontuarios?paciente=${patientId}`);
+};
+```
+
+### Prontuarios.tsx
+
+Adicionar:
+```typescript
+import { useSearchParams } from "react-router-dom";
+
+// Dentro do componente:
+const [searchParams] = useSearchParams();
+
+useEffect(() => {
+  const pacienteId = searchParams.get("paciente");
+  if (pacienteId && patients.length > 0 && !prontuariosLoading) {
+    handleSelectPatient(pacienteId);
+  }
+}, [searchParams, patients, prontuariosLoading]);
 ```
 
 ---
 
-## Mudanças Detalhadas
-
-| Arquivo | Propriedade | Antes | Depois |
-|---------|-------------|-------|--------|
-| `DroppableSlot.tsx` | className | `flex gap-0.5 flex-nowrap` | `flex gap-0.5 flex-nowrap overflow-hidden` |
-| `DraggableSession.tsx` | container | `flex-1 min-w-0` | `flex-1 min-w-0 max-w-full overflow-hidden` |
-| `DraggableSession.tsx` | linha nome | `flex items-center gap-1` | `flex items-center gap-1 min-w-0 flex-1 overflow-hidden` |
-| `DraggableSession.tsx` | texto serviço | `truncate text-[10px]` | `truncate text-[10px] w-full` |
-
----
-
-## Comportamento Visual Esperado
+## Fluxo do Utilizador
 
 ```text
-ANTES (transbordando)
-┌────────────────┐────────────────┐
-│ SEG            │ TER            │
-├────────────────┼────────────────┤
-│ 09:00 João ────│───────Agendado │  <-- texto vaza
-│ Fisioterapia Neurodesenvolvimento...
-└────────────────┴────────────────┘
+1. Utilizador abre modal de detalhes do paciente
+2. Na aba "Dados", clica em "Editar"
+3. Modal de edição abre com dados pré-preenchidos
+4. Utilizador altera dados e clica "Guardar"
+5. Dados são salvos no Supabase
+6. Modal de edição fecha, detalhes atualizados
 
-DEPOIS (contido na coluna)
-┌────────────────┐────────────────┐
-│ SEG            │ TER            │
-├────────────────┼────────────────┤
-│ 09:00 João Ag..│                │  <-- contido
-│ Fisio Neuro... │                │  <-- truncado
-└────────────────┴────────────────┘
+OU
+
+1. Utilizador abre modal de detalhes do paciente
+2. Clica em "Ver Prontuário"
+3. Modal fecha, navega para /prontuarios?paciente=xxx
+4. Página Prontuários abre com paciente pré-selecionado
 ```
 
 ---
 
-## Resumo Técnico
+## Resumo de Complexidade
 
-- **Complexidade**: Baixa (apenas CSS)
-- **Arquivos afetados**: 2
-- **Risco**: Mínimo
-- **Compatibilidade**: Mantém drag & drop funcional
-
+| Aspecto | Avaliação |
+|---------|-----------|
+| Complexidade | Média |
+| Arquivos novos | 1 |
+| Arquivos modificados | 3 |
+| Risco | Baixo - usa padrões existentes |
