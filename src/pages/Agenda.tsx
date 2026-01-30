@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -15,6 +15,10 @@ import { useData } from "@/contexts/DataContext";
 import { SessionService, Session } from "@/services/SessionService";
 import { Patient } from "@/services/PatientService";
 import { checkAppointmentCreatedTrigger, AutomationTriggerResult } from "@/services/AutomationEngine";
+import { CreditPurchaseData } from "@/components/patients/AddCreditsModal";
+import { CreditService } from "@/services/CreditService";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 // Components
 import { AgendaControls } from "@/components/agenda/AgendaControls";
@@ -28,7 +32,33 @@ import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToa
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
 export default function Agenda() {
-  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession } = useData();
+  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession, addCredits, refreshCreditBalances } = useData();
+  const { user } = useAuth();
+  
+  const [clinicId, setClinicId] = useState<string | null>(null);
+  
+  // Fetch clinic_id for the current user
+  useEffect(() => {
+    async function fetchClinicId() {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("clinic_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching clinic_id:", error);
+        return;
+      }
+
+      if (data?.clinic_id) {
+        setClinicId(data.clinic_id);
+      }
+    }
+    fetchClinicId();
+  }, [user]);
   
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
@@ -227,6 +257,40 @@ export default function Agenda() {
     resetForm();
   };
 
+  // Add credits from session modal
+  const handleAddCredits = async (patientId: string, data: CreditPurchaseData) => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(patientId)) {
+      const msg = `patient_id inválido: ${patientId}`;
+      toast.error(msg);
+      throw new Error(msg);
+    }
+
+    if (!clinicId) {
+      const msg = "Clínica não identificada. Faça login novamente.";
+      toast.error(msg);
+      throw new Error(msg);
+    }
+
+    const result = await CreditService.purchaseCredits(clinicId, patientId, data.amount, {
+      description: data.description,
+      monetaryValue: data.monetaryValue,
+      paymentMethod: data.paymentMethod,
+      paymentStatus: data.paymentStatus,
+    });
+
+    if (!result.success) {
+      const msg = result.error || "Erro ao adicionar créditos";
+      toast.error(msg);
+      throw new Error(msg);
+    }
+
+    // Update local state for immediate UI feedback
+    await addCredits(patientId, data.amount);
+    await refreshCreditBalances();
+  };
+
   return (
     <AppLayout 
       title="Agenda" 
@@ -322,6 +386,7 @@ export default function Agenda() {
         onRefundCredit={refundCredit}
         onUseCredit={useCredit}
         wasCreditUsedForSession={wasCreditUsedForSession}
+        onAddCredits={handleAddCredits}
       />
 
       {/* Automation Trigger Toast/Modal */}
