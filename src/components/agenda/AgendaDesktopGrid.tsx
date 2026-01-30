@@ -163,12 +163,15 @@ export function AgendaDesktopGrid({
                             const hasCredits = patientId && getCreditBalance 
                               ? getCreditBalance(patientId) > 0 
                               : undefined;
+                            // Format time with minutes
+                            const sessionTime = format(new Date(session.start_time), "HH:mm");
                             return (
                               <DraggableSession
                                 key={session.id}
                                 session={session}
                                 onClick={onSessionClick}
                                 hasCredits={hasCredits}
+                                displayTime={sessionTime}
                               />
                             );
                           })}

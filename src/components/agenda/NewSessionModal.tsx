@@ -53,7 +53,7 @@ interface Service {
 interface NewSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  selectedSlot: { date: Date; hour: number } | null;
+  selectedSlot: { date: Date; hour: number; minute?: number } | null;
   patients: Patient[];
   professionals: Professional[];
   services: Service[];
@@ -64,6 +64,7 @@ interface NewSessionModalProps {
     notes: string;
     date?: Date;
     hour?: number;
+    minute?: number;
   }) => void;
   selectedPaciente: string;
   setSelectedPaciente: (value: string) => void;
@@ -76,8 +77,11 @@ interface NewSessionModalProps {
   getCreditBalance?: (patientId: string) => number;
 }
 
-// Generate hours array for time picker (7:00 to 18:00)
-const AVAILABLE_HOURS = Array.from({ length: 12 }, (_, i) => i + 7);
+// Full range of available hours (06:00 to 23:00)
+const AVAILABLE_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
+
+// Available minute intervals
+const AVAILABLE_MINUTES = [0, 15, 30, 45];
 
 export function NewSessionModal({
   isOpen,
@@ -100,6 +104,7 @@ export function NewSessionModal({
   // Local state for date/time when no slot is pre-selected
   const [manualDate, setManualDate] = useState<Date | undefined>(undefined);
   const [manualHour, setManualHour] = useState<string>("");
+  const [manualMinute, setManualMinute] = useState<string>("0");
 
   // Reset manual selections when modal opens/closes or slot changes
   useEffect(() => {
@@ -107,10 +112,12 @@ export function NewSessionModal({
       // Slot was pre-selected (clicked on calendar)
       setManualDate(selectedSlot.date);
       setManualHour(String(selectedSlot.hour));
+      setManualMinute(String(selectedSlot.minute ?? 0));
     } else if (isOpen && !selectedSlot) {
       // Opened from global button - reset
       setManualDate(undefined);
       setManualHour("");
+      setManualMinute("0");
     }
   }, [isOpen, selectedSlot]);
 
@@ -120,6 +127,7 @@ export function NewSessionModal({
   // Final date/time to use
   const finalDate = selectedSlot?.date ?? manualDate;
   const finalHour = selectedSlot?.hour ?? (manualHour ? parseInt(manualHour, 10) : undefined);
+  const finalMinute = selectedSlot?.minute ?? parseInt(manualMinute, 10);
 
   const handleSubmit = () => {
     if (!finalDate || finalHour === undefined) {
@@ -134,6 +142,7 @@ export function NewSessionModal({
       notes,
       date: finalDate,
       hour: finalHour,
+      minute: finalMinute,
     });
   };
 
@@ -191,11 +200,11 @@ export function NewSessionModal({
                 {format(finalDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
               </p>
               <p className="text-muted-foreground">
-                {String(finalHour).padStart(2, '0')}:00
+                {String(finalHour).padStart(2, '0')}:{String(finalMinute).padStart(2, '0')}
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
               {/* Date Picker */}
               <div className="space-y-2">
                 <Label>Data *</Label>
@@ -225,22 +234,47 @@ export function NewSessionModal({
                 </Popover>
               </div>
 
-              {/* Time Picker */}
-              <div className="space-y-2">
-                <Label>Horário *</Label>
-                <Select value={manualHour} onValueChange={setManualHour}>
-                  <SelectTrigger className="min-h-[44px]">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AVAILABLE_HOURS.map((hour) => (
-                      <SelectItem key={hour} value={String(hour)} className="min-h-[44px]">
-                        {String(hour).padStart(2, '0')}:00
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Time Picker - Hour + Minute */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Hora *</Label>
+                  <Select value={manualHour} onValueChange={setManualHour}>
+                    <SelectTrigger className="min-h-[44px]">
+                      <SelectValue placeholder="Hora" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AVAILABLE_HOURS.map((hour) => (
+                        <SelectItem key={hour} value={String(hour)} className="min-h-[44px]">
+                          {String(hour).padStart(2, '0')}h
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Minutos</Label>
+                  <Select value={manualMinute} onValueChange={setManualMinute}>
+                    <SelectTrigger className="min-h-[44px]">
+                      <SelectValue placeholder="Min" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AVAILABLE_MINUTES.map((minute) => (
+                        <SelectItem key={minute} value={String(minute)} className="min-h-[44px]">
+                          {String(minute).padStart(2, '0')}min
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+
+              {/* Time preview */}
+              {manualHour && (
+                <p className="text-sm text-muted-foreground text-center">
+                  Horário: {String(parseInt(manualHour, 10)).padStart(2, '0')}:{String(parseInt(manualMinute, 10)).padStart(2, '0')}
+                </p>
+              )}
             </div>
           )}
 

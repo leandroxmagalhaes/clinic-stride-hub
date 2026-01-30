@@ -22,9 +22,10 @@ interface DraggableSessionProps {
   session: Session;
   onClick: (session: Session) => void;
   hasCredits?: boolean; // true = crédito disponível, false = sem créditos
+  displayTime?: string; // e.g., "14:45"
 }
 
-export function DraggableSession({ session, onClick, hasCredits }: DraggableSessionProps) {
+export function DraggableSession({ session, onClick, hasCredits, displayTime }: DraggableSessionProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: session.id,
     data: { session },
@@ -80,9 +81,16 @@ export function DraggableSession({ session, onClick, hasCredits }: DraggableSess
           >
             <GripVertical className="h-3 w-3 text-muted-foreground opacity-60 group-hover/session:opacity-100 transition-opacity" />
           </div>
-          <p className="font-medium truncate">
-            {session.paciente?.full_name.split(' ')[0]}
-          </p>
+          <div className="flex items-center gap-1">
+            {displayTime && (
+              <span className="text-[10px] text-muted-foreground font-medium">
+                {displayTime}
+              </span>
+            )}
+            <p className="font-medium truncate">
+              {session.paciente?.full_name.split(' ')[0]}
+            </p>
+          </div>
         </div>
         <StatusBadge status={session.status as any} className="scale-90" />
       </div>

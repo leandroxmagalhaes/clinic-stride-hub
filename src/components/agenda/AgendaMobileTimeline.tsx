@@ -88,13 +88,13 @@ export function AgendaMobileTimeline({
                         onClick={() => onSessionClick(session)}
                         className="w-full text-left p-4 hover:bg-muted/50 transition-colors min-h-[72px] flex items-start gap-4 active:bg-muted"
                       >
-                        {/* Time column */}
+                        {/* Time column - show actual session time */}
                         <div className="flex-shrink-0 w-14 text-center">
                           <p className={cn(
                             "text-sm font-semibold",
                             isCurrentHour && "text-primary"
                           )}>
-                            {String(hour).padStart(2, '0')}:00
+                            {format(new Date(session.start_time), "HH:mm")}
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             {session.servico?.duration_minutes}min
