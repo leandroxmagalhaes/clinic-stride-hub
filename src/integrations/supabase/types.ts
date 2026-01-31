@@ -866,6 +866,7 @@ export type Database = {
       relatorios_clinicos: {
         Row: {
           clinic_id: string
+          conteudo: string | null
           created_at: string | null
           created_by: string | null
           data_validade: string | null
@@ -894,6 +895,7 @@ export type Database = {
         }
         Insert: {
           clinic_id: string
+          conteudo?: string | null
           created_at?: string | null
           created_by?: string | null
           data_validade?: string | null
@@ -922,6 +924,7 @@ export type Database = {
         }
         Update: {
           clinic_id?: string
+          conteudo?: string | null
           created_at?: string | null
           created_by?: string | null
           data_validade?: string | null

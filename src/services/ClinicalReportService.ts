@@ -13,6 +13,7 @@ export interface ClinicalReport {
   tipo: ReportType;
   periodo_inicio: string;
   periodo_fim: string;
+  conteudo?: string | null;
   diagnostico_clinico?: string | null;
   objetivo_tratamento?: string | null;
   sessoes_realizadas?: number | null;
@@ -44,6 +45,7 @@ export interface ClinicalReportInsert {
   tipo: ReportType;
   periodo_inicio: string;
   periodo_fim: string;
+  conteudo?: string;
   diagnostico_clinico?: string;
   objetivo_tratamento?: string;
   sessoes_realizadas?: number;
@@ -65,6 +67,7 @@ export interface ClinicalReportUpdate {
   tipo?: ReportType;
   periodo_inicio?: string;
   periodo_fim?: string;
+  conteudo?: string;
   diagnostico_clinico?: string;
   objetivo_tratamento?: string;
   sessoes_realizadas?: number;
