@@ -126,33 +126,53 @@ export async function generateClinicalReportPDF(
   // =====================
   // CLINICAL CONTENT
   // =====================
-  const sections = [
-    { title: "DIAGNÓSTICO CLÍNICO", content: report.diagnostico_clinico },
-    { title: "OBJETIVO DO TRATAMENTO", content: report.objetivo_tratamento },
-    { title: "EVOLUÇÃO DO PACIENTE", content: report.evolucao_paciente },
-    { title: "RESULTADOS OBTIDOS", content: report.resultados_obtidos },
-    { title: "RECOMENDAÇÕES", content: report.recomendacoes },
-    { title: "OBSERVAÇÕES", content: report.observacoes },
-  ];
-
-  for (const section of sections) {
-    if (!section.content) continue;
-
-    checkPageBreak(25);
-
-    // Section title
+  
+  // Check if using new single content field or legacy fields
+  if (report.conteudo) {
+    // New format: Single content field
+    checkPageBreak(30);
+    
     doc.setTextColor(...primaryColor);
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text(section.title, margin, yPos);
-    yPos += 5;
-
-    // Section content
+    doc.text("CONTEÚDO DO RELATÓRIO", margin, yPos);
+    yPos += 6;
+    
     doc.setTextColor(...textColor);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    yPos = addWrappedText(section.content, margin, yPos, contentWidth, 4.5);
-    yPos += 8;
+    doc.setFontSize(10);
+    yPos = addWrappedText(report.conteudo, margin, yPos, contentWidth, 5);
+    yPos += 10;
+  } else {
+    // Legacy format: Multiple section fields (retrocompatibility)
+    const sections = [
+      { title: "DIAGNÓSTICO CLÍNICO", content: report.diagnostico_clinico },
+      { title: "OBJETIVO DO TRATAMENTO", content: report.objetivo_tratamento },
+      { title: "EVOLUÇÃO DO PACIENTE", content: report.evolucao_paciente },
+      { title: "RESULTADOS OBTIDOS", content: report.resultados_obtidos },
+      { title: "RECOMENDAÇÕES", content: report.recomendacoes },
+      { title: "OBSERVAÇÕES", content: report.observacoes },
+    ];
+
+    for (const section of sections) {
+      if (!section.content) continue;
+
+      checkPageBreak(25);
+
+      // Section title
+      doc.setTextColor(...primaryColor);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text(section.title, margin, yPos);
+      yPos += 5;
+
+      // Section content
+      doc.setTextColor(...textColor);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      yPos = addWrappedText(section.content, margin, yPos, contentWidth, 4.5);
+      yPos += 8;
+    }
   }
 
   // =====================

@@ -88,13 +88,8 @@ export function NewClinicalReportModal({
   const [dataValidade, setDataValidade] = useState<Date | undefined>();
   const [diasAviso, setDiasAviso] = useState("7");
 
-  // Clinical content
-  const [diagnosticoClinico, setDiagnosticoClinico] = useState("");
-  const [objetivoTratamento, setObjetivoTratamento] = useState("");
-  const [evolucaoPaciente, setEvolucaoPaciente] = useState("");
-  const [resultadosObtidos, setResultadosObtidos] = useState("");
-  const [recomendacoes, setRecomendacoes] = useState("");
-  const [observacoes, setObservacoes] = useState("");
+  // Clinical content - simplified to single field
+  const [conteudo, setConteudo] = useState("");
 
   // Professional selection
   const [professionalId, setProfessionalId] = useState("");
@@ -113,12 +108,21 @@ export function NewClinicalReportModal({
         setDestinatarioIdentificacao(editingReport.destinatario_identificacao || "");
         setDataValidade(editingReport.data_validade ? new Date(editingReport.data_validade) : undefined);
         setDiasAviso(String(editingReport.dias_aviso_antecedencia));
-        setDiagnosticoClinico(editingReport.diagnostico_clinico || "");
-        setObjetivoTratamento(editingReport.objetivo_tratamento || "");
-        setEvolucaoPaciente(editingReport.evolucao_paciente || "");
-        setResultadosObtidos(editingReport.resultados_obtidos || "");
-        setRecomendacoes(editingReport.recomendacoes || "");
-        setObservacoes(editingReport.observacoes || "");
+        // Handle both new format (conteudo) and legacy format
+        if (editingReport.conteudo) {
+          setConteudo(editingReport.conteudo);
+        } else {
+          // Build content from legacy fields for backward compatibility
+          const legacyParts = [
+            editingReport.diagnostico_clinico && `Diagnóstico Clínico:\n${editingReport.diagnostico_clinico}`,
+            editingReport.objetivo_tratamento && `Objetivo do Tratamento:\n${editingReport.objetivo_tratamento}`,
+            editingReport.evolucao_paciente && `Evolução do Paciente:\n${editingReport.evolucao_paciente}`,
+            editingReport.resultados_obtidos && `Resultados Obtidos:\n${editingReport.resultados_obtidos}`,
+            editingReport.recomendacoes && `Recomendações:\n${editingReport.recomendacoes}`,
+            editingReport.observacoes && `Observações:\n${editingReport.observacoes}`,
+          ].filter(Boolean);
+          setConteudo(legacyParts.join('\n\n'));
+        }
         setProfessionalId(editingReport.professional_id);
         setSessionsCount(editingReport.sessoes_realizadas || null);
       } else {
@@ -132,12 +136,7 @@ export function NewClinicalReportModal({
         setDestinatarioIdentificacao("");
         setDataValidade(undefined);
         setDiasAviso("7");
-        setDiagnosticoClinico("");
-        setObjetivoTratamento("");
-        setEvolucaoPaciente("");
-        setResultadosObtidos("");
-        setRecomendacoes("");
-        setObservacoes("");
+        setConteudo("");
         setProfessionalId(professionals[0]?.id || "");
         setSessionsCount(null);
       }
@@ -175,7 +174,7 @@ export function NewClinicalReportModal({
       );
 
       if (evolutionsText) {
-        setEvolucaoPaciente(prev => 
+        setConteudo(prev => 
           prev ? `${prev}\n\n--- Evoluções Importadas ---\n\n${evolutionsText}` : evolutionsText
         );
         toast.success("Evoluções importadas com sucesso!");
@@ -223,13 +222,8 @@ export function NewClinicalReportModal({
         tipo,
         periodo_inicio: format(periodoInicio!, "yyyy-MM-dd"),
         periodo_fim: format(periodoFim!, "yyyy-MM-dd"),
-        diagnostico_clinico: diagnosticoClinico || undefined,
-        objetivo_tratamento: objetivoTratamento || undefined,
+        conteudo: conteudo || undefined,
         sessoes_realizadas: sessionsCount || 0,
-        evolucao_paciente: evolucaoPaciente || undefined,
-        resultados_obtidos: resultadosObtidos || undefined,
-        recomendacoes: recomendacoes || undefined,
-        observacoes: observacoes || undefined,
         destinatario_nome: destinatarioNome || undefined,
         destinatario_especialidade: destinatarioEspecialidade || undefined,
         destinatario_identificacao: destinatarioIdentificacao || undefined,
@@ -269,13 +263,8 @@ export function NewClinicalReportModal({
       tipo,
       periodo_inicio: format(periodoInicio!, "yyyy-MM-dd"),
       periodo_fim: format(periodoFim!, "yyyy-MM-dd"),
-      diagnostico_clinico: diagnosticoClinico,
-      objetivo_tratamento: objetivoTratamento,
+      conteudo: conteudo,
       sessoes_realizadas: sessionsCount,
-      evolucao_paciente: evolucaoPaciente,
-      resultados_obtidos: resultadosObtidos,
-      recomendacoes: recomendacoes,
-      observacoes: observacoes,
       destinatario_nome: destinatarioNome,
       destinatario_especialidade: destinatarioEspecialidade,
       destinatario_identificacao: destinatarioIdentificacao,
@@ -517,90 +506,40 @@ export function NewClinicalReportModal({
 
             {/* Tab 2: Conteúdo Clínico */}
             <TabsContent value="conteudo" className="space-y-4 mt-0">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="diagnostico">Diagnóstico Clínico</Label>
-                  <Textarea
-                    id="diagnostico"
-                    value={diagnosticoClinico}
-                    onChange={(e) => setDiagnosticoClinico(e.target.value)}
-                    placeholder="Ex: Lombalgia crônica, limitação de ADM..."
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="objetivo">Objetivo do Tratamento</Label>
-                  <Textarea
-                    id="objetivo"
-                    value={objetivoTratamento}
-                    onChange={(e) => setObjetivoTratamento(e.target.value)}
-                    placeholder="Ex: Redução da dor, ganho de amplitude..."
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label htmlFor="evolucao">Evolução do Paciente</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleImportEvolutions}
-                      disabled={loadingEvolutions || !periodoInicio || !periodoFim}
-                      className="gap-2"
-                    >
-                      {loadingEvolutions ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Import className="h-4 w-4" />
-                      )}
-                      Importar Evoluções
-                    </Button>
-                  </div>
-                  <Textarea
-                    id="evolucao"
-                    value={evolucaoPaciente}
-                    onChange={(e) => setEvolucaoPaciente(e.target.value)}
-                    placeholder="Descreva a evolução clínica do paciente..."
-                    rows={6}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="resultados">Resultados Obtidos</Label>
-                  <Textarea
-                    id="resultados"
-                    value={resultadosObtidos}
-                    onChange={(e) => setResultadosObtidos(e.target.value)}
-                    placeholder="Ex: Redução de dor de 8/10 para 3/10..."
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="recomendacoes">Recomendações</Label>
-                  <Textarea
-                    id="recomendacoes"
-                    value={recomendacoes}
-                    onChange={(e) => setRecomendacoes(e.target.value)}
-                    placeholder="Ex: Manter exercícios, retorno em 3 meses..."
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="observacoes">Observações</Label>
-                  <Textarea
-                    id="observacoes"
-                    value={observacoes}
-                    onChange={(e) => setObservacoes(e.target.value)}
-                    placeholder="Informações adicionais..."
-                    rows={2}
-                  />
-                </div>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="conteudo">Conteúdo do Relatório</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleImportEvolutions}
+                  disabled={loadingEvolutions || !periodoInicio || !periodoFim}
+                  className="gap-2"
+                >
+                  {loadingEvolutions ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Import className="h-4 w-4" />
+                  )}
+                  Importar Evoluções
+                </Button>
               </div>
+              <Textarea
+                id="conteudo"
+                value={conteudo}
+                onChange={(e) => setConteudo(e.target.value)}
+                placeholder="Escreva livremente o conteúdo do relatório clínico...
+
+Pode incluir:
+• Diagnóstico e queixa principal
+• Objetivos do tratamento
+• Evolução e progresso
+• Resultados obtidos
+• Recomendações
+• Observações"
+                rows={18}
+                className="min-h-[350px]"
+              />
             </TabsContent>
 
             {/* Tab 3: Preview */}
@@ -655,26 +594,10 @@ export function NewClinicalReportModal({
                     </div>
                   )}
 
-                  {(diagnosticoClinico || evolucaoPaciente || recomendacoes) && (
-                    <div className="border-t pt-4 space-y-3">
-                      {diagnosticoClinico && (
-                        <div>
-                          <p className="font-medium text-sm text-primary">Diagnóstico:</p>
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{diagnosticoClinico}</p>
-                        </div>
-                      )}
-                      {evolucaoPaciente && (
-                        <div>
-                          <p className="font-medium text-sm text-primary">Evolução:</p>
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4">{evolucaoPaciente}</p>
-                        </div>
-                      )}
-                      {recomendacoes && (
-                        <div>
-                          <p className="font-medium text-sm text-primary">Recomendações:</p>
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{recomendacoes}</p>
-                        </div>
-                      )}
+                  {conteudo && (
+                    <div className="border-t pt-4">
+                      <p className="font-medium text-sm text-primary mb-2">Conteúdo:</p>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-6">{conteudo}</p>
                     </div>
                   )}
                 </div>
