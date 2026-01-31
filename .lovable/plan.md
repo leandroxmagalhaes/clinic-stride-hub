@@ -1,94 +1,135 @@
 
-# Corrigir Problema: Tab Relatórios Não Aparece em Produção
 
-## Problema Identificado
+# Simplificar Relatório Clínico - Texto Livre
 
-A aba **Relatórios** não mostra conteúdo no navegador externo porque o componente `ClinicalReportsList` está condicionado à existência de `clinicInfo`:
+## Situação Atual
 
-```tsx
-// Linha 560-573 de Prontuarios.tsx
-<TabsContent value="relatorios">
-  {clinicInfo && (      // ← O problema está aqui!
-    <ClinicalReportsList ... />
-  )}
-</TabsContent>
-```
+O formulário de relatório clínico tem **6 campos separados** na tab "Conteúdo Clínico":
 
-### Por que funciona no Lovable e não no navegador externo?
+| Campo | Linhas |
+|-------|--------|
+| Diagnóstico Clínico | 3 |
+| Objetivo do Tratamento | 3 |
+| Evolução do Paciente | 6 |
+| Resultados Obtidos | 3 |
+| Recomendações | 3 |
+| Observações | 2 |
 
-1. **Logs de Console**: Foi detectado um erro `AuthApiError: Invalid Refresh Token` 
-2. O hook `useClinicInfo` depende de autenticação para buscar dados da clínica
-3. Se houver qualquer problema de autenticação ou se a query ainda estiver carregando, `clinicInfo` será `undefined`
-4. Quando `clinicInfo` é `undefined`, **nada é renderizado na tab**
-
-No ambiente Lovable, a sessão pode estar mais estável. No navegador externo, tokens expirados ou problemas de sincronização causam falhas.
+O PDF gera secções com títulos para cada campo preenchido.
 
 ---
 
-## Solução
+## Proposta
 
-Remover a renderização condicional baseada em `clinicInfo` e sempre mostrar o componente. O `clinicInfo` deve ser tratado como opcional dentro do `ClinicalReportsList`.
+Substituir os 6 campos por **um único campo de texto livre** chamado "Conteúdo do Relatório", dando total flexibilidade ao profissional para estruturar como preferir.
 
 ---
 
 ## Implementação
 
-### 1. Modificar: `src/pages/Prontuarios.tsx`
+### 1. Modificar: `src/components/prontuarios/NewClinicalReportModal.tsx`
 
-**De:**
-```tsx
-<TabsContent value="relatorios">
-  {clinicInfo && (
-    <ClinicalReportsList
-      patientId={selectedProntuario.paciente_id}
-      prontuarioId={selectedProntuario.id}
-      clinicId={selectedProntuario.clinic_id}
-      clinicInfo={{
-        name: clinicInfo.name,
-        address: clinicInfo.address || undefined,
-        phone: clinicInfo.phone || undefined,
-        email: clinicInfo.email || undefined,
-      }}
-    />
-  )}
-</TabsContent>
+**Simplificar estado do formulário:**
+```typescript
+// De 6 estados separados:
+// diagnosticoClinico, objetivoTratamento, evolucaoPaciente, 
+// resultadosObtidos, recomendacoes, observacoes
+
+// Para 1 único:
+const [conteudo, setConteudo] = useState("");
 ```
 
-**Para:**
+**Simplificar Tab "Conteúdo Clínico":**
 ```tsx
-<TabsContent value="relatorios">
-  <ClinicalReportsList
-    patientId={selectedProntuario.paciente_id}
-    prontuarioId={selectedProntuario.id}
-    clinicId={selectedProntuario.clinic_id}
-    clinicInfo={clinicInfo ? {
-      name: clinicInfo.name,
-      address: clinicInfo.address || undefined,
-      phone: clinicInfo.phone || undefined,
-      email: clinicInfo.email || undefined,
-    } : undefined}
+<TabsContent value="conteudo" className="space-y-4 mt-0">
+  <div className="flex items-center justify-between mb-2">
+    <Label htmlFor="conteudo">Conteúdo do Relatório</Label>
+    <Button variant="outline" size="sm" onClick={handleImportEvolutions}>
+      <Import className="h-4 w-4 mr-2" />
+      Importar Evoluções
+    </Button>
+  </div>
+  <Textarea
+    id="conteudo"
+    value={conteudo}
+    onChange={(e) => setConteudo(e.target.value)}
+    placeholder="Escreva livremente o conteúdo do relatório clínico..."
+    rows={15}
+    className="min-h-[300px]"
   />
 </TabsContent>
 ```
 
-### 2. O componente `ClinicalReportsList` já aceita `clinicInfo` como opcional
+### 2. Modificar: `src/services/ClinicalReportService.ts`
 
-Na interface atual (linha 48-58):
-```tsx
-interface ClinicalReportsListProps {
-  patientId: string;
-  prontuarioId: string;
-  clinicId: string;
-  clinicInfo?: {  // ← Já é opcional!
-    name?: string;
-    address?: string;
-    phone?: string;
-    email?: string;
-  };
+Adicionar novo campo `conteudo` às interfaces (mantendo os antigos para retrocompatibilidade):
+
+```typescript
+export interface ClinicalReport {
+  // ... campos existentes
+  conteudo?: string | null;  // Novo campo de texto livre
 }
 ```
 
-O PDF é gerado com ou sem `clinicInfo` - simplesmente não mostra dados da clínica no cabeçalho se não existir.
+### 3. Modificar: `src/components/prontuarios/ClinicalReportPDF.ts`
+
+**Simplificar geração do PDF:**
+
+```typescript
+// Se tiver conteúdo livre, usa apenas ele
+if (report.conteudo) {
+  doc.setTextColor(...textColor);
+  doc.setFontSize(10);
+  yPos = addWrappedText(report.conteudo, margin, yPos, contentWidth, 5);
+} else {
+  // Fallback para campos antigos (retrocompatibilidade)
+  const sections = [
+    { title: "DIAGNÓSTICO CLÍNICO", content: report.diagnostico_clinico },
+    // ... demais campos
+  ];
+  // ... renderização por secções
+}
+```
+
+### 4. Migração de Banco de Dados
+
+Adicionar nova coluna à tabela `relatorios_clinicos`:
+
+```sql
+ALTER TABLE relatorios_clinicos 
+ADD COLUMN conteudo TEXT;
+```
+
+---
+
+## Resultado Visual
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  Tab: Conteúdo Clínico                                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Conteúdo do Relatório        [Importar Evoluções]          │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                                                     │    │
+│  │  O paciente apresentou-se com queixa de dor        │    │
+│  │  lombar há 3 meses. Após avaliação inicial,        │    │
+│  │  iniciamos protocolo de tratamento com foco        │    │
+│  │  em fortalecimento de core e mobilidade.           │    │
+│  │                                                     │    │
+│  │  Ao longo das 12 sessões realizadas, observamos    │    │
+│  │  melhora progressiva da dor (8/10 → 2/10) e        │    │
+│  │  ganho funcional significativo.                    │    │
+│  │                                                     │    │
+│  │  Recomendamos continuidade dos exercícios          │    │
+│  │  domiciliares e reavaliação em 3 meses.            │    │
+│  │                                                     │    │
+│  │                                                     │    │
+│  │                                                     │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -96,21 +137,18 @@ O PDF é gerado com ou sem `clinicInfo` - simplesmente não mostra dados da clí
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/Prontuarios.tsx` | Remover condição `{clinicInfo && (...)}` da tab Relatórios |
+| `NewClinicalReportModal.tsx` | Substituir 6 campos por 1 textarea grande |
+| `ClinicalReportService.ts` | Adicionar campo `conteudo` às interfaces |
+| `ClinicalReportPDF.ts` | Usar texto livre ou fallback para campos antigos |
+| Nova migração SQL | Adicionar coluna `conteudo` |
 
 ---
 
-## Resultado Esperado
+## Retrocompatibilidade
 
-```text
-ANTES:
-- Tab "Relatórios" vazia quando clinicInfo não carrega
-
-DEPOIS:
-- Tab "Relatórios" sempre mostra o componente ClinicalReportsList
-- Se clinicInfo estiver disponível, PDF terá dados da clínica
-- Se clinicInfo não estiver disponível, componente funciona normalmente
-```
+- Relatórios antigos continuam funcionando (usam campos separados)
+- Novos relatórios usam o campo único
+- PDF detecta automaticamente qual formato usar
 
 ---
 
@@ -118,8 +156,8 @@ DEPOIS:
 
 | Aspecto | Valor |
 |---------|-------|
-| Complexidade | Muito baixa |
-| Arquivos modificados | 1 |
-| Linhas alteradas | ~10 |
-| Risco | Nenhum |
-| Causa raiz | Renderização condicional desnecessária |
+| Complexidade | Baixa-Média |
+| Arquivos modificados | 3 |
+| Nova migração | 1 (adicionar coluna) |
+| Risco | Baixo (retrocompatível) |
+
