@@ -558,19 +558,17 @@ export default function Prontuarios() {
                 </TabsContent>
 
                 <TabsContent value="relatorios">
-                  {clinicInfo && (
-                    <ClinicalReportsList
-                      patientId={selectedProntuario.paciente_id}
-                      prontuarioId={selectedProntuario.id}
-                      clinicId={selectedProntuario.clinic_id}
-                      clinicInfo={{
-                        name: clinicInfo.name,
-                        address: clinicInfo.address || undefined,
-                        phone: clinicInfo.phone || undefined,
-                        email: clinicInfo.email || undefined,
-                      }}
-                    />
-                  )}
+                  <ClinicalReportsList
+                    patientId={selectedProntuario.paciente_id}
+                    prontuarioId={selectedProntuario.id}
+                    clinicId={selectedProntuario.clinic_id}
+                    clinicInfo={clinicInfo ? {
+                      name: clinicInfo.name,
+                      address: clinicInfo.address || undefined,
+                      phone: clinicInfo.phone || undefined,
+                      email: clinicInfo.email || undefined,
+                    } : undefined}
+                  />
                 </TabsContent>
 
                 <TabsContent value="prontuario">
