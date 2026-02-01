@@ -298,7 +298,7 @@ export function NewClinicalReportModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            {editingReport ? "Editar Relatório Clínico" : "Novo Relatório Clínico"}
+            {editingReport ? "Editar Relatório Fisioterapêutico" : "Novo Relatório Fisioterapêutico"}
             {editingReport && (
               <Badge className={cn("ml-2", REPORT_STATUS_CONFIG[editingReport.status].className)}>
                 {REPORT_STATUS_CONFIG[editingReport.status].label}
@@ -528,7 +528,7 @@ export function NewClinicalReportModal({
                 id="conteudo"
                 value={conteudo}
                 onChange={(e) => setConteudo(e.target.value)}
-                placeholder="Escreva livremente o conteúdo do relatório clínico...
+                placeholder="Escreva livremente o conteúdo do relatório fisioterapêutico...
 
 Pode incluir:
 • Diagnóstico e queixa principal
@@ -557,7 +557,7 @@ Pode incluir:
                     <h3 className="text-lg font-bold text-primary">
                       {clinicInfo?.name || "Clínica"}
                     </h3>
-                    <p className="text-sm text-muted-foreground">RELATÓRIO CLÍNICO</p>
+                    <p className="text-sm text-muted-foreground">RELATÓRIO FISIOTERAPÊUTICO</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 text-sm">

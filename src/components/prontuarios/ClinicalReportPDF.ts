@@ -69,7 +69,7 @@ export async function generateClinicalReportPDF(
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("RELATÓRIO CLÍNICO", margin, 25);
+  doc.text("RELATÓRIO FISIOTERAPÊUTICO", margin, 25);
 
   yPos = 45;
 

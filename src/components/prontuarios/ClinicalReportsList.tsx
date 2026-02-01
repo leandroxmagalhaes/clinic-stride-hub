@@ -223,7 +223,7 @@ export function ClinicalReportsList({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-lg font-semibold">Relatórios Clínicos</h3>
+        <h3 className="font-display text-lg font-semibold">Relatórios Fisioterapêuticos</h3>
         <Button onClick={() => setIsNewModalOpen(true)} className="gap-2">
           <Plus className="h-4 w-4" />
           Novo Relatório
@@ -290,7 +290,7 @@ export function ClinicalReportsList({
             <p className="text-muted-foreground">
               {hasActiveFilters 
                 ? "Nenhum relatório encontrado com os filtros aplicados"
-                : "Nenhum relatório criado. Crie o primeiro relatório clínico."}
+                : "Nenhum relatório criado. Crie o primeiro relatório fisioterapêutico."}
             </p>
           </CardContent>
         </Card>
