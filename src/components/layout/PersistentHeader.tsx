@@ -1,9 +1,9 @@
 import { memo } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { Bell, Search } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { usePageTitleContext } from '@/contexts/PageTitleContext';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 export const PersistentHeader = memo(function PersistentHeader() {
   const { pageTitle } = usePageTitleContext();
@@ -33,10 +33,7 @@ export const PersistentHeader = memo(function PersistentHeader() {
           />
         </div>
         
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive" />
-        </Button>
+        <NotificationBell />
 
         {actions}
       </div>
