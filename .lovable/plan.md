@@ -1,42 +1,168 @@
 
+# Sistema de Notificações no Sino
 
-# Alterar Terminologia: Relatório Clínico → Relatório Fisioterapêutico
+## Objetivo
 
-## Resumo
-
-Substituir todas as ocorrências de "Relatório Clínico" por "Relatório Fisioterapêutico" na interface do utilizador e no PDF gerado.
-
----
-
-## Locais a Alterar
-
-| Arquivo | Linha | Texto Atual | Novo Texto |
-|---------|-------|-------------|------------|
-| `ClinicalReportsList.tsx` | 226 | "Relatórios Clínicos" | "Relatórios Fisioterapêuticos" |
-| `ClinicalReportsList.tsx` | 293 | "relatório clínico" | "relatório fisioterapêutico" |
-| `NewClinicalReportModal.tsx` | 301 | "Editar Relatório Clínico" / "Novo Relatório Clínico" | "Editar Relatório Fisioterapêutico" / "Novo Relatório Fisioterapêutico" |
-| `NewClinicalReportModal.tsx` | 531 | "relatório clínico..." | "relatório fisioterapêutico..." |
-| `NewClinicalReportModal.tsx` | 560 | "RELATÓRIO CLÍNICO" | "RELATÓRIO FISIOTERAPÊUTICO" |
-| `ClinicalReportPDF.ts` | 72 | "RELATÓRIO CLÍNICO" | "RELATÓRIO FISIOTERAPÊUTICO" |
+Adicionar funcionalidade ao ícone do sino (🔔) no cabeçalho, mostrando um centro de notificações com alertas relevantes para a clínica.
 
 ---
 
-## Alterações por Arquivo
+## Tipos de Notificações
 
-### 1. `src/components/prontuarios/ClinicalReportsList.tsx`
+O sistema irá agregar notificações de várias fontes já existentes:
 
-- Linha 226: Título da secção
-- Linha 293: Mensagem de lista vazia
+| Tipo | Descrição | Prioridade |
+|------|-----------|------------|
+| 🎂 **Aniversários** | Pacientes aniversariantes hoje | Alta |
+| ⚠️ **Relatórios Vencidos** | Relatórios fisioterapêuticos com prazo expirado | Alta |
+| 📋 **Relatórios a Vencer** | Relatórios que vencem em 7 dias | Média |
+| 📅 **Sessões Hoje** | Resumo das sessões do dia | Info |
+| ⏰ **Pacientes Inativos** | Pacientes sem sessões há 30+ dias | Média |
 
-### 2. `src/components/prontuarios/NewClinicalReportModal.tsx`
+---
 
-- Linha 301: Título do modal (editar/novo)
-- Linha 531: Placeholder do textarea
-- Linha 560: Preview do cabeçalho do relatório
+## Interface Visual
 
-### 3. `src/components/prontuarios/ClinicalReportPDF.ts`
+```text
+┌─────────────────────────────────────┐
+│  🔔 Notificações                  ✕ │
+├─────────────────────────────────────┤
+│                                     │
+│  🎂 ANIVERSÁRIOS HOJE               │
+│  ─────────────────────              │
+│  • Maria Silva faz anos hoje        │
+│  • João Santos faz anos hoje        │
+│                                     │
+│  ⚠️ ALERTAS                         │
+│  ─────────────────────              │
+│  • 2 relatórios com prazo vencido   │
+│  • 1 relatório vence em 3 dias      │
+│                                     │
+│  📅 AGENDA DE HOJE                  │
+│  ─────────────────────              │
+│  • 8 sessões agendadas              │
+│  • 2 confirmadas, 6 pendentes       │
+│                                     │
+│  ────────────────────────────────── │
+│  [Ver Todas] [Marcar como lidas]    │
+└─────────────────────────────────────┘
+```
 
-- Linha 72: Cabeçalho do PDF gerado
+---
+
+## Arquitetura
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│                         PersistentHeader                          │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │                    NotificationBell                         │  │
+│  │  ┌─────────────────────────────────────────────────────┐   │  │
+│  │  │                NotificationPopover                   │   │  │
+│  │  │  ┌───────────────────────────────────────────────┐  │   │  │
+│  │  │  │            NotificationItem (x N)             │  │   │  │
+│  │  │  └───────────────────────────────────────────────┘  │   │  │
+│  │  └─────────────────────────────────────────────────────┘   │  │
+│  └────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┘
+
+         │
+         ▼
+┌─────────────────────┐
+│ NotificationService │ ◄── Agrega dados de múltiplas fontes
+└─────────────────────┘
+         │
+    ┌────┴────┐
+    ▼         ▼
+┌────────┐ ┌────────────────┐
+│Pacientes│ │Relatórios      │
+│(aniv.)  │ │(prazos)        │
+└────────┘ └────────────────┘
+    │              │
+    ▼              ▼
+┌────────┐ ┌────────────────┐
+│Sessões │ │EngagementSvc   │
+│(hoje)  │ │(inativos)      │
+└────────┘ └────────────────┘
+```
+
+---
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/services/NotificationService.ts` | **Criar** | Serviço para buscar e agregar notificações |
+| `src/components/notifications/NotificationBell.tsx` | **Criar** | Componente do sino com popover |
+| `src/components/notifications/NotificationItem.tsx` | **Criar** | Item individual de notificação |
+| `src/components/layout/PersistentHeader.tsx` | **Modificar** | Substituir botão estático pelo NotificationBell |
+
+---
+
+## Implementação Detalhada
+
+### 1. NotificationService.ts
+
+```typescript
+// Tipos de notificação
+export type NotificationType = 
+  | 'birthday' 
+  | 'report_expired' 
+  | 'report_expiring' 
+  | 'sessions_today'
+  | 'inactive_patient';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  priority: 'high' | 'medium' | 'low';
+  link?: string;
+  createdAt: Date;
+}
+
+// Métodos:
+// - getNotifications(): Promise<Notification[]>
+// - getBirthdayNotifications()
+// - getReportAlerts()
+// - getTodaySessions()
+// - getInactivePatients()
+```
+
+### 2. NotificationBell.tsx
+
+- Usa `Popover` do Radix UI (já instalado)
+- Mostra badge com contagem de notificações não lidas
+- Lista notificações agrupadas por tipo
+- Animação sutil ao haver novas notificações
+
+### 3. NotificationItem.tsx
+
+- Ícone baseado no tipo (🎂, ⚠️, 📅, etc.)
+- Cores de acordo com prioridade
+- Clique navega para a secção relevante
+
+---
+
+## Comportamento
+
+1. **Carregamento**: Notificações são buscadas ao carregar o header
+2. **Badge**: Mostra número de notificações de alta prioridade
+3. **Clique**: Abre popover com lista scrollável
+4. **Navegação**: Clicar numa notificação leva à página correspondente
+5. **Responsivo**: Funciona em mobile com popover adaptado
+
+---
+
+## Navegação por Tipo
+
+| Tipo | Destino ao Clicar |
+|------|-------------------|
+| Aniversário | `/engajamento` |
+| Relatório vencido/a vencer | `/prontuarios` |
+| Sessões hoje | `/agenda` |
+| Paciente inativo | `/engajamento` |
 
 ---
 
@@ -44,8 +170,9 @@ Substituir todas as ocorrências de "Relatório Clínico" por "Relatório Fisiot
 
 | Aspecto | Valor |
 |---------|-------|
-| Complexidade | Muito baixa |
-| Arquivos modificados | 3 |
-| Linhas alteradas | ~6 |
-| Risco | Nenhum (apenas texto) |
-
+| Complexidade | Média |
+| Arquivos criados | 3 |
+| Arquivos modificados | 1 |
+| Dependências novas | Nenhuma |
+| Risco | Baixo |
+| Usa banco de dados | Apenas leitura |
