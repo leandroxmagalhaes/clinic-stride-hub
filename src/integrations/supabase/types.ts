@@ -439,6 +439,115 @@ export type Database = {
           },
         ]
       }
+      horarios_reservados: {
+        Row: {
+          clinic_id: string
+          cor: string | null
+          created_at: string
+          created_by: string | null
+          data_fim: string | null
+          data_inicio: string
+          dias_semana: number[] | null
+          duracao_minutos: number
+          horario_inicio: string
+          horarios_personalizados: Json | null
+          id: string
+          observacoes: string | null
+          patient_id: string
+          professional_id: string | null
+          service_id: string | null
+          status: string
+          tipo: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          clinic_id: string
+          cor?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio: string
+          dias_semana?: number[] | null
+          duracao_minutos?: number
+          horario_inicio: string
+          horarios_personalizados?: Json | null
+          id?: string
+          observacoes?: string | null
+          patient_id: string
+          professional_id?: string | null
+          service_id?: string | null
+          status?: string
+          tipo?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          clinic_id?: string
+          cor?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          dias_semana?: number[] | null
+          duracao_minutos?: number
+          horario_inicio?: string
+          horarios_personalizados?: Json | null
+          id?: string
+          observacoes?: string | null
+          patient_id?: string
+          professional_id?: string | null
+          service_id?: string | null
+          status?: string
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "horarios_reservados_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "horarios_reservados_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "horarios_reservados_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "horarios_reservados_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "horarios_reservados_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "profissionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "horarios_reservados_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pacientes: {
         Row: {
           address: string | null
@@ -1487,6 +1596,18 @@ export type Database = {
       }
     }
     Functions: {
+      check_horario_reservado: {
+        Args: { p_date: string; p_professional_id?: string; p_time: string }
+        Returns: {
+          cor: string
+          patient_id: string
+          patient_name: string
+          reservado: boolean
+          reservation_id: string
+          tipo: string
+          titulo: string
+        }[]
+      }
       get_invite_details: { Args: { invite_token: string }; Returns: Json }
       get_patient_balance: { Args: { p_patient_id: string }; Returns: number }
       get_patient_credit_balance: {

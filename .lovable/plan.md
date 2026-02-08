@@ -1,25 +1,54 @@
+# Horários Reservados - Plano de Implementação
 
+## ✅ DIA 1 - CONCLUÍDO
 
-# DIA 1 - Implementação Imediata
+### Tabela `horarios_reservados`
+- ✅ Criada com todos os campos (tipo, dias_semana, horario_inicio, horarios_personalizados, etc.)
+- ✅ RLS policies para isolamento por clínica
+- ✅ Índices para performance
+- ✅ Trigger para updated_at automático
+- ✅ Função SQL `check_horario_reservado()` para verificar conflitos
 
-## O que será feito agora
+### Serviço TypeScript
+- ✅ `src/services/ReservedSlotService.ts` criado com:
+  - Interfaces tipadas (ReservedSlot, CreateReservedSlotData, etc.)
+  - CRUD completo (fetchAll, create, update, cancel, delete)
+  - Verificação de conflitos (checkReservation)
+  - Expansão de recorrências (getForDateRange, getForDate)
 
-Vou executar as seguintes tarefas nesta ordem:
+---
 
-### 1. Migração SQL
-Criar a tabela `horarios_reservados` com:
-- Campos para bloqueios fixos e personalizados
-- Políticas RLS para isolamento por clínica
-- Índices para performance
-- Trigger para `updated_at` automático
-- Função helper `check_horario_reservado()`
+## 🔲 DIA 2 - UI Básica (Próximo)
 
-### 2. Serviço TypeScript
-Criar `src/services/ReservedSlotService.ts` com:
-- Interfaces TypeScript tipadas
-- Métodos CRUD (fetchAll, create, update, cancel)
-- Verificação de conflitos
-- Busca por intervalo de datas
+### Modal de Criação
+- [ ] Botão "Horário Reservado" na página Agenda
+- [ ] Modal com formulário:
+  - Seleção de paciente
+  - Tipo (Fixo/Personalizado)
+  - Dias da semana (para Fixo)
+  - Horário de início
+  - Duração
+  - Data início/fim
+  - Cor e observações
+
+### Visualização na Agenda
+- [ ] Cards coloridos nos slots reservados
+- [ ] Ícone de cadeado para indicar bloqueio
+- [ ] Tooltip com info do paciente
+
+---
+
+## 🔲 DIA 3 - Integração Completa
+
+### Verificação de Conflitos
+- [ ] Ao criar sessão normal, verificar se slot está reservado
+- [ ] Aviso visual quando conflito detectado
+- [ ] Opção de prosseguir ou cancelar
+
+### Gestão de Reservas
+- [ ] Lista de todas as reservas ativas
+- [ ] Edição e cancelamento
+- [ ] Filtros por paciente/profissional
 
 ---
 
@@ -48,22 +77,9 @@ TABELA: horarios_reservados
 └── RLS: clinic_id = get_user_clinic_id(auth.uid())
 
 SERVIÇO: ReservedSlotService.ts
-├── fetchAll()
-├── create(data)
-├── update(id, data)
-├── cancel(id)
+├── fetchAll() / fetchActive() / fetchByPatient()
+├── create(data) / update(id, data)
+├── cancel(id) / pause(id) / activate(id) / delete(id)
 ├── checkReservation(date, time, professionalId)
-└── getForDateRange(startDate, endDate)
+└── getForDateRange(startDate, endDate) / getForDate(date)
 ```
-
----
-
-## Próximo Passo
-
-Após aprovar este plano, vou:
-1. Executar a migração SQL
-2. Criar o arquivo ReservedSlotService.ts
-3. Marcar Dia 1 como concluído
-
-**Créditos estimados: 2-3**
-
