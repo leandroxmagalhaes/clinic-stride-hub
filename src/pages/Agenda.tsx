@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Lock } from "lucide-react";
 import { 
   startOfWeek, 
   addDays, 
@@ -19,12 +19,15 @@ import { CreditPurchaseData } from "@/components/patients/AddCreditsModal";
 import { CreditService } from "@/services/CreditService";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { useReservedSlots } from "@/hooks/useReservedSlots";
+import { CreateReservedSlotData } from "@/services/ReservedSlotService";
 
 // Components
 import { AgendaControls } from "@/components/agenda/AgendaControls";
 import { AgendaDesktopGrid } from "@/components/agenda/AgendaDesktopGrid";
 import { AgendaMobileTimeline } from "@/components/agenda/AgendaMobileTimeline";
 import { NewSessionModal } from "@/components/agenda/NewSessionModal";
+import { NewReservedSlotModal } from "@/components/agenda/NewReservedSlotModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
 import { AgendaSkeleton } from "@/components/skeletons/PageSkeletons";
@@ -35,8 +38,17 @@ const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 export default function Agenda() {
   const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession, addCredits, refreshCreditBalances, isLoading } = useData();
   const { user } = useAuth();
+  const { 
+    reservedSlots, 
+    createReservedSlot, 
+    getOccurrencesForWeek, 
+    getOccurrencesForDate,
+    isSlotReserved,
+    isLoading: reservedSlotsLoading 
+  } = useReservedSlots();
   
   const [clinicId, setClinicId] = useState<string | null>(null);
+  const [isReservedSlotModalOpen, setIsReservedSlotModalOpen] = useState(false);
   
   // Fetch clinic_id for the current user
   useEffect(() => {
@@ -310,16 +322,31 @@ export default function Agenda() {
     );
   }
 
+  // Handle create reserved slot
+  const handleCreateReservedSlot = async (data: CreateReservedSlotData) => {
+    await createReservedSlot(data);
+  };
+
   return (
     <AppLayout 
       title="Agenda" 
       subtitle="Gerencie os agendamentos da clínica"
       actions={
-        <Button onClick={() => setIsModalOpen(true)} className="gap-2 min-h-[44px]">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Nova Sessão</span>
-          <span className="sm:hidden">Novo</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setIsReservedSlotModalOpen(true)} 
+            className="gap-2 min-h-[44px]"
+          >
+            <Lock className="h-4 w-4" />
+            <span className="hidden sm:inline">Reservar</span>
+          </Button>
+          <Button onClick={() => setIsModalOpen(true)} className="gap-2 min-h-[44px]">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Nova Sessão</span>
+            <span className="sm:hidden">Novo</span>
+          </Button>
+        </div>
       }
     >
       <div className="space-y-4 animate-fade-in">
@@ -356,6 +383,7 @@ export default function Agenda() {
           weekDays={weekDays}
           hours={displayedHours}
           sessions={sessions}
+          reservedSlotOccurrences={getOccurrencesForWeek(weekStart)}
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
           onSessionReschedule={handleSessionReschedule}
@@ -367,6 +395,7 @@ export default function Agenda() {
           currentDate={currentDate}
           hours={displayedHours}
           sessions={sessions}
+          reservedSlotOccurrences={getOccurrencesForDate(currentDate)}
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
           getCreditBalance={getCreditBalance}
@@ -392,6 +421,19 @@ export default function Agenda() {
         setNotes={setNotes}
         getCreditBalance={getCreditBalance}
       />
+
+      {/* New Reserved Slot Modal */}
+      {clinicId && (
+        <NewReservedSlotModal
+          isOpen={isReservedSlotModalOpen}
+          onClose={() => setIsReservedSlotModalOpen(false)}
+          patients={patients}
+          professionals={professionals}
+          services={services}
+          clinicId={clinicId}
+          onSubmit={handleCreateReservedSlot}
+        />
+      )}
 
       {/* Session Management Modal */}
       <SessionManagementModal
