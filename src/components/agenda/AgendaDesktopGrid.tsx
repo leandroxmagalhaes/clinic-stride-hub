@@ -14,8 +14,10 @@ import {
 import { useState } from "react";
 import { DraggableSession } from "./DraggableSession";
 import { DroppableSlot } from "./DroppableSlot";
+import { ReservedSlotCard } from "./ReservedSlotCard";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { GripVertical } from "lucide-react";
+import { ReservedSlot } from "@/services/ReservedSlotService";
 
 interface Session {
   id: string;
@@ -28,10 +30,17 @@ interface Session {
   servico?: { name: string; color: string };
 }
 
+interface ReservedSlotOccurrence {
+  date: string;
+  time: string;
+  reservation: ReservedSlot;
+}
+
 interface AgendaDesktopGridProps {
   weekDays: Date[];
   hours: number[];
   sessions: Session[];
+  reservedSlotOccurrences?: ReservedSlotOccurrence[];
   onSlotClick: (date: Date, hour: number) => void;
   onSessionClick: (session: Session) => void;
   onSessionReschedule?: (sessionId: string, newDate: Date, newHour: number) => void;
@@ -42,6 +51,7 @@ export function AgendaDesktopGrid({
   weekDays, 
   hours, 
   sessions,
+  reservedSlotOccurrences = [],
   onSlotClick,
   onSessionClick,
   onSessionReschedule,
@@ -61,6 +71,14 @@ export function AgendaDesktopGrid({
     return sessions.filter(
       (s) => isSameDay(s.start_time, date) && s.start_time.getHours() === hour
     );
+  };
+
+  const getReservationsForSlot = (date: Date, hour: number) => {
+    const dateStr = format(date, "yyyy-MM-dd");
+    return reservedSlotOccurrences.filter(occ => {
+      const occHour = parseInt(occ.time.split(':')[0], 10);
+      return occ.date === dateStr && occHour === hour;
+    });
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -145,6 +163,7 @@ export function AgendaDesktopGrid({
                     </div>
                     {weekDays.map((day, dayIndex) => {
                       const slotSessions = getSessionsForSlot(day, hour);
+                      const slotReservations = getReservationsForSlot(day, hour);
                       const isToday = isSameDay(day, new Date());
                       const slotId = `${day.toISOString()}-${hour}`;
                       
@@ -155,9 +174,19 @@ export function AgendaDesktopGrid({
                           date={day}
                           hour={hour}
                           isToday={isToday}
-                          hasSession={slotSessions.length > 0}
+                          hasSession={slotSessions.length > 0 || slotReservations.length > 0}
                           onSlotClick={() => onSlotClick(day, hour)}
                         >
+                          {/* Reserved slots first (background) */}
+                          {slotReservations.map((occ) => (
+                            <ReservedSlotCard
+                              key={`reserved-${occ.reservation.id}-${occ.date}-${occ.time}`}
+                              reservation={occ.reservation}
+                              time={occ.time}
+                              compact={slotSessions.length > 0}
+                            />
+                          ))}
+                          {/* Regular sessions */}
                           {slotSessions.map((session) => {
                             const patientId = session.paciente?.id;
                             const hasCredits = patientId && getCreditBalance 

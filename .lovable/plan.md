@@ -18,36 +18,46 @@
 
 ---
 
-## 🔲 DIA 2 - UI Básica (Próximo)
+## ✅ DIA 2 - CONCLUÍDO
 
 ### Modal de Criação
-- [ ] Botão "Horário Reservado" na página Agenda
-- [ ] Modal com formulário:
-  - Seleção de paciente
+- ✅ Botão "Reservar" na página Agenda (com ícone de cadeado)
+- ✅ `NewReservedSlotModal.tsx` com formulário completo:
+  - Seleção de paciente (searchable combobox)
   - Tipo (Fixo/Personalizado)
-  - Dias da semana (para Fixo)
+  - Dias da semana (botões toggle para fixo)
   - Horário de início
-  - Duração
+  - Duração configurável
   - Data início/fim
-  - Cor e observações
+  - Seleção de cor
+  - Observações
 
 ### Visualização na Agenda
-- [ ] Cards coloridos nos slots reservados
-- [ ] Ícone de cadeado para indicar bloqueio
-- [ ] Tooltip com info do paciente
+- ✅ `ReservedSlotCard.tsx` - Cards coloridos com borda tracejada
+- ✅ Ícone de cadeado para indicar bloqueio
+- ✅ Tooltip com informações do paciente
+- ✅ Integração no `AgendaDesktopGrid.tsx`
+- ✅ Integração no `AgendaMobileTimeline.tsx`
+
+### Hook de Gerenciamento
+- ✅ `useReservedSlots.ts` - Hook customizado com:
+  - Estado local dos horários reservados
+  - CRUD operations
+  - Expansão de recorrências para semana/dia
+  - Verificação se slot está reservado
 
 ---
 
-## 🔲 DIA 3 - Integração Completa
+## 🔲 DIA 3 - Verificação de Conflitos (Próximo)
 
-### Verificação de Conflitos
+### Verificação ao Criar Sessão
 - [ ] Ao criar sessão normal, verificar se slot está reservado
 - [ ] Aviso visual quando conflito detectado
-- [ ] Opção de prosseguir ou cancelar
+- [ ] Permitir usar o slot reservado (converte em sessão)
 
 ### Gestão de Reservas
 - [ ] Lista de todas as reservas ativas
-- [ ] Edição e cancelamento
+- [ ] Edição e cancelamento de reservas
 - [ ] Filtros por paciente/profissional
 
 ---
@@ -55,31 +65,21 @@
 ## Resumo Técnico
 
 ```text
-TABELA: horarios_reservados
-├── id (UUID PK)
-├── clinic_id (UUID NOT NULL)
-├── patient_id (UUID NOT NULL)
-├── professional_id (UUID opcional)
-├── service_id (UUID opcional)
-├── tipo ('fixo' | 'personalizado')
-├── titulo (TEXT)
-├── dias_semana (INTEGER[] - para fixo)
-├── horario_inicio (TIME)
-├── duracao_minutos (INTEGER)
-├── horarios_personalizados (JSONB - para personalizado)
-├── data_inicio (DATE)
-├── data_fim (DATE nullable)
-├── status ('ativo' | 'pausado' | 'cancelado')
-├── cor (TEXT)
-├── observacoes (TEXT)
-├── created_by (UUID)
-├── created_at / updated_at (TIMESTAMPTZ)
-└── RLS: clinic_id = get_user_clinic_id(auth.uid())
+ARQUIVOS CRIADOS/MODIFICADOS:
 
-SERVIÇO: ReservedSlotService.ts
-├── fetchAll() / fetchActive() / fetchByPatient()
-├── create(data) / update(id, data)
-├── cancel(id) / pause(id) / activate(id) / delete(id)
-├── checkReservation(date, time, professionalId)
-└── getForDateRange(startDate, endDate) / getForDate(date)
+src/services/ReservedSlotService.ts     ✅ Serviço CRUD + verificação
+src/hooks/useReservedSlots.ts           ✅ Hook de gerenciamento
+src/components/agenda/NewReservedSlotModal.tsx    ✅ Modal de criação
+src/components/agenda/ReservedSlotCard.tsx        ✅ Card visual
+src/components/agenda/AgendaDesktopGrid.tsx       ✅ Atualizado
+src/components/agenda/AgendaMobileTimeline.tsx    ✅ Atualizado
+src/pages/Agenda.tsx                    ✅ Integração completa
+
+TABELA SQL: horarios_reservados
+├── id, clinic_id, patient_id, professional_id, service_id
+├── tipo ('fixo' | 'personalizado')
+├── dias_semana (INTEGER[]), horario_inicio (TIME), duracao_minutos
+├── horarios_personalizados (JSONB)
+├── data_inicio, data_fim, status, cor, observacoes
+└── RLS: clinic_id = get_user_clinic_id(auth.uid())
 ```
