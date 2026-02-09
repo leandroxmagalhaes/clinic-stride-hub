@@ -1,85 +1,124 @@
-# Horários Reservados - Plano de Implementação
 
-## ✅ DIA 1 - CONCLUÍDO
+# Plano de Correção: Sistema de Horários Reservados
 
-### Tabela `horarios_reservados`
-- ✅ Criada com todos os campos (tipo, dias_semana, horario_inicio, horarios_personalizados, etc.)
-- ✅ RLS policies para isolamento por clínica
-- ✅ Índices para performance
-- ✅ Trigger para updated_at automático
-- ✅ Função SQL `check_horario_reservado()` para verificar conflitos
+## Diagnóstico
 
-### Serviço TypeScript
-- ✅ `src/services/ReservedSlotService.ts` criado com:
-  - Interfaces tipadas (ReservedSlot, CreateReservedSlotData, etc.)
-  - CRUD completo (fetchAll, create, update, cancel, delete)
-  - Verificação de conflitos (checkReservation)
-  - Expansão de recorrências (getForDateRange, getForDate)
+Após análise detalhada, identifiquei que o sistema de horários reservados foi criado mas **não está a funcionar** devido a problemas de arquitetura de dados.
 
----
+### Problema Principal: Incompatibilidade de Foreign Keys
 
-## ✅ DIA 2 - CONCLUÍDO
-
-### Modal de Criação
-- ✅ Botão "Reservar" na página Agenda (com ícone de cadeado)
-- ✅ `NewReservedSlotModal.tsx` com formulário completo:
-  - Seleção de paciente (searchable combobox)
-  - Tipo (Fixo/Personalizado)
-  - Dias da semana (botões toggle para fixo)
-  - Horário de início
-  - Duração configurável
-  - Data início/fim
-  - Seleção de cor
-  - Observações
-
-### Visualização na Agenda
-- ✅ `ReservedSlotCard.tsx` - Cards coloridos com borda tracejada
-- ✅ Ícone de cadeado para indicar bloqueio
-- ✅ Tooltip com informações do paciente
-- ✅ Integração no `AgendaDesktopGrid.tsx`
-- ✅ Integração no `AgendaMobileTimeline.tsx`
-
-### Hook de Gerenciamento
-- ✅ `useReservedSlots.ts` - Hook customizado com:
-  - Estado local dos horários reservados
-  - CRUD operations
-  - Expansão de recorrências para semana/dia
-  - Verificação se slot está reservado
-
----
-
-## 🔲 DIA 3 - Verificação de Conflitos (Próximo)
-
-### Verificação ao Criar Sessão
-- [ ] Ao criar sessão normal, verificar se slot está reservado
-- [ ] Aviso visual quando conflito detectado
-- [ ] Permitir usar o slot reservado (converte em sessão)
-
-### Gestão de Reservas
-- [ ] Lista de todas as reservas ativas
-- [ ] Edição e cancelamento de reservas
-- [ ] Filtros por paciente/profissional
-
----
-
-## Resumo Técnico
+A tabela `horarios_reservados` foi criada com uma foreign key `professional_id` que aponta para a tabela `profissionais`. No entanto, **a aplicação usa profissionais da tabela `profiles`** (filtrados por role).
 
 ```text
-ARQUIVOS CRIADOS/MODIFICADOS:
+SITUAÇÃO ATUAL:
+─────────────────────────────────────────
+horarios_reservados.professional_id
+         ↓ (FK)
+    profissionais.id  ← TABELA ERRADA
 
-src/services/ReservedSlotService.ts     ✅ Serviço CRUD + verificação
-src/hooks/useReservedSlots.ts           ✅ Hook de gerenciamento
-src/components/agenda/NewReservedSlotModal.tsx    ✅ Modal de criação
-src/components/agenda/ReservedSlotCard.tsx        ✅ Card visual
-src/components/agenda/AgendaDesktopGrid.tsx       ✅ Atualizado
-src/components/agenda/AgendaMobileTimeline.tsx    ✅ Atualizado
-src/pages/Agenda.tsx                    ✅ Integração completa
-
-TABELA SQL: horarios_reservados
-├── id, clinic_id, patient_id, professional_id, service_id
-├── tipo ('fixo' | 'personalizado')
-├── dias_semana (INTEGER[]), horario_inicio (TIME), duracao_minutos
-├── horarios_personalizados (JSONB)
-├── data_inicio, data_fim, status, cor, observacoes
-└── RLS: clinic_id = get_user_clinic_id(auth.uid())
+DataContext.professionals vem de:
+    profiles.id (role = 'fisioterapeuta'/'admin'/'professional')
 ```
+
+Quando um utilizador tenta criar uma reserva:
+1. Seleciona um profissional (ID vem de `profiles`)
+2. Tenta gravar na tabela `horarios_reservados`
+3. A FK falha porque o ID não existe em `profissionais`
+
+### Problema Secundário: Queries de JOIN Incorretas
+
+O `ReservedSlotService.ts` usa:
+```typescript
+professional:profissionais!professional_id(...)
+```
+
+Deveria usar o padrão do `DataContext`:
+```typescript
+professional:profiles!horarios_reservados_professional_id_fkey(...)
+```
+
+---
+
+## Solução Proposta
+
+### Fase 1: Corrigir Foreign Key no Banco de Dados
+
+Alterar a FK `horarios_reservados_professional_id_fkey` para apontar para `profiles.id` em vez de `profissionais.id`.
+
+```sql
+-- Remover FK antiga
+ALTER TABLE public.horarios_reservados
+DROP CONSTRAINT horarios_reservados_professional_id_fkey;
+
+-- Criar FK correta apontando para profiles
+ALTER TABLE public.horarios_reservados
+ADD CONSTRAINT horarios_reservados_professional_id_fkey
+FOREIGN KEY (professional_id) REFERENCES public.profiles(id);
+```
+
+### Fase 2: Corrigir ReservedSlotService.ts
+
+Atualizar todas as queries para usar o padrão correto de JOIN:
+
+```typescript
+// ANTES (incorreto):
+professional:profissionais!professional_id(id, full_name)
+
+// DEPOIS (correto):
+professional:profiles!horarios_reservados_professional_id_fkey(id, full_name)
+```
+
+Métodos afetados:
+- `fetchAll()`
+- `fetchActive()`
+- `fetchByPatient()`
+- `create()`
+- `update()`
+
+### Fase 3: Adicionar Tratamento de Erros no Hook
+
+Melhorar o `useReservedSlots.ts` para mostrar erros de forma mais clara:
+
+```typescript
+const createReservedSlot = useCallback(async (data: CreateReservedSlotData) => {
+  try {
+    const newSlot = await ReservedSlotService.create(data);
+    setReservedSlots(prev => [newSlot, ...prev]);
+    toast.success("Horário reservado com sucesso!");
+    return newSlot;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro ao criar reserva";
+    toast.error(message);
+    throw err;
+  }
+}, []);
+```
+
+---
+
+## Resumo de Alterações
+
+| Arquivo/Recurso | Tipo | Descrição |
+|-----------------|------|-----------|
+| Migração SQL | BD | Corrigir FK para apontar para `profiles` |
+| `ReservedSlotService.ts` | TS | Corrigir JOINs nas queries |
+| `useReservedSlots.ts` | TS | Adicionar feedback de erros |
+
+---
+
+## Créditos Estimados: 2
+
+| Item | Créditos |
+|------|----------|
+| Migração SQL | 1 |
+| Correções TypeScript | 1 |
+| **Total** | **2** |
+
+---
+
+## Resultado Esperado
+
+Após as correções:
+1. O botão "Reservar" criará slots corretamente no banco
+2. Os slots aparecerão na grelha da agenda com o ícone de cadeado
+3. Erros serão mostrados via toast se algo falhar
