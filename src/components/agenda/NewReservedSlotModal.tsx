@@ -417,12 +417,15 @@ export function NewReservedSlotModal({
           {/* Professional (optional) */}
           <div className="space-y-2">
             <Label>Profissional (opcional)</Label>
-            <Select value={selectedProfessional} onValueChange={setSelectedProfessional}>
+            <Select 
+              value={selectedProfessional || "__none__"} 
+              onValueChange={(v) => setSelectedProfessional(v === "__none__" ? "" : v)}
+            >
               <SelectTrigger className="min-h-[44px]">
                 <SelectValue placeholder="Qualquer profissional" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="" className="min-h-[44px]">
+                <SelectItem value="__none__" className="min-h-[44px]">
                   Qualquer profissional
                 </SelectItem>
                 {professionals.map((p) => (
@@ -437,12 +440,15 @@ export function NewReservedSlotModal({
           {/* Service (optional) */}
           <div className="space-y-2">
             <Label>Serviço (opcional)</Label>
-            <Select value={selectedService} onValueChange={setSelectedService}>
+            <Select 
+              value={selectedService || "__none__"} 
+              onValueChange={(v) => setSelectedService(v === "__none__" ? "" : v)}
+            >
               <SelectTrigger className="min-h-[44px]">
                 <SelectValue placeholder="Qualquer serviço" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="" className="min-h-[44px]">
+                <SelectItem value="__none__" className="min-h-[44px]">
                   Qualquer serviço
                 </SelectItem>
                 {services.map((s) => (
