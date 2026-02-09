@@ -147,7 +147,7 @@ export const ReservedSlotService = {
       .select(`
         *,
         patient:pacientes!patient_id(id, full_name),
-        professional:profissionais!professional_id(id, full_name),
+        professional:profiles!horarios_reservados_professional_id_fkey(id, full_name),
         service:servicos!service_id(id, name, color)
       `)
       .order('created_at', { ascending: false });
@@ -169,7 +169,7 @@ export const ReservedSlotService = {
       .select(`
         *,
         patient:pacientes!patient_id(id, full_name),
-        professional:profissionais!professional_id(id, full_name),
+        professional:profiles!horarios_reservados_professional_id_fkey(id, full_name),
         service:servicos!service_id(id, name, color)
       `)
       .eq('status', 'ativo')
@@ -192,7 +192,7 @@ export const ReservedSlotService = {
       .select(`
         *,
         patient:pacientes!patient_id(id, full_name),
-        professional:profissionais!professional_id(id, full_name),
+        professional:profiles!horarios_reservados_professional_id_fkey(id, full_name),
         service:servicos!service_id(id, name, color)
       `)
       .eq('patient_id', patientId)
@@ -243,7 +243,7 @@ export const ReservedSlotService = {
       .select(`
         *,
         patient:pacientes!patient_id(id, full_name),
-        professional:profissionais!professional_id(id, full_name),
+        professional:profiles!horarios_reservados_professional_id_fkey(id, full_name),
         service:servicos!service_id(id, name, color)
       `)
       .single();
@@ -273,7 +273,7 @@ export const ReservedSlotService = {
       .select(`
         *,
         patient:pacientes!patient_id(id, full_name),
-        professional:profissionais!professional_id(id, full_name),
+        professional:profiles!horarios_reservados_professional_id_fkey(id, full_name),
         service:servicos!service_id(id, name, color)
       `)
       .single();
@@ -393,7 +393,7 @@ export const ReservedSlotService = {
       .select(`
         *,
         patient:pacientes!patient_id(id, full_name),
-        professional:profissionais!professional_id(id, full_name),
+        professional:profiles!horarios_reservados_professional_id_fkey(id, full_name),
         service:servicos!service_id(id, name, color)
       `)
       .eq('status', 'ativo')

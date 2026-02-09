@@ -536,7 +536,7 @@ export type Database = {
             foreignKeyName: "horarios_reservados_professional_id_fkey"
             columns: ["professional_id"]
             isOneToOne: false
-            referencedRelation: "profissionais"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
