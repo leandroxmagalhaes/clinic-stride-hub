@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { 
   ReservedSlotService, 
   ReservedSlot, 
   CreateReservedSlotData,
   UpdateReservedSlotData 
 } from "@/services/ReservedSlotService";
-import { startOfWeek, endOfWeek, format, addDays } from "date-fns";
+import { format, addDays, endOfWeek } from "date-fns";
+import { toast } from "@/hooks/use-toast";
 
 interface ReservedSlotOccurrence {
   date: string;
@@ -26,7 +27,9 @@ export function useReservedSlots() {
       const data = await ReservedSlotService.fetchActive();
       setReservedSlots(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar reservas");
+      const message = err instanceof Error ? err.message : "Erro ao carregar reservas";
+      setError(message);
+      toast({ title: "Erro", description: message, variant: "destructive" });
       console.error("Error fetching reserved slots:", err);
     } finally {
       setIsLoading(false);
@@ -40,22 +43,43 @@ export function useReservedSlots() {
 
   // Create new reserved slot
   const createReservedSlot = useCallback(async (data: CreateReservedSlotData) => {
-    const newSlot = await ReservedSlotService.create(data);
-    setReservedSlots(prev => [newSlot, ...prev]);
-    return newSlot;
+    try {
+      const newSlot = await ReservedSlotService.create(data);
+      setReservedSlots(prev => [newSlot, ...prev]);
+      toast({ title: "Sucesso", description: "Horário reservado com sucesso!" });
+      return newSlot;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao criar reserva";
+      toast({ title: "Erro", description: message, variant: "destructive" });
+      throw err;
+    }
   }, []);
 
   // Update reserved slot
   const updateReservedSlot = useCallback(async (id: string, data: UpdateReservedSlotData) => {
-    const updated = await ReservedSlotService.update(id, data);
-    setReservedSlots(prev => prev.map(s => s.id === id ? updated : s));
-    return updated;
+    try {
+      const updated = await ReservedSlotService.update(id, data);
+      setReservedSlots(prev => prev.map(s => s.id === id ? updated : s));
+      toast({ title: "Sucesso", description: "Reserva atualizada!" });
+      return updated;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao atualizar reserva";
+      toast({ title: "Erro", description: message, variant: "destructive" });
+      throw err;
+    }
   }, []);
 
   // Cancel reserved slot
   const cancelReservedSlot = useCallback(async (id: string) => {
-    await ReservedSlotService.cancel(id);
-    setReservedSlots(prev => prev.filter(s => s.id !== id));
+    try {
+      await ReservedSlotService.cancel(id);
+      setReservedSlots(prev => prev.filter(s => s.id !== id));
+      toast({ title: "Sucesso", description: "Reserva cancelada!" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao cancelar reserva";
+      toast({ title: "Erro", description: message, variant: "destructive" });
+      throw err;
+    }
   }, []);
 
   // Get occurrences for a specific week
