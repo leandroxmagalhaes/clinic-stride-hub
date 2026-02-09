@@ -1,124 +1,61 @@
 
-# Plano de Correção: Sistema de Horários Reservados
+# Correção: Erro "SelectItem must have a value prop that is not an empty string"
 
 ## Diagnóstico
 
-Após análise detalhada, identifiquei que o sistema de horários reservados foi criado mas **não está a funcionar** devido a problemas de arquitetura de dados.
+O erro acontece quando o utilizador clica no botão "Reservar" (cadeado) na página da Agenda. A aplicação quebra devido a um problema no componente `NewReservedSlotModal.tsx`.
 
-### Problema Principal: Incompatibilidade de Foreign Keys
+### Causa Raiz
 
-A tabela `horarios_reservados` foi criada com uma foreign key `professional_id` que aponta para a tabela `profissionais`. No entanto, **a aplicação usa profissionais da tabela `profiles`** (filtrados por role).
+O Radix UI Select **não permite** que `<SelectItem>` tenha `value=""` (string vazia). Esta string é reservada para limpar a seleção e mostrar o placeholder.
+
+Linhas problemáticas em `NewReservedSlotModal.tsx`:
 
 ```text
-SITUAÇÃO ATUAL:
-─────────────────────────────────────────
-horarios_reservados.professional_id
-         ↓ (FK)
-    profissionais.id  ← TABELA ERRADA
+Linha 425-427:
+<SelectItem value="" className="min-h-[44px]">
+  Qualquer profissional
+</SelectItem>
 
-DataContext.professionals vem de:
-    profiles.id (role = 'fisioterapeuta'/'admin'/'professional')
+Linha 445-447:
+<SelectItem value="" className="min-h-[44px]">
+  Qualquer serviço
+</SelectItem>
 ```
 
-Quando um utilizador tenta criar uma reserva:
-1. Seleciona um profissional (ID vem de `profiles`)
-2. Tenta gravar na tabela `horarios_reservados`
-3. A FK falha porque o ID não existe em `profissionais`
+## Solução
 
-### Problema Secundário: Queries de JOIN Incorretas
+Substituir `value=""` por um valor placeholder especial (ex: `"__none__"`) e ajustar a lógica para converter este valor de volta para `null` quando necessário.
 
-O `ReservedSlotService.ts` usa:
-```typescript
-professional:profissionais!professional_id(...)
-```
+### Alterações no NewReservedSlotModal.tsx
 
-Deveria usar o padrão do `DataContext`:
-```typescript
-professional:profiles!horarios_reservados_professional_id_fkey(...)
-```
+1. **Linha 425-427** - SelectItem de Profissional:
+   - Antes: `value=""`
+   - Depois: `value="__none__"`
 
----
+2. **Linha 445-447** - SelectItem de Serviço:
+   - Antes: `value=""`
+   - Depois: `value="__none__"`
 
-## Solução Proposta
+3. **Handler onValueChange** - Converter `"__none__"` para string vazia:
+   - Linha 420: `onValueChange={(v) => setSelectedProfessional(v === "__none__" ? "" : v)}`
+   - Linha 440: `onValueChange={(v) => setSelectedService(v === "__none__" ? "" : v)}`
 
-### Fase 1: Corrigir Foreign Key no Banco de Dados
+4. **Valor do Select** - Converter string vazia de volta para `"__none__"`:
+   - Linha 420: `value={selectedProfessional || "__none__"}`
+   - Linha 440: `value={selectedService || "__none__"}`
 
-Alterar a FK `horarios_reservados_professional_id_fkey` para apontar para `profiles.id` em vez de `profissionais.id`.
+### Resumo de Ficheiros
 
-```sql
--- Remover FK antiga
-ALTER TABLE public.horarios_reservados
-DROP CONSTRAINT horarios_reservados_professional_id_fkey;
-
--- Criar FK correta apontando para profiles
-ALTER TABLE public.horarios_reservados
-ADD CONSTRAINT horarios_reservados_professional_id_fkey
-FOREIGN KEY (professional_id) REFERENCES public.profiles(id);
-```
-
-### Fase 2: Corrigir ReservedSlotService.ts
-
-Atualizar todas as queries para usar o padrão correto de JOIN:
-
-```typescript
-// ANTES (incorreto):
-professional:profissionais!professional_id(id, full_name)
-
-// DEPOIS (correto):
-professional:profiles!horarios_reservados_professional_id_fkey(id, full_name)
-```
-
-Métodos afetados:
-- `fetchAll()`
-- `fetchActive()`
-- `fetchByPatient()`
-- `create()`
-- `update()`
-
-### Fase 3: Adicionar Tratamento de Erros no Hook
-
-Melhorar o `useReservedSlots.ts` para mostrar erros de forma mais clara:
-
-```typescript
-const createReservedSlot = useCallback(async (data: CreateReservedSlotData) => {
-  try {
-    const newSlot = await ReservedSlotService.create(data);
-    setReservedSlots(prev => [newSlot, ...prev]);
-    toast.success("Horário reservado com sucesso!");
-    return newSlot;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Erro ao criar reserva";
-    toast.error(message);
-    throw err;
-  }
-}, []);
-```
-
----
-
-## Resumo de Alterações
-
-| Arquivo/Recurso | Tipo | Descrição |
-|-----------------|------|-----------|
-| Migração SQL | BD | Corrigir FK para apontar para `profiles` |
-| `ReservedSlotService.ts` | TS | Corrigir JOINs nas queries |
-| `useReservedSlots.ts` | TS | Adicionar feedback de erros |
-
----
-
-## Créditos Estimados: 2
-
-| Item | Créditos |
-|------|----------|
-| Migração SQL | 1 |
-| Correções TypeScript | 1 |
-| **Total** | **2** |
-
----
+| Ficheiro | Alteração |
+|----------|-----------|
+| `src/components/agenda/NewReservedSlotModal.tsx` | Corrigir valores vazios em SelectItem |
 
 ## Resultado Esperado
 
-Após as correções:
-1. O botão "Reservar" criará slots corretamente no banco
-2. Os slots aparecerão na grelha da agenda com o ícone de cadeado
-3. Erros serão mostrados via toast se algo falhar
+Após a correção:
+1. O modal "Novo Horário Reservado" abrirá sem erros
+2. Os campos opcionais (Profissional e Serviço) funcionarão corretamente com opção "Qualquer"
+3. A aplicação não crashará ao clicar no botão Reservar
+
+## Créditos Estimados: 1
