@@ -20,7 +20,7 @@ import { CreditService } from "@/services/CreditService";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useReservedSlots } from "@/hooks/useReservedSlots";
-import { CreateReservedSlotData } from "@/services/ReservedSlotService";
+import { CreateReservedSlotData, ReservedSlot, ReservedSlotService } from "@/services/ReservedSlotService";
 
 // Components
 import { AgendaControls } from "@/components/agenda/AgendaControls";
@@ -29,6 +29,7 @@ import { AgendaMobileTimeline } from "@/components/agenda/AgendaMobileTimeline";
 import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 import { NewReservedSlotModal } from "@/components/agenda/NewReservedSlotModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
+import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotManagementModal";
 import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
 import { AgendaSkeleton } from "@/components/skeletons/PageSkeletons";
 
@@ -41,14 +42,19 @@ export default function Agenda() {
   const { 
     reservedSlots, 
     createReservedSlot, 
+    updateReservedSlot,
+    cancelReservedSlot,
     getOccurrencesForWeek, 
     getOccurrencesForDate,
     isSlotReserved,
+    fetchReservedSlots,
     isLoading: reservedSlotsLoading 
   } = useReservedSlots();
   
   const [clinicId, setClinicId] = useState<string | null>(null);
   const [isReservedSlotModalOpen, setIsReservedSlotModalOpen] = useState(false);
+  const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
+  const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
   
   // Fetch clinic_id for the current user
   useEffect(() => {
@@ -135,6 +141,17 @@ export default function Agenda() {
   const handleSessionClick = (session: Session) => {
     setSelectedSession(session);
     setIsSessionModalOpen(true);
+  };
+
+  const handleReservedSlotClick = (reservation: ReservedSlot) => {
+    setSelectedReservation(reservation);
+    setIsReservationManageOpen(true);
+  };
+
+  const handleReservationManageClose = () => {
+    setIsReservationManageOpen(false);
+    setSelectedReservation(null);
+    fetchReservedSlots(); // Refresh after changes
   };
 
   const handleSessionModalClose = () => {
@@ -387,6 +404,7 @@ export default function Agenda() {
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
           onSessionReschedule={handleSessionReschedule}
+          onReservedSlotClick={handleReservedSlotClick}
           getCreditBalance={getCreditBalance}
         />
 
@@ -398,6 +416,7 @@ export default function Agenda() {
           reservedSlotOccurrences={getOccurrencesForDate(currentDate)}
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
+          onReservedSlotClick={handleReservedSlotClick}
           getCreditBalance={getCreditBalance}
         />
       </div>
@@ -448,6 +467,18 @@ export default function Agenda() {
         onUseCredit={useCredit}
         wasCreditUsedForSession={wasCreditUsedForSession}
         onAddCredits={handleAddCredits}
+      />
+
+      {/* Reserved Slot Management Modal */}
+      <ReservedSlotManagementModal
+        isOpen={isReservationManageOpen}
+        onClose={handleReservationManageClose}
+        reservation={selectedReservation}
+        onUpdate={updateReservedSlot}
+        onCancel={cancelReservedSlot}
+        onDelete={async (id) => { await ReservedSlotService.delete(id); }}
+        onPause={async (id) => { await ReservedSlotService.pause(id); }}
+        onActivate={async (id) => { await ReservedSlotService.activate(id); }}
       />
 
       {/* Automation Trigger Toast/Modal */}
