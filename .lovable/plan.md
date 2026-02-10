@@ -1,61 +1,66 @@
 
-# Correção: Erro "SelectItem must have a value prop that is not an empty string"
+# Gestão de Horários Reservados: Editar e Excluir
 
-## Diagnóstico
-
-O erro acontece quando o utilizador clica no botão "Reservar" (cadeado) na página da Agenda. A aplicação quebra devido a um problema no componente `NewReservedSlotModal.tsx`.
-
-### Causa Raiz
-
-O Radix UI Select **não permite** que `<SelectItem>` tenha `value=""` (string vazia). Esta string é reservada para limpar a seleção e mostrar o placeholder.
-
-Linhas problemáticas em `NewReservedSlotModal.tsx`:
-
-```text
-Linha 425-427:
-<SelectItem value="" className="min-h-[44px]">
-  Qualquer profissional
-</SelectItem>
-
-Linha 445-447:
-<SelectItem value="" className="min-h-[44px]">
-  Qualquer serviço
-</SelectItem>
-```
+## Problema
+Os cards de horário reservado (cadeado) na agenda não respondem ao clique. Não existe nenhum modal de gestão para editar ou excluir reservas existentes.
 
 ## Solução
 
-Substituir `value=""` por um valor placeholder especial (ex: `"__none__"`) e ajustar a lógica para converter este valor de volta para `null` quando necessário.
+Criar um modal de gestão de horários reservados e conectá-lo aos cards na agenda.
 
-### Alterações no NewReservedSlotModal.tsx
+---
 
-1. **Linha 425-427** - SelectItem de Profissional:
-   - Antes: `value=""`
-   - Depois: `value="__none__"`
+### 1. Novo componente: `ReservedSlotManagementModal`
 
-2. **Linha 445-447** - SelectItem de Serviço:
-   - Antes: `value=""`
-   - Depois: `value="__none__"`
+Um modal que abre ao clicar num card de reserva, com as seguintes funcionalidades:
 
-3. **Handler onValueChange** - Converter `"__none__"` para string vazia:
-   - Linha 420: `onValueChange={(v) => setSelectedProfessional(v === "__none__" ? "" : v)}`
-   - Linha 440: `onValueChange={(v) => setSelectedService(v === "__none__" ? "" : v)}`
+**Visualização:**
+- Nome do utente, profissional, serviço
+- Tipo (fixo/personalizado), dias da semana, horário
+- Período de validade (data início/fim)
+- Cor e observações
 
-4. **Valor do Select** - Converter string vazia de volta para `"__none__"`:
-   - Linha 420: `value={selectedProfessional || "__none__"}`
-   - Linha 440: `value={selectedService || "__none__"}`
+**Ações:**
+- **Editar** campos principais: título, profissional, serviço, dias da semana, horário, cor, datas, observações
+- **Pausar/Reativar** reserva (alterna status entre "ativo" e "pausado")
+- **Cancelar** reserva (soft delete com confirmação)
+- **Excluir permanentemente** (hard delete com confirmação extra)
 
-### Resumo de Ficheiros
+### 2. Atualizar `Agenda.tsx`
 
+- Adicionar estado para a reserva selecionada e controlo do modal
+- Criar handler `handleReservedSlotClick` que recebe a reserva
+- Passar funções `updateReservedSlot` e `cancelReservedSlot` do hook para o modal
+- Renderizar o novo modal
+
+### 3. Atualizar `AgendaDesktopGrid.tsx`
+
+- Adicionar prop `onReservedSlotClick: (reservation: ReservedSlot) => void`
+- Passar o `onClick` ao `ReservedSlotCard` com a reserva correspondente
+
+### 4. Atualizar `AgendaMobileTimeline.tsx`
+
+- Mesma alteração: adicionar prop e conectar o `onClick` do `ReservedSlotCard`
+
+---
+
+### Detalhes Técnicos
+
+**Ficheiros a criar:**
+| Ficheiro | Descrição |
+|----------|-----------|
+| `src/components/agenda/ReservedSlotManagementModal.tsx` | Modal de visualização, edição e exclusão |
+
+**Ficheiros a editar:**
 | Ficheiro | Alteração |
 |----------|-----------|
-| `src/components/agenda/NewReservedSlotModal.tsx` | Corrigir valores vazios em SelectItem |
+| `src/pages/Agenda.tsx` | Estado, handler e renderização do modal |
+| `src/components/agenda/AgendaDesktopGrid.tsx` | Prop `onReservedSlotClick`, passar onClick ao card |
+| `src/components/agenda/AgendaMobileTimeline.tsx` | Prop `onReservedSlotClick`, passar onClick ao card |
 
-## Resultado Esperado
-
-Após a correção:
-1. O modal "Novo Horário Reservado" abrirá sem erros
-2. Os campos opcionais (Profissional e Serviço) funcionarão corretamente com opção "Qualquer"
-3. A aplicação não crashará ao clicar no botão Reservar
-
-## Créditos Estimados: 1
+**Estrutura do modal:**
+- Modo de leitura por defeito (exibe detalhes)
+- Botão "Editar" alterna para modo de edição inline
+- Botão "Cancelar Reserva" com `AlertDialog` de confirmação
+- Botão "Excluir" com dupla confirmação (não pode ser desfeito)
+- Usa `updateReservedSlot` e `cancelReservedSlot` do `useReservedSlots`
