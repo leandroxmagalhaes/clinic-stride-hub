@@ -1,66 +1,101 @@
 
-# Gestão de Horários Reservados: Editar e Excluir
+# Layout Contínuo da Agenda (Estilo Google Calendar)
 
-## Problema
-Os cards de horário reservado (cadeado) na agenda não respondem ao clique. Não existe nenhum modal de gestão para editar ou excluir reservas existentes.
+## Problema Atual
+
+A agenda usa um layout discreto por hora: cada sessão é colocada na linha da hora correspondente ao `getHours()`. Uma sessão das 13:30 com 60min aparece apenas dentro da célula das 13:00, sem ocupar visualmente o espaço até às 14:30.
 
 ## Solução
 
-Criar um modal de gestão de horários reservados e conectá-lo aos cards na agenda.
+Transformar a grelha para usar **posicionamento absoluto baseado em minutos**, como o Google Calendar. Cada hora terá uma altura fixa em pixels e as sessões serão posicionadas com `top` e `height` calculados proporcionalmente.
+
+```text
+ANTES (discreto):                 DEPOIS (contínuo):
+┌─────────────────┐              ┌─────────────────┐
+│ 13:00           │              │ 13:00           │
+│ ┌─────────────┐ │              │                 │
+│ │ Vicente     │ │              │ ── 13:30 ────── │
+│ │ 13:30 60min │ │              │ │ Vicente     │ │
+│ └─────────────┘ │              │ │ 13:30 60min │ │
+├─────────────────┤              ├─│             │─┤
+│ 14:00           │              │ │             │ │
+│ + Agendar       │              │ └─────────────┘ │
+├─────────────────┤              ├─────────────────┤
+│ 15:00           │              │ 15:00           │
+```
 
 ---
 
-### 1. Novo componente: `ReservedSlotManagementModal`
+## Alteracoes
 
-Um modal que abre ao clicar num card de reserva, com as seguintes funcionalidades:
+### 1. `AgendaDesktopGrid.tsx` - Layout continuo com posicao absoluta
 
-**Visualização:**
-- Nome do utente, profissional, serviço
-- Tipo (fixo/personalizado), dias da semana, horário
-- Período de validade (data início/fim)
-- Cor e observações
+**Mudanca principal:** Em vez de filtrar sessoes por hora e colocar dentro de cada linha, criar um container relativo por coluna (dia) com todas as horas como linhas de fundo, e posicionar sessoes absolutamente.
 
-**Ações:**
-- **Editar** campos principais: título, profissional, serviço, dias da semana, horário, cor, datas, observações
-- **Pausar/Reativar** reserva (alterna status entre "ativo" e "pausado")
-- **Cancelar** reserva (soft delete com confirmação)
-- **Excluir permanentemente** (hard delete com confirmação extra)
+- Definir constante `HOUR_HEIGHT = 70px` (altura de cada hora)
+- Manter as linhas de hora como background grid (labels + bordas)
+- Para cada dia, criar uma coluna com `position: relative`
+- Posicionar cada sessao com:
+  - `top = (startHour - firstHour) * HOUR_HEIGHT + (startMinute / 60) * HOUR_HEIGHT`
+  - `height = (durationMinutes / 60) * HOUR_HEIGHT`
+- Manter drag-and-drop funcional
+- Slots vazios continuam clicaveis como overlay transparente
 
-### 2. Atualizar `Agenda.tsx`
+### 2. `AgendaMobileTimeline.tsx` - Mesmo conceito para mobile
 
-- Adicionar estado para a reserva selecionada e controlo do modal
-- Criar handler `handleReservedSlotClick` que recebe a reserva
-- Passar funções `updateReservedSlot` e `cancelReservedSlot` do hook para o modal
-- Renderizar o novo modal
+- Usar o mesmo calculo de posicao
+- Manter a coluna de tempo a esquerda
+- Sessoes posicionadas absolutamente no container
 
-### 3. Atualizar `AgendaDesktopGrid.tsx`
+### 3. `DraggableSession.tsx` - Adaptar ao novo layout
 
-- Adicionar prop `onReservedSlotClick: (reservation: ReservedSlot) => void`
-- Passar o `onClick` ao `ReservedSlotCard` com a reserva correspondente
+- Aceitar prop `style` para receber top/height do parent
+- Manter contendo interno flexivel para sessoes curtas vs longas
 
-### 4. Atualizar `AgendaMobileTimeline.tsx`
+### 4. `DroppableSlot.tsx` - Ajustar para layout continuo
 
-- Mesma alteração: adicionar prop e conectar o `onClick` do `ReservedSlotCard`
+- Manter como zona de drop mas com altura fixa `HOUR_HEIGHT`
+- Remover renderizacao de filhos (sessoes serao renderizadas na camada acima)
 
 ---
 
-### Detalhes Técnicos
+## Detalhes Tecnicos
 
-**Ficheiros a criar:**
-| Ficheiro | Descrição |
+| Ficheiro | Alteracao |
 |----------|-----------|
-| `src/components/agenda/ReservedSlotManagementModal.tsx` | Modal de visualização, edição e exclusão |
+| `src/components/agenda/AgendaDesktopGrid.tsx` | Refactoring para layout absoluto com HOUR_HEIGHT |
+| `src/components/agenda/AgendaMobileTimeline.tsx` | Mesmo refactoring para mobile |
+| `src/components/agenda/DraggableSession.tsx` | Aceitar style externo (top/height) |
+| `src/components/agenda/DroppableSlot.tsx` | Ajustar para servir apenas como drop zone |
 
-**Ficheiros a editar:**
-| Ficheiro | Alteração |
-|----------|-----------|
-| `src/pages/Agenda.tsx` | Estado, handler e renderização do modal |
-| `src/components/agenda/AgendaDesktopGrid.tsx` | Prop `onReservedSlotClick`, passar onClick ao card |
-| `src/components/agenda/AgendaMobileTimeline.tsx` | Prop `onReservedSlotClick`, passar onClick ao card |
+### Calculo de posicao
 
-**Estrutura do modal:**
-- Modo de leitura por defeito (exibe detalhes)
-- Botão "Editar" alterna para modo de edição inline
-- Botão "Cancelar Reserva" com `AlertDialog` de confirmação
-- Botão "Excluir" com dupla confirmação (não pode ser desfeito)
-- Usa `updateReservedSlot` e `cancelReservedSlot` do `useReservedSlots`
+```typescript
+const HOUR_HEIGHT = 70; // px por hora
+
+function getSessionStyle(session, firstHour) {
+  const start = new Date(session.start_time);
+  const end = new Date(session.end_time);
+  const startMinutes = (start.getHours() - firstHour) * 60 + start.getMinutes();
+  const durationMinutes = (end.getTime() - start.getTime()) / 60000;
+  
+  return {
+    position: 'absolute',
+    top: `${(startMinutes / 60) * HOUR_HEIGHT}px`,
+    height: `${(durationMinutes / 60) * HOUR_HEIGHT}px`,
+    left: 0,
+    right: 0,
+  };
+}
+```
+
+### Sobreposicao (side-by-side)
+
+O layout existente de sessoes lado-a-lado sera mantido. Sessoes que se sobrepoe no tempo serao detetadas e dividirao a largura da coluna igualmente (ja implementado com flex, sera adaptado para posicao absoluta com calculo de `left`/`width`).
+
+## Resultado Esperado
+
+- Sessao das 13:30 com 60min aparece visualmente de 13:30 a 14:30
+- Sessao das 16:00 com 45min ocupa 3/4 da altura da hora
+- Visual identico ao Google Calendar (terceira imagem de referencia)
+- Drag-and-drop continua funcional
