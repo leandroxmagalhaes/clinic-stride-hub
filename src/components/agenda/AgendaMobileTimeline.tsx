@@ -31,6 +31,7 @@ interface AgendaMobileTimelineProps {
   reservedSlotOccurrences?: ReservedSlotOccurrence[];
   onSlotClick: (date: Date, hour: number) => void;
   onSessionClick: (session: Session) => void;
+  onReservedSlotClick?: (reservation: ReservedSlot) => void;
   getCreditBalance?: (patientId: string) => number;
 }
 
@@ -41,6 +42,7 @@ export function AgendaMobileTimeline({
   reservedSlotOccurrences = [],
   onSlotClick,
   onSessionClick,
+  onReservedSlotClick,
   getCreditBalance,
 }: AgendaMobileTimelineProps) {
   const getSessionsForHour = (hour: number) => {
@@ -115,11 +117,12 @@ export function AgendaMobileTimeline({
                         
                         {/* Reserved slot card */}
                         <div 
-                          className="flex-1 p-3 rounded-lg border-l-4 border-dashed"
+                          className="flex-1 p-3 rounded-lg border-l-4 border-dashed cursor-pointer hover:opacity-80 transition-opacity"
                           style={{ 
                             backgroundColor: `${occ.reservation.cor}20`,
                             borderLeftColor: occ.reservation.cor,
                           }}
+                          onClick={() => onReservedSlotClick?.(occ.reservation)}
                         >
                           <div className="flex items-center gap-2 mb-1">
                             <Lock className="h-3.5 w-3.5 text-muted-foreground" />

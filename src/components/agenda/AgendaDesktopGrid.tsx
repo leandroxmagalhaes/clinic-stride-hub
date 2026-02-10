@@ -44,6 +44,7 @@ interface AgendaDesktopGridProps {
   onSlotClick: (date: Date, hour: number) => void;
   onSessionClick: (session: Session) => void;
   onSessionReschedule?: (sessionId: string, newDate: Date, newHour: number) => void;
+  onReservedSlotClick?: (reservation: ReservedSlot) => void;
   getCreditBalance?: (patientId: string) => number;
 }
 
@@ -55,6 +56,7 @@ export function AgendaDesktopGrid({
   onSlotClick,
   onSessionClick,
   onSessionReschedule,
+  onReservedSlotClick,
   getCreditBalance,
 }: AgendaDesktopGridProps) {
   const [activeSession, setActiveSession] = useState<Session | null>(null);
@@ -184,6 +186,7 @@ export function AgendaDesktopGrid({
                               reservation={occ.reservation}
                               time={occ.time}
                               compact={slotSessions.length > 0}
+                              onClick={() => onReservedSlotClick?.(occ.reservation)}
                             />
                           ))}
                           {/* Regular sessions */}
