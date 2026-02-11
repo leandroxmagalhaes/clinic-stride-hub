@@ -1,101 +1,110 @@
 
-# Layout Contínuo da Agenda (Estilo Google Calendar)
 
-## Problema Atual
+# Layout Continuo da Agenda (Estilo Google Calendar)
 
-A agenda usa um layout discreto por hora: cada sessão é colocada na linha da hora correspondente ao `getHours()`. Uma sessão das 13:30 com 60min aparece apenas dentro da célula das 13:00, sem ocupar visualmente o espaço até às 14:30.
+## Objetivo
 
-## Solução
+Transformar a grelha da agenda para que as sessoes e reservas ocupem visualmente o espaco proporcional a sua duracao. Uma sessao das 13:30 com 60 minutos aparecera de 13:30 a 14:30, cruzando a linha das 14:00.
 
-Transformar a grelha para usar **posicionamento absoluto baseado em minutos**, como o Google Calendar. Cada hora terá uma altura fixa em pixels e as sessões serão posicionadas com `top` e `height` calculados proporcionalmente.
+## Arquitetura da Mudanca
+
+A estrutura atual renderiza sessoes **dentro** de cada linha de hora. A nova estrutura separa duas camadas:
+
+1. **Camada de fundo** - linhas de hora com labels e drop zones (grelha visual)
+2. **Camada de sessoes** - posicionadas absolutamente sobre a grelha
+
+### Calculo de posicao
 
 ```text
-ANTES (discreto):                 DEPOIS (contínuo):
-┌─────────────────┐              ┌─────────────────┐
-│ 13:00           │              │ 13:00           │
-│ ┌─────────────┐ │              │                 │
-│ │ Vicente     │ │              │ ── 13:30 ────── │
-│ │ 13:30 60min │ │              │ │ Vicente     │ │
-│ └─────────────┘ │              │ │ 13:30 60min │ │
-├─────────────────┤              ├─│             │─┤
-│ 14:00           │              │ │             │ │
-│ + Agendar       │              │ └─────────────┘ │
-├─────────────────┤              ├─────────────────┤
-│ 15:00           │              │ 15:00           │
+HOUR_HEIGHT = 70px
+
+top  = ((horaInicio - primeiraHora) * 60 + minutoInicio) / 60 * HOUR_HEIGHT
+height = duracaoMinutos / 60 * HOUR_HEIGHT
 ```
+
+Exemplo: sessao 13:30, 60min, primeiraHora=8
+- top = ((13-8)*60 + 30) / 60 * 70 = 330/60 * 70 = 385px
+- height = 60/60 * 70 = 70px
+
+### Sobreposicao lado-a-lado
+
+Sessoes que se sobrepoe no tempo serao detetadas por intervalo e dividirao a largura da coluna. Cada sessao recebera `left` e `width` calculados (ex: 2 sessoes sobrepostas = cada uma com 50% da largura).
 
 ---
 
-## Alteracoes
+## Ficheiros a Alterar
 
-### 1. `AgendaDesktopGrid.tsx` - Layout continuo com posicao absoluta
+### 1. `src/components/agenda/AgendaDesktopGrid.tsx` (reescrita principal)
 
-**Mudanca principal:** Em vez de filtrar sessoes por hora e colocar dentro de cada linha, criar um container relativo por coluna (dia) com todas as horas como linhas de fundo, e posicionar sessoes absolutamente.
+**Estrutura nova:**
+- Header mantido igual (dias da semana)
+- Corpo: grid com coluna de horas (60px) + 1 coluna relativa por dia
+- Cada coluna de dia:
+  - Linhas de hora como divs com `height: HOUR_HEIGHT` (fundo visual + drop zones)
+  - Sessoes e reservas posicionadas absolutamente com `top`/`height` calculados
+- Funcao `getOverlappingGroups()` para detetar sobreposicoes e calcular `left`/`width`
+- Drop zones continuam como `DroppableSlot` empilhados verticalmente (1 por hora)
+- Sessoes renderizadas numa camada `position: absolute` sobre os drop zones
 
-- Definir constante `HOUR_HEIGHT = 70px` (altura de cada hora)
-- Manter as linhas de hora como background grid (labels + bordas)
-- Para cada dia, criar uma coluna com `position: relative`
-- Posicionar cada sessao com:
-  - `top = (startHour - firstHour) * HOUR_HEIGHT + (startMinute / 60) * HOUR_HEIGHT`
-  - `height = (durationMinutes / 60) * HOUR_HEIGHT`
-- Manter drag-and-drop funcional
-- Slots vazios continuam clicaveis como overlay transparente
+### 2. `src/components/agenda/DraggableSession.tsx` (aceitar estilo externo)
 
-### 2. `AgendaMobileTimeline.tsx` - Mesmo conceito para mobile
+- Adicionar prop `positionStyle?: React.CSSProperties` para receber `top`, `height`, `left`, `width`, `position: absolute`
+- Mesclar com o estilo interno existente (cor, borda)
+- Quando a sessao e curta (< 35px de altura), usar layout compacto (1 linha)
 
-- Usar o mesmo calculo de posicao
-- Manter a coluna de tempo a esquerda
-- Sessoes posicionadas absolutamente no container
+### 3. `src/components/agenda/DroppableSlot.tsx` (simplificar)
 
-### 3. `DraggableSession.tsx` - Adaptar ao novo layout
+- Altura fixa `HOUR_HEIGHT` (70px) em vez de `min-h-[70px]`
+- Remover layout flex horizontal (sessoes ja nao sao filhos)
+- Manter como zona de drop + click para agendar
+- Nao renderiza `children` (sessoes sao renderizadas na camada acima)
 
-- Aceitar prop `style` para receber top/height do parent
-- Manter contendo interno flexivel para sessoes curtas vs longas
+### 4. `src/components/agenda/ReservedSlotCard.tsx` (aceitar estilo externo)
 
-### 4. `DroppableSlot.tsx` - Ajustar para layout continuo
+- Adicionar prop `positionStyle?: React.CSSProperties` similar ao DraggableSession
+- Manter visual existente
 
-- Manter como zona de drop mas com altura fixa `HOUR_HEIGHT`
-- Remover renderizacao de filhos (sessoes serao renderizadas na camada acima)
+### 5. `src/components/agenda/AgendaMobileTimeline.tsx` (layout continuo mobile)
+
+- Mesma logica de posicionamento absoluto
+- Container relativo com altura = totalHoras * HOUR_HEIGHT
+- Linhas de hora como fundo
+- Sessoes e reservas posicionadas absolutamente
+- Manter indicador de hora atual
 
 ---
 
 ## Detalhes Tecnicos
 
-| Ficheiro | Alteracao |
-|----------|-----------|
-| `src/components/agenda/AgendaDesktopGrid.tsx` | Refactoring para layout absoluto com HOUR_HEIGHT |
-| `src/components/agenda/AgendaMobileTimeline.tsx` | Mesmo refactoring para mobile |
-| `src/components/agenda/DraggableSession.tsx` | Aceitar style externo (top/height) |
-| `src/components/agenda/DroppableSlot.tsx` | Ajustar para servir apenas como drop zone |
+| Ficheiro | Tipo | Descricao |
+|----------|------|-----------|
+| `AgendaDesktopGrid.tsx` | Editar | Refactoring completo para layout absoluto |
+| `AgendaMobileTimeline.tsx` | Editar | Mesmo refactoring para mobile |
+| `DraggableSession.tsx` | Editar | Aceitar `positionStyle` + layout compacto |
+| `DroppableSlot.tsx` | Editar | Simplificar para drop zone pura |
+| `ReservedSlotCard.tsx` | Editar | Aceitar `positionStyle` |
 
-### Calculo de posicao
+### Logica de sobreposicao
 
-```typescript
-const HOUR_HEIGHT = 70; // px por hora
-
-function getSessionStyle(session, firstHour) {
-  const start = new Date(session.start_time);
-  const end = new Date(session.end_time);
-  const startMinutes = (start.getHours() - firstHour) * 60 + start.getMinutes();
-  const durationMinutes = (end.getTime() - start.getTime()) / 60000;
-  
-  return {
-    position: 'absolute',
-    top: `${(startMinutes / 60) * HOUR_HEIGHT}px`,
-    height: `${(durationMinutes / 60) * HOUR_HEIGHT}px`,
-    left: 0,
-    right: 0,
-  };
-}
+```text
+Para cada dia:
+  1. Ordenar sessoes por start_time
+  2. Agrupar sessoes cujos intervalos se sobrepoe
+  3. Dentro de cada grupo, atribuir indice (0, 1, 2...)
+  4. Calcular: left = (indice / total) * 100%, width = (1 / total) * 100%
 ```
 
-### Sobreposicao (side-by-side)
+### Drag-and-drop
 
-O layout existente de sessoes lado-a-lado sera mantido. Sessoes que se sobrepoe no tempo serao detetadas e dividirao a largura da coluna igualmente (ja implementado com flex, sera adaptado para posicao absoluta com calculo de `left`/`width`).
+- Drop zones (`DroppableSlot`) permanecem empilhadas verticalmente, uma por hora
+- Ao soltar, o handler recebe a hora do slot de destino (igual ao atual)
+- O overlay de drag mantem o visual atual
 
 ## Resultado Esperado
 
-- Sessao das 13:30 com 60min aparece visualmente de 13:30 a 14:30
-- Sessao das 16:00 com 45min ocupa 3/4 da altura da hora
-- Visual identico ao Google Calendar (terceira imagem de referencia)
-- Drag-and-drop continua funcional
+- Sessao das 13:30 com 60min: bloco visual de 13:30 a 14:30
+- Sessao das 16:00 com 45min: bloco ocupa 3/4 da linha de hora
+- Sessoes sobrepostas: lado a lado com largura dividida
+- Reservas: mesmo comportamento de posicionamento continuo
+- Drag-and-drop: funcional sem alteracoes de comportamento
+
