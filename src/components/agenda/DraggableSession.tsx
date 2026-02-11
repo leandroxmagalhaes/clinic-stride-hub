@@ -3,6 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, CheckCircle2, AlertTriangle } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
+import React from "react";
 
 interface Session {
   id: string;
@@ -21,35 +22,40 @@ interface Session {
 interface DraggableSessionProps {
   session: Session;
   onClick: (session: Session) => void;
-  hasCredits?: boolean; // true = crédito disponível, false = sem créditos
-  displayTime?: string; // e.g., "14:45"
+  hasCredits?: boolean;
+  displayTime?: string;
+  positionStyle?: React.CSSProperties;
 }
 
-export function DraggableSession({ session, onClick, hasCredits, displayTime }: DraggableSessionProps) {
+export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle }: DraggableSessionProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: session.id,
     data: { session },
   });
 
-  // Determine credit/payment status for visual styling
   const isPendingPayment = session.payment_status === 'pending' || hasCredits === false;
   const hasCreditAvailable = hasCredits === true;
 
-  const style = {
+  const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 40;
+
+  const internalStyle: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     backgroundColor: `${session.servico?.color}15`,
     borderLeft: `3px solid ${session.servico?.color}`,
+    ...positionStyle,
   };
+
+  if (transform) {
+    internalStyle.transform = CSS.Translate.toString(transform);
+  }
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={internalStyle}
       className={cn(
-        "p-2 rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative",
-        "flex-1 min-w-0 max-w-full overflow-hidden", // Contém conteúdo na largura da coluna
+        "rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative overflow-hidden",
         isDragging && "opacity-50 shadow-lg z-50 ring-2 ring-primary",
-        // Credit status borders
         isPendingPayment && "ring-2 ring-warning/50",
         hasCreditAvailable && "ring-1 ring-success/30"
       )}
@@ -59,8 +65,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime }: 
       }}
     >
       {/* Credit indicator icon */}
-      {hasCredits !== undefined && (
-        <div className="absolute -top-1 -right-1">
+      {hasCredits !== undefined && !isCompact && (
+        <div className="absolute -top-1 -right-1 z-10">
           {hasCreditAvailable ? (
             <div className="bg-success text-success-foreground rounded-full p-0.5">
               <CheckCircle2 className="h-3 w-3" />
@@ -73,31 +79,56 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime }: 
         </div>
       )}
       
-      <div className="flex items-center justify-between gap-1 mb-1 min-w-0 overflow-hidden">
-        <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
+      {isCompact ? (
+        /* Compact single-line layout for short sessions */
+        <div className="flex items-center gap-1 p-1 min-w-0 overflow-hidden">
           <div
             {...attributes}
             {...listeners}
             className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
           >
-            <GripVertical className="h-3 w-3 text-muted-foreground opacity-60 group-hover/session:opacity-100 transition-opacity" />
+            <GripVertical className="h-3 w-3 text-muted-foreground opacity-60" />
           </div>
-          <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
-            {displayTime && (
-              <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
-                {displayTime}
-              </span>
-            )}
-            <p className="font-medium truncate min-w-0">
-              {session.paciente?.full_name.split(' ')[0]}
-            </p>
-          </div>
+          {displayTime && (
+            <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
+              {displayTime}
+            </span>
+          )}
+          <p className="font-medium truncate min-w-0">
+            {session.paciente?.full_name.split(' ')[0]}
+          </p>
+          <StatusBadge status={session.status as any} className="scale-75 flex-shrink-0" />
         </div>
-        <StatusBadge status={session.status as any} className="scale-90 flex-shrink-0" />
-      </div>
-      <p className="text-muted-foreground truncate text-[10px] w-full">
-        {session.servico?.name} • {session.profissional?.full_name.split(' ')[0]}
-      </p>
+      ) : (
+        /* Normal layout */
+        <div className="p-2">
+          <div className="flex items-center justify-between gap-1 mb-1 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
+              <div
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+              >
+                <GripVertical className="h-3 w-3 text-muted-foreground opacity-60 group-hover/session:opacity-100 transition-opacity" />
+              </div>
+              <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
+                {displayTime && (
+                  <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
+                    {displayTime}
+                  </span>
+                )}
+                <p className="font-medium truncate min-w-0">
+                  {session.paciente?.full_name.split(' ')[0]}
+                </p>
+              </div>
+            </div>
+            <StatusBadge status={session.status as any} className="scale-90 flex-shrink-0" />
+          </div>
+          <p className="text-muted-foreground truncate text-[10px] w-full">
+            {session.servico?.name} • {session.profissional?.full_name.split(' ')[0]}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
