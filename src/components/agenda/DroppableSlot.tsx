@@ -1,16 +1,14 @@
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
-import { isSameDay } from "date-fns";
-import { ReactNode } from "react";
+
+const HOUR_HEIGHT = 70;
 
 interface DroppableSlotProps {
   id: string;
   date: Date;
   hour: number;
   isToday: boolean;
-  children: ReactNode;
   onSlotClick: () => void;
-  hasSession: boolean;
 }
 
 export function DroppableSlot({
@@ -18,9 +16,7 @@ export function DroppableSlot({
   date,
   hour,
   isToday,
-  children,
   onSlotClick,
-  hasSession,
 }: DroppableSlotProps) {
   const { setNodeRef, isOver } = useDroppable({
     id,
@@ -31,15 +27,15 @@ export function DroppableSlot({
     <div
       ref={setNodeRef}
       className={cn(
-        "min-h-[70px] p-1 border-r last:border-r-0 transition-colors",
-        "flex gap-0.5 flex-nowrap overflow-hidden", // Layout horizontal + contém sessões na célula
+        "border-b last:border-b-0 transition-colors cursor-pointer",
         isToday && "bg-primary/[0.02]",
         isOver && "bg-primary/10 ring-2 ring-primary/50 ring-inset",
-        !hasSession && "hover:bg-muted/30 cursor-pointer"
+        "hover:bg-muted/30"
       )}
-      onClick={() => !hasSession && onSlotClick()}
-    >
-      {children}
-    </div>
+      style={{ height: `${HOUR_HEIGHT}px` }}
+      onClick={onSlotClick}
+    />
   );
 }
+
+export { HOUR_HEIGHT };

@@ -2,23 +2,28 @@ import { Lock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ReservedSlot } from "@/services/ReservedSlotService";
+import React from "react";
 
 interface ReservedSlotCardProps {
   reservation: ReservedSlot;
   time: string;
   onClick?: () => void;
   compact?: boolean;
+  positionStyle?: React.CSSProperties;
 }
 
 export function ReservedSlotCard({ 
   reservation, 
   time, 
   onClick, 
-  compact = false 
+  compact = false,
+  positionStyle,
 }: ReservedSlotCardProps) {
   const patientName = reservation.patient?.full_name || "Paciente";
   const firstName = patientName.split(' ')[0];
-  const displayTime = time.substring(0, 5); // "HH:MM"
+  const displayTime = time.substring(0, 5);
+
+  const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 40;
 
   return (
     <TooltipProvider>
@@ -27,37 +32,40 @@ export function ReservedSlotCard({
           <div
             onClick={onClick}
             className={cn(
-              "rounded-md text-xs cursor-pointer transition-all hover:opacity-90",
+              "rounded-md text-xs cursor-pointer transition-all hover:opacity-90 overflow-hidden",
               "border-l-3 border-dashed",
-              compact ? "p-1" : "p-2"
+              (compact || isCompact) ? "p-1" : "p-2"
             )}
             style={{
               backgroundColor: `${reservation.cor}30`,
               borderLeftColor: reservation.cor,
               borderLeftWidth: '3px',
               borderLeftStyle: 'dashed',
+              ...positionStyle,
             }}
           >
             <div className="flex items-center gap-1">
               <Lock 
                 className={cn(
                   "flex-shrink-0 text-muted-foreground",
-                  compact ? "h-3 w-3" : "h-3.5 w-3.5"
+                  (compact || isCompact) ? "h-3 w-3" : "h-3.5 w-3.5"
                 )} 
               />
-              {!compact && (
+              {!(compact || isCompact) && (
                 <span className="text-[10px] text-muted-foreground">
                   {displayTime}
                 </span>
               )}
             </div>
-            <p className={cn(
-              "font-medium truncate mt-0.5",
-              compact ? "text-[10px]" : "text-xs"
-            )}>
-              {firstName}
-            </p>
-            {!compact && reservation.titulo && (
+            {!isCompact && (
+              <p className={cn(
+                "font-medium truncate mt-0.5",
+                (compact || isCompact) ? "text-[10px]" : "text-xs"
+              )}>
+                {firstName}
+              </p>
+            )}
+            {!(compact || isCompact) && reservation.titulo && (
               <p className="text-muted-foreground truncate text-[10px]">
                 {reservation.titulo}
               </p>
