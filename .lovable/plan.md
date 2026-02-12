@@ -1,37 +1,96 @@
 
 
-# Correção: Erro ao agendar sessão
+# Modalidades de Agendamento no Modal "Novo Agendamento"
 
-## Problema
+## Objetivo
 
-O constraint `sessoes_payment_status_check` na base de dados aceita apenas: `pendente`, `pago`, `parcial`, `cancelado`.
+Adicionar ao modal de "Novo Agendamento" existente a possibilidade de escolher entre 4 modalidades de atendimento, com configuracoes especificas de frequencia e dias para as modalidades recorrentes/pacotes.
 
-Quando o paciente tem créditos (como o Bruno Fonseca Cravo Roxo com 1 crédito), o código define `payment_status = "reservado"`, que é rejeitado pela base de dados.
+## Modalidades
 
-## Solução
+1. **Atendimento Avulso** - Comportamento atual (sessao unica)
+2. **Servico Recorrente** - Sessoes repetidas com frequencia definida, pagamento antecipado
+3. **Pacote Fixo** - Quantidade fixa de sessoes (ex: 4, 8, 12) com dias pre-definidos
+4. **Pacote Personalizado** - Quantidade e dias totalmente flexiveis
 
-### 1. Migração SQL
+## Experiencia do Utilizador
 
-Atualizar o constraint para incluir o valor `"reservado"`:
+Ao abrir o modal "Novo Agendamento", o utilizador vera:
 
-```sql
-ALTER TABLE sessoes DROP CONSTRAINT sessoes_payment_status_check;
-ALTER TABLE sessoes ADD CONSTRAINT sessoes_payment_status_check 
-  CHECK (payment_status = ANY (ARRAY['pendente','pago','parcial','cancelado','reservado']));
+1. Um seletor de **Modalidade** no topo (antes dos campos atuais)
+2. Se escolher "Avulso": formulario atual sem alteracoes
+3. Se escolher "Recorrente", "Pacote Fixo" ou "Pacote Personalizado":
+   - Campo de **Frequencia** (semanal, quinzenal, mensal)
+   - Seletor de **Dias da semana** (segunda a sabado, multi-selecao)
+   - Opcao entre **Dias fixos** (sempre os mesmos dias) ou **Dias flexiveis** (variar semana a semana)
+   - Para pacotes: campo de **Quantidade de sessoes** (4, 8, 12 ou personalizado)
+   - **Pre-visualizacao** das datas geradas antes de confirmar
+4. Ao submeter, o sistema cria todas as sessoes de uma vez na agenda
+
+## Mudancas na Base de Dados
+
+Nova tabela `scheduling_packages` para rastrear pacotes/recorrencias:
+
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid | PK |
+| clinic_id | uuid | FK para clinics |
+| paciente_id | uuid | FK para pacientes |
+| profissional_id | uuid | FK para profiles |
+| servico_id | uuid | FK para servicos |
+| modality | text | avulso, recorrente, pacote_fixo, pacote_personalizado |
+| frequency | text | semanal, quinzenal, mensal (nullable) |
+| fixed_days | jsonb | Array de dias da semana ex: [1,3,5] (nullable) |
+| flexible | boolean | Se os dias podem variar |
+| total_sessions | integer | Quantidade total de sessoes no pacote |
+| sessions_created | integer | Sessoes ja criadas |
+| status | text | ativo, pausado, concluido, cancelado |
+| start_date | date | Data de inicio |
+| end_date | date | Data prevista de fim (nullable) |
+| notes | text | Observacoes (nullable) |
+| created_at | timestamptz | |
+
+As sessoes criadas por um pacote terao um campo `package_id` na tabela `sessoes` para rastreabilidade.
+
+## Ficheiros a Alterar/Criar
+
+| Ficheiro | Acao | Descricao |
+|----------|------|-----------|
+| Migracao SQL | Criar | Tabela `scheduling_packages` + coluna `package_id` em `sessoes` |
+| `src/components/agenda/NewSessionModal.tsx` | Editar | Adicionar seletor de modalidade e campos condicionais |
+| `src/components/agenda/PackageSchedulePreview.tsx` | Criar | Componente de pre-visualizacao das datas geradas |
+| `src/services/PackageSchedulingService.ts` | Criar | Logica de geracao de datas baseada em frequencia/dias |
+| `src/pages/Agenda.tsx` | Editar | Handler para criar multiplas sessoes de pacote |
+| `src/contexts/DataContext.tsx` | Editar | Adicionar funcao para criar sessoes em lote |
+
+## Detalhes Tecnicos
+
+### Geracao de datas (PackageSchedulingService)
+
+```text
+Entrada: data_inicio, frequencia, dias_semana[], total_sessoes
+Saida: Date[] com todas as datas calculadas
+
+Algoritmo:
+1. A partir da data_inicio, iterar semana a semana (ou conforme frequencia)
+2. Para cada semana, incluir os dias selecionados
+3. Parar quando atingir total_sessoes
+4. Verificar conflitos com sessoes existentes e horarios reservados
 ```
 
-### 2. Melhorar mensagem de erro em `Agenda.tsx`
+### Fluxo de submissao para pacotes
 
-Alterar o bloco `catch` do `handleCreateSession` para exibir a mensagem real do erro em vez do texto genérico "Erro ao agendar sessão", facilitando a depuração futura.
+```text
+1. Utilizador preenche modalidade + frequencia + dias + paciente + profissional + servico + hora
+2. Sistema gera preview das datas
+3. Utilizador confirma
+4. Sistema cria 1 registro em scheduling_packages
+5. Sistema cria N registros em sessoes (todos com package_id)
+6. Todas as sessoes ficam visiveis na agenda
+```
 
-## Ficheiros
+### RLS
 
-| Tipo | Recurso | Alteração |
-|------|---------|-----------|
-| Migração | Base de dados | Adicionar `"reservado"` ao CHECK constraint |
-| Código | `src/pages/Agenda.tsx` | Melhorar mensagem no catch |
-
-## Resultado
-
-Agendamentos para pacientes com créditos (como Bruno) passarão a funcionar normalmente.
+- `scheduling_packages` tera RLS baseada em `clinic_id` (mesmo padrao das outras tabelas)
+- A coluna `package_id` em `sessoes` e nullable (sessoes avulsas continuam sem pacote)
 
