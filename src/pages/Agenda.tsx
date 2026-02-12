@@ -37,7 +37,7 @@ import { AgendaSkeleton } from "@/components/skeletons/PageSkeletons";
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
 export default function Agenda() {
-  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession, addCredits, refreshCreditBalances, isLoading } = useData();
+  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession, addCredits, refreshCreditBalances, refreshSessions, isLoading } = useData();
   const { user } = useAuth();
   const { 
     reservedSlots, 
@@ -188,6 +188,7 @@ export default function Agenda() {
     date?: Date;
     hour?: number;
     minute?: number;
+    packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
   }) => {
     // Use provided date/hour or fall back to selectedSlot
     const finalDate = data.date || selectedSlot?.date;
@@ -200,19 +201,85 @@ export default function Agenda() {
     }
 
     try {
-      // Get lookup data for session creation
       const selectedPatient = patients.find(p => p.id === data.pacienteId);
       const selectedProfessional = professionals.find(p => p.id === data.profissionalId);
       const selectedService = services.find(s => s.id === data.servicoId);
 
-      // Determine payment_status BEFORE creating session (no credit consumption on scheduling)
       const balance = getCreditBalance(data.pacienteId);
       const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
-      // If service consumes credit and patient has credits, mark as "reservado"
-      // Otherwise mark as "pendente"
       const paymentStatus = (serviceConsumesCredit && balance > 0) ? "reservado" : "pendente";
 
-      // Create session using service (includes validation and conflict check)
+      // ── Package / Recurring mode ──
+      if (data.packageData && data.packageData.generatedDates.length > 0) {
+        const { packageData } = data;
+
+        // 1. Create scheduling_packages record
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) throw new Error("Não autenticado");
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("clinic_id")
+          .eq("user_id", userData.user.id)
+          .maybeSingle();
+        if (!profile?.clinic_id) throw new Error("Clínica não encontrada");
+
+        const { data: pkg, error: pkgError } = await supabase
+          .from("scheduling_packages")
+          .insert({
+            clinic_id: profile.clinic_id,
+            paciente_id: data.pacienteId,
+            profissional_id: data.profissionalId,
+            servico_id: data.servicoId,
+            modality: packageData.modality,
+            frequency: packageData.frequency || null,
+            fixed_days: packageData.fixedDays,
+            flexible: packageData.flexible,
+            total_sessions: packageData.totalSessions,
+            sessions_created: packageData.generatedDates.length,
+            status: "ativo",
+            start_date: finalDate.toISOString().split("T")[0],
+            notes: data.notes || null,
+            created_by: userData.user.id,
+          })
+          .select("id")
+          .single();
+
+        if (pkgError) throw pkgError;
+
+        // 2. Create all sessions in batch
+        const sessionInserts = packageData.generatedDates.map((gd) => {
+          const startTime = new Date(gd.date);
+          startTime.setHours(gd.hour, gd.minute, 0, 0);
+          const endTime = new Date(startTime);
+          endTime.setMinutes(endTime.getMinutes() + (selectedService?.duration_minutes || 60));
+
+          return {
+            clinic_id: profile.clinic_id,
+            paciente_id: data.pacienteId,
+            profissional_id: data.profissionalId,
+            servico_id: data.servicoId,
+            start_time: startTime.toISOString(),
+            end_time: endTime.toISOString(),
+            status: "agendado",
+            notes: data.notes,
+            price: selectedService ? Number(selectedService.price) : 0,
+            payment_status: paymentStatus,
+            package_id: pkg.id,
+          };
+        });
+
+        const { error: batchError } = await supabase.from("sessoes").insert(sessionInserts);
+        if (batchError) throw batchError;
+
+        setIsModalOpen(false);
+        resetForm();
+        await refreshSessions();
+
+        toast.success(`${packageData.generatedDates.length} sessões agendadas com sucesso!`);
+        return;
+      }
+
+      // ── Single session mode (avulso) ──
       const newSession = SessionService.create(
         {
           pacienteId: data.pacienteId,
@@ -224,7 +291,7 @@ export default function Agenda() {
           notes: data.notes,
         },
         sessions,
-        'clinic-id', // Will be set properly by backend
+        'clinic-id',
         {
           services: services.map(s => ({
             id: s.id,
@@ -239,16 +306,12 @@ export default function Agenda() {
         }
       );
 
-      // Set the payment_status before insert (NO credit deduction on scheduling)
       newSession.payment_status = paymentStatus;
-
-      // Add to context (persists to Supabase database)
       await addSession(newSession);
 
       setIsModalOpen(false);
       resetForm();
 
-      // Check for automation triggers AFTER successful session creation
       const triggerResult = await checkAppointmentCreatedTrigger({
         patientName: selectedPatient?.full_name || '',
         patientPhone: selectedPatient?.phone || undefined,
@@ -259,10 +322,8 @@ export default function Agenda() {
       });
 
       if (triggerResult.shouldTrigger) {
-        // Show automation prompt
         setAutomationTrigger(triggerResult);
       } else {
-        // Show success toast
         toast.success(
           paymentStatus === "pendente"
             ? "Sessão agendada com pagamento pendente"

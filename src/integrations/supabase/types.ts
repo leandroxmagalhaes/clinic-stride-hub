@@ -1175,6 +1175,109 @@ export type Database = {
           },
         ]
       }
+      scheduling_packages: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          created_by: string | null
+          end_date: string | null
+          fixed_days: Json | null
+          flexible: boolean
+          frequency: string | null
+          id: string
+          modality: string
+          notes: string | null
+          paciente_id: string
+          profissional_id: string
+          servico_id: string
+          sessions_created: number
+          start_date: string
+          status: string
+          total_sessions: number
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          fixed_days?: Json | null
+          flexible?: boolean
+          frequency?: string | null
+          id?: string
+          modality: string
+          notes?: string | null
+          paciente_id: string
+          profissional_id: string
+          servico_id: string
+          sessions_created?: number
+          start_date: string
+          status?: string
+          total_sessions?: number
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          fixed_days?: Json | null
+          flexible?: boolean
+          frequency?: string | null
+          id?: string
+          modality?: string
+          notes?: string | null
+          paciente_id?: string
+          profissional_id?: string
+          servico_id?: string
+          sessions_created?: number
+          start_date?: string
+          status?: string
+          total_sessions?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_packages_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduling_packages_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduling_packages_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "scheduling_packages_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "scheduling_packages_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduling_packages_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       servicos: {
         Row: {
           clinic_id: string
@@ -1235,6 +1338,7 @@ export type Database = {
           id: string
           notes: string | null
           paciente_id: string
+          package_id: string | null
           payment_method: string | null
           payment_status: string | null
           price: number | null
@@ -1253,6 +1357,7 @@ export type Database = {
           id?: string
           notes?: string | null
           paciente_id: string
+          package_id?: string | null
           payment_method?: string | null
           payment_status?: string | null
           price?: number | null
@@ -1271,6 +1376,7 @@ export type Database = {
           id?: string
           notes?: string | null
           paciente_id?: string
+          package_id?: string | null
           payment_method?: string | null
           payment_status?: string | null
           price?: number | null
@@ -1308,6 +1414,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "sessoes_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_packages"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "sessoes_profissional_id_fkey"
