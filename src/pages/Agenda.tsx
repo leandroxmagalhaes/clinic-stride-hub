@@ -270,7 +270,8 @@ export default function Agenda() {
         );
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
+      const msg = error instanceof Error ? error.message : (error as any)?.message || "Erro ao agendar sessão";
+      toast.error(msg);
     }
   };
 
