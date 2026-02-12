@@ -36,7 +36,15 @@ import { Clock, CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { ScheduleWarningAlert } from "@/components/agenda/ScheduleWarningAlert";
+import { ModalityFields } from "@/components/agenda/ModalityFields";
+import { PackageSchedulePreview } from "@/components/agenda/PackageSchedulePreview";
 import { HealthTagService, HealthTag } from "@/services/HealthTagService";
+import {
+  PackageSchedulingService,
+  SchedulingModality,
+  SchedulingFrequency,
+  GeneratedDate,
+} from "@/services/PackageSchedulingService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -58,6 +66,15 @@ interface Service {
   duration_minutes: number;
 }
 
+export interface PackageSubmitData {
+  modality: SchedulingModality;
+  frequency?: SchedulingFrequency;
+  fixedDays: number[];
+  flexible: boolean;
+  totalSessions: number;
+  generatedDates: GeneratedDate[];
+}
+
 interface NewSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -73,6 +90,7 @@ interface NewSessionModalProps {
     date?: Date;
     hour?: number;
     minute?: number;
+    packageData?: PackageSubmitData;
   }) => void;
   selectedPaciente: string;
   setSelectedPaciente: (value: string) => void;
@@ -87,8 +105,6 @@ interface NewSessionModalProps {
 
 // Full range of available hours (06:00 to 23:00)
 const AVAILABLE_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
-
-// Available minute intervals
 const AVAILABLE_MINUTES = [0, 15, 30, 45];
 
 export function NewSessionModal({
@@ -109,38 +125,71 @@ export function NewSessionModal({
   setNotes,
   getCreditBalance,
 }: NewSessionModalProps) {
-  // Local state for date/time when no slot is pre-selected
   const [manualDate, setManualDate] = useState<Date | undefined>(undefined);
   const [manualHour, setManualHour] = useState<string>("");
   const [patientSearchOpen, setPatientSearchOpen] = useState(false);
   const [manualMinute, setManualMinute] = useState<string>("0");
 
-  // Reset manual selections when modal opens/closes or slot changes
+  // Package/modality state
+  const [modality, setModality] = useState<SchedulingModality>("avulso");
+  const [frequency, setFrequency] = useState<SchedulingFrequency>("semanal");
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [flexible, setFlexible] = useState(false);
+  const [totalSessions, setTotalSessions] = useState(4);
+  const [customSessionCount, setCustomSessionCount] = useState("");
+
+  // Reset when modal opens/closes
   useEffect(() => {
     if (isOpen && selectedSlot) {
-      // Slot was pre-selected (clicked on calendar)
       setManualDate(selectedSlot.date);
       setManualHour(String(selectedSlot.hour));
       setManualMinute(String(selectedSlot.minute ?? 0));
     } else if (isOpen && !selectedSlot) {
-      // Opened from global button - reset
       setManualDate(undefined);
       setManualHour("");
       setManualMinute("0");
     }
+    if (isOpen) {
+      setModality("avulso");
+      setFrequency("semanal");
+      setSelectedDays([]);
+      setFlexible(false);
+      setTotalSessions(4);
+      setCustomSessionCount("");
+    }
   }, [isOpen, selectedSlot]);
 
-  // Determine if we're in "manual selection" mode (no pre-selected slot)
   const isManualMode = !selectedSlot;
-
-  // Final date/time to use
   const finalDate = selectedSlot?.date ?? manualDate;
   const finalHour = selectedSlot?.hour ?? (manualHour ? parseInt(manualHour, 10) : undefined);
   const finalMinute = selectedSlot?.minute ?? parseInt(manualMinute, 10);
 
+  const isPackageMode = modality !== "avulso";
+
+  // Generate preview dates for packages
+  const generatedDates = useMemo(() => {
+    if (!isPackageMode || !finalDate || finalHour === undefined || selectedDays.length === 0) {
+      return [];
+    }
+    return PackageSchedulingService.generateDates({
+      modality,
+      frequency,
+      fixedDays: selectedDays,
+      flexible,
+      totalSessions: modality === "recorrente" ? 12 : totalSessions, // recorrente generates 12 by default
+      startDate: finalDate,
+      hour: finalHour,
+      minute: finalMinute,
+    });
+  }, [isPackageMode, modality, frequency, selectedDays, flexible, totalSessions, finalDate, finalHour, finalMinute]);
+
   const handleSubmit = () => {
     if (!finalDate || finalHour === undefined) {
       toast.error("Selecione data e horário");
+      return;
+    }
+    if (isPackageMode && selectedDays.length === 0) {
+      toast.error("Selecione pelo menos um dia da semana");
       return;
     }
 
@@ -152,26 +201,27 @@ export function NewSessionModal({
       date: finalDate,
       hour: finalHour,
       minute: finalMinute,
+      packageData: isPackageMode
+        ? {
+            modality,
+            frequency,
+            fixedDays: selectedDays,
+            flexible,
+            totalSessions: modality === "recorrente" ? generatedDates.length : totalSessions,
+            generatedDates,
+          }
+        : undefined,
     });
   };
 
-  // Get selected patient data
-  const selectedPatientData = useMemo(() => {
-    return patients.find(p => p.id === selectedPaciente);
-  }, [patients, selectedPaciente]);
-
-  // Get health tags for selected patient
-  const patientHealthTags = useMemo(() => {
-    return HealthTagService.parseTags(selectedPatientData?.health_tags as string[] | undefined);
-  }, [selectedPatientData]);
-
-  // Get schedule warnings based on health tags and selected time
+  // Patient data
+  const selectedPatientData = useMemo(() => patients.find(p => p.id === selectedPaciente), [patients, selectedPaciente]);
+  const patientHealthTags = useMemo(() => HealthTagService.parseTags(selectedPatientData?.health_tags as string[] | undefined), [selectedPatientData]);
   const scheduleWarnings = useMemo(() => {
     if (finalHour === undefined || patientHealthTags.length === 0) return [];
     return HealthTagService.validateScheduling(patientHealthTags, finalHour);
   }, [patientHealthTags, finalHour]);
 
-  // Show toast warnings for health tag conflicts
   useEffect(() => {
     if (scheduleWarnings.length > 0 && selectedPaciente && finalHour !== undefined) {
       scheduleWarnings.forEach(warning => {
@@ -183,7 +233,6 @@ export function NewSessionModal({
     }
   }, [scheduleWarnings, selectedPaciente, finalHour]);
 
-  // Get credit balance for selected patient
   const patientBalance = useMemo(() => {
     if (!selectedPaciente || !getCreditBalance) return null;
     return getCreditBalance(selectedPaciente);
@@ -193,7 +242,7 @@ export function NewSessionModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
@@ -202,7 +251,23 @@ export function NewSessionModal({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Date/Time Selection - Always visible but editable only in manual mode */}
+          {/* Modality Selector */}
+          <ModalityFields
+            modality={modality}
+            setModality={setModality}
+            frequency={frequency}
+            setFrequency={setFrequency}
+            selectedDays={selectedDays}
+            setSelectedDays={setSelectedDays}
+            flexible={flexible}
+            setFlexible={setFlexible}
+            totalSessions={totalSessions}
+            setTotalSessions={setTotalSessions}
+            customSessionCount={customSessionCount}
+            setCustomSessionCount={setCustomSessionCount}
+          />
+
+          {/* Date/Time Selection */}
           {!isManualMode && finalDate && finalHour !== undefined ? (
             <div className="p-3 rounded-lg bg-muted/50 text-sm">
               <p className="font-medium">
@@ -211,12 +276,14 @@ export function NewSessionModal({
               <p className="text-muted-foreground">
                 {String(finalHour).padStart(2, '0')}:{String(finalMinute).padStart(2, '0')}
               </p>
+              {isPackageMode && (
+                <p className="text-xs text-muted-foreground mt-1">Data de início do pacote</p>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Date Picker */}
               <div className="space-y-2">
-                <Label>Data *</Label>
+                <Label>{isPackageMode ? "Data de início *" : "Data *"}</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -243,7 +310,6 @@ export function NewSessionModal({
                 </Popover>
               </div>
 
-              {/* Time Picker - Hour + Minute */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Hora *</Label>
@@ -278,7 +344,6 @@ export function NewSessionModal({
                 </div>
               </div>
 
-              {/* Time preview */}
               {manualHour && (
                 <p className="text-sm text-muted-foreground text-center">
                   Horário: {String(parseInt(manualHour, 10)).padStart(2, '0')}:{String(parseInt(manualMinute, 10)).padStart(2, '0')}
@@ -287,6 +352,7 @@ export function NewSessionModal({
             </div>
           )}
 
+          {/* Patient selector */}
           <div className="space-y-2">
             <Label>Paciente *</Label>
             <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
@@ -333,8 +399,7 @@ export function NewSessionModal({
                 </Command>
               </PopoverContent>
             </Popover>
-            
-            {/* Patient info: Health Tags + Credit Balance */}
+
             {selectedPatientData && (
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 {patientHealthTags.length > 0 && (
@@ -347,12 +412,10 @@ export function NewSessionModal({
             )}
           </div>
 
-          {/* Schedule Warnings */}
           {scheduleWarnings.length > 0 && (
             <ScheduleWarningAlert warnings={scheduleWarnings} />
           )}
 
-          {/* Insufficient credits warning */}
           {hasInsufficientCredits && (
             <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive">
               <p className="font-medium">⚠️ Créditos insuficientes</p>
@@ -386,8 +449,8 @@ export function NewSessionModal({
                 {services.map((s) => (
                   <SelectItem key={s.id} value={s.id} className="min-h-[44px]">
                     <div className="flex items-center gap-2">
-                      <div 
-                        className="w-2 h-2 rounded-full flex-shrink-0" 
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ backgroundColor: s.color }}
                       />
                       {s.name} ({s.duration_minutes}min)
@@ -400,7 +463,7 @@ export function NewSessionModal({
 
           <div className="space-y-2">
             <Label>Observações</Label>
-            <Textarea 
+            <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Observações sobre a sessão..."
@@ -408,21 +471,30 @@ export function NewSessionModal({
               className="min-h-[88px]"
             />
           </div>
+
+          {/* Package preview */}
+          {isPackageMode && generatedDates.length > 0 && (
+            <PackageSchedulePreview dates={generatedDates} />
+          )}
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={onClose}
             className="min-h-[44px] w-full sm:w-auto"
           >
             Cancelar
           </Button>
-          <Button 
+          <Button
             onClick={handleSubmit}
             className="min-h-[44px] w-full sm:w-auto"
           >
-            {hasInsufficientCredits ? "Agendar (Pendente)" : "Agendar Sessão"}
+            {isPackageMode
+              ? `Agendar ${generatedDates.length} sessões`
+              : hasInsufficientCredits
+                ? "Agendar (Pendente)"
+                : "Agendar Sessão"}
           </Button>
         </DialogFooter>
       </DialogContent>
