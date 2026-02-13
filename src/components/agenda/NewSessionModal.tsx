@@ -304,7 +304,6 @@ export function NewSessionModal({
                       onSelect={setManualDate}
                       initialFocus
                       className={cn("p-3 pointer-events-auto")}
-                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                     />
                   </PopoverContent>
                 </Popover>
@@ -349,6 +348,14 @@ export function NewSessionModal({
                   Horário: {String(parseInt(manualHour, 10)).padStart(2, '0')}:{String(parseInt(manualMinute, 10)).padStart(2, '0')}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Retroactive date warning */}
+          {finalDate && finalDate < new Date(new Date().setHours(0, 0, 0, 0)) && (
+            <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning-foreground">
+              <p className="font-medium">📅 Data retroativa</p>
+              <p className="text-xs mt-1">Esta data é anterior a hoje. O agendamento será registrado como retroativo.</p>
             </div>
           )}
 

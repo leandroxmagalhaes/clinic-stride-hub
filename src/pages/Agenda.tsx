@@ -253,6 +253,7 @@ export default function Agenda() {
           const endTime = new Date(startTime);
           endTime.setMinutes(endTime.getMinutes() + (selectedService?.duration_minutes || 60));
 
+          const isRetroactive = startTime < new Date();
           return {
             clinic_id: profile.clinic_id,
             paciente_id: data.pacienteId,
@@ -260,7 +261,7 @@ export default function Agenda() {
             servico_id: data.servicoId,
             start_time: startTime.toISOString(),
             end_time: endTime.toISOString(),
-            status: "agendado",
+            status: isRetroactive ? "realizado" : "agendado",
             notes: data.notes,
             price: selectedService ? Number(selectedService.price) : 0,
             payment_status: paymentStatus,
@@ -307,6 +308,11 @@ export default function Agenda() {
       );
 
       newSession.payment_status = paymentStatus;
+      // Mark retroactive sessions as "realizado"
+      const sessionStart = new Date(newSession.start_time);
+      if (sessionStart < new Date()) {
+        newSession.status = "realizado";
+      }
       await addSession(newSession);
 
       setIsModalOpen(false);
