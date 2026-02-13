@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.send-team-invite]
 verify_jwt = false
+
+[functions.patient-onboarding]
+verify_jwt = false

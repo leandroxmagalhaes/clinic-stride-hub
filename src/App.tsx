@@ -25,6 +25,7 @@ const Comercial = lazy(() => import("./pages/Comercial"));
 const Engajamento = lazy(() => import("./pages/Engajamento"));
 const Configuracoes = lazy(() => import("./pages/Configuracoes"));
 const PatientPortal = lazy(() => import("./pages/PatientPortal"));
+const PreRegisto = lazy(() => import("./pages/PreRegisto"));
 
 // Non-lazy pages (auth/static - load immediately)
 import Login from "./pages/Login";
@@ -86,6 +87,11 @@ const App = () => (
               <Route path="/signup" element={<Signup />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/pre-registo/:token" element={
+                <Suspense fallback={<PageLoadingFallback />}>
+                  <PreRegisto />
+                </Suspense>
+              } />
               
               {/* Protected routes with persistent layout */}
               <Route path="/" element={

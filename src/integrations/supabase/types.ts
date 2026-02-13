@@ -551,10 +551,14 @@ export type Database = {
       pacientes: {
         Row: {
           address: string | null
+          billing_address: Json | null
+          billing_name: string | null
+          billing_nif: string | null
           birth_date: string | null
           clinic_id: string
           cpf: string | null
           created_at: string
+          data_consent: boolean
           email: string | null
           emergency_contact: string | null
           emergency_phone: string | null
@@ -562,21 +566,30 @@ export type Database = {
           gender: string | null
           health_insurance: string | null
           health_tags: string[] | null
+          height_cm: number | null
           id: string
+          image_consent: boolean
           initial_assessment_data: Json | null
           is_active: boolean | null
           notes: string | null
+          onboarding_completed_at: string | null
           phone: string | null
           primary_specialty_id: string | null
           privacy_consent_at: string | null
+          public_token: string
           updated_at: string
+          weight_kg: number | null
         }
         Insert: {
           address?: string | null
+          billing_address?: Json | null
+          billing_name?: string | null
+          billing_nif?: string | null
           birth_date?: string | null
           clinic_id: string
           cpf?: string | null
           created_at?: string
+          data_consent?: boolean
           email?: string | null
           emergency_contact?: string | null
           emergency_phone?: string | null
@@ -584,21 +597,30 @@ export type Database = {
           gender?: string | null
           health_insurance?: string | null
           health_tags?: string[] | null
+          height_cm?: number | null
           id?: string
+          image_consent?: boolean
           initial_assessment_data?: Json | null
           is_active?: boolean | null
           notes?: string | null
+          onboarding_completed_at?: string | null
           phone?: string | null
           primary_specialty_id?: string | null
           privacy_consent_at?: string | null
+          public_token?: string
           updated_at?: string
+          weight_kg?: number | null
         }
         Update: {
           address?: string | null
+          billing_address?: Json | null
+          billing_name?: string | null
+          billing_nif?: string | null
           birth_date?: string | null
           clinic_id?: string
           cpf?: string | null
           created_at?: string
+          data_consent?: boolean
           email?: string | null
           emergency_contact?: string | null
           emergency_phone?: string | null
@@ -606,14 +628,19 @@ export type Database = {
           gender?: string | null
           health_insurance?: string | null
           health_tags?: string[] | null
+          height_cm?: number | null
           id?: string
+          image_consent?: boolean
           initial_assessment_data?: Json | null
           is_active?: boolean | null
           notes?: string | null
+          onboarding_completed_at?: string | null
           phone?: string | null
           primary_specialty_id?: string | null
           privacy_consent_at?: string | null
+          public_token?: string
           updated_at?: string
+          weight_kg?: number | null
         }
         Relationships: [
           {
