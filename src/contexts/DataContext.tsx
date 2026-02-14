@@ -543,8 +543,8 @@ export function DataProvider({ children }: DataProviderProps) {
   // Load all data on mount - only if authenticated
   useEffect(() => {
     const initLoad = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
         // No user session - clear loading states, don't fetch
         setPatientsLoading(false);
         setSessionsLoading(false);
@@ -553,7 +553,7 @@ export function DataProvider({ children }: DataProviderProps) {
         setEvolutionsLoading(false);
         return;
       }
-      cachedUserId.current = user.id;
+      cachedUserId.current = session.user.id;
       await fetchAllData(false);
       hasInitiallyLoaded.current = true;
     };
@@ -562,7 +562,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
   // Refresh data on auth state change - stabilized to prevent tab-switch freezes
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
         cachedUserId.current = null;
         hasInitiallyLoaded.current = false;
@@ -575,15 +575,15 @@ export function DataProvider({ children }: DataProviderProps) {
         setCreditBalances({});
         setCreditUsageMap({});
       } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        const userId = session?.user?.id;
+        if (!userId) return;
         // If same user (token refresh on tab switch), do silent fetches
-        if (user.id === cachedUserId.current && hasInitiallyLoaded.current) {
+        if (userId === cachedUserId.current && hasInitiallyLoaded.current) {
           fetchAllData(true);
           return;
         }
         // New user signed in or first session
-        cachedUserId.current = user.id;
+        cachedUserId.current = userId;
         await fetchAllData(false);
         hasInitiallyLoaded.current = true;
       }
