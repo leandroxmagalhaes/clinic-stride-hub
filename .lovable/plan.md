@@ -1,113 +1,92 @@
 
 
-# Agendamento em Lote via Upload de Planilha
+# Corrigir Dashboard Travado nos Skeletons
 
-## Resumo
+## Problema
 
-Criar uma funcionalidade completa de agendamento em lote na pagina de Agenda, onde o utilizador faz upload de uma planilha (como a exportada do Google Calendar), o sistema analisa os nomes e cruza com os pacientes cadastrados, sugere correspondencias, e apresenta uma tabela de revisao para aprovacao antes de gravar os agendamentos.
+O sistema fica travado nos skeletons de carregamento e nunca mostra os dados. A causa raiz esta no `DataContext.tsx`:
 
-## Fluxo do Utilizador
+1. A funcao `initLoad` usa `supabase.auth.getUser()` que faz uma chamada de rede ao servidor de autenticacao. Se essa chamada demorar, todo o carregamento trava.
+2. O guard `isFetchingAll` pode criar um deadlock: quando `initLoad` e `INITIAL_SESSION` correm ao mesmo tempo, a segunda chamada a `fetchAllData` retorna imediatamente SEM executar os fetches, mas os estados de loading (`patientsLoading`, `sessionsLoading`, etc.) continuam `true` para sempre.
 
-1. Clicar em "Agendamento em Lote" na pagina Agenda
-2. Fazer upload da planilha (.xlsx/.csv)
-3. Selecionar o profissional e servico padrao (aplicados a todos os agendamentos)
-4. O sistema analisa cada linha, cruza o nome com os pacientes cadastrados e apresenta:
-   - **Match exato**: paciente encontrado automaticamente (verde)
-   - **Match parcial**: sugestoes de pacientes similares para o utilizador escolher (amarelo)
-   - **Sem match**: nome nao encontrado, utilizador pode selecionar manualmente ou ignorar (vermelho)
-5. Tabela de revisao editavel onde se pode:
-   - Aprovar/rejeitar cada linha individualmente
-   - Alterar o paciente sugerido
-   - Editar data, hora, observacoes
-   - Ver status de cada linha (aprovado, conflito, sem paciente)
-6. Clicar "Agendar Aprovados" para criar todas as sessoes de uma vez
+## Solucao
 
-## Arquivos a Criar
+### Arquivo: `src/contexts/DataContext.tsx`
 
-### 1. `src/services/BatchSchedulingService.ts`
-Servico responsavel pela logica de:
-- Parsing da planilha (colunas: Data, Dia da Semana, Evento/Pessoa, Horario Inicio, Horario Fim, Observacoes)
-- Algoritmo de matching de nomes (fuzzy match) que:
-  - Compara nome da planilha com `full_name` dos pacientes cadastrados
-  - Calcula score de similaridade (Levenshtein simplificado / substring matching)
-  - Considera nomes parciais (ex: "Bryan" match com "Bryan Costa Silva")
-  - Trata nomes abreviados (ex: "Caetana" match com "Caetana Rodrigues")
-  - Identifica ambiguidades quando ha multiplos pacientes com nomes parecidos
-- Detecao de conflitos de horario com sessoes existentes
-- Parsing de datas no formato DD/MM/YYYY
-- Parsing de horarios no formato HH:MM
+Duas correcoes:
 
-### 2. `src/components/agenda/BatchScheduleModal.tsx`
-Modal principal com 4 etapas:
-- **Etapa 1 - Upload**: Area de drag-and-drop + selecao de profissional e servico padrao + botao para descarregar modelo
-- **Etapa 2 - Analise**: O sistema processa a planilha e mostra progresso
-- **Etapa 3 - Revisao**: Tabela editavel com todas as linhas, status de match, selector de paciente, checkbox de aprovacao
-- **Etapa 4 - Resultado**: Resumo com quantos agendamentos foram criados com sucesso
+**A) Trocar `getUser()` por `getSession()` no initLoad**
 
-### 3. `src/components/agenda/BatchScheduleReviewTable.tsx`
-Componente da tabela de revisao com:
-- Coluna checkbox (selecionar/deselecionar)
-- Coluna Data (editavel)
-- Coluna Horario Inicio/Fim
-- Coluna Nome Original (da planilha)
-- Coluna Paciente Sugerido (dropdown com sugestoes, pesquisavel)
-- Coluna Score de Match (indicador visual)
-- Coluna Status (aprovado, conflito, sem paciente)
-- Coluna Observacoes
-- Botoes "Selecionar Todos" / "Deselecionar Todos"
+`getSession()` e local/cachado e nao faz chamada de rede, ao contrario de `getUser()` que contacta o servidor. Isto elimina o risco de travamento por rede lenta.
 
-## Arquivos a Modificar
-
-### 4. `src/pages/Agenda.tsx`
-- Adicionar botao "Lote" (ou icone de upload) ao lado dos botoes existentes "Reservar" e "Nova Sessao"
-- Adicionar estado para controlar o modal de agendamento em lote
-- Adicionar handler para criar as sessoes aprovadas em batch (reutilizando a logica existente de insercao via Supabase)
-
-## Detalhes Tecnicos
-
-### Algoritmo de Matching de Nomes
-
-```text
-Para cada nome da planilha:
-  1. Normalizar (minusculas, remover acentos, trim)
-  2. Buscar match exato no full_name dos pacientes
-  3. Se nao encontrou, buscar por contem (substring)
-     - "Bryan" encontra "Bryan Costa Silva"
-  4. Se nao encontrou, buscar por palavras individuais
-     - "Caetana" encontra "Caetana Rodrigues"
-  5. Calcular score de similaridade para cada candidato
-  6. Se score > 80%: match automatico
-  7. Se score 50-80%: sugestao (amarelo)
-  8. Se score < 50%: sem match (vermelho)
-  9. Se multiplos candidatos com score > 70%: ambiguidade (amarelo)
+```typescript
+const initLoad = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) {
+    setPatientsLoading(false);
+    setSessionsLoading(false);
+    setProfessionalsLoading(false);
+    setServicesLoading(false);
+    setEvolutionsLoading(false);
+    return;
+  }
+  cachedUserId.current = session.user.id;
+  await fetchAllData(false);
+  hasInitiallyLoaded.current = true;
+};
 ```
 
-### Formato Esperado da Planilha
+**B) Remover o guard `isFetchingAll` e garantir que loading sempre resolve**
 
-Baseado na imagem fornecida pelo utilizador:
-| Data | Dia da Semana | Evento/Pessoa | Horario Inicio | Horario Fim | Observacoes |
-|------|---------------|---------------|----------------|-------------|-------------|
-| 06/02/2026 | Sexta | Maria Francisca Veloso | 13:00 | 14:00 | |
+O guard `isFetchingAll` e a causa do deadlock. Ao remover, duas chamadas concorrentes a `fetchAllData` podem correr em paralelo, mas isso nao causa problema: os fetch individuais (fetchPatients, fetchSessions, etc.) sao idempotentes e a segunda execucao simplesmente sobrescreve com os mesmos dados. O importante e que os estados de loading SEMPRE sejam resolvidos.
 
-O sistema tambem ira aceitar variacoes de nomes de colunas (case-insensitive).
+```typescript
+// Remover isFetchingAll ref
+// Remover guard de isFetchingAll dentro de fetchAllData
 
-### Criacao de Sessoes em Batch
+const fetchAllData = async (silent = false) => {
+  await Promise.all([
+    fetchPatients(silent),
+    fetchServices(silent),
+    fetchSessions(silent),
+    fetchProfessionals(silent),
+    fetchEvolutions(silent),
+    fetchCreditBalances(),
+    fetchCreditUsageMap(),
+  ]);
+};
+```
 
-- Reutilizar a mesma logica de insercao que ja existe no `handleCreateSession` da Agenda
-- Sessoes com data anterior a hoje serao criadas com status "realizado" (retroativas)
-- Sessoes com observacao "No-Show" serao criadas com status "falta"
-- Verificacao de conflitos de horario antes da insercao
-- Insercao via `supabase.from('sessoes').insert([...])` em batch
+**C) Tambem usar `getSession()` no listener de auth**
 
-### Biblioteca de Parsing
-- Reutilizar a dependencia `xlsx` ja instalada no projeto
+Substituir `getUser()` por `getSession()` no handler de `onAuthStateChange` para consistencia e rapidez. O callback do `onAuthStateChange` ja recebe a session como segundo parametro, portanto basta usar essa session diretamente:
+
+```typescript
+supabase.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_OUT') {
+    // ... limpar estado
+  } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+    const user = session?.user;
+    if (!user) return;
+    if (user.id === cachedUserId.current && hasInitiallyLoaded.current) {
+      fetchAllData(true);
+      return;
+    }
+    cachedUserId.current = user.id;
+    await fetchAllData(false);
+    hasInitiallyLoaded.current = true;
+  }
+});
+```
 
 ## Resultado Esperado
 
-- O utilizador pode importar dezenas ou centenas de agendamentos de uma vez
-- Nomes incompletos ou abreviados sao inteligentemente associados aos pacientes cadastrados
-- Casos duvidosos sao apresentados para revisao manual
-- Agendamentos retroativos sao suportados
-- Conflitos de horario sao detectados antes da gravacao
-- Interface consistente com o design existente do sistema (mesmos componentes UI)
+- O Dashboard carrega imediatamente sem travar nos skeletons
+- Sem chamadas de rede bloqueantes durante a inicializacao
+- Sem risco de deadlock entre initLoad e o listener de autenticacao
+- Funciona corretamente em qualquer navegador e perfil
+
+## Arquivo a modificar
+
+1. `src/contexts/DataContext.tsx` - As tres correcoes descritas acima
 
