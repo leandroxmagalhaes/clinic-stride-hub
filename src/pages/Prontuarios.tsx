@@ -18,6 +18,7 @@ import {
   Pencil,
   Loader2,
   ClipboardList,
+  ArrowLeft,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -149,6 +150,7 @@ export default function Prontuarios() {
           primary_specialty_id: existingProntuario.primary_specialty_id,
         },
       });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (paciente) {
       // Create new prontuario for patient in database
       try {
@@ -202,6 +204,7 @@ export default function Prontuarios() {
           [pacienteId]: newProntuario,
         }));
         setSelectedProntuario(newProntuario);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (err) {
         console.error("Exception creating prontuario:", err);
       }
@@ -357,7 +360,7 @@ export default function Prontuarios() {
     >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
         {/* Patient List */}
-        <div className="lg:col-span-4 space-y-4">
+        <div className={cn("lg:col-span-4 space-y-4", selectedProntuario && "hidden lg:block")}>
           <Card className="shadow-card">
             <CardContent className="p-4">
               <div className="relative">
@@ -421,8 +424,18 @@ export default function Prontuarios() {
 
         {/* Prontuario Detail */}
         <div className="lg:col-span-8">
-          {selectedProntuario ? (
+           {selectedProntuario ? (
             <div className="space-y-4">
+              {/* Back button - mobile only */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="lg:hidden gap-2 mb-2"
+                onClick={() => setSelectedProntuario(null)}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Voltar à lista
+              </Button>
               {/* Patient Header */}
               <Card className="shadow-card">
                 <CardContent className="p-4">
@@ -641,7 +654,7 @@ export default function Prontuarios() {
               </Tabs>
             </div>
           ) : (
-            <Card className="shadow-card">
+            <Card className="shadow-card hidden lg:block">
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <FileText className="h-16 w-16 text-muted-foreground/50 mb-4" />
                 <h3 className="font-display text-lg font-semibold mb-2">
