@@ -27,6 +27,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -66,6 +67,11 @@ interface NavItemProps {
 // Memoized NavItem component - extracted outside AppSidebar to prevent recreation
 const NavItem = memo(function NavItem({ item, isActive }: NavItemProps) {
   const Icon = item.icon;
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  const handleClick = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   return (
     <SidebarMenuItem>
@@ -89,7 +95,7 @@ const NavItem = memo(function NavItem({ item, isActive }: NavItemProps) {
             )}
           </div>
         ) : (
-          <Link to={item.url} className="flex items-center gap-3 w-full">
+          <Link to={item.url} onClick={handleClick} className="flex items-center gap-3 w-full">
             <Icon className="h-4 w-4" />
             <span>{item.title}</span>
           </Link>
