@@ -1,97 +1,66 @@
 
+# Corrigir Travamentos em Todas as Telas
 
-# Agendamento em Lote - Importacao de Sessoes via Planilha
+## Problemas Identificados
 
-## Resumo
+### 1. Instancias duplicadas do React (causa principal da lentidao)
+O `vite.config.ts` nao tem `dedupe` configurado. Bibliotecas como `@dnd-kit`, `@radix-ui`, `recharts`, etc. podem empacotar suas proprias copias do React, causando conflitos internos que deixam a aplicacao extremamente lenta e instavel.
 
-Adicionar um botao "Lote" na pagina Agenda que abre um modal para importar agendamentos a partir de ficheiros Excel/CSV. O sistema faz matching inteligente dos nomes com pacientes cadastrados e permite revisao antes de gravar.
+### 2. Skeleton sem forwardRef (erros no console)
+O componente `Skeleton` nao aceita refs, gerando erros repetidos no console toda vez que um skeleton e renderizado. Isso polui o console e pode afetar performance por excesso de warnings.
 
-## Componentes a Criar
+### 3. Dashboard e Agenda bloqueiam tudo no `isLoading` global
+Ambas as paginas usam `if (isLoading) return <Skeleton>` que depende de TODOS os dados (pacientes + sessoes + profissionais + servicos) carregarem simultaneamente. Se qualquer um demorar, a tela inteira fica travada nos skeletons.
 
-### 1. `src/services/BatchSchedulingService.ts` - Logica de negocio
+## Correcoes (sem tocar no DataContext.tsx)
 
-- Parsing do ficheiro Excel/CSV usando a biblioteca `xlsx` (ja instalada)
-- Colunas esperadas: paciente, profissional, servico, data, hora, minuto, observacoes
-- Algoritmo de fuzzy matching para nomes:
-  - Match exato (case-insensitive)
-  - Match parcial (nome contem o texto ou vice-versa)
-  - Match por primeiro nome + iniciais
-  - Scoring baseado em similaridade (Levenshtein simplificado ou token matching)
-- Geracao do template de planilha para download
-- Validacao de dados (datas, horas, campos obrigatorios)
+### Arquivo 1: `vite.config.ts`
+Adicionar `dedupe: ["react", "react-dom", "react/jsx-runtime"]` na configuracao de `resolve`. Isto forca o Vite a usar uma unica instancia do React em todo o bundle, eliminando conflitos entre bibliotecas.
 
-### 2. `src/components/agenda/BatchSchedulingModal.tsx` - Modal principal
+### Arquivo 2: `src/components/ui/skeleton.tsx`
+Converter para `React.forwardRef` para eliminar os erros repetidos no console.
 
-Modal com 3 etapas:
+### Arquivo 3: `src/pages/Dashboard.tsx`
+Remover o bloco `if (isLoading) return <DashboardSkeleton />`. A pagina renderiza imediatamente com dados vazios (mostra 0 nos stats, lista vazia nas sessoes). Os dados aparecem assim que carregam, sem travar a tela.
 
-**Etapa 1 - Upload:**
-- Zona de drag-and-drop ou botao para selecionar ficheiro (.xlsx, .csv)
-- Botao para descarregar modelo de planilha
-- Indicador de progresso durante parsing
-
-**Etapa 2 - Revisao:**
-- Tabela com todas as linhas importadas
-- Indicadores visuais por linha:
-  - Verde: match exato encontrado para paciente/profissional/servico
-  - Amarelo: sugestao encontrada (match parcial)
-  - Vermelho: sem match
-- Dropdown pesquisavel (combobox) para corrigir paciente/profissional/servico manualmente
-- Checkbox individual para aprovar/rejeitar cada linha
-- Checkbox "selecionar todos" no cabecalho
-- Indicacao de sessoes retroativas (data passada -> status "realizado")
-- Detecao de conflitos de horario
-
-**Etapa 3 - Confirmacao:**
-- Resumo: X sessoes aprovadas, Y rejeitadas, Z retroativas
-- Botao "Agendar Aprovadas"
-
-### 3. Alteracao em `src/pages/Agenda.tsx` (minima)
-
-- Adicionar import do `BatchSchedulingModal`
-- Adicionar estado `isBatchModalOpen`
-- Adicionar botao "Lote" ao lado dos botoes existentes (area de actions)
-- Renderizar o `BatchSchedulingModal`
-- Handler para gravar as sessoes aprovadas (inserir no banco via supabase diretamente, depois chamar `refreshSessions`)
-
-## Formato da Planilha Modelo
-
-| paciente | profissional | servico | data | hora | minuto | observacoes |
-|----------|-------------|---------|------|------|--------|-------------|
-| Joao Silva | Dr. Maria Santos | Fisioterapia | 15/02/2026 | 10 | 0 | Primeira sessao |
-
-## Algoritmo de Matching
-
-```text
-Para cada nome na planilha:
-  1. Normalizar (lowercase, remover acentos)
-  2. Tentar match exato -> confianca "exato"
-  3. Tentar "contem" (nome do paciente contem o texto) -> confianca "sugestao"
-  4. Dividir em tokens e verificar quantos tokens coincidem -> confianca "sugestao"
-  5. Nenhum match -> confianca "sem_match"
-```
-
-## Fluxo de Gravacao
-
-- Para cada linha aprovada, criar um registo na tabela `sessoes` via supabase
-- Sessoes com data passada recebem status "realizado"
-- Sessoes com data futura recebem status "agendado"
-- Apos insercao, chamar `refreshSessions()` do DataContext para atualizar a UI
-- Exibir toast com resumo (X agendadas, Y falharam)
+### Arquivo 4: `src/pages/Agenda.tsx`
+Mesmo padrao: remover o bloco `if (isLoading) return <AgendaSkeleton />`. A agenda aparece imediatamente (vazia), preenchendo conforme os dados carregam.
 
 ## Detalhes Tecnicos
 
-### Ficheiros a criar:
-1. `src/services/BatchSchedulingService.ts` - parsing, matching, template, validacao
-2. `src/components/agenda/BatchSchedulingModal.tsx` - modal completo com 3 etapas
+### vite.config.ts
+```typescript
+resolve: {
+  alias: {
+    "@": path.resolve(__dirname, "./src"),
+  },
+  dedupe: ["react", "react-dom", "react/jsx-runtime"],
+},
+```
 
-### Ficheiro a editar (minimo):
-1. `src/pages/Agenda.tsx` - adicionar botao "Lote" e renderizar modal
+### skeleton.tsx
+```typescript
+import * as React from "react";
+import { cn } from "@/lib/utils";
 
-### Ficheiro que NAO sera tocado:
+const Skeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn("animate-pulse rounded-md bg-muted", className)} {...props} />
+  )
+);
+Skeleton.displayName = "Skeleton";
+
+export { Skeleton };
+```
+
+### Dashboard.tsx e Agenda.tsx
+Remover os blocos `if (isLoading) { return ... <Skeleton> }` que bloqueiam a renderizacao completa da pagina. Os componentes ja lidam graciosamente com arrays vazios (mostram "Nenhum agendamento proximo", valores 0, etc.).
+
+## Ficheiro que NAO sera tocado
 - `src/contexts/DataContext.tsx`
 
-### Dependencias utilizadas (ja instaladas):
-- `xlsx` - parsing de ficheiros Excel/CSV
-- `lucide-react` - icones
-- Componentes UI existentes (Dialog, Button, Table, Checkbox, Command/Combobox, Badge)
-
+## Resultado Esperado
+- Aplicacao significativamente mais rapida (sem React duplicado)
+- Zero erros de ref no console
+- Paginas aparecem instantaneamente, dados preenchem progressivamente
+- Funciona melhor tanto no desktop quanto no mobile
