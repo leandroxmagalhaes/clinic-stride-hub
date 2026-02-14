@@ -19,10 +19,18 @@ export function useAuth() {
     // Set up auth state listener FIRST (before getSession)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setAuthState({
-          user: session?.user ?? null,
-          session,
-          loading: false,
+        setAuthState(prev => {
+          const newUserId = session?.user?.id ?? null;
+          const prevUserId = prev.user?.id ?? null;
+          // Skip update if user hasn't changed (avoids re-renders on TOKEN_REFRESHED)
+          if (newUserId === prevUserId && !prev.loading) {
+            return prev;
+          }
+          return {
+            user: session?.user ?? null,
+            session,
+            loading: false,
+          };
         });
       }
     );
