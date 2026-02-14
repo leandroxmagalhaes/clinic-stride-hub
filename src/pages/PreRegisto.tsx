@@ -225,6 +225,15 @@ export default function PreRegisto() {
       return;
     }
 
+    if (!form.cpf?.trim() || form.cpf.replace(/\D/g, "").length !== 9) {
+      toast({
+        title: "NIF obrigatório",
+        description: "Por favor, preencha o NIF com 9 dígitos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const queryParam = isNewMode ? `clinic_id=${clinicIdParam}` : `token=${token}`;
@@ -381,15 +390,15 @@ export default function PreRegisto() {
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Masculino">Masculino</SelectItem>
-                      <SelectItem value="Feminino">Feminino</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
+                      <SelectItem value="M">Masculino</SelectItem>
+                      <SelectItem value="F">Feminino</SelectItem>
+                      <SelectItem value="O">Outro</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div>
-                <Label htmlFor="cpf">NIF</Label>
+                <Label htmlFor="cpf">NIF *</Label>
                 <Input
                   id="cpf"
                   value={form.cpf || ""}
