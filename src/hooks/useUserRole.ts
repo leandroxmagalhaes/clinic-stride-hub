@@ -7,6 +7,12 @@ export function useUserRole() {
   const [isLoading, setIsLoading] = useState(true);
   const cachedUserId = useRef<string | null>(null);
   const isFetching = useRef(false);
+  const rolesRef = useRef<AppRole[]>([]);
+
+  // Keep rolesRef in sync
+  useEffect(() => {
+    rolesRef.current = roles;
+  }, [roles]);
 
   const fetchRoles = useCallback(async () => {
     // Prevent concurrent fetches
@@ -15,7 +21,7 @@ export function useUserRole() {
     const { data: { user } } = await supabase.auth.getUser();
     
     // Skip fetch if user hasn't changed and we already have roles
-    if (user?.id === cachedUserId.current && roles.length > 0) {
+    if (user?.id === cachedUserId.current && rolesRef.current.length > 0) {
       setIsLoading(false);
       return;
     }
@@ -42,7 +48,7 @@ export function useUserRole() {
       setIsLoading(false);
       isFetching.current = false;
     }
-  }, [roles.length]);
+  }, []); // No dependencies - uses refs instead
 
   useEffect(() => {
     fetchRoles();
@@ -52,12 +58,14 @@ export function useUserRole() {
       if (event === 'SIGNED_OUT') {
         cachedUserId.current = null;
         setRoles([]);
+        rolesRef.current = [];
         setIsLoading(false);
         return;
       }
       if (event === 'SIGNED_IN') {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user?.id === cachedUserId.current && roles.length > 0) {
+        // Only re-fetch if user actually changed
+        if (user?.id === cachedUserId.current && rolesRef.current.length > 0) {
           return;
         }
         cachedUserId.current = null;

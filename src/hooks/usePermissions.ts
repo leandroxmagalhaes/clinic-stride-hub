@@ -57,7 +57,12 @@ export function usePermissions() {
     };
 
     if (!rolesLoading) {
-      loadPermissions();
+      if (hasLoadedPermissions.current) {
+        // Silent reload - don't set isLoadingPermissions back to true
+        loadPermissions();
+      } else {
+        loadPermissions();
+      }
     }
   }, [rolesLoading]);
 

@@ -1,6 +1,6 @@
 // DataContext - Centralized state management with 100% Supabase integration
 // All data is fetched from the database - no localStorage or mock data
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
@@ -104,9 +104,13 @@ export function DataProvider({ children }: DataProviderProps) {
   // Track credit usage per session for idempotency (session_id -> boolean)
   const [creditUsageMap, setCreditUsageMap] = useState<Record<string, boolean>>({});
 
+  // Refs for tab-switch stability
+  const cachedUserId = useRef<string | null>(null);
+  const hasInitiallyLoaded = useRef(false);
+
   // Fetch patients from Supabase
-  const fetchPatients = async () => {
-    setPatientsLoading(true);
+  const fetchPatients = async (silent = false) => {
+    if (!silent) setPatientsLoading(true);
     try {
       const { data, error } = await supabase
         .from("pacientes")
@@ -127,8 +131,8 @@ export function DataProvider({ children }: DataProviderProps) {
   };
 
   // Fetch sessions from Supabase with relations
-  const fetchSessions = async () => {
-    setSessionsLoading(true);
+  const fetchSessions = async (silent = false) => {
+    if (!silent) setSessionsLoading(true);
     try {
       const { data, error } = await supabase
         .from("sessoes")
@@ -173,8 +177,8 @@ export function DataProvider({ children }: DataProviderProps) {
   };
 
   // Fetch professionals from profiles table (sessoes FK points here)
-  const fetchProfessionals = async () => {
-    setProfessionalsLoading(true);
+  const fetchProfessionals = async (silent = false) => {
+    if (!silent) setProfessionalsLoading(true);
     try {
       // Must fetch from profiles table because sessoes.profissional_id references profiles.id
       const { data, error } = await supabase
@@ -223,8 +227,8 @@ export function DataProvider({ children }: DataProviderProps) {
   };
 
   // Fetch evolutions from Supabase
-  const fetchEvolutions = async () => {
-    setEvolutionsLoading(true);
+  const fetchEvolutions = async (silent = false) => {
+    if (!silent) setEvolutionsLoading(true);
     try {
       const { data, error } = await supabase
         .from("evolucoes_clinicas")
@@ -289,8 +293,8 @@ export function DataProvider({ children }: DataProviderProps) {
   };
 
   // Fetch services from Supabase
-  const fetchServices = async () => {
-    setServicesLoading(true);
+  const fetchServices = async (silent = false) => {
+    if (!silent) setServicesLoading(true);
     try {
       const { data, error } = await supabase
         .from("servicos")
@@ -518,19 +522,30 @@ export function DataProvider({ children }: DataProviderProps) {
 
   // Load all data on mount
   useEffect(() => {
-    fetchPatients();
-    fetchServices();
-    fetchSessions();
-    fetchProfessionals();
-    fetchEvolutions();
-    fetchCreditBalances();
-    fetchCreditUsageMap();
+    const initLoad = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      cachedUserId.current = user?.id ?? null;
+      
+      await Promise.all([
+        fetchPatients(),
+        fetchServices(),
+        fetchSessions(),
+        fetchProfessionals(),
+        fetchEvolutions(),
+        fetchCreditBalances(),
+        fetchCreditUsageMap(),
+      ]);
+      hasInitiallyLoaded.current = true;
+    };
+    initLoad();
   }, []);
 
-  // Refresh data on auth state change
+  // Refresh data on auth state change - stabilized to prevent tab-switch freezes
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
       if (event === 'SIGNED_OUT') {
+        cachedUserId.current = null;
+        hasInitiallyLoaded.current = false;
         // Clear all state on logout
         setPatients([]);
         setServices([]);
@@ -540,7 +555,22 @@ export function DataProvider({ children }: DataProviderProps) {
         setCreditBalances({});
         setCreditUsageMap({});
       } else if (event === 'SIGNED_IN') {
-        // Refresh all data when user signs in
+        const { data: { user } } = await supabase.auth.getUser();
+        // If same user (token refresh on tab switch), do silent fetches
+        if (user?.id === cachedUserId.current && hasInitiallyLoaded.current) {
+          // Silent refresh - no loading spinners
+          fetchPatients(true);
+          fetchServices(true);
+          fetchSessions(true);
+          fetchProfessionals(true);
+          fetchEvolutions(true);
+          fetchCreditBalances();
+          fetchCreditUsageMap();
+          return;
+        }
+        // New user signed in
+        cachedUserId.current = user?.id ?? null;
+        hasInitiallyLoaded.current = true;
         fetchPatients();
         fetchServices();
         fetchSessions();
