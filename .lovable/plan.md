@@ -1,28 +1,40 @@
 
-
-# Corrigir Dashboard Travado nos Skeletons
+# Corrigir Tela Travada em Skeletons ao Abrir em Outro Navegador
 
 ## Problema
 
-O sistema fica travado nos skeletons de carregamento e nunca mostra os dados. A causa raiz esta no `DataContext.tsx`:
+Ao abrir o sistema num perfil diferente do Chrome e fazer login com outra conta, a pagina fica presa nos skeletons de carregamento e nunca mostra os dados. A imagem mostra o Dashboard ("Painel") com todos os cards em skeleton indefinidamente.
 
-1. A funcao `initLoad` usa `supabase.auth.getUser()` que faz uma chamada de rede ao servidor de autenticacao. Se essa chamada demorar, todo o carregamento trava.
-2. O guard `isFetchingAll` pode criar um deadlock: quando `initLoad` e `INITIAL_SESSION` correm ao mesmo tempo, a segunda chamada a `fetchAllData` retorna imediatamente SEM executar os fetches, mas os estados de loading (`patientsLoading`, `sessionsLoading`, etc.) continuam `true` para sempre.
+## Causa Raiz
+
+O `DataProvider` esta posicionado no topo da aplicacao (fora do `ProtectedRoute`), o que cria uma condicao de corrida:
+
+1. O utilizador abre a app num navegador novo (sem sessao ou com token expirado)
+2. `initLoad` executa imediatamente e tenta buscar dados SEM autenticacao
+3. As queries falham silenciosamente (RLS bloqueia) e retornam arrays vazios
+4. `hasInitiallyLoaded` e marcado como `true`
+5. O utilizador faz login, o evento `SIGNED_IN` dispara
+6. O handler verifica `user?.id === cachedUserId.current` -- como `cachedUserId` e `null` e o user e real, entra na branch "novo utilizador"
+7. Novos fetches sao disparados COM loading, mas os fetches anteriores (do `initLoad`) podem ainda estar a correr, criando uma corrida entre duas execucoes simultaneas da mesma funcao
+8. Uma das execucoes pode definir `loading=false` prematuramente enquanto a outra ainda esta a carregar, ou os dados vazios do primeiro fetch podem sobrescrever os dados reais
+
+Alem disso, o listener de autenticacao so trata `SIGNED_IN` e `SIGNED_OUT`, mas ignora o evento `INITIAL_SESSION` que o sistema de autenticacao dispara quando ja existe uma sessao valida ao abrir a pagina.
 
 ## Solucao
 
 ### Arquivo: `src/contexts/DataContext.tsx`
 
-Duas correcoes:
+Tres correcoes pontuais:
 
-**A) Trocar `getUser()` por `getSession()` no initLoad**
+**A) initLoad so busca dados se houver utilizador autenticado**
 
-`getSession()` e local/cachado e nao faz chamada de rede, ao contrario de `getUser()` que contacta o servidor. Isto elimina o risco de travamento por rede lenta.
+Se `getUser()` retorna null (sem sessao), nao executar nenhum fetch. Apenas marcar loading como false para nao mostrar skeletons eternamente. O carregamento real so acontece quando `SIGNED_IN` dispara apos o login.
 
 ```typescript
 const initLoad = async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    // Sem utilizador - nao buscar dados, apenas resolver loading
     setPatientsLoading(false);
     setSessionsLoading(false);
     setProfessionalsLoading(false);
@@ -30,63 +42,55 @@ const initLoad = async () => {
     setEvolutionsLoading(false);
     return;
   }
-  cachedUserId.current = session.user.id;
-  await fetchAllData(false);
+  cachedUserId.current = user.id;
+  await Promise.all([...fetches...]);
   hasInitiallyLoaded.current = true;
 };
 ```
 
-**B) Remover o guard `isFetchingAll` e garantir que loading sempre resolve**
+**B) Tratar evento `INITIAL_SESSION` alem de `SIGNED_IN`**
 
-O guard `isFetchingAll` e a causa do deadlock. Ao remover, duas chamadas concorrentes a `fetchAllData` podem correr em paralelo, mas isso nao causa problema: os fetch individuais (fetchPatients, fetchSessions, etc.) sao idempotentes e a segunda execucao simplesmente sobrescreve com os mesmos dados. O importante e que os estados de loading SEMPRE sejam resolvidos.
+Quando o utilizador ja tem sessao valida ao abrir a pagina, o sistema de autenticacao emite `INITIAL_SESSION` em vez de `SIGNED_IN`. Adicionar tratamento para este evento.
 
 ```typescript
-// Remover isFetchingAll ref
-// Remover guard de isFetchingAll dentro de fetchAllData
-
-const fetchAllData = async (silent = false) => {
-  await Promise.all([
-    fetchPatients(silent),
-    fetchServices(silent),
-    fetchSessions(silent),
-    fetchProfessionals(silent),
-    fetchEvolutions(silent),
-    fetchCreditBalances(),
-    fetchCreditUsageMap(),
-  ]);
-};
+} else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+  // ... mesmo tratamento
+}
 ```
 
-**C) Tambem usar `getSession()` no listener de auth**
+**C) Protecao contra fetches concorrentes**
 
-Substituir `getUser()` por `getSession()` no handler de `onAuthStateChange` para consistencia e rapidez. O callback do `onAuthStateChange` ja recebe a session como segundo parametro, portanto basta usar essa session diretamente:
+Adicionar um ref `isFetchingAll` para impedir que duas rondas de fetch corram simultaneamente. Se uma ronda ja esta em curso, a segunda e ignorada.
 
 ```typescript
-supabase.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'SIGNED_OUT') {
-    // ... limpar estado
-  } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-    const user = session?.user;
-    if (!user) return;
-    if (user.id === cachedUserId.current && hasInitiallyLoaded.current) {
-      fetchAllData(true);
-      return;
-    }
-    cachedUserId.current = user.id;
-    await fetchAllData(false);
-    hasInitiallyLoaded.current = true;
+const isFetchingAll = useRef(false);
+
+const fetchAllData = async (silent = false) => {
+  if (isFetchingAll.current) return;
+  isFetchingAll.current = true;
+  try {
+    await Promise.all([
+      fetchPatients(silent),
+      fetchServices(silent),
+      fetchSessions(silent),
+      fetchProfessionals(silent),
+      fetchEvolutions(silent),
+      fetchCreditBalances(),
+      fetchCreditUsageMap(),
+    ]);
+  } finally {
+    isFetchingAll.current = false;
   }
-});
+};
 ```
 
 ## Resultado Esperado
 
-- O Dashboard carrega imediatamente sem travar nos skeletons
-- Sem chamadas de rede bloqueantes durante a inicializacao
-- Sem risco de deadlock entre initLoad e o listener de autenticacao
-- Funciona corretamente em qualquer navegador e perfil
+- Abrir o sistema num perfil de Chrome diferente e fazer login com outra conta funciona corretamente
+- Os dados carregam apos o login sem ficar preso nos skeletons
+- O comportamento ao mudar de aba continua estavel (correcoes anteriores mantidas)
+- Sem corridas de fetches concorrentes
 
-## Arquivo a modificar
+## Arquivos a modificar
 
 1. `src/contexts/DataContext.tsx` - As tres correcoes descritas acima
-
