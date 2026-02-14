@@ -1,29 +1,32 @@
 
-# Corrigir Erro de Constraint no Agendamento Retroativo
+
+# Colapsar Lista de Pacientes ao Selecionar Prontuario (Mobile)
 
 ## Problema
 
-A constraint `sessoes_status_check` na tabela `sessoes` nao inclui o valor `realizado`, que e o status atribuido automaticamente a sessoes retroativas (datas passadas). O codigo tenta inserir `status: "realizado"` mas o banco rejeita com erro de violacao de constraint.
-
-**Valores permitidos atualmente:** `agendado`, `confirmado`, `em_atendimento`, `finalizado`, `cancelado`, `faltou`
-
-**Valores usados no codigo mas ausentes:** `realizado`, `falta`
+Na versao mobile (tela pequena), a lista de pacientes e o prontuario ficam empilhados verticalmente. Ao selecionar um paciente, o utilizador precisa descer ate ao final da pagina para ver o prontuario.
 
 ## Solucao
 
-Atualizar a constraint `sessoes_status_check` para incluir todos os valores de status usados na aplicacao.
+Implementar um comportamento de "lista/detalhe" responsivo: em telas pequenas, ao selecionar um paciente, a lista e escondida e so aparece o prontuario com um botao "Voltar" para regressar a lista.
 
-### Migracao SQL
+## Detalhes Tecnicos
 
-```sql
-ALTER TABLE public.sessoes DROP CONSTRAINT sessoes_status_check;
-ALTER TABLE public.sessoes ADD CONSTRAINT sessoes_status_check 
-  CHECK (status = ANY (ARRAY[
-    'agendado', 'confirmado', 'em_atendimento', 
-    'finalizado', 'realizado', 'cancelado', 'faltou', 'falta'
-  ]));
-```
+### Arquivo: `src/pages/Prontuarios.tsx`
 
-### Nenhuma alteracao de codigo necessaria
+1. **Logica de visibilidade mobile**: Quando `selectedProntuario` existe, esconder a coluna da lista de pacientes em mobile (`hidden lg:block`) e mostrar apenas o prontuario. Quando nenhum paciente esta selecionado, mostrar a lista normalmente.
 
-O codigo ja esta correto ao usar `realizado` para sessoes retroativas. O problema e exclusivamente na constraint do banco de dados.
+2. **Botao "Voltar a lista"**: Adicionar um botao visivel apenas em mobile (`lg:hidden`) no topo do prontuario, permitindo limpar a selecao e voltar a lista de pacientes.
+
+3. **Classes condicionais**:
+   - Lista de pacientes: `className={cn("lg:col-span-4 space-y-4", selectedProntuario && "hidden lg:block")}`
+   - Detalhe do prontuario: sempre visivel quando ha selecao
+   - O placeholder "Selecione um utente" mantem `hidden lg:block` (nao aparece em mobile sem selecao)
+
+4. **Scroll automatico**: Apos selecionar um paciente em mobile, fazer scroll para o topo da pagina para garantir que o prontuario fica imediatamente visivel.
+
+### Resultado
+
+- **Desktop**: Comportamento inalterado (lista a esquerda, prontuario a direita)
+- **Mobile**: Lista desaparece ao selecionar paciente, prontuario aparece de imediato com botao para voltar
+
