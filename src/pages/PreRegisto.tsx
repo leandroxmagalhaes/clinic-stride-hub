@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, Loader2, User, Phone, FileText, ShieldCheck, Copy } from "lucide-react";
+import { CheckCircle, Loader2, User, Phone, FileText, ShieldCheck, Copy, AlertTriangle } from "lucide-react";
 
 interface PatientData {
   full_name: string;
@@ -64,6 +64,7 @@ export default function PreRegisto() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clinic, setClinic] = useState<ClinicInfo>({ name: "", logo_url: "" });
+  const [noNif, setNoNif] = useState(false);
 
   const [form, setForm] = useState<PatientData>({
     full_name: "",
@@ -225,13 +226,15 @@ export default function PreRegisto() {
       return;
     }
 
-    if (!form.cpf?.trim() || form.cpf.replace(/\D/g, "").length !== 9) {
-      toast({
-        title: "NIF obrigatório",
-        description: "Por favor, preencha o NIF com 9 dígitos.",
-        variant: "destructive",
-      });
-      return;
+    if (!noNif) {
+      if (!form.cpf?.trim() || form.cpf.replace(/\D/g, "").length !== 9) {
+        toast({
+          title: "NIF obrigatório",
+          description: "Por favor, preencha o NIF com 9 dígitos.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -398,7 +401,7 @@ export default function PreRegisto() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="cpf">NIF *</Label>
+                <Label htmlFor="cpf">NIF {!noNif && "*"}</Label>
                 <Input
                   id="cpf"
                   value={form.cpf || ""}
@@ -407,10 +410,34 @@ export default function PreRegisto() {
                     updateField("cpf", v);
                   }}
                   placeholder="123456789"
-                  disabled={disabled}
+                  disabled={disabled || noNif}
                   maxLength={9}
                   inputMode="numeric"
                 />
+                <div className="flex items-center gap-2 mt-2">
+                  <Checkbox
+                    id="no_nif"
+                    checked={noNif}
+                    onCheckedChange={(checked) => {
+                      setNoNif(!!checked);
+                      if (checked) {
+                        updateField("cpf", null);
+                      }
+                    }}
+                    disabled={disabled}
+                  />
+                  <Label htmlFor="no_nif" className="text-sm font-normal text-muted-foreground cursor-pointer">
+                    Ainda não possuo NIF (ex: bebé/criança)
+                  </Label>
+                </div>
+                {noNif && (
+                  <div className="flex items-start gap-2 mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-yellow-700">
+                      Lembre-se de atualizar o cadastro assim que obtiver o NIF.
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
