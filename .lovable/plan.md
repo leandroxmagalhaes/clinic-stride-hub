@@ -1,96 +1,128 @@
 
-# Corrigir Tela Travada em Skeletons ao Abrir em Outro Navegador
+
+# Corrigir Tela Travada em "Carregando..." ao Mudar de Aba (Solucao Definitiva)
 
 ## Problema
 
-Ao abrir o sistema num perfil diferente do Chrome e fazer login com outra conta, a pagina fica presa nos skeletons de carregamento e nunca mostra os dados. A imagem mostra o Dashboard ("Painel") com todos os cards em skeleton indefinidamente.
+Ao mudar de aba do navegador e voltar, a tela fica presa nos skeletons de carregamento e nao volta a mostrar os dados. A imagem mostra a pagina de Pacientes travada em "Carregando..." com skeletons visiveis.
 
-## Causa Raiz
+## Causa Raiz (3 pontos de falha)
 
-O `DataProvider` esta posicionado no topo da aplicacao (fora do `ProtectedRoute`), o que cria uma condicao de corrida:
+Existem tres sistemas que reagem ao evento de autenticacao ao voltar a aba, cada um contribuindo para o problema:
 
-1. O utilizador abre a app num navegador novo (sem sessao ou com token expirado)
-2. `initLoad` executa imediatamente e tenta buscar dados SEM autenticacao
-3. As queries falham silenciosamente (RLS bloqueia) e retornam arrays vazios
-4. `hasInitiallyLoaded` e marcado como `true`
-5. O utilizador faz login, o evento `SIGNED_IN` dispara
-6. O handler verifica `user?.id === cachedUserId.current` -- como `cachedUserId` e `null` e o user e real, entra na branch "novo utilizador"
-7. Novos fetches sao disparados COM loading, mas os fetches anteriores (do `initLoad`) podem ainda estar a correr, criando uma corrida entre duas execucoes simultaneas da mesma funcao
-8. Uma das execucoes pode definir `loading=false` prematuramente enquanto a outra ainda esta a carregar, ou os dados vazios do primeiro fetch podem sobrescrever os dados reais
+### 1. DataContext re-busca TUDO ao voltar a aba
 
-Alem disso, o listener de autenticacao so trata `SIGNED_IN` e `SIGNED_OUT`, mas ignora o evento `INITIAL_SESSION` que o sistema de autenticacao dispara quando ja existe uma sessao valida ao abrir a pagina.
+O `DataContext.tsx` (linha 532) tem um listener de `onAuthStateChange` que, ao receber `SIGNED_IN` (disparado no token refresh ao voltar a aba), re-busca TODOS os dados (pacientes, sessoes, profissionais, etc.). Cada fetch define `xxxLoading = true`, o que mostra os skeletons. Se algum fetch falhar ou demorar, a tela trava.
+
+### 2. useUserRole tem dependencia circular
+
+O `fetchRoles` em `useUserRole.ts` depende de `roles.length` no seu `useCallback` (linha 45). Isto cria uma dependencia circular: quando roles carregam, `fetchRoles` muda de referencia, o `useEffect` re-executa e re-subscreve o listener de auth. Alem disso, `roles.length` dentro do `onAuthStateChange` captura um valor obsoleto (stale closure).
+
+### 3. Fetches repetem o loading mesmo quando ja tem dados
+
+Todas as funcoes de fetch no DataContext (fetchPatients, fetchSessions, etc.) definem `xxxLoading = true` no inicio, mesmo quando ja existem dados carregados. Isto apaga os dados visiveis e mostra skeletons.
 
 ## Solucao
 
-### Arquivo: `src/contexts/DataContext.tsx`
+### Arquivo 1: `src/contexts/DataContext.tsx`
 
-Tres correcoes pontuais:
+**Problema:** O listener `onAuthStateChange` dispara re-fetch de tudo no `SIGNED_IN`.
 
-**A) initLoad so busca dados se houver utilizador autenticado**
+**Correcao:**
+- Adicionar um `cachedUserId` ref para rastrear o utilizador atual
+- No evento `SIGNED_IN`, verificar se o utilizador mudou antes de re-buscar
+- Se o utilizador e o mesmo (apenas token refresh), ignorar o evento
+- Nas funcoes de fetch, NAO definir loading como `true` se ja existirem dados carregados (usar um parametro `isInitial` ou verificar se o array ja tem dados)
 
-Se `getUser()` retorna null (sem sessao), nao executar nenhum fetch. Apenas marcar loading como false para nao mostrar skeletons eternamente. O carregamento real so acontece quando `SIGNED_IN` dispara apos o login.
+### Arquivo 2: `src/hooks/useUserRole.ts`
+
+**Problema:** `fetchRoles` depende de `roles.length`, criando loop e stale closures.
+
+**Correcao:**
+- Usar um ref (`rolesRef`) para rastrear roles em vez de depender do estado diretamente no callback
+- Remover `roles.length` das dependencias do `useCallback`
+- Usar o ref dentro do `onAuthStateChange` para verificar se ja tem roles carregadas (evita stale closure)
+
+### Arquivo 3: `src/hooks/usePermissions.ts` (ajuste menor)
+
+Verificar que `isLoadingPermissions` nunca volta a `true` apos a primeira carga, independentemente do que aconteca com `rolesLoading`.
+
+## Detalhes Tecnicos
+
+### DataContext - Listener estabilizado
 
 ```typescript
-const initLoad = async () => {
+// Adicionar ref no topo do DataProvider
+const cachedUserId = useRef<string | null>(null);
+const hasInitiallyLoaded = useRef(false);
+
+// No useEffect do auth listener:
+useEffect(() => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+    if (event === 'SIGNED_OUT') {
+      cachedUserId.current = null;
+      hasInitiallyLoaded.current = false;
+      // Limpar dados...
+      return;
+    }
+    if (event === 'SIGNED_IN') {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id === cachedUserId.current && hasInitiallyLoaded.current) {
+        return; // Mesmo utilizador, ignorar
+      }
+      cachedUserId.current = user?.id ?? null;
+      // Re-buscar dados...
+    }
+  });
+  return () => subscription.unsubscribe();
+}, []);
+```
+
+### DataContext - Fetches sem loading quando ja tem dados
+
+Para cada funcao de fetch, nao definir loading como `true` se ja existirem dados:
+
+```typescript
+const fetchPatients = async (silent = false) => {
+  if (!silent) setPatientsLoading(true);
+  // ... fetch logic
+};
+```
+
+O fetch inicial usa `silent = false`, re-fetches usam `silent = true`.
+
+### useUserRole - Sem dependencia circular
+
+```typescript
+const rolesRef = useRef<AppRole[]>([]);
+
+const fetchRoles = useCallback(async () => {
+  if (isFetching.current) return;
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    // Sem utilizador - nao buscar dados, apenas resolver loading
-    setPatientsLoading(false);
-    setSessionsLoading(false);
-    setProfessionalsLoading(false);
-    setServicesLoading(false);
-    setEvolutionsLoading(false);
+  if (user?.id === cachedUserId.current && rolesRef.current.length > 0) {
+    setIsLoading(false);
     return;
   }
-  cachedUserId.current = user.id;
-  await Promise.all([...fetches...]);
-  hasInitiallyLoaded.current = true;
-};
-```
+  // ... resto do fetch
+}, []); // SEM dependencias que mudam
 
-**B) Tratar evento `INITIAL_SESSION` alem de `SIGNED_IN`**
-
-Quando o utilizador ja tem sessao valida ao abrir a pagina, o sistema de autenticacao emite `INITIAL_SESSION` em vez de `SIGNED_IN`. Adicionar tratamento para este evento.
-
-```typescript
-} else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-  // ... mesmo tratamento
-}
-```
-
-**C) Protecao contra fetches concorrentes**
-
-Adicionar um ref `isFetchingAll` para impedir que duas rondas de fetch corram simultaneamente. Se uma ronda ja esta em curso, a segunda e ignorada.
-
-```typescript
-const isFetchingAll = useRef(false);
-
-const fetchAllData = async (silent = false) => {
-  if (isFetchingAll.current) return;
-  isFetchingAll.current = true;
-  try {
-    await Promise.all([
-      fetchPatients(silent),
-      fetchServices(silent),
-      fetchSessions(silent),
-      fetchProfessionals(silent),
-      fetchEvolutions(silent),
-      fetchCreditBalances(),
-      fetchCreditUsageMap(),
-    ]);
-  } finally {
-    isFetchingAll.current = false;
-  }
-};
+// Manter rolesRef sincronizado
+useEffect(() => {
+  rolesRef.current = roles;
+}, [roles]);
 ```
 
 ## Resultado Esperado
 
-- Abrir o sistema num perfil de Chrome diferente e fazer login com outra conta funciona corretamente
-- Os dados carregam apos o login sem ficar preso nos skeletons
-- O comportamento ao mudar de aba continua estavel (correcoes anteriores mantidas)
-- Sem corridas de fetches concorrentes
+- Mudar de aba e voltar NAO mostra skeletons nem trava a pagina
+- Os dados permanecem visiveis durante re-verificacoes silenciosas
+- Formularios e modais abertos continuam intactos
+- Login/logout continuam a funcionar normalmente
+- A primeira carga continua a mostrar loading normalmente
 
 ## Arquivos a modificar
 
-1. `src/contexts/DataContext.tsx` - As tres correcoes descritas acima
+1. `src/contexts/DataContext.tsx` - Estabilizar listener auth + fetches silenciosos
+2. `src/hooks/useUserRole.ts` - Corrigir dependencia circular + stale closures
+3. `src/hooks/usePermissions.ts` - Garantir que loading nao reseta
+
