@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useUserRole } from "./useUserRole";
 import { UserPermissionService, UserPermissions, ModulePermission } from "@/services/UserPermissionService";
 
@@ -34,6 +34,7 @@ export function usePermissions() {
   const { roles, isLoading: rolesLoading, isAdmin, isProfessional, hasRole } = useUserRole();
   const [customPermissions, setCustomPermissions] = useState<UserPermissions | null>(null);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
+  const hasLoadedPermissions = useRef(false);
 
   const isSecretary = hasRole('secretary');
   const isAdminMaster = isAdmin;
@@ -48,7 +49,10 @@ export function usePermissions() {
       } catch (error) {
         console.error('Error loading custom permissions:', error);
       } finally {
-        setIsLoadingPermissions(false);
+        if (!hasLoadedPermissions.current) {
+          hasLoadedPermissions.current = true;
+          setIsLoadingPermissions(false);
+        }
       }
     };
 

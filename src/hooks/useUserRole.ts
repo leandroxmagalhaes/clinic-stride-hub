@@ -48,9 +48,18 @@ export function useUserRole() {
     fetchRoles();
 
     // Re-fetch only on SIGNED_IN and SIGNED_OUT events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-        // Reset cache on auth change to force refetch
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+      if (event === 'SIGNED_OUT') {
+        cachedUserId.current = null;
+        setRoles([]);
+        setIsLoading(false);
+        return;
+      }
+      if (event === 'SIGNED_IN') {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id === cachedUserId.current && roles.length > 0) {
+          return;
+        }
         cachedUserId.current = null;
         fetchRoles();
       }
