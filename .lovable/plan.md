@@ -1,83 +1,46 @@
 
-
-# Link Generico de Pre-Registo para Novos Utentes
+# NIF Obrigatorio com Opcao "Ainda nao possuo NIF"
 
 ## Resumo
 
-Criar um link generico por clinica (sem associacao a utente existente) que permite a qualquer pessoa preencher o formulario de pre-registo e criar automaticamente um novo registo de paciente. O link sera copiavel a partir da tela de Pacientes.
+Manter o NIF como campo obrigatorio, mas adicionar um checkbox "Ainda nao possuo NIF" que desbloqueia a submissao sem NIF. Quando marcado, o sistema regista que o utente precisa atualizar o NIF futuramente.
 
-## Como funciona
+## Comportamento
 
-O link tera o formato: `/pre-registo/novo?c={clinic_id}`
-
-- Ao abrir, mostra o mesmo formulario de pre-registo, mas completamente em branco
-- Ao submeter, cria um novo paciente na tabela `pacientes` (em vez de atualizar um existente)
-- A clinica e identificada pelo parametro `c` (clinic_id)
+1. Por defeito, o NIF e obrigatorio (com asterisco)
+2. Abaixo do campo NIF, aparece um checkbox: "Ainda nao possuo NIF (ex: bebe/crianca)"
+3. Ao marcar o checkbox:
+   - O campo NIF fica desativado e limpo
+   - A validacao de NIF e ignorada na submissao
+   - Aparece um aviso amarelo: "Lembre-se de atualizar o cadastro assim que obtiver o NIF."
+4. O formulario submete normalmente com `cpf: null`
+5. Na listagem de pacientes, utentes sem NIF ficam sinalizados para lembrar a clinica
 
 ## Alteracoes
 
-### 1. Edge Function `patient-onboarding/index.ts`
+### 1. Frontend: `src/pages/PreRegisto.tsx`
 
-Adicionar suporte para o modo "novo":
-- **GET** `?clinic_id=xxx` (sem token): Retorna apenas os dados da clinica (nome + logo), sem dados de utente
-- **POST** `?clinic_id=xxx` (sem token): Cria um novo registo na tabela `pacientes` com os dados do formulario, associando ao `clinic_id`
+- Adicionar estado `noNif` (boolean, default false)
+- Adicionar checkbox "Ainda nao possuo NIF" abaixo do campo NIF
+- Quando `noNif = true`:
+  - Desativar e limpar o campo NIF
+  - Mostrar alerta informativo amarelo com lembrete
+- Ajustar validacao no `handleSubmit`:
+  - Se `noNif` e false: NIF obrigatorio com 9 digitos (logica atual)
+  - Se `noNif` e true: ignorar validacao de NIF
 
-A logica existente com `?token=xxx` continua a funcionar como antes.
+### 2. Edge Function: `patient-onboarding/index.ts`
 
-### 2. Pagina `PreRegisto.tsx`
+- Remover a validacao server-side que exige NIF (o campo `cpf` ja e nullable na base de dados)
+- Manter apenas a validacao de formato (9 digitos) quando o valor e fornecido
 
-Adaptar para dois modos:
-- **Modo edicao** (existente): URL `/pre-registo/:token` -- carrega e atualiza dados de um utente
-- **Modo novo**: URL `/pre-registo/novo` com query param `?c=CLINIC_ID` -- formulario em branco, cria novo utente ao submeter
+### 3. Sinalizacao na listagem (opcional, fase futura)
 
-A rota `/pre-registo/novo` sera adicionada ao `App.tsx` apontando para o mesmo componente.
+- Utentes sem NIF podem ser identificados na tela de Pacientes com um badge "NIF em falta" para facilitar o acompanhamento
 
-### 3. Pagina `Pacientes.tsx`
+## Resultado
 
-Adicionar um botao "Link Generico" (ou integrar na area existente) que copia para a area de transferencia o URL:
-`{origin}/pre-registo/novo?c={clinic_id}`
-
-Pode ser um botao simples junto ao "Enviar Link" existente, ou uma opcao adicional dentro do mesmo modal.
-
-### 4. Rota em `App.tsx`
-
-Adicionar rota publica: `/pre-registo/novo` apontando para `PreRegisto`
-
-## Detalhes tecnicos
-
-### Edge Function -- novo fluxo
-
-```text
-GET ?clinic_id=xxx (sem token)
-  -> SELECT name, logo_url FROM clinics WHERE id = clinic_id
-  -> Retorna { patient: null, clinic: { name, logo_url }, mode: "new" }
-
-POST ?clinic_id=xxx (sem token)
-  -> Valida dados (full_name obrigatorio, data_consent obrigatorio)
-  -> INSERT INTO pacientes (...) VALUES (...) com clinic_id
-  -> Retorna { success: true }
-```
-
-### PreRegisto.tsx -- logica de modo
-
-```text
-Se URL = /pre-registo/novo?c=xxx
-  -> mode = "new", clinicId vem da query string
-  -> GET edge function com ?clinic_id=xxx (carrega logo)
-  -> POST edge function com ?clinic_id=xxx (cria utente)
-
-Se URL = /pre-registo/:token
-  -> mode = "edit" (comportamento atual)
-```
-
-### Botao na tela de Pacientes
-
-Junto ao botao "Enviar Link", adicionar botao "Link Generico" com icone de copia. Ao clicar, copia o URL generico e mostra toast de confirmacao.
-
-### Validacao de seguranca
-
-- O clinic_id e um UUID, validado no edge function
-- A criacao de pacientes via link generico e intencional (a clinica partilha o link conscientemente)
-- Campos sensiveis continuam protegidos (apenas dados de formulario sao aceites)
-- Telefone sera obrigatorio na criacao (consistente com a validacao existente do PatientService)
-
+- A grande maioria dos utentes preenche o NIF normalmente (sem opcao de "saltar")
+- Casos excepcionais (bebes) conseguem completar o registo
+- O lembrete visual incentiva a atualizacao futura
+- Sem retrabalho para a clinica na maioria dos casos
