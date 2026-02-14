@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, Lock } from "lucide-react";
+import { Plus, Lock, Upload } from "lucide-react";
 import { 
   startOfWeek, 
   addDays, 
@@ -31,6 +31,7 @@ import { NewReservedSlotModal } from "@/components/agenda/NewReservedSlotModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotManagementModal";
 import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
+import { BatchScheduleModal } from "@/components/agenda/BatchScheduleModal";
 import { AgendaSkeleton } from "@/components/skeletons/PageSkeletons";
 
 // Full range of available hours (06:00 to 23:00)
@@ -53,6 +54,7 @@ export default function Agenda() {
   
   const [clinicId, setClinicId] = useState<string | null>(null);
   const [isReservedSlotModalOpen, setIsReservedSlotModalOpen] = useState(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
   
@@ -420,6 +422,14 @@ export default function Agenda() {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
+            onClick={() => setIsBatchModalOpen(true)} 
+            className="gap-2 min-h-[44px]"
+          >
+            <Upload className="h-4 w-4" />
+            <span className="hidden sm:inline">Lote</span>
+          </Button>
+          <Button 
+            variant="outline" 
             onClick={() => setIsReservedSlotModalOpen(true)} 
             className="gap-2 min-h-[44px]"
           >
@@ -522,7 +532,19 @@ export default function Agenda() {
         />
       )}
 
-      {/* Session Management Modal */}
+      {/* Batch Schedule Modal */}
+      {clinicId && (
+        <BatchScheduleModal
+          isOpen={isBatchModalOpen}
+          onClose={() => setIsBatchModalOpen(false)}
+          patients={patients}
+          professionals={professionals}
+          services={services}
+          sessions={sessions}
+          clinicId={clinicId}
+          onComplete={() => refreshSessions()}
+        />
+      )}
       <SessionManagementModal
         isOpen={isSessionModalOpen}
         onClose={handleSessionModalClose}
