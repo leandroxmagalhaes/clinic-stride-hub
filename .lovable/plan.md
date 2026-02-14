@@ -1,66 +1,65 @@
 
-# Corrigir Travamentos em Todas as Telas
+# Corrigir Crashes e Lentidao Progressiva
 
-## Problemas Identificados
+## Problema 1: App crasha com "Erro Inesperado"
 
-### 1. Instancias duplicadas do React (causa principal da lentidao)
-O `vite.config.ts` nao tem `dedupe` configurado. Bibliotecas como `@dnd-kit`, `@radix-ui`, `recharts`, etc. podem empacotar suas proprias copias do React, causando conflitos internos que deixam a aplicacao extremamente lenta e instavel.
+As paginas sao carregadas com `lazy()` sem tratamento de falha. Quando o deploy muda ou a rede oscila, os ficheiros JavaScript antigos ficam invalidos. O `lazy()` falha com `TypeError: Importing a module script failed`, o ErrorBoundary do Sentry captura e mostra "Erro Inesperado". O utilizador precisa recarregar manualmente.
 
-### 2. Skeleton sem forwardRef (erros no console)
-O componente `Skeleton` nao aceita refs, gerando erros repetidos no console toda vez que um skeleton e renderizado. Isso polui o console e pode afetar performance por excesso de warnings.
+**Correcao:** Criar uma funcao `lazyWithRetry` que tenta recarregar o modulo ate 3 vezes antes de falhar. Se todas as tentativas falharem, faz reload automatico da pagina (uma unica vez, usando sessionStorage para evitar loop infinito).
 
-### 3. Dashboard e Agenda bloqueiam tudo no `isLoading` global
-Ambas as paginas usam `if (isLoading) return <Skeleton>` que depende de TODOS os dados (pacientes + sessoes + profissionais + servicos) carregarem simultaneamente. Se qualquer um demorar, a tela inteira fica travada nos skeletons.
+## Problema 2: Lentidao progressiva (causa raiz)
 
-## Correcoes (sem tocar no DataContext.tsx)
+O `useAuth()` e um hook independente — cada componente que o utiliza cria sua propria subscricao `onAuthStateChange` e chamada `getSession()`. Foram encontradas 8+ chamadas independentes:
 
-### Arquivo 1: `vite.config.ts`
-Adicionar `dedupe: ["react", "react-dom", "react/jsx-runtime"]` na configuracao de `resolve`. Isto forca o Vite a usar uma unica instancia do React em todo o bundle, eliminando conflitos entre bibliotecas.
+- ProtectedRoute
+- AppSidebar  
+- Agenda
+- Pacientes
+- Engajamento
+- PatientPortal
+- TeamSettingsPanel
+- Login/Signup
 
-### Arquivo 2: `src/components/ui/skeleton.tsx`
-Converter para `React.forwardRef` para eliminar os erros repetidos no console.
+Cada subscricao gera eventos de rede, processamento e re-renders separados. Com o tempo, isso degrada a performance ate o ponto de travamento.
 
-### Arquivo 3: `src/pages/Dashboard.tsx`
-Remover o bloco `if (isLoading) return <DashboardSkeleton />`. A pagina renderiza imediatamente com dados vazios (mostra 0 nos stats, lista vazia nas sessoes). Os dados aparecem assim que carregam, sem travar a tela.
+**Correcao:** Converter `useAuth` de hook standalone para um AuthContext/AuthProvider, garantindo UMA UNICA subscricao de autenticacao para toda a aplicacao. Todos os componentes consomem o mesmo estado sem criar listeners duplicados.
 
-### Arquivo 4: `src/pages/Agenda.tsx`
-Mesmo padrao: remover o bloco `if (isLoading) return <AgendaSkeleton />`. A agenda aparece imediatamente (vazia), preenchendo conforme os dados carregam.
+## Problema 3: Warnings no console (menor)
 
-## Detalhes Tecnicos
+`DialogHeader` e `DialogFooter` em `dialog.tsx` sao funcoes simples que nao aceitam refs, gerando warnings repetidos no console. Nao causa crash mas polui os logs.
 
-### vite.config.ts
-```typescript
-resolve: {
-  alias: {
-    "@": path.resolve(__dirname, "./src"),
-  },
-  dedupe: ["react", "react-dom", "react/jsx-runtime"],
-},
-```
+**Correcao:** Converter ambos para `React.forwardRef`.
 
-### skeleton.tsx
-```typescript
-import * as React from "react";
-import { cn } from "@/lib/utils";
+## Ficheiros a Criar
 
-const Skeleton = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("animate-pulse rounded-md bg-muted", className)} {...props} />
-  )
-);
-Skeleton.displayName = "Skeleton";
+### 1. `src/contexts/AuthContext.tsx`
+- Criar AuthProvider que encapsula TODA a logica de autenticacao
+- Uma unica subscricao `onAuthStateChange`
+- Uma unica chamada `getSession()`
+- Exportar `useAuth()` como hook de contexto
+- Manter exatamente a mesma API (user, session, loading, signIn, signUp, signOut)
 
-export { Skeleton };
-```
+## Ficheiros a Editar
 
-### Dashboard.tsx e Agenda.tsx
-Remover os blocos `if (isLoading) { return ... <Skeleton> }` que bloqueiam a renderizacao completa da pagina. Os componentes ja lidam graciosamente com arrays vazios (mostram "Nenhum agendamento proximo", valores 0, etc.).
+### 1. `src/App.tsx`
+- Substituir `lazy()` por `lazyWithRetry()` em todas as 12 paginas
+- Envolver a app com `<AuthProvider>`
+- A funcao `lazyWithRetry` fica definida no topo do ficheiro
+
+### 2. `src/hooks/useAuth.tsx`
+- Remover toda a logica interna (useState, useEffect, subscricoes)
+- Transformar em re-export simples do AuthContext: `export { useAuth } from '@/contexts/AuthContext'`
+- Todos os imports existentes (`from '@/hooks/useAuth'`) continuam a funcionar sem alteracao
+
+### 3. `src/components/ui/dialog.tsx`
+- Converter `DialogHeader` e `DialogFooter` para `React.forwardRef`
 
 ## Ficheiro que NAO sera tocado
 - `src/contexts/DataContext.tsx`
 
 ## Resultado Esperado
-- Aplicacao significativamente mais rapida (sem React duplicado)
-- Zero erros de ref no console
-- Paginas aparecem instantaneamente, dados preenchem progressivamente
-- Funciona melhor tanto no desktop quanto no mobile
+
+- Zero crashes por falha de carregamento de modulos (retry automatico)
+- Uma unica subscricao de autenticacao em vez de 8+ (reducao drastica de carga)
+- Performance estavel ao longo do tempo, sem degradacao progressiva
+- Console limpo, sem warnings de refs
