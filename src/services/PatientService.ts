@@ -17,6 +17,7 @@ export interface Patient {
   notes?: string | null;
   health_tags?: HealthTag[];
   is_active: boolean;
+  public_token?: string;
 }
 
 export interface CreatePatientData {

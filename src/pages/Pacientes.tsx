@@ -22,8 +22,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink, FileUp } from "lucide-react";
+import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink, FileUp, Send } from "lucide-react";
 import { ImportPatientsModal } from "@/components/patients/ImportPatientsModal";
+import { SendOnboardingLinkModal } from "@/components/patients/SendOnboardingLinkModal";
 import { toast } from "sonner";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -78,6 +79,7 @@ export default function Pacientes() {
   }, [user]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isOnboardingLinkModalOpen, setIsOnboardingLinkModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   // Form state
@@ -274,6 +276,11 @@ export default function Pacientes() {
       subtitle={`${patients.length} pacientes cadastrados`}
       actions={
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setIsOnboardingLinkModalOpen(true)} className="gap-2">
+            <Send className="h-4 w-4" />
+            <span className="hidden sm:inline">Enviar Link</span>
+            <span className="sm:hidden">Link</span>
+          </Button>
           <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="gap-2">
             <FileUp className="h-4 w-4" />
             <span className="hidden sm:inline">Importar Planilha</span>
@@ -553,6 +560,13 @@ export default function Pacientes() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Onboarding Link Modal */}
+      <SendOnboardingLinkModal
+        isOpen={isOnboardingLinkModalOpen}
+        onClose={() => setIsOnboardingLinkModalOpen(false)}
+        patients={patients}
+      />
 
       {/* Import Patients Modal */}
       {clinicId && (
