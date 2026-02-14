@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink, FileUp, Send } from "lucide-react";
+import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink, FileUp, Send, Link2, Check } from "lucide-react";
 import { ImportPatientsModal } from "@/components/patients/ImportPatientsModal";
 import { SendOnboardingLinkModal } from "@/components/patients/SendOnboardingLinkModal";
 import { toast } from "sonner";
@@ -80,6 +80,7 @@ export default function Pacientes() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isOnboardingLinkModalOpen, setIsOnboardingLinkModalOpen] = useState(false);
+  const [genericLinkCopied, setGenericLinkCopied] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   // Form state
@@ -276,10 +277,33 @@ export default function Pacientes() {
       subtitle={`${patients.length} pacientes cadastrados`}
       actions={
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              if (!clinicId) {
+                toast.error("Clínica não identificada.");
+                return;
+              }
+              const genericUrl = `${window.location.origin}/pre-registo/novo?c=${clinicId}`;
+              try {
+                await navigator.clipboard.writeText(genericUrl);
+                setGenericLinkCopied(true);
+                toast.success("Link genérico copiado!");
+                setTimeout(() => setGenericLinkCopied(false), 2000);
+              } catch {
+                toast.error("Erro ao copiar link");
+              }
+            }}
+            className="gap-2"
+          >
+            {genericLinkCopied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+            <span className="hidden sm:inline">{genericLinkCopied ? "Copiado!" : "Link Genérico"}</span>
+            <span className="sm:hidden">{genericLinkCopied ? "✓" : "Link"}</span>
+          </Button>
           <Button variant="outline" onClick={() => setIsOnboardingLinkModalOpen(true)} className="gap-2">
             <Send className="h-4 w-4" />
             <span className="hidden sm:inline">Enviar Link</span>
-            <span className="sm:hidden">Link</span>
+            <span className="sm:hidden">Enviar</span>
           </Button>
           <Button variant="outline" onClick={() => setIsImportModalOpen(true)} className="gap-2">
             <FileUp className="h-4 w-4" />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,7 +52,12 @@ interface ClinicInfo {
 
 export default function PreRegisto() {
   const { token } = useParams<{ token: string }>();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Determine mode: "new" if token is "novo", otherwise "edit"
+  const isNewMode = token === "novo";
+  const clinicIdParam = isNewMode ? searchParams.get("c") : null;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -80,13 +85,47 @@ export default function PreRegisto() {
   });
 
   useEffect(() => {
-    if (!token) return;
-    fetchPatientData();
-  }, [token]);
+    if (isNewMode) {
+      if (!clinicIdParam) {
+        setError("Link inválido. Parâmetro de clínica em falta.");
+        setLoading(false);
+        return;
+      }
+      fetchClinicOnly();
+    } else {
+      if (!token) return;
+      fetchPatientData();
+    }
+  }, [token, isNewMode, clinicIdParam]);
+
+  const fetchClinicOnly = async () => {
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-onboarding?clinic_id=${clinicIdParam}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        setError("Link inválido ou clínica não encontrada.");
+        setLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      setClinic(data.clinic);
+    } catch {
+      setError("Erro ao carregar dados.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchPatientData = async () => {
     try {
-      // Use fetch directly since we need query params
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-onboarding?token=${token}`;
       const response = await fetch(url, {
         method: "GET",
@@ -177,9 +216,19 @@ export default function PreRegisto() {
       return;
     }
 
+    if (isNewMode && !form.phone?.trim()) {
+      toast({
+        title: "Telemóvel obrigatório",
+        description: "Por favor, preencha o número de telemóvel.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-onboarding?token=${token}`;
+      const queryParam = isNewMode ? `clinic_id=${clinicIdParam}` : `token=${token}`;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-onboarding?${queryParam}`;
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -244,7 +293,7 @@ export default function PreRegisto() {
             <CheckCircle className="h-10 w-10 text-primary" />
           </div>
           <h1 className="text-xl font-semibold text-foreground">
-            Os seus dados foram atualizados com sucesso!
+            {isNewMode ? "O seu registo foi criado com sucesso!" : "Os seus dados foram atualizados com sucesso!"}
           </h1>
           <p className="text-muted-foreground text-sm">
             Pode fechar esta página. Obrigado!
@@ -586,7 +635,7 @@ export default function PreRegisto() {
           {submitting ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
-            "Atualizar Ficha"
+            isNewMode ? "Submeter Registo" : "Atualizar Ficha"
           )}
         </Button>
 

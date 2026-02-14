@@ -6,6 +6,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -14,27 +16,141 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const token = url.searchParams.get("token");
+    const clinicId = url.searchParams.get("clinic_id");
 
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // ── MODE: Generic link (new patient) ──
+    if (clinicId && !token) {
+      if (!uuidRegex.test(clinicId)) {
+        return new Response(JSON.stringify({ error: "clinic_id inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "GET") {
+        const { data: clinic } = await supabase
+          .from("clinics")
+          .select("name, logo_url")
+          .eq("id", clinicId)
+          .single();
+
+        if (!clinic) {
+          return new Response(JSON.stringify({ error: "Clínica não encontrada" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(
+          JSON.stringify({
+            patient: null,
+            clinic: { name: clinic.name || "", logo_url: clinic.logo_url || "" },
+            mode: "new",
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (req.method === "POST") {
+        const body = await req.json();
+
+        // Validate required fields
+        if (!body.full_name?.trim()) {
+          return new Response(
+            JSON.stringify({ error: "Nome completo é obrigatório" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (!body.data_consent) {
+          return new Response(
+            JSON.stringify({ error: "O consentimento de dados é obrigatório" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (!body.phone?.trim()) {
+          return new Response(
+            JSON.stringify({ error: "Telemóvel é obrigatório" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Validate NIF if provided
+        if (body.cpf && !/^\d{9}$/.test(body.cpf.replace(/\s/g, ""))) {
+          return new Response(
+            JSON.stringify({ error: "NIF deve conter 9 dígitos numéricos" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Verify clinic exists
+        const { data: clinicExists } = await supabase
+          .from("clinics")
+          .select("id")
+          .eq("id", clinicId)
+          .single();
+
+        if (!clinicExists) {
+          return new Response(
+            JSON.stringify({ error: "Clínica não encontrada" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const allowedFields = [
+          "full_name", "birth_date", "gender", "cpf", "phone", "email",
+          "height_cm", "weight_kg",
+          "emergency_contact", "emergency_phone",
+          "billing_name", "billing_nif", "billing_address",
+          "image_consent", "data_consent",
+        ];
+
+        const insertData: Record<string, unknown> = { clinic_id: clinicId };
+        for (const field of allowedFields) {
+          if (body[field] !== undefined) {
+            insertData[field] = body[field];
+          }
+        }
+        insertData.onboarding_completed_at = new Date().toISOString();
+
+        const { error } = await supabase.from("pacientes").insert(insertData);
+
+        if (error) {
+          console.error("Insert error:", error);
+          return new Response(
+            JSON.stringify({ error: "Erro ao criar registo" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // ── MODE: Existing patient (token) ──
     if (!token) {
-      return new Response(JSON.stringify({ error: "Token obrigatório" }), {
+      return new Response(JSON.stringify({ error: "Token ou clinic_id obrigatório" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(token)) {
       return new Response(JSON.stringify({ error: "Token inválido" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
 
     if (req.method === "GET") {
       const { data, error } = await supabase
@@ -58,7 +174,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Fetch clinic info for logo/name
       let clinicInfo = { name: "", logo_url: "" };
       if (data.clinic_id) {
         const { data: clinic } = await supabase
@@ -85,7 +200,6 @@ Deno.serve(async (req) => {
     if (req.method === "POST") {
       const body = await req.json();
 
-      // Validate required fields
       if (!body.data_consent) {
         return new Response(
           JSON.stringify({ error: "O consentimento de dados é obrigatório" }),
@@ -96,7 +210,6 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Validate NIF format if provided
       if (body.cpf && !/^\d{9}$/.test(body.cpf.replace(/\s/g, ""))) {
         return new Response(
           JSON.stringify({ error: "NIF deve conter 9 dígitos numéricos" }),
@@ -107,7 +220,6 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Build update object with only allowed fields
       const allowedFields = [
         "full_name", "birth_date", "gender", "cpf", "phone", "email",
         "height_cm", "weight_kg",
