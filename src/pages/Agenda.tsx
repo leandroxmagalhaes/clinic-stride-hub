@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, Lock } from "lucide-react";
+import { Plus, Lock, FileSpreadsheet } from "lucide-react";
 import { 
   startOfWeek, 
   addDays, 
@@ -32,6 +32,7 @@ import { SessionManagementModal } from "@/components/agenda/SessionManagementMod
 import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotManagementModal";
 import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
 import { AgendaSkeleton } from "@/components/skeletons/PageSkeletons";
+import { BatchSchedulingModal } from "@/components/agenda/BatchSchedulingModal";
 
 // Full range of available hours (06:00 to 23:00)
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
@@ -53,6 +54,7 @@ export default function Agenda() {
   
   const [clinicId, setClinicId] = useState<string | null>(null);
   const [isReservedSlotModalOpen, setIsReservedSlotModalOpen] = useState(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
   
@@ -420,6 +422,14 @@ export default function Agenda() {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
+            onClick={() => setIsBatchModalOpen(true)} 
+            className="gap-2 min-h-[44px]"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            <span className="hidden sm:inline">Lote</span>
+          </Button>
+          <Button 
+            variant="outline" 
             onClick={() => setIsReservedSlotModalOpen(true)} 
             className="gap-2 min-h-[44px]"
           >
@@ -554,6 +564,19 @@ export default function Agenda() {
         triggerResult={automationTrigger}
         onDismiss={() => setAutomationTrigger(null)}
       />
+
+      {/* Batch Scheduling Modal */}
+      {clinicId && (
+        <BatchSchedulingModal
+          isOpen={isBatchModalOpen}
+          onClose={() => setIsBatchModalOpen(false)}
+          patients={patients}
+          professionals={professionals}
+          services={services}
+          clinicId={clinicId}
+          onSessionsCreated={refreshSessions}
+        />
+      )}
     </AppLayout>
   );
 }
