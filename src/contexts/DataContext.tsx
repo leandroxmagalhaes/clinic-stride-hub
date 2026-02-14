@@ -107,6 +107,7 @@ export function DataProvider({ children }: DataProviderProps) {
   // Refs for tab-switch stability
   const cachedUserId = useRef<string | null>(null);
   const hasInitiallyLoaded = useRef(false);
+  const isFetchingAll = useRef(false);
 
   // Fetch patients from Supabase
   const fetchPatients = async (silent = false) => {
@@ -520,21 +521,40 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
-  // Load all data on mount
-  useEffect(() => {
-    const initLoad = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      cachedUserId.current = user?.id ?? null;
-      
+  // Centralized fetch with concurrency guard
+  const fetchAllData = async (silent = false) => {
+    if (isFetchingAll.current) return;
+    isFetchingAll.current = true;
+    try {
       await Promise.all([
-        fetchPatients(),
-        fetchServices(),
-        fetchSessions(),
-        fetchProfessionals(),
-        fetchEvolutions(),
+        fetchPatients(silent),
+        fetchServices(silent),
+        fetchSessions(silent),
+        fetchProfessionals(silent),
+        fetchEvolutions(silent),
         fetchCreditBalances(),
         fetchCreditUsageMap(),
       ]);
+    } finally {
+      isFetchingAll.current = false;
+    }
+  };
+
+  // Load all data on mount - only if authenticated
+  useEffect(() => {
+    const initLoad = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        // No user session - clear loading states, don't fetch
+        setPatientsLoading(false);
+        setSessionsLoading(false);
+        setProfessionalsLoading(false);
+        setServicesLoading(false);
+        setEvolutionsLoading(false);
+        return;
+      }
+      cachedUserId.current = user.id;
+      await fetchAllData(false);
       hasInitiallyLoaded.current = true;
     };
     initLoad();
@@ -554,30 +574,18 @@ export function DataProvider({ children }: DataProviderProps) {
         setEvolutions([]);
         setCreditBalances({});
         setCreditUsageMap({});
-      } else if (event === 'SIGNED_IN') {
+      } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
         const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
         // If same user (token refresh on tab switch), do silent fetches
-        if (user?.id === cachedUserId.current && hasInitiallyLoaded.current) {
-          // Silent refresh - no loading spinners
-          fetchPatients(true);
-          fetchServices(true);
-          fetchSessions(true);
-          fetchProfessionals(true);
-          fetchEvolutions(true);
-          fetchCreditBalances();
-          fetchCreditUsageMap();
+        if (user.id === cachedUserId.current && hasInitiallyLoaded.current) {
+          fetchAllData(true);
           return;
         }
-        // New user signed in
-        cachedUserId.current = user?.id ?? null;
+        // New user signed in or first session
+        cachedUserId.current = user.id;
+        await fetchAllData(false);
         hasInitiallyLoaded.current = true;
-        fetchPatients();
-        fetchServices();
-        fetchSessions();
-        fetchProfessionals();
-        fetchEvolutions();
-        fetchCreditBalances();
-        fetchCreditUsageMap();
       }
     });
 
