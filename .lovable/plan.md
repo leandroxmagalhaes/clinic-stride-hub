@@ -1,47 +1,94 @@
 
-# Preservar Estado dos Formularios ao Mudar de Aba
+
+# Corrigir Perda de Formularios ao Mudar de Aba (Solucao Completa)
 
 ## Problema
 
-Quando muda de aba no navegador e volta, os formularios (novo paciente, agendamento) fecham e os dados preenchidos sao perdidos. Isto acontece porque o sistema de autenticacao dispara uma atualizacao de estado ao regressar a aba, o que provoca um re-render em cascata que remonta os componentes das paginas, resetando todo o estado local (modais abertos, campos preenchidos).
+A correcao anterior no `useAuth` nao foi suficiente. Existem outros pontos no sistema que reagem a eventos de autenticacao e provocam a remontagem dos componentes da pagina, apagando formularios abertos.
+
+A cadeia do problema:
+1. Ao voltar a aba, o sistema de autenticacao pode emitir um evento
+2. `useUserRole` reage ao evento, reseta o cache e re-busca permissoes com `isLoading = true`
+3. `usePermissions` ve `rolesLoading = true` e reporta `isLoading = true`
+4. `PermissionGuard` mostra o ecrã "Verificando permissoes..." e **desmonta a pagina inteira**
+5. Quando as permissoes carregam, a pagina monta do zero -- formularios, modais e dados perdidos
 
 ## Solucao
 
-Estabilizar o hook de autenticacao para evitar re-renders desnecessarios quando o utilizador nao mudou. Isto resolve o problema na raiz, sem necessidade de rascunhos ou persistencia extra.
+Corrigir em 3 pontos para garantir que a pagina nunca e desmontada desnecessariamente:
 
-## Detalhes Tecnicos
+### 1. `useUserRole` - Evitar re-fetch desnecessario (`src/hooks/useUserRole.ts`)
 
-### 1. Estabilizar `useAuth` (`src/hooks/useAuth.tsx`)
-
-O `onAuthStateChange` do sistema de autenticacao dispara eventos (como `TOKEN_REFRESHED`) ao regressar a uma aba, criando novos objetos de estado mesmo quando o utilizador e o mesmo. Isto causa re-renders desnecessarios em toda a arvore de componentes.
-
-**Correcao:** Comparar o ID do utilizador antes de atualizar o estado. So atualizar quando houve uma mudanca real (login, logout, troca de utilizador).
+No listener de `onAuthStateChange`, antes de resetar o cache e re-buscar roles no evento `SIGNED_IN`, verificar se o utilizador realmente mudou. Se o ID e o mesmo, ignorar o evento.
 
 ```typescript
-supabase.auth.onAuthStateChange((_event, session) => {
-  setAuthState(prev => {
-    const newUserId = session?.user?.id ?? null;
-    const prevUserId = prev.user?.id ?? null;
-    // Evitar re-render se o utilizador nao mudou
-    if (newUserId === prevUserId && !prev.loading) {
-      return prev;
+supabase.auth.onAuthStateChange(async (event) => {
+  if (event === 'SIGNED_OUT') {
+    cachedUserId.current = null;
+    setRoles([]);
+    setIsLoading(false);
+    return;
+  }
+  if (event === 'SIGNED_IN') {
+    const { data: { user } } = await supabase.auth.getUser();
+    // So re-buscar se o utilizador realmente mudou
+    if (user?.id === cachedUserId.current && roles.length > 0) {
+      return;
     }
-    return {
-      user: session?.user ?? null,
-      session,
-      loading: false,
-    };
-  });
+    cachedUserId.current = null;
+    fetchRoles();
+  }
 });
 ```
 
-### 2. Estabilizar `DataContext` (`src/contexts/DataContext.tsx`)
+### 2. `PermissionGuard` - Nao desmontar apos primeira carga (`src/components/auth/PermissionGuard.tsx`)
 
-Garantir que o listener de autenticacao dentro do DataProvider tambem nao dispara re-fetches desnecessarios ao mudar de aba. Adicionar verificacao similar para so re-carregar dados quando o utilizador realmente muda.
+Usar um `useRef` para rastrear se as permissoes ja foram carregadas uma vez. Se ja foram, manter os filhos montados mesmo durante recarregamentos (mostrar um indicador sutil se necessario, sem desmontar a pagina).
 
-### Resultado
+```typescript
+const hasLoadedOnce = useRef(false);
+
+if (!isLoading) {
+  hasLoadedOnce.current = true;
+}
+
+// Primeira carga: mostrar spinner
+if (isLoading && !hasLoadedOnce.current) {
+  return <LoadingSpinner />;
+}
+// Ja carregou: manter filhos montados
+```
+
+### 3. `usePermissions` - Nao resetar loading apos primeira carga (`src/hooks/usePermissions.ts`)
+
+Usar um ref para evitar que `isLoadingPermissions` volte a `true` apos a primeira carga bem-sucedida.
+
+```typescript
+const hasLoadedPermissions = useRef(false);
+
+// No effect de carregar permissoes:
+if (!rolesLoading) {
+  if (hasLoadedPermissions.current) {
+    // Re-carregar silenciosamente sem mudar isLoading
+    loadPermissions().then(() => {});
+  } else {
+    loadPermissions().then(() => {
+      hasLoadedPermissions.current = true;
+    });
+  }
+}
+```
+
+## Arquivos a modificar
+
+- `src/hooks/useUserRole.ts` - Verificar ID do utilizador antes de re-buscar roles
+- `src/hooks/usePermissions.ts` - Nao resetar loading apos primeira carga
+- `src/components/auth/PermissionGuard.tsx` - Manter filhos montados apos primeira verificacao
+
+## Resultado
 
 - Mudar de aba e voltar **nao fecha** modais nem perde dados de formularios
-- O comportamento de login/logout continua a funcionar normalmente
-- Nenhuma alteracao visual ou funcional para o utilizador
-- Solucao na raiz do problema, sem necessidade de "rascunhos" ou persistencia em localStorage
+- As permissoes sao verificadas silenciosamente em segundo plano
+- A primeira carga continua a mostrar o spinner normalmente
+- Login/logout continuam a funcionar corretamente
+
