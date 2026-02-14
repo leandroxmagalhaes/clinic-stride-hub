@@ -31,14 +31,14 @@ import { NewReservedSlotModal } from "@/components/agenda/NewReservedSlotModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotManagementModal";
 import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
-import { AgendaSkeleton } from "@/components/skeletons/PageSkeletons";
+
 import { BatchSchedulingModal } from "@/components/agenda/BatchSchedulingModal";
 
 // Full range of available hours (06:00 to 23:00)
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
 export default function Agenda() {
-  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession, addCredits, refreshCreditBalances, refreshSessions, isLoading } = useData();
+  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession, addCredits, refreshCreditBalances, refreshSessions } = useData();
   const { user } = useAuth();
   const { 
     reservedSlots, 
@@ -391,23 +391,6 @@ export default function Agenda() {
     await refreshCreditBalances();
   };
 
-  // Show skeleton while loading
-  if (isLoading) {
-    return (
-      <AppLayout 
-        title="Agenda" 
-        subtitle="Gerencie os agendamentos da clínica"
-        actions={
-          <Button disabled className="gap-2 min-h-[44px]">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Nova Sessão</span>
-          </Button>
-        }
-      >
-        <AgendaSkeleton />
-      </AppLayout>
-    );
-  }
 
   // Handle create reserved slot
   const handleCreateReservedSlot = async (data: CreateReservedSlotData) => {
