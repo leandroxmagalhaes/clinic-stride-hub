@@ -1,45 +1,64 @@
 
-# Corrigir Menu Vazio na Sidebar
+# Plano de Estabilizacao do Sistema
 
-## Problema Identificado
+## Causa Raiz Identificada
 
-A sidebar filtra os itens de navegacao usando `canAccessModule()`, que depende das permissoes do utilizador. Enquanto as permissoes estao a carregar (roles do utilizador ainda nao foram buscadas da base de dados), `canAccessModule()` retorna `false` para TODOS os modulos. Resultado: o menu fica completamente vazio.
+Existem DUAS implementacoes separadas de `useAuth`:
 
-A centralizacao do AuthContext alterou o timing de carregamento, fazendo com que o `useUserRole` (que tem a sua propria subscricao de autenticacao separada) demore mais a resolver as roles. O utilizador ve a sidebar com header ("Physione") e footer ("Usuario") mas sem nenhum item de menu no meio.
+1. **`src/contexts/AuthContext.tsx`** - AuthProvider centralizado com Context (usado pelo `useUserRole`)
+2. **`src/hooks/useAuth.tsx`** - Hook independente que cria a SUA PROPRIA subscricao `onAuthStateChange` (usado pelo `ProtectedRoute`, `AppSidebar`, e outros)
 
-Adicionalmente, o `useUserRole` ainda cria a sua propria subscricao `onAuthStateChange`, duplicando a do AuthContext. Isto causa chamadas de rede desnecessarias e pode gerar race conditions.
+Cada componente que importa de `src/hooks/useAuth.tsx` cria uma subscricao de autenticacao INDEPENDENTE com estado proprio. Isto significa que:
+- `ProtectedRoute` tem o seu estado de auth
+- `AppSidebar` tem outro estado de auth separado
+- `AuthContext` tem ainda outro
+- `DataContext` tem mais outro
 
-## Correcoes
+Resultado: 4+ subscricoes de autenticacao a competir entre si, resolvendo em momentos diferentes, causando oscilacoes, menu a aparecer/desaparecer, e lentidao.
 
-### 1. `src/components/layout/AppSidebar.tsx` - Mostrar menu durante carregamento
+## Correcoes (3 ficheiros)
 
-Alterar a logica de `visibleItems` para mostrar TODOS os itens enquanto as permissoes estao a carregar, em vez de esconder tudo. Adicionar o estado `isLoading` do `usePermissions`:
+### 1. `src/hooks/useAuth.tsx` - Eliminar hook duplicado
+
+Substituir o hook inteiro por um simples re-export do AuthContext. Em vez de criar a sua propria subscricao, passa a usar o estado centralizado:
 
 ```text
-Antes:
-  main: mainNavItems.filter(item => !item.module || canAccessModule(item.module))
-
-Depois:
-  main: isLoading ? mainNavItems : mainNavItems.filter(item => !item.module || canAccessModule(item.module))
+Antes: Hook independente com onAuthStateChange + getSession proprios (85 linhas)
+Depois: Re-export de useAuth do AuthContext (1 linha)
 ```
 
-Isto garante que o menu esta sempre visivel. Quando as permissoes terminam de carregar, os itens sao filtrados conforme o papel do utilizador.
+Isto elimina instantaneamente todas as subscricoes duplicadas criadas por cada componente que usa este hook.
 
-### 2. `src/hooks/useUserRole.ts` - Eliminar subscricao duplicada
+### 2. `src/hooks/usePermissions.ts` - Eliminar chamada getUser()
 
-Remover a subscricao `onAuthStateChange` do `useUserRole` (que duplica a do AuthContext). Em vez disso, usar o `user` do `useAuth()` como dependencia para buscar as roles. Isto:
-- Elimina a segunda subscricao de autenticacao
-- Usa o estado de auth ja resolvido pelo AuthContext
-- Remove a chamada redundante a `supabase.auth.getUser()`
-- Garante que as roles sao carregadas assim que o AuthContext confirma o utilizador
+O `UserPermissionService.getCurrentUserPermissions()` faz `supabase.auth.getUser()` (chamada de rede) em cada carregamento. Substituir por uso directo do `user.id` ja disponivel via `useUserRole` > `useAuth` > `AuthContext`:
 
-### 3. `src/hooks/useAuth.tsx` - Manter re-export (ja esta correto)
+```text
+Antes: await UserPermissionService.getCurrentUserPermissions()
+       (que internamente faz supabase.auth.getUser())
 
-Este ficheiro ja re-exporta do AuthContext. Nenhuma alteracao necessaria.
+Depois: await UserPermissionService.getUserPermissions(user.id)
+        (usa o ID ja resolvido, sem chamada de rede extra)
+```
+
+Requer acesso ao `user` do `useAuth()` dentro do hook.
+
+### 3. `src/components/layout/AppSidebar.tsx` - Garantir estabilidade
+
+Confirmar que a logica de `visibleItems` continua a mostrar todos os itens durante o carregamento (ja implementada na alteracao anterior, mas verificar que funciona com o auth unificado).
+
+Adicionalmente, memoizar `getRolesLabels` para evitar re-renders desnecessarios da sidebar.
+
+## O que NAO sera tocado
+
+- `src/contexts/AuthContext.tsx` - E a fonte de verdade, permanece como esta
+- `src/contexts/DataContext.tsx` - Congelado conforme instrucao do utilizador
+- `src/components/ui/sidebar.tsx` - Sem alteracoes necessarias
+- `src/components/ui/sheet.tsx` - Os warnings de ref sao cosmeticos e nao afetam funcionalidade
 
 ## Resultado Esperado
 
-- Menu de navegacao visivel IMEDIATAMENTE ao abrir a app
-- Itens filtrados por permissao apenas apos o carregamento completo
-- Uma unica subscricao de autenticacao em toda a app (eliminando race conditions)
-- Performance mais estavel e previsivel
+- De 4+ subscricoes de autenticacao para apenas 2 (AuthContext + DataContext)
+- Menu visivel imediatamente, sem oscilacoes
+- Menos chamadas de rede na inicializacao (eliminada getUser() redundante)
+- Estado de auth consistente em toda a aplicacao
