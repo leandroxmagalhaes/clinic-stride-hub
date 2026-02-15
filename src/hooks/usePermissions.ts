@@ -1,5 +1,6 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useUserRole } from "./useUserRole";
+import { useAuth } from "@/contexts/AuthContext";
 import { UserPermissionService, UserPermissions, ModulePermission } from "@/services/UserPermissionService";
 
 export type PermissionModule = 
@@ -31,6 +32,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export function usePermissions() {
+  const { user } = useAuth();
   const { roles, isLoading: rolesLoading, isAdmin, isProfessional, hasRole } = useUserRole();
   const [customPermissions, setCustomPermissions] = useState<UserPermissions | null>(null);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
@@ -40,11 +42,13 @@ export function usePermissions() {
   const isAdminMaster = isAdmin;
   const isFisioterapeuta = isProfessional && !isAdmin && !isSecretary;
 
-  // Load custom permissions from database
+  // Load custom permissions from database using user.id directly (no extra getUser() call)
   useEffect(() => {
+    if (rolesLoading || !user?.id) return;
+
     const loadPermissions = async () => {
       try {
-        const permissions = await UserPermissionService.getCurrentUserPermissions();
+        const permissions = await UserPermissionService.getUserPermissions(user.id);
         setCustomPermissions(permissions);
       } catch (error) {
         console.error('Error loading custom permissions:', error);
@@ -56,15 +60,8 @@ export function usePermissions() {
       }
     };
 
-    if (!rolesLoading) {
-      if (hasLoadedPermissions.current) {
-        // Silent reload - don't set isLoadingPermissions back to true
-        loadPermissions();
-      } else {
-        loadPermissions();
-      }
-    }
-  }, [rolesLoading]);
+    loadPermissions();
+  }, [rolesLoading, user?.id]);
 
   const permissions = useMemo(() => {
     const getModulePermissions = (module: PermissionModule): ModulePermissions => {
@@ -157,13 +154,13 @@ export function usePermissions() {
     };
   }, [isAdminMaster, isSecretary, isFisioterapeuta, customPermissions]);
 
-  const getRoleLabel = (role: string): string => {
+  const getRoleLabel = useCallback((role: string): string => {
     return ROLE_LABELS[role] || role;
-  };
+  }, []);
 
-  const getRolesLabels = (): string[] => {
-    return roles.map(getRoleLabel);
-  };
+  const getRolesLabels = useCallback((): string[] => {
+    return roles.map(r => ROLE_LABELS[r] || r);
+  }, [roles]);
 
   const isLoading = rolesLoading || isLoadingPermissions;
 
