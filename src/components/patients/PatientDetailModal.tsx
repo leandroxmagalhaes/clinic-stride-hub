@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getPublicBaseUrl } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -81,7 +82,7 @@ export function PatientDetailModal({
 
     setIsSendingPortalLink(true);
     try {
-      const portalUrl = `${window.location.origin}/patient-portal`;
+      const portalUrl = `${getPublicBaseUrl()}/patient-portal`;
 
       const { data, error } = await supabase.functions.invoke("send-patient-portal-link", {
         body: {

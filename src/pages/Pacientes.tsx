@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { getPublicBaseUrl } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -284,7 +285,7 @@ export default function Pacientes() {
                 toast.error("Clínica não identificada.");
                 return;
               }
-              const genericUrl = `${window.location.origin}/pre-registo/novo?c=${clinicId}`;
+              const genericUrl = `${getPublicBaseUrl()}/pre-registo/novo?c=${clinicId}`;
               try {
                 await navigator.clipboard.writeText(genericUrl);
                 setGenericLinkCopied(true);

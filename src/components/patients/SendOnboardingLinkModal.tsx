@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getPublicBaseUrl } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +27,7 @@ export function SendOnboardingLinkModal({ isOpen, onClose, patients }: SendOnboa
   const filtered = PatientService.filterBySearch(patients, search);
 
   const buildLink = (token: string) =>
-    `${window.location.origin}/pre-registo/${token}`;
+    `${getPublicBaseUrl()}/pre-registo/${token}`;
 
   const handleCopy = async () => {
     if (!selected?.public_token) return;
