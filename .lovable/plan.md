@@ -1,80 +1,45 @@
 
-# Corrigir Links de Utentes Apontando para Dominio Errado
+# Corrigir Menu Vazio na Sidebar
 
-## Problema
+## Problema Identificado
 
-Quando se copia o "Link Generico" ou o "Link de Pre-Registo" individual, o sistema usa `window.location.origin` para construir o URL. Se o profissional esta a usar a aplicacao pelo editor ou preview do Lovable, o link gerado aponta para `lovable.dev` -- que e a plataforma de desenvolvimento, nao a aplicacao publicada. Utentes que abrem esse link veem a pagina de login do Lovable em vez do formulario de pre-registo.
+A sidebar filtra os itens de navegacao usando `canAccessModule()`, que depende das permissoes do utilizador. Enquanto as permissoes estao a carregar (roles do utilizador ainda nao foram buscadas da base de dados), `canAccessModule()` retorna `false` para TODOS os modulos. Resultado: o menu fica completamente vazio.
 
-## Solucao
+A centralizacao do AuthContext alterou o timing de carregamento, fazendo com que o `useUserRole` (que tem a sua propria subscricao de autenticacao separada) demore mais a resolver as roles. O utilizador ve a sidebar com header ("Physione") e footer ("Usuario") mas sem nenhum item de menu no meio.
 
-Criar uma funcao utilitaria `getPublicBaseUrl()` que retorna sempre o dominio correto da aplicacao publicada, e substituir todos os `window.location.origin` que geram links publicos (para utentes, portal, convites).
+Adicionalmente, o `useUserRole` ainda cria a sua propria subscricao `onAuthStateChange`, duplicando a do AuthContext. Isto causa chamadas de rede desnecessarias e pode gerar race conditions.
 
-## Ficheiros a modificar
+## Correcoes
 
-### 1. `src/lib/utils.ts` - Adicionar funcao `getPublicBaseUrl()`
+### 1. `src/components/layout/AppSidebar.tsx` - Mostrar menu durante carregamento
 
-Adicionar a seguinte funcao:
+Alterar a logica de `visibleItems` para mostrar TODOS os itens enquanto as permissoes estao a carregar, em vez de esconder tudo. Adicionar o estado `isLoading` do `usePermissions`:
 
 ```text
-getPublicBaseUrl():
-  - Se o hostname atual contem "lovable.dev" ou "lovable.app" com prefixo "id-preview--",
-    extrair o slug e retornar o URL publicado (https://{slug}.lovable.app)
-  - Caso contrario (dominio customizado ou producao), usar window.location.origin normalmente
+Antes:
+  main: mainNavItems.filter(item => !item.module || canAccessModule(item.module))
+
+Depois:
+  main: isLoading ? mainNavItems : mainNavItems.filter(item => !item.module || canAccessModule(item.module))
 ```
 
-Isto garante que mesmo no editor/preview, os links gerados apontam para a versao publicada.
+Isto garante que o menu esta sempre visivel. Quando as permissoes terminam de carregar, os itens sao filtrados conforme o papel do utilizador.
 
-### 2. `src/pages/Pacientes.tsx` - Link Generico
+### 2. `src/hooks/useUserRole.ts` - Eliminar subscricao duplicada
 
-Linha 287: Substituir `window.location.origin` por `getPublicBaseUrl()` na geracao do link generico.
+Remover a subscricao `onAuthStateChange` do `useUserRole` (que duplica a do AuthContext). Em vez disso, usar o `user` do `useAuth()` como dependencia para buscar as roles. Isto:
+- Elimina a segunda subscricao de autenticacao
+- Usa o estado de auth ja resolvido pelo AuthContext
+- Remove a chamada redundante a `supabase.auth.getUser()`
+- Garante que as roles sao carregadas assim que o AuthContext confirma o utilizador
 
-### 3. `src/components/patients/SendOnboardingLinkModal.tsx` - Link Individual
+### 3. `src/hooks/useAuth.tsx` - Manter re-export (ja esta correto)
 
-Linha 28-29: Substituir `window.location.origin` por `getPublicBaseUrl()` na funcao `buildLink`.
-
-### 4. `src/components/patients/PatientDetailModal.tsx` - Link Portal
-
-Linha 84: Substituir `window.location.origin` por `getPublicBaseUrl()` no URL do portal do paciente.
-
-### 5. `src/services/AutomationEngine.ts` - URL base de automacao
-
-Linha 25: Substituir `window.location.origin` por `getPublicBaseUrl()`.
-
-### 6. `src/services/TeamService.ts` - Convites de equipa
-
-Linhas 238 e 257: Substituir `window.location.origin` por `getPublicBaseUrl()` nos URLs de convite.
-
-## Ficheiros que NAO serao tocados
-
-- `src/contexts/AuthContext.tsx` e `src/hooks/useAuth.tsx` - O `emailRedirectTo` de autenticacao deve continuar a usar `window.location.origin` pois o redirect precisa voltar ao mesmo dominio onde o utilizador esta.
-- `src/contexts/DataContext.tsx`
-
-## Detalhes Tecnicos
-
-A funcao `getPublicBaseUrl()` em `src/lib/utils.ts`:
-
-```typescript
-export function getPublicBaseUrl(): string {
-  if (typeof window === 'undefined') {
-    return 'https://clinic-stride-hub.lovable.app';
-  }
-  const host = window.location.hostname;
-  // Preview URL pattern: id-preview--{slug}.lovable.app
-  const previewMatch = host.match(/^id-preview--(.+)\.lovable\.app$/);
-  if (previewMatch) {
-    return `https://${previewMatch[1]}.lovable.app`;
-  }
-  // Editor: lovable.dev
-  if (host.includes('lovable.dev')) {
-    return 'https://clinic-stride-hub.lovable.app';
-  }
-  // Production or custom domain
-  return window.location.origin;
-}
-```
+Este ficheiro ja re-exporta do AuthContext. Nenhuma alteracao necessaria.
 
 ## Resultado Esperado
 
-- Links de pre-registo apontam sempre para o dominio publicado da aplicacao
-- Utentes que recebem o link veem o formulario de pre-registo, nao o login do Lovable
-- Funciona independentemente de onde o profissional esta a aceder (editor, preview ou producao)
+- Menu de navegacao visivel IMEDIATAMENTE ao abrir a app
+- Itens filtrados por permissao apenas apos o carregamento completo
+- Uma unica subscricao de autenticacao em toda a app (eliminando race conditions)
+- Performance mais estavel e previsivel
