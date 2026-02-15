@@ -125,7 +125,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { locale, setLocale } = useLocale();
-  const { canAccessModule, getRolesLabels } = usePermissions();
+  const { canAccessModule, getRolesLabels, isLoading: permissionsLoading } = usePermissions();
   const { data: clinicInfo } = useClinicInfo();
 
   const handleLogout = async () => {
@@ -159,9 +159,9 @@ export function AppSidebar() {
 
   // Memoize visible items based on permissions - calculated once
   const visibleItems = useMemo(() => ({
-    main: mainNavItems.filter(item => !item.module || canAccessModule(item.module)),
-    management: managementNavItems.filter(item => !item.module || canAccessModule(item.module)),
-  }), [canAccessModule]);
+    main: permissionsLoading ? mainNavItems : mainNavItems.filter(item => !item.module || canAccessModule(item.module)),
+    management: permissionsLoading ? managementNavItems : managementNavItems.filter(item => !item.module || canAccessModule(item.module)),
+  }), [canAccessModule, permissionsLoading]);
 
   // Memoize current path for active state
   const currentPath = location.pathname;
