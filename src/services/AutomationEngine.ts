@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getPublicBaseUrl } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AutomationFlow } from "./AutomationService";
@@ -22,7 +23,7 @@ export interface MessageTemplateData {
 export function getPortalBaseUrl(): string {
   // Use window.location.origin to get the current domain (works for both preview and production)
   if (typeof window !== 'undefined') {
-    return window.location.origin;
+    return getPublicBaseUrl();
   }
   // Fallback for SSR or edge cases
   return 'https://clinic-stride-hub.lovable.app';

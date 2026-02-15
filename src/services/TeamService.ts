@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getPublicBaseUrl } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 
 export type AppRole = Database['public']['Enums']['app_role'];
@@ -235,7 +236,7 @@ export class TeamService {
       }
 
       // Build the invite URL
-      const baseUrl = window.location.origin;
+      const baseUrl = getPublicBaseUrl();
       const inviteUrl = `${baseUrl}/signup?invite=${invite.token}`;
 
       return { 
@@ -254,7 +255,7 @@ export class TeamService {
    * Get the invite URL for an existing invite
    */
   static getInviteUrl(token: string): string {
-    const baseUrl = window.location.origin;
+    const baseUrl = getPublicBaseUrl();
     return `${baseUrl}/signup?invite=${token}`;
   }
 
