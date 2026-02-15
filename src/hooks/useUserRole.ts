@@ -1,32 +1,17 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { UserRoleService, AppRole } from "@/services/UserRoleService";
+import { AppRole } from "@/services/UserRoleService";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function useUserRole() {
+  const { user } = useAuth();
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const cachedUserId = useRef<string | null>(null);
   const isFetching = useRef(false);
-  const rolesRef = useRef<AppRole[]>([]);
 
-  // Keep rolesRef in sync
   useEffect(() => {
-    rolesRef.current = roles;
-  }, [roles]);
-
-  const fetchRoles = useCallback(async () => {
-    // Prevent concurrent fetches
-    if (isFetching.current) return;
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    // Skip fetch if user hasn't changed and we already have roles
-    if (user?.id === cachedUserId.current && rolesRef.current.length > 0) {
-      setIsLoading(false);
-      return;
-    }
-
-    // Handle logout case
+    // Handle logout
     if (!user) {
       cachedUserId.current = null;
       setRoles([]);
@@ -34,49 +19,44 @@ export function useUserRole() {
       return;
     }
 
-    isFetching.current = true;
-    cachedUserId.current = user.id;
-    setIsLoading(true);
-
-    try {
-      const userRoles = await UserRoleService.getUserRoles();
-      setRoles(userRoles);
-    } catch (error) {
-      console.error('Error fetching user roles:', error);
-      setRoles([]);
-    } finally {
+    // Skip if same user and we already have roles
+    if (user.id === cachedUserId.current && roles.length > 0) {
       setIsLoading(false);
-      isFetching.current = false;
+      return;
     }
-  }, []); // No dependencies - uses refs instead
 
-  useEffect(() => {
-    fetchRoles();
+    // Prevent concurrent fetches
+    if (isFetching.current) return;
 
-    // Re-fetch only on SIGNED_IN and SIGNED_OUT events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
-      if (event === 'SIGNED_OUT') {
-        cachedUserId.current = null;
-        setRoles([]);
-        rolesRef.current = [];
-        setIsLoading(false);
-        return;
-      }
-      if (event === 'SIGNED_IN') {
-        const { data: { user } } = await supabase.auth.getUser();
-        // Only re-fetch if user actually changed
-        if (user?.id === cachedUserId.current && rolesRef.current.length > 0) {
-          return;
+    const fetchRoles = async () => {
+      isFetching.current = true;
+      cachedUserId.current = user.id;
+      setIsLoading(true);
+
+      try {
+        const { data, error } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('Error fetching user roles:', error);
+          setRoles([]);
+        } else {
+          setRoles((data || []).map(r => r.role));
         }
-        cachedUserId.current = null;
-        fetchRoles();
+      } catch (error) {
+        console.error('Error fetching user roles:', error);
+        setRoles([]);
+      } finally {
+        setIsLoading(false);
+        isFetching.current = false;
       }
-    });
+    };
 
-    return () => subscription.unsubscribe();
-  }, [fetchRoles]);
+    fetchRoles();
+  }, [user?.id]); // Only re-run when user identity changes
 
-  // Memoize the role check functions to prevent unnecessary recalculations
   const roleChecks = useMemo(() => ({
     isPatient: roles.includes('patient'),
     isProfessional: roles.includes('professional'),
