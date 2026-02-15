@@ -1,65 +1,80 @@
 
-# Corrigir Crashes e Lentidao Progressiva
+# Corrigir Links de Utentes Apontando para Dominio Errado
 
-## Problema 1: App crasha com "Erro Inesperado"
+## Problema
 
-As paginas sao carregadas com `lazy()` sem tratamento de falha. Quando o deploy muda ou a rede oscila, os ficheiros JavaScript antigos ficam invalidos. O `lazy()` falha com `TypeError: Importing a module script failed`, o ErrorBoundary do Sentry captura e mostra "Erro Inesperado". O utilizador precisa recarregar manualmente.
+Quando se copia o "Link Generico" ou o "Link de Pre-Registo" individual, o sistema usa `window.location.origin` para construir o URL. Se o profissional esta a usar a aplicacao pelo editor ou preview do Lovable, o link gerado aponta para `lovable.dev` -- que e a plataforma de desenvolvimento, nao a aplicacao publicada. Utentes que abrem esse link veem a pagina de login do Lovable em vez do formulario de pre-registo.
 
-**Correcao:** Criar uma funcao `lazyWithRetry` que tenta recarregar o modulo ate 3 vezes antes de falhar. Se todas as tentativas falharem, faz reload automatico da pagina (uma unica vez, usando sessionStorage para evitar loop infinito).
+## Solucao
 
-## Problema 2: Lentidao progressiva (causa raiz)
+Criar uma funcao utilitaria `getPublicBaseUrl()` que retorna sempre o dominio correto da aplicacao publicada, e substituir todos os `window.location.origin` que geram links publicos (para utentes, portal, convites).
 
-O `useAuth()` e um hook independente — cada componente que o utiliza cria sua propria subscricao `onAuthStateChange` e chamada `getSession()`. Foram encontradas 8+ chamadas independentes:
+## Ficheiros a modificar
 
-- ProtectedRoute
-- AppSidebar  
-- Agenda
-- Pacientes
-- Engajamento
-- PatientPortal
-- TeamSettingsPanel
-- Login/Signup
+### 1. `src/lib/utils.ts` - Adicionar funcao `getPublicBaseUrl()`
 
-Cada subscricao gera eventos de rede, processamento e re-renders separados. Com o tempo, isso degrada a performance ate o ponto de travamento.
+Adicionar a seguinte funcao:
 
-**Correcao:** Converter `useAuth` de hook standalone para um AuthContext/AuthProvider, garantindo UMA UNICA subscricao de autenticacao para toda a aplicacao. Todos os componentes consomem o mesmo estado sem criar listeners duplicados.
+```text
+getPublicBaseUrl():
+  - Se o hostname atual contem "lovable.dev" ou "lovable.app" com prefixo "id-preview--",
+    extrair o slug e retornar o URL publicado (https://{slug}.lovable.app)
+  - Caso contrario (dominio customizado ou producao), usar window.location.origin normalmente
+```
 
-## Problema 3: Warnings no console (menor)
+Isto garante que mesmo no editor/preview, os links gerados apontam para a versao publicada.
 
-`DialogHeader` e `DialogFooter` em `dialog.tsx` sao funcoes simples que nao aceitam refs, gerando warnings repetidos no console. Nao causa crash mas polui os logs.
+### 2. `src/pages/Pacientes.tsx` - Link Generico
 
-**Correcao:** Converter ambos para `React.forwardRef`.
+Linha 287: Substituir `window.location.origin` por `getPublicBaseUrl()` na geracao do link generico.
 
-## Ficheiros a Criar
+### 3. `src/components/patients/SendOnboardingLinkModal.tsx` - Link Individual
 
-### 1. `src/contexts/AuthContext.tsx`
-- Criar AuthProvider que encapsula TODA a logica de autenticacao
-- Uma unica subscricao `onAuthStateChange`
-- Uma unica chamada `getSession()`
-- Exportar `useAuth()` como hook de contexto
-- Manter exatamente a mesma API (user, session, loading, signIn, signUp, signOut)
+Linha 28-29: Substituir `window.location.origin` por `getPublicBaseUrl()` na funcao `buildLink`.
 
-## Ficheiros a Editar
+### 4. `src/components/patients/PatientDetailModal.tsx` - Link Portal
 
-### 1. `src/App.tsx`
-- Substituir `lazy()` por `lazyWithRetry()` em todas as 12 paginas
-- Envolver a app com `<AuthProvider>`
-- A funcao `lazyWithRetry` fica definida no topo do ficheiro
+Linha 84: Substituir `window.location.origin` por `getPublicBaseUrl()` no URL do portal do paciente.
 
-### 2. `src/hooks/useAuth.tsx`
-- Remover toda a logica interna (useState, useEffect, subscricoes)
-- Transformar em re-export simples do AuthContext: `export { useAuth } from '@/contexts/AuthContext'`
-- Todos os imports existentes (`from '@/hooks/useAuth'`) continuam a funcionar sem alteracao
+### 5. `src/services/AutomationEngine.ts` - URL base de automacao
 
-### 3. `src/components/ui/dialog.tsx`
-- Converter `DialogHeader` e `DialogFooter` para `React.forwardRef`
+Linha 25: Substituir `window.location.origin` por `getPublicBaseUrl()`.
 
-## Ficheiro que NAO sera tocado
+### 6. `src/services/TeamService.ts` - Convites de equipa
+
+Linhas 238 e 257: Substituir `window.location.origin` por `getPublicBaseUrl()` nos URLs de convite.
+
+## Ficheiros que NAO serao tocados
+
+- `src/contexts/AuthContext.tsx` e `src/hooks/useAuth.tsx` - O `emailRedirectTo` de autenticacao deve continuar a usar `window.location.origin` pois o redirect precisa voltar ao mesmo dominio onde o utilizador esta.
 - `src/contexts/DataContext.tsx`
+
+## Detalhes Tecnicos
+
+A funcao `getPublicBaseUrl()` em `src/lib/utils.ts`:
+
+```typescript
+export function getPublicBaseUrl(): string {
+  if (typeof window === 'undefined') {
+    return 'https://clinic-stride-hub.lovable.app';
+  }
+  const host = window.location.hostname;
+  // Preview URL pattern: id-preview--{slug}.lovable.app
+  const previewMatch = host.match(/^id-preview--(.+)\.lovable\.app$/);
+  if (previewMatch) {
+    return `https://${previewMatch[1]}.lovable.app`;
+  }
+  // Editor: lovable.dev
+  if (host.includes('lovable.dev')) {
+    return 'https://clinic-stride-hub.lovable.app';
+  }
+  // Production or custom domain
+  return window.location.origin;
+}
+```
 
 ## Resultado Esperado
 
-- Zero crashes por falha de carregamento de modulos (retry automatico)
-- Uma unica subscricao de autenticacao em vez de 8+ (reducao drastica de carga)
-- Performance estavel ao longo do tempo, sem degradacao progressiva
-- Console limpo, sem warnings de refs
+- Links de pre-registo apontam sempre para o dominio publicado da aplicacao
+- Utentes que recebem o link veem o formulario de pre-registo, nao o login do Lovable
+- Funciona independentemente de onde o profissional esta a aceder (editor, preview ou producao)
