@@ -1,64 +1,97 @@
 
-# Plano de Estabilizacao do Sistema
+# Corrigir Deadlock no onAuthStateChange do DataContext
 
-## Causa Raiz Identificada
+## Problema
 
-Existem DUAS implementacoes separadas de `useAuth`:
+No ficheiro `src/contexts/DataContext.tsx` (linha 545), o callback do `onAuthStateChange` esta definido como `async` e usa `await supabase.auth.getUser()` internamente. Segundo a documentacao do Supabase, isto causa deadlock porque o callback executa dentro do lock interno de autenticacao, e `getUser()` tenta adquirir o mesmo lock.
 
-1. **`src/contexts/AuthContext.tsx`** - AuthProvider centralizado com Context (usado pelo `useUserRole`)
-2. **`src/hooks/useAuth.tsx`** - Hook independente que cria a SUA PROPRIA subscricao `onAuthStateChange` (usado pelo `ProtectedRoute`, `AppSidebar`, e outros)
+Este e o principal causador dos travamentos e lentidao do sistema.
 
-Cada componente que importa de `src/hooks/useAuth.tsx` cria uma subscricao de autenticacao INDEPENDENTE com estado proprio. Isto significa que:
-- `ProtectedRoute` tem o seu estado de auth
-- `AppSidebar` tem outro estado de auth separado
-- `AuthContext` tem ainda outro
-- `DataContext` tem mais outro
+O `AuthContext.tsx` esta correto -- nao usa async/await no callback.
 
-Resultado: 4+ subscricoes de autenticacao a competir entre si, resolvendo em momentos diferentes, causando oscilacoes, menu a aparecer/desaparecer, e lentidao.
+## Correcao
 
-## Correcoes (3 ficheiros)
+Alterar o callback em `src/contexts/DataContext.tsx` (linhas 545-582) para:
 
-### 1. `src/hooks/useAuth.tsx` - Eliminar hook duplicado
+1. Remover `async` da assinatura do callback
+2. Remover `await supabase.auth.getUser()` de dentro do callback
+3. Usar o `session` que o proprio `onAuthStateChange` ja fornece como segundo parametro (contem `session.user`)
+4. Mover operacoes assincronas para `setTimeout` para executarem fora do lock
 
-Substituir o hook inteiro por um simples re-export do AuthContext. Em vez de criar a sua propria subscricao, passa a usar o estado centralizado:
-
+### Codigo atual (problematico):
 ```text
-Antes: Hook independente com onAuthStateChange + getSession proprios (85 linhas)
-Depois: Re-export de useAuth do AuthContext (1 linha)
+supabase.auth.onAuthStateChange(async (event) => {
+  if (event === 'SIGNED_OUT') { ... }
+  else if (event === 'SIGNED_IN') {
+    const { data: { user } } = await supabase.auth.getUser();  // DEADLOCK
+    if (user?.id === cachedUserId.current && hasInitiallyLoaded.current) { ... }
+    ...
+  }
+});
 ```
 
-Isto elimina instantaneamente todas as subscricoes duplicadas criadas por cada componente que usa este hook.
-
-### 2. `src/hooks/usePermissions.ts` - Eliminar chamada getUser()
-
-O `UserPermissionService.getCurrentUserPermissions()` faz `supabase.auth.getUser()` (chamada de rede) em cada carregamento. Substituir por uso directo do `user.id` ja disponivel via `useUserRole` > `useAuth` > `AuthContext`:
-
+### Codigo corrigido:
 ```text
-Antes: await UserPermissionService.getCurrentUserPermissions()
-       (que internamente faz supabase.auth.getUser())
-
-Depois: await UserPermissionService.getUserPermissions(user.id)
-        (usa o ID ja resolvido, sem chamada de rede extra)
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') {
+    cachedUserId.current = null;
+    hasInitiallyLoaded.current = false;
+    // Limpar estado sincronamente
+    setPatients([]);
+    setServices([]);
+    setSessions([]);
+    setProfessionals([]);
+    setEvolutions([]);
+    setCreditBalances({});
+    setCreditUsageMap({});
+  } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    const userId = session?.user?.id ?? null;
+    // Defer fetches para fora do lock
+    setTimeout(() => {
+      if (userId === cachedUserId.current && hasInitiallyLoaded.current) {
+        // Silent refresh (sem spinners)
+        fetchPatients(true);
+        fetchServices(true);
+        fetchSessions(true);
+        fetchProfessionals(true);
+        fetchEvolutions(true);
+        fetchCreditBalances();
+        fetchCreditUsageMap();
+      } else {
+        cachedUserId.current = userId;
+        hasInitiallyLoaded.current = true;
+        fetchPatients();
+        fetchServices();
+        fetchSessions();
+        fetchProfessionals();
+        fetchEvolutions();
+        fetchCreditBalances();
+        fetchCreditUsageMap();
+      }
+    }, 0);
+  }
+});
 ```
 
-Requer acesso ao `user` do `useAuth()` dentro do hook.
+### Alteracoes no initLoad (linhas 525-541)
 
-### 3. `src/components/layout/AppSidebar.tsx` - Garantir estabilidade
+Tambem remover o `await supabase.auth.getUser()` redundante no `initLoad`. O `user` ja esta disponivel via `supabase.auth.getSession()`:
 
-Confirmar que a logica de `visibleItems` continua a mostrar todos os itens durante o carregamento (ja implementada na alteracao anterior, mas verificar que funciona com o auth unificado).
+```text
+Antes:
+  const { data: { user } } = await supabase.auth.getUser();
 
-Adicionalmente, memoizar `getRolesLabels` para evitar re-renders desnecessarios da sidebar.
+Depois:
+  const { data: { session } } = await supabase.auth.getSession();
+  cachedUserId.current = session?.user?.id ?? null;
+```
 
-## O que NAO sera tocado
+## Ficheiro unico a alterar
 
-- `src/contexts/AuthContext.tsx` - E a fonte de verdade, permanece como esta
-- `src/contexts/DataContext.tsx` - Congelado conforme instrucao do utilizador
-- `src/components/ui/sidebar.tsx` - Sem alteracoes necessarias
-- `src/components/ui/sheet.tsx` - Os warnings de ref sao cosmeticos e nao afetam funcionalidade
+- `src/contexts/DataContext.tsx` (linhas 524-585)
 
-## Resultado Esperado
+## Resultado esperado
 
-- De 4+ subscricoes de autenticacao para apenas 2 (AuthContext + DataContext)
-- Menu visivel imediatamente, sem oscilacoes
-- Menos chamadas de rede na inicializacao (eliminada getUser() redundante)
-- Estado de auth consistente em toda a aplicacao
+- Eliminacao do deadlock que causa travamentos
+- Carregamento mais rapido (menos uma chamada de rede)
+- Sistema estavel sem oscilacoes
