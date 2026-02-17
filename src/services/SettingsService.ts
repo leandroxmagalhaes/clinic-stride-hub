@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getAuthContext } from '@/lib/auth-helpers';
 import type { ClinicSettings, SettingsUpdatePayload } from '@/types/settings';
 
 /**
@@ -11,22 +12,13 @@ export class SettingsService {
    * Returns null if no settings exist yet
    */
   static async getSettings(): Promise<ClinicSettings | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    // Get user's clinic_id first
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('clinic_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!profile?.clinic_id) return null;
+    const { clinicId } = await getAuthContext().catch(() => ({ clinicId: null as string | null }));
+    if (!clinicId) return null;
 
     const { data, error } = await supabase
       .from('clinic_settings')
       .select('*')
-      .eq('clinic_id', profile.clinic_id)
+      .eq('clinic_id', clinicId)
       .maybeSingle();
 
     if (error) {
@@ -42,23 +34,13 @@ export class SettingsService {
    * Safe to call multiple times with same data
    */
   static async saveSettings(payload: SettingsUpdatePayload): Promise<ClinicSettings> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não autenticado');
-
-    // Get user's clinic_id
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('clinic_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!profile?.clinic_id) throw new Error('Clínica não encontrada');
+    const { clinicId } = await getAuthContext();
 
     // Check if settings already exist
     const { data: existing } = await supabase
       .from('clinic_settings')
       .select('id')
-      .eq('clinic_id', profile.clinic_id)
+      .eq('clinic_id', clinicId)
       .maybeSingle();
 
     let result;
@@ -71,7 +53,7 @@ export class SettingsService {
           ...payload,
           updated_at: new Date().toISOString(),
         })
-        .eq('clinic_id', profile.clinic_id)
+        .eq('clinic_id', clinicId)
         .select()
         .single();
 
@@ -82,7 +64,7 @@ export class SettingsService {
       const { data, error } = await supabase
         .from('clinic_settings')
         .insert({
-          clinic_id: profile.clinic_id,
+          clinic_id: clinicId,
           ...payload,
         })
         .select()
@@ -106,21 +88,13 @@ export class SettingsService {
    * Gets clinic name from clinics table as fallback
    */
   static async getClinicInfo(): Promise<{ name: string } | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('clinic_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!profile?.clinic_id) return null;
+    const { clinicId } = await getAuthContext().catch(() => ({ clinicId: null as string | null }));
+    if (!clinicId) return null;
 
     const { data } = await supabase
       .from('clinics')
       .select('name')
-      .eq('id', profile.clinic_id)
+      .eq('id', clinicId)
       .single();
 
     return data;

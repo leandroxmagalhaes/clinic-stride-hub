@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getAuthContext } from '@/lib/auth-helpers';
 
 interface ClinicInfo {
   id: string;
@@ -17,23 +18,18 @@ export function useClinicInfo() {
   return useQuery({
     queryKey: ['clinic-info'],
     queryFn: async (): Promise<ClinicInfo | null> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      // Get user's clinic_id from profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('clinic_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (!profile?.clinic_id) return null;
+      let clinicId: string;
+      try {
+        ({ clinicId } = await getAuthContext());
+      } catch {
+        return null;
+      }
 
       // Get clinic info
       const { data: clinic } = await supabase
         .from('clinics')
         .select('id, name, logo_url, phone, email, address')
-        .eq('id', profile.clinic_id)
+        .eq('id', clinicId)
         .maybeSingle();
 
       return clinic;

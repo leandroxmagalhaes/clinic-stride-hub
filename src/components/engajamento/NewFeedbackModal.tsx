@@ -49,17 +49,12 @@ export function NewFeedbackModal({ isOpen, onClose, onSuccess }: NewFeedbackModa
   };
 
   const fetchClinicId = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('clinic_id')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (data?.clinic_id) {
-        setClinicId(data.clinic_id);
-      }
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    try {
+      const { clinicId: id } = await getAuthContext();
+      setClinicId(id);
+    } catch {
+      // Not authenticated
     }
   };
 

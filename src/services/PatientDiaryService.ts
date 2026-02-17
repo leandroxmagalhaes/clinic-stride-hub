@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthUserId } from "@/lib/auth-helpers";
 import { z } from "zod";
 
 // Zod schema for diary entry validation
@@ -22,19 +23,6 @@ export interface DiaryEntry {
   updated_at: string;
 }
 
-// Type for the patient_diary table (not yet in generated types)
-type PatientDiaryTable = {
-  id: string;
-  patient_id: string;
-  clinic_id: string | null;
-  pain_level: number;
-  activity_description: string;
-  notes: string | null;
-  entry_date: string;
-  created_at: string;
-  updated_at: string;
-};
-
 export class PatientDiaryService {
   /**
    * Create a new diary entry (idempotent - only one entry per day)
@@ -46,19 +34,20 @@ export class PatientDiaryService {
       return { success: false, error: validation.error.errors[0]?.message || "Dados inválidos" };
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
+    let userId: string;
+    try {
+      userId = await getAuthUserId();
+    } catch {
       return { success: false, error: "Usuário não autenticado" };
     }
 
     // Check if entry already exists for today (idempotency)
     const today = new Date().toISOString().split('T')[0];
     
-    // Use raw query approach since types aren't generated yet
     const { data: existing } = await supabase
       .from('patient_diary' as any)
       .select('id')
-      .eq('patient_id', userData.user.id)
+      .eq('patient_id', userId)
       .eq('entry_date', today)
       .maybeSingle();
 
@@ -85,7 +74,7 @@ export class PatientDiaryService {
     const { data, error } = await supabase
       .from('patient_diary' as any)
       .insert({
-        patient_id: userData.user.id,
+        patient_id: userId,
         pain_level: validation.data.pain_level,
         activity_description: validation.data.activity_description,
         notes: validation.data.notes || null,
@@ -105,8 +94,12 @@ export class PatientDiaryService {
    * Get diary entries for the last N days
    */
   static async getRecentEntries(days: number = 7): Promise<DiaryEntry[]> {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return [];
+    let userId: string;
+    try {
+      userId = await getAuthUserId();
+    } catch {
+      return [];
+    }
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
@@ -114,7 +107,7 @@ export class PatientDiaryService {
     const { data, error } = await supabase
       .from('patient_diary' as any)
       .select('*')
-      .eq('patient_id', userData.user.id)
+      .eq('patient_id', userId)
       .gte('entry_date', startDate.toISOString().split('T')[0])
       .order('entry_date', { ascending: false });
 
@@ -130,14 +123,18 @@ export class PatientDiaryService {
    * Check if entry exists for today
    */
   static async hasTodayEntry(): Promise<boolean> {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return false;
+    let userId: string;
+    try {
+      userId = await getAuthUserId();
+    } catch {
+      return false;
+    }
 
     const today = new Date().toISOString().split('T')[0];
     const { data } = await supabase
       .from('patient_diary' as any)
       .select('id')
-      .eq('patient_id', userData.user.id)
+      .eq('patient_id', userId)
       .eq('entry_date', today)
       .maybeSingle();
 

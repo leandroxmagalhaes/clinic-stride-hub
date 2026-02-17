@@ -317,16 +317,8 @@ export function DataProvider({ children }: DataProviderProps) {
 
   // Add new service
   const addService = async (data: Partial<Service>): Promise<void> => {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) throw new Error("User not authenticated");
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("clinic_id")
-      .eq("user_id", userData.user.id)
-      .maybeSingle();
-
-    if (!profile?.clinic_id) throw new Error("User has no clinic");
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
 
     const { error } = await supabase.from("servicos").insert({
       name: data.name!,
@@ -335,7 +327,7 @@ export function DataProvider({ children }: DataProviderProps) {
       price: data.price || 0,
       consumes_credit: data.consumes_credit ?? true,
       color: data.color || "#10B981",
-      clinic_id: profile.clinic_id,
+      clinic_id: clinicId,
     });
 
     if (error) throw error;
@@ -600,21 +592,12 @@ export function DataProvider({ children }: DataProviderProps) {
 
   // Add session - persists to Supabase database
   const addSession = async (session: Session): Promise<void> => {
-    // Get clinic_id from authenticated user
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) throw new Error("User not authenticated");
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("clinic_id")
-      .eq("user_id", userData.user.id)
-      .maybeSingle();
-
-    if (!profile?.clinic_id) throw new Error("User has no clinic");
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
 
     // Insert into database
     const { data, error } = await supabase.from("sessoes").insert({
-      clinic_id: profile.clinic_id,
+      clinic_id: clinicId,
       paciente_id: session.paciente_id,
       profissional_id: session.profissional_id,
       servico_id: session.servico_id,
@@ -716,22 +699,13 @@ export function DataProvider({ children }: DataProviderProps) {
   const addCredits = async (patientId: string, amount: number): Promise<void> => {
     if (amount <= 0) return;
     
-    // Get clinic_id
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) throw new Error("User not authenticated");
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("clinic_id")
-      .eq("user_id", userData.user.id)
-      .maybeSingle();
-
-    if (!profile?.clinic_id) throw new Error("User has no clinic");
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
 
     // Insert credit transaction
     const { error } = await supabase.from("transacoes_credito").insert({
       patient_id: patientId,
-      clinic_id: profile.clinic_id,
+      clinic_id: clinicId,
       tipo: 'compra',
       quantidade: amount,
     });
@@ -766,22 +740,13 @@ export function DataProvider({ children }: DataProviderProps) {
         return { success: false, error: "Saldo de créditos insuficiente" };
       }
 
-      // Get clinic_id
-      const { data: userData } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("clinic_id")
-        .eq("user_id", userData?.user?.id)
-        .maybeSingle();
-
-      if (!profile?.clinic_id) {
-        return { success: false, error: "Clínica não encontrada" };
-      }
+      const { getAuthContext } = await import("@/lib/auth-helpers");
+      const { clinicId } = await getAuthContext();
 
       // Insert usage transaction (quantidade is negative for usage)
       const { error } = await supabase.from("transacoes_credito").insert({
         patient_id: patientId,
-        clinic_id: profile.clinic_id,
+        clinic_id: clinicId,
         tipo: "uso",
         quantidade: -1,
         session_id: sessionId,
@@ -814,22 +779,13 @@ export function DataProvider({ children }: DataProviderProps) {
     sessionId: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      // Get clinic_id
-      const { data: userData } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("clinic_id")
-        .eq("user_id", userData?.user?.id)
-        .maybeSingle();
-
-      if (!profile?.clinic_id) {
-        return { success: false, error: "Clínica não encontrada" };
-      }
+      const { getAuthContext } = await import("@/lib/auth-helpers");
+      const { clinicId } = await getAuthContext();
 
       // Insert refund transaction (quantidade is positive for refund)
       const { error } = await supabase.from("transacoes_credito").insert({
         patient_id: patientId,
-        clinic_id: profile.clinic_id,
+        clinic_id: clinicId,
         tipo: "estorno",
         quantidade: 1,
         session_id: sessionId,

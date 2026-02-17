@@ -114,16 +114,13 @@ export async function getClinicName(clinicId: string): Promise<string> {
  * Fetch clinic_id for current user
  */
 export async function getCurrentClinicId(): Promise<string | null> {
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return null;
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('clinic_id')
-    .eq('user_id', userData.user.id)
-    .single();
-
-  return profile?.clinic_id || null;
+  const { getAuthContext } = await import("@/lib/auth-helpers");
+  try {
+    const { clinicId } = await getAuthContext();
+    return clinicId;
+  } catch {
+    return null;
+  }
 }
 
 export interface AutomationTriggerResult {

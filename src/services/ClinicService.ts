@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getAuthContext } from '@/lib/auth-helpers';
 import type { Clinic, ClinicDataFormData } from '@/types/clinic';
 
 /**
@@ -9,22 +10,13 @@ export class ClinicService {
    * Get the current user's clinic data
    */
   static async getClinic(): Promise<Clinic | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    // Get user's clinic_id from profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('clinic_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (!profile?.clinic_id) return null;
+    const { clinicId } = await getAuthContext().catch(() => ({ clinicId: null as string | null }));
+    if (!clinicId) return null;
 
     const { data, error } = await supabase
       .from('clinics')
       .select('*')
-      .eq('id', profile.clinic_id)
+      .eq('id', clinicId)
       .maybeSingle();
 
     if (error) {
@@ -39,17 +31,7 @@ export class ClinicService {
    * Update clinic data
    */
   static async updateClinic(payload: ClinicDataFormData): Promise<Clinic> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não autenticado');
-
-    // Get user's clinic_id
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('clinic_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (!profile?.clinic_id) throw new Error('Clínica não encontrada');
+    const { clinicId } = await getAuthContext();
 
     const { data, error } = await supabase
       .from('clinics')
@@ -62,7 +44,7 @@ export class ClinicService {
         website: payload.website || null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', profile.clinic_id)
+      .eq('id', clinicId)
       .select()
       .single();
 
@@ -78,16 +60,7 @@ export class ClinicService {
    * Update clinic logo URL
    */
   static async updateLogo(logoUrl: string | null): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não autenticado');
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('clinic_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (!profile?.clinic_id) throw new Error('Clínica não encontrada');
+    const { clinicId } = await getAuthContext();
 
     const { error } = await supabase
       .from('clinics')
@@ -95,7 +68,7 @@ export class ClinicService {
         logo_url: logoUrl,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', profile.clinic_id);
+      .eq('id', clinicId);
 
     if (error) {
       console.error('Error updating logo:', error);
