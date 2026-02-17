@@ -111,10 +111,13 @@ export class UserPermissionService {
    * Get current user's custom permissions
    */
   static async getCurrentUserPermissions(): Promise<UserPermissions | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    return this.getUserPermissions(user.id);
+    const { getAuthUserId } = await import("@/lib/auth-helpers");
+    try {
+      const userId = await getAuthUserId();
+      return this.getUserPermissions(userId);
+    } catch {
+      return null;
+    }
   }
 
   /**

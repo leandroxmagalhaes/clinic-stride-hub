@@ -216,19 +216,13 @@ export default function Agenda() {
         const { packageData } = data;
 
         // 1. Create scheduling_packages record
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData.user) throw new Error("Não autenticado");
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("clinic_id")
-          .eq("user_id", userData.user.id)
-          .maybeSingle();
-        if (!profile?.clinic_id) throw new Error("Clínica não encontrada");
+        const { getAuthContext } = await import("@/lib/auth-helpers");
+        const { userId: currentUserId, clinicId: userClinicId } = await getAuthContext();
 
         const { data: pkg, error: pkgError } = await supabase
           .from("scheduling_packages")
           .insert({
-            clinic_id: profile.clinic_id,
+            clinic_id: userClinicId,
             paciente_id: data.pacienteId,
             profissional_id: data.profissionalId,
             servico_id: data.servicoId,
@@ -241,7 +235,7 @@ export default function Agenda() {
             status: "ativo",
             start_date: finalDate.toISOString().split("T")[0],
             notes: data.notes || null,
-            created_by: userData.user.id,
+            created_by: currentUserId,
           })
           .select("id")
           .single();
@@ -257,7 +251,7 @@ export default function Agenda() {
 
           const isRetroactive = startTime < new Date();
           return {
-            clinic_id: profile.clinic_id,
+            clinic_id: userClinicId,
             paciente_id: data.pacienteId,
             profissional_id: data.profissionalId,
             servico_id: data.servicoId,

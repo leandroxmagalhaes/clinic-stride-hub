@@ -40,17 +40,9 @@ export interface UpdateLeadData {
 
 export class LeadService {
   static async getClinicId(): Promise<string> {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) throw new Error("User not authenticated");
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("clinic_id")
-      .eq("user_id", userData.user.id)
-      .single();
-
-    if (!profile?.clinic_id) throw new Error("User has no clinic");
-    return profile.clinic_id;
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
+    return clinicId;
   }
 
   static async fetchAll(): Promise<SalesLead[]> {

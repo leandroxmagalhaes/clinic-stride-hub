@@ -154,21 +154,13 @@ export default function Prontuarios() {
     } else if (paciente) {
       // Create new prontuario for patient in database
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData.user) return;
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("clinic_id")
-          .eq("user_id", userData.user.id)
-          .maybeSingle();
-
-        if (!profile?.clinic_id) return;
+        const { getAuthContext } = await import("@/lib/auth-helpers");
+        const { clinicId } = await getAuthContext();
 
         const { data: newPront, error } = await supabase
           .from("prontuarios")
           .insert({
-            clinic_id: profile.clinic_id,
+            clinic_id: clinicId,
             paciente_id: pacienteId,
             anamnese: "",
             diagnostico: "",

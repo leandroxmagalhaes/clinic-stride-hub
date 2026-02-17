@@ -213,10 +213,8 @@ export class TeamService {
       }
 
       // Get current user id
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        return { success: false, error: 'Utilizador não autenticado' };
-      }
+      const { getAuthUserId } = await import("@/lib/auth-helpers");
+      const userId = await getAuthUserId();
 
       // Create the invite
       const { data: invite, error } = await supabase
@@ -226,7 +224,7 @@ export class TeamService {
           email: data.email.toLowerCase(),
           full_name: data.full_name,
           role: data.role,
-          invited_by: user.id,
+          invited_by: userId,
         })
         .select('token')
         .single();

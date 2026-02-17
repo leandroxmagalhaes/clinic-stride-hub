@@ -1,5 +1,6 @@
 // AuditService - Centralized audit logging for all entity actions
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthContextWithEmail } from "@/lib/auth-helpers";
 
 export type AuditAction = 
   | 'create' 
@@ -44,26 +45,12 @@ export class AuditService {
    */
   static async log(params: LogParams): Promise<{ success: boolean; error?: string }> {
     try {
-      // Get current user and clinic
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        return { success: false, error: "User not authenticated" };
-      }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("clinic_id, email")
-        .eq("user_id", userData.user.id)
-        .maybeSingle();
-
-      if (!profile?.clinic_id) {
-        return { success: false, error: "User has no clinic" };
-      }
+      const { userId, clinicId, email } = await getAuthContextWithEmail();
 
       const { error } = await supabase.from("audit_logs").insert({
-        clinic_id: profile.clinic_id,
-        user_id: userData.user.id,
-        user_email: profile.email || userData.user.email,
+        clinic_id: clinicId,
+        user_id: userId,
+        user_email: email,
         action: params.action,
         entity_type: params.entityType,
         entity_id: params.entityId,

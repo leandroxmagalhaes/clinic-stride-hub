@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthUserId } from "@/lib/auth-helpers";
 import type { Database } from "@/integrations/supabase/types";
 
 export type AppRole = Database['public']['Enums']['app_role'];
@@ -15,13 +16,17 @@ export class UserRoleService {
    * Get all roles for the current user
    */
   static async getUserRoles(): Promise<AppRole[]> {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return [];
+    let userId: string;
+    try {
+      userId = await getAuthUserId();
+    } catch {
+      return [];
+    }
 
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', userData.user.id);
+      .eq('user_id', userId);
 
     if (error) {
       console.error('Error fetching user roles:', error);
