@@ -523,8 +523,8 @@ export function DataProvider({ children }: DataProviderProps) {
   // Load all data on mount
   useEffect(() => {
     const initLoad = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      cachedUserId.current = user?.id ?? null;
+      const { data: { session } } = await supabase.auth.getSession();
+      cachedUserId.current = session?.user?.id ?? null;
       
       await Promise.all([
         fetchPatients(),
@@ -542,7 +542,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
   // Refresh data on auth state change - stabilized to prevent tab-switch freezes
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         cachedUserId.current = null;
         hasInitiallyLoaded.current = false;
@@ -554,30 +554,32 @@ export function DataProvider({ children }: DataProviderProps) {
         setEvolutions([]);
         setCreditBalances({});
         setCreditUsageMap({});
-      } else if (event === 'SIGNED_IN') {
-        const { data: { user } } = await supabase.auth.getUser();
-        // If same user (token refresh on tab switch), do silent fetches
-        if (user?.id === cachedUserId.current && hasInitiallyLoaded.current) {
-          // Silent refresh - no loading spinners
-          fetchPatients(true);
-          fetchServices(true);
-          fetchSessions(true);
-          fetchProfessionals(true);
-          fetchEvolutions(true);
-          fetchCreditBalances();
-          fetchCreditUsageMap();
-          return;
-        }
-        // New user signed in
-        cachedUserId.current = user?.id ?? null;
-        hasInitiallyLoaded.current = true;
-        fetchPatients();
-        fetchServices();
-        fetchSessions();
-        fetchProfessionals();
-        fetchEvolutions();
-        fetchCreditBalances();
-        fetchCreditUsageMap();
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        const userId = session?.user?.id ?? null;
+        // Defer fetches outside the auth lock
+        setTimeout(() => {
+          if (userId === cachedUserId.current && hasInitiallyLoaded.current) {
+            // Silent refresh - no loading spinners
+            fetchPatients(true);
+            fetchServices(true);
+            fetchSessions(true);
+            fetchProfessionals(true);
+            fetchEvolutions(true);
+            fetchCreditBalances();
+            fetchCreditUsageMap();
+          } else {
+            // New user signed in
+            cachedUserId.current = userId;
+            hasInitiallyLoaded.current = true;
+            fetchPatients();
+            fetchServices();
+            fetchSessions();
+            fetchProfessionals();
+            fetchEvolutions();
+            fetchCreditBalances();
+            fetchCreditUsageMap();
+          }
+        }, 0);
       }
     });
 
