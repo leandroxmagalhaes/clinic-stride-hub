@@ -1,97 +1,140 @@
 
-# Corrigir Deadlock no onAuthStateChange do DataContext
+
+# Optimizar Chamadas Redundantes de `getUser()` em Todo o Projecto
 
 ## Problema
 
-No ficheiro `src/contexts/DataContext.tsx` (linha 545), o callback do `onAuthStateChange` esta definido como `async` e usa `await supabase.auth.getUser()` internamente. Segundo a documentacao do Supabase, isto causa deadlock porque o callback executa dentro do lock interno de autenticacao, e `getUser()` tenta adquirir o mesmo lock.
+Existem **125 chamadas** a `supabase.auth.getUser()` espalhadas por **15 ficheiros**. Cada chamada e um pedido HTTP ao servidor para validar o token, mesmo quando o `user` ja esta disponivel no `AuthContext`. Isto adiciona latencia a cada operacao do utilizador.
 
-Este e o principal causador dos travamentos e lentidao do sistema.
-
-O `AuthContext.tsx` esta correto -- nao usa async/await no callback.
-
-## Correcao
-
-Alterar o callback em `src/contexts/DataContext.tsx` (linhas 545-582) para:
-
-1. Remover `async` da assinatura do callback
-2. Remover `await supabase.auth.getUser()` de dentro do callback
-3. Usar o `session` que o proprio `onAuthStateChange` ja fornece como segundo parametro (contem `session.user`)
-4. Mover operacoes assincronas para `setTimeout` para executarem fora do lock
-
-### Codigo atual (problematico):
+### Padrao repetido (presente em quase todos os services):
 ```text
-supabase.auth.onAuthStateChange(async (event) => {
-  if (event === 'SIGNED_OUT') { ... }
-  else if (event === 'SIGNED_IN') {
-    const { data: { user } } = await supabase.auth.getUser();  // DEADLOCK
-    if (user?.id === cachedUserId.current && hasInitiallyLoaded.current) { ... }
-    ...
+const { data: { user } } = await supabase.auth.getUser();  // HTTP call
+if (!user) return/throw;
+const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('user_id', user.id);
+```
+
+Este padrao de "obter user + obter clinic_id" repete-se dezenas de vezes.
+
+## Estrategia
+
+Criar uma funcao utilitaria que usa `supabase.auth.getSession()` (leitura local, sem HTTP) em vez de `getUser()` (HTTP). Depois, substituir todas as chamadas nos services e componentes.
+
+### Diferenca tecnica:
+- `getUser()` -- faz HTTP request ao servidor (lento, ~100-300ms cada)
+- `getSession()` -- le da memoria/localStorage (instantaneo, 0ms)
+
+## Ficheiros a Alterar (15 ficheiros)
+
+### 1. NOVO: `src/lib/auth-helpers.ts` -- Funcao utilitaria centralizada
+
+Criar funcao `getAuthContext()` que retorna `{ userId, clinicId }` usando `getSession()` em vez de `getUser()`. Todos os services passam a usar esta funcao.
+
+```text
+getSession() -> session.user.id -> query profiles -> clinic_id
+```
+
+### 2. `src/contexts/DataContext.tsx` (5 chamadas a remover)
+
+Metodos afectados:
+- `addService` (linha 320)
+- `addSession` (linha 604)
+- `addCredits` (linha 720)
+- `useCredit` (linha 770)
+- `refundCredit` (linha 818)
+
+Substituir `supabase.auth.getUser()` por `getAuthContext()` em cada metodo.
+
+### 3. `src/services/AuditService.ts` (1 chamada)
+- Metodo `log` (linha 48)
+
+### 4. `src/services/LeadService.ts` (1 chamada)
+- Metodo `getClinicId` (linha 43)
+
+### 5. `src/services/ClinicService.ts` (3 chamadas)
+- `getClinic` (linha 12)
+- `updateClinic` (linha 42)
+- `updateLogo` (linha 81)
+
+### 6. `src/services/SettingsService.ts` (3 chamadas)
+- `getSettings` (linha 14)
+- `saveSettings` (linha 45)
+- `getClinicInfo` (linha 109)
+
+### 7. `src/services/AutomationEngine.ts` (1 chamada)
+- `getCurrentClinicId` (linha 117)
+
+### 8. `src/services/TeamService.ts` (1 chamada)
+- `inviteMember` (linha 216)
+
+### 9. `src/services/PatientDiaryService.ts` (3 chamadas)
+- `createEntry` (linha 49)
+- `getRecentEntries` (linha 108)
+- `hasTodayEntry` (linha 133)
+
+### 10. `src/services/UserRoleService.ts` (1 chamada)
+- `getUserRoles` (linha 18)
+
+### 11. `src/services/UserPermissionService.ts` (1 chamada)
+- `getCurrentUserPermissions` (linha 114)
+
+### 12. `src/hooks/useClinicInfo.ts` (1 chamada)
+- `queryFn` (linha 20)
+
+### 13. `src/pages/Prontuarios.tsx` (1 chamada)
+- Handler de criacao de prontuario (linha 157)
+
+### 14. `src/pages/Agenda.tsx` (1 chamada)
+- Handler de criacao de pacote (linha 219)
+
+### 15. `src/components/engajamento/NewFeedbackModal.tsx` (1 chamada)
+- `fetchClinicId` (linha 52)
+
+## Detalhes Tecnicos
+
+### Funcao utilitaria (`src/lib/auth-helpers.ts`):
+
+```text
+export async function getAuthContext(): Promise<{ userId: string; clinicId: string }>
+  1. Chama supabase.auth.getSession() (leitura local)
+  2. Extrai session.user.id
+  3. Consulta profiles para obter clinic_id
+  4. Retorna { userId, clinicId }
+  5. Lanca erro se nao autenticado ou sem clinica
+
+export async function getAuthUserId(): Promise<string>
+  1. Chama supabase.auth.getSession()
+  2. Retorna session.user.id
+  3. Para services que so precisam do userId (PatientDiaryService, UserRoleService)
+```
+
+### Exemplo de transformacao (LeadService):
+
+```text
+ANTES:
+  static async getClinicId(): Promise<string> {
+    const { data: userData } = await supabase.auth.getUser();     // HTTP
+    if (!userData.user) throw new Error("...");
+    const { data: profile } = await supabase.from("profiles")...
+    return profile.clinic_id;
   }
-});
-```
 
-### Codigo corrigido:
-```text
-supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_OUT') {
-    cachedUserId.current = null;
-    hasInitiallyLoaded.current = false;
-    // Limpar estado sincronamente
-    setPatients([]);
-    setServices([]);
-    setSessions([]);
-    setProfessionals([]);
-    setEvolutions([]);
-    setCreditBalances({});
-    setCreditUsageMap({});
-  } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-    const userId = session?.user?.id ?? null;
-    // Defer fetches para fora do lock
-    setTimeout(() => {
-      if (userId === cachedUserId.current && hasInitiallyLoaded.current) {
-        // Silent refresh (sem spinners)
-        fetchPatients(true);
-        fetchServices(true);
-        fetchSessions(true);
-        fetchProfessionals(true);
-        fetchEvolutions(true);
-        fetchCreditBalances();
-        fetchCreditUsageMap();
-      } else {
-        cachedUserId.current = userId;
-        hasInitiallyLoaded.current = true;
-        fetchPatients();
-        fetchServices();
-        fetchSessions();
-        fetchProfessionals();
-        fetchEvolutions();
-        fetchCreditBalances();
-        fetchCreditUsageMap();
-      }
-    }, 0);
+DEPOIS:
+  static async getClinicId(): Promise<string> {
+    const { clinicId } = await getAuthContext();                   // Local
+    return clinicId;
   }
-});
 ```
 
-### Alteracoes no initLoad (linhas 525-541)
+## O que NAO sera alterado
 
-Tambem remover o `await supabase.auth.getUser()` redundante no `initLoad`. O `user` ja esta disponivel via `supabase.auth.getSession()`:
+- `src/contexts/AuthContext.tsx` -- Fonte de verdade, permanece intacto
+- `src/contexts/DataContext.tsx` -- Apenas os metodos individuais (addService, addSession, etc.), NAO a logica de inicializacao/onAuthStateChange que ja foi corrigida
+- Ficheiros gerados automaticamente (.env, client.ts, types.ts)
 
-```text
-Antes:
-  const { data: { user } } = await supabase.auth.getUser();
+## Resultado Esperado
 
-Depois:
-  const { data: { session } } = await supabase.auth.getSession();
-  cachedUserId.current = session?.user?.id ?? null;
-```
+- Eliminacao de ~25 chamadas HTTP redundantes por sessao de utilizador
+- Cada operacao (criar sessao, adicionar credito, etc.) fica ~100-300ms mais rapida
+- Codigo mais limpo e centralizado (padrao DRY)
+- Zero alteracoes de comportamento visivel -- apenas mais rapido
 
-## Ficheiro unico a alterar
-
-- `src/contexts/DataContext.tsx` (linhas 524-585)
-
-## Resultado esperado
-
-- Eliminacao do deadlock que causa travamentos
-- Carregamento mais rapido (menos uma chamada de rede)
-- Sistema estavel sem oscilacoes
