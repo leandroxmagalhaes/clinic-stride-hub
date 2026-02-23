@@ -1,39 +1,49 @@
 
 
-# Resolver erro d3-array no Vite Build
+# Corrigir Build Falhado e Erro "Erro Inesperado" na App Publicada
 
-## Problema
-O Vite nao consegue resolver o entry point do pacote `d3-array` (dependencia transitiva do `recharts`), causando falha no build.
+## Diagnostico
 
-## Solucao
-Adicionar configuracao no `vite.config.ts` para forcar o Vite a pre-processar o `d3-array`.
+A app publicada esta a correr uma versao antiga (build antigo) porque o build actual **falha** devido ao pacote `d3-array`. Isto significa que todas as correcoes de null safety feitas anteriormente **nunca foram publicadas**.
 
-## Alteracao
+### Causa Raiz do Build Falhado
 
-### `vite.config.ts`
-Adicionar dois blocos de configuracao apos o bloco `resolve`:
-
-- **`optimizeDeps.include`**: Adicionar `'d3-array'` para forcar pre-bundling da dependencia
-- **`build.commonjsOptions.include`**: Adicionar `/d3-array/` e `/node_modules/` para garantir que o Rollup processa correctamente o modulo durante o build de producao
+O pacote `d3-array@3.2.4` (dependencia transitiva do `recharts`) tem um campo `exports` malformado no seu `package.json`:
 
 ```text
-ANTES:
-  resolve: { ... },
-}));
-
-DEPOIS:
-  resolve: { ... },
-  optimizeDeps: {
-    include: ["d3-array"],
-  },
-  build: {
-    commonjsOptions: {
-      include: [/d3-array/, /node_modules/],
-    },
-  },
-}));
+"exports": {
+  "umd": "./dist/d3-array.min.js",
+  "default": "./src/index.js"
+}
 ```
 
-## Ficheiro alterado
-- `vite.config.ts` (unico ficheiro)
+O Vite/Rollup espera uma entrada `"."` (ponto) no campo exports para resolver o entry point do pacote. Como nao existe, o build falha com: `Failed to resolve entry for package "d3-array"`.
+
+A configuracao `optimizeDeps.include` e `commonjsOptions` que adicionamos anteriormente so ajuda no modo de desenvolvimento, **nao resolve o problema do build de producao**.
+
+## Solucao
+
+Adicionar um `resolve.alias` no `vite.config.ts` que aponta `d3-array` directamente para o seu ficheiro de entrada (`src/index.js`), contornando completamente a resolucao defeituosa do campo `exports`.
+
+## Ficheiro a Alterar
+
+### `vite.config.ts`
+
+Adicionar alias para `d3-array` no bloco `resolve.alias` existente, e manter as configuracoes `optimizeDeps` e `commonjsOptions` como estao:
+
+```text
+resolve: {
+  alias: {
+    "@": path.resolve(__dirname, "./src"),
+    "d3-array": path.resolve(__dirname, "node_modules/d3-array/src/index.js"),
+  },
+  dedupe: ["react", "react-dom", "react/jsx-runtime"],
+},
+```
+
+## Resultado Esperado
+
+1. O build de producao passa a funcionar correctamente
+2. A app e publicada com todas as correcoes de null safety feitas anteriormente
+3. O erro "Erro Inesperado" ao navegar entre abas desaparece
 
