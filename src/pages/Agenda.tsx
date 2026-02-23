@@ -386,6 +386,27 @@ export default function Agenda() {
   };
 
 
+  // Handle duplicate session
+  const handleDuplicateSession = async (data: {
+    pacienteId: string;
+    profissionalId: string;
+    servicoId: string;
+    date: Date;
+    hour: number;
+    minute: number;
+    notes: string;
+  }) => {
+    await handleCreateSession({
+      pacienteId: data.pacienteId,
+      profissionalId: data.profissionalId,
+      servicoId: data.servicoId,
+      notes: data.notes,
+      date: data.date,
+      hour: data.hour,
+      minute: data.minute,
+    });
+  };
+
   // Handle create reserved slot
   const handleCreateReservedSlot = async (data: CreateReservedSlotData) => {
     await createReservedSlot(data);
@@ -522,6 +543,7 @@ export default function Agenda() {
         onUseCredit={useCredit}
         wasCreditUsedForSession={wasCreditUsedForSession}
         onAddCredits={handleAddCredits}
+        onDuplicateSession={handleDuplicateSession}
       />
 
       {/* Reserved Slot Management Modal */}
