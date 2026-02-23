@@ -60,16 +60,9 @@ export default function Profissionais() {
   const handleCreateProfessional = async () => {
     try {
       // Get clinic_id from user profile
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("Utilizador não autenticado");
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("clinic_id")
-        .eq("user_id", userData.user.id)
-        .maybeSingle();
-
-      if (!profile?.clinic_id) throw new Error("Clínica não identificada");
+      const { getAuthContext } = await import("@/lib/auth-helpers");
+      const { clinicId: clinic_id } = await getAuthContext();
+      const profile = { clinic_id };
 
       // Insert into database
       const { data: newProf, error } = await supabase
@@ -219,7 +212,7 @@ export default function Profissionais() {
                 <div className="flex items-start gap-4">
                   <Avatar className="h-14 w-14">
                     <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
-                      {professional.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                      {(professional.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
@@ -290,7 +283,7 @@ export default function Profissionais() {
             <DialogTitle className="font-display flex items-center gap-3">
               <Avatar className="h-10 w-10">
                 <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                  {selectedProfessional?.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                  {(selectedProfessional?.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
                 </AvatarFallback>
               </Avatar>
               {selectedProfessional?.full_name}

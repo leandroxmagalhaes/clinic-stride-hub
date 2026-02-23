@@ -515,19 +515,29 @@ export function DataProvider({ children }: DataProviderProps) {
   // Load all data on mount
   useEffect(() => {
     const initLoad = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      cachedUserId.current = session?.user?.id ?? null;
-      
-      await Promise.all([
-        fetchPatients(),
-        fetchServices(),
-        fetchSessions(),
-        fetchProfessionals(),
-        fetchEvolutions(),
-        fetchCreditBalances(),
-        fetchCreditUsageMap(),
-      ]);
-      hasInitiallyLoaded.current = true;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        cachedUserId.current = session?.user?.id ?? null;
+        
+        await Promise.all([
+          fetchPatients(),
+          fetchServices(),
+          fetchSessions(),
+          fetchProfessionals(),
+          fetchEvolutions(),
+          fetchCreditBalances(),
+          fetchCreditUsageMap(),
+        ]);
+        hasInitiallyLoaded.current = true;
+      } catch (err) {
+        console.error("Error during initial data load:", err);
+        // Ensure loading states are released even on error
+        setPatientsLoading(false);
+        setSessionsLoading(false);
+        setProfessionalsLoading(false);
+        setServicesLoading(false);
+        setEvolutionsLoading(false);
+      }
     };
     initLoad();
   }, []);

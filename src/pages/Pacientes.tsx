@@ -351,7 +351,7 @@ export default function Pacientes() {
                   <div className="flex items-start gap-4">
                     <Avatar className="h-12 w-12">
                       <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                        {patient.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                        {(patient.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">

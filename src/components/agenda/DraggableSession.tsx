@@ -95,7 +95,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             </span>
           )}
           <p className="font-medium truncate min-w-0">
-            {session.paciente?.full_name.split(' ')[0]}
+            {session.paciente?.full_name?.split(' ')?.[0] ?? ''}
           </p>
           <StatusBadge status={session.status as any} className="scale-75 flex-shrink-0" />
         </div>
@@ -118,14 +118,14 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
                   </span>
                 )}
                 <p className="font-medium truncate min-w-0">
-                  {session.paciente?.full_name.split(' ')[0]}
+                  {session.paciente?.full_name?.split(' ')?.[0] ?? ''}
                 </p>
               </div>
             </div>
             <StatusBadge status={session.status as any} className="scale-90 flex-shrink-0" />
           </div>
           <p className="text-muted-foreground truncate text-[10px] w-full">
-            {session.servico?.name} • {session.profissional?.full_name.split(' ')[0]}
+            {session.servico?.name} • {session.profissional?.full_name?.split(' ')?.[0] ?? ''}
           </p>
         </div>
       )}

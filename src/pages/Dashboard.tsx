@@ -228,7 +228,7 @@ export default function Dashboard() {
                   >
                     <Avatar className="h-9 w-9">
                       <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                        {patient.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        {(patient.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">

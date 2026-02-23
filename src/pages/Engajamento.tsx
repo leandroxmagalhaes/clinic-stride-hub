@@ -55,20 +55,31 @@ export default function Engajamento() {
 
   const fetchClinicId = async () => {
     if (!user) return null;
-    const { data } = await supabase
-      .from('profiles')
-      .select('clinic_id')
-      .eq('user_id', user.id)
-      .single();
-    return data?.clinic_id || null;
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('clinic_id')
+        .eq('user_id', user.id)
+        .single();
+      return data?.clinic_id || null;
+    } catch (err) {
+      console.error('Error fetching clinic id:', err);
+      return null;
+    }
   };
 
   const fetchAllData = async () => {
     setIsLoading(true);
-    const cId = await fetchClinicId();
-    setClinicId(cId);
-    await Promise.all([fetchEngagementData(), fetchAutomationData()]);
-    setIsLoading(false);
+    try {
+      const cId = await fetchClinicId();
+      setClinicId(cId);
+      await Promise.all([fetchEngagementData(), fetchAutomationData()]);
+    } catch (err) {
+      console.error('Error fetching engagement data:', err);
+      toast.error('Erro ao carregar dados de engajamento');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {

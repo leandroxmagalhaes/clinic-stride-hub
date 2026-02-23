@@ -66,7 +66,7 @@ export function SendOnboardingLinkModal({ isOpen, onClose, patients }: SendOnboa
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
               <Avatar className="h-10 w-10">
                 <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                  {selected.full_name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                  {(selected.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
                 </AvatarFallback>
               </Avatar>
               <div>
@@ -112,7 +112,7 @@ export function SendOnboardingLinkModal({ isOpen, onClose, patients }: SendOnboa
                   >
                     <Avatar className="h-8 w-8">
                       <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                        {p.full_name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                        {(p.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
