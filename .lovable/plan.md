@@ -1,74 +1,140 @@
 
 
-# Duplicar Agendamento com Nova Data
+# Corrigir Erros Inesperados e Fortalecer Resiliencia da Aplicacao
 
-## Resumo
+## Problemas Identificados
 
-Adicionar um botao "Duplicar" no modal de Gestao de Sessao (`SessionManagementModal`) que permite criar rapidamente uma nova sessao com os mesmos dados (utente, profissional, servico) mas numa data/hora diferente. O fluxo respeita toda a logica de creditos existente.
+### 1. Crashs por `null.split()` em `.full_name` (CRITICO)
+Em **8 ficheiros**, o codigo acede `.full_name.split(' ')` directamente em objectos que podem ser `null` ou `undefined` (ex: `session.paciente?.full_name.split(...)`, `session.profissional?.full_name.split(...)`). O optional chaining `?.` para no `paciente`, mas `.full_name` pode nao existir, e `.split()` e chamado num valor potencialmente `undefined`, causando crash.
 
-## Como vai funcionar
+**Ficheiros afectados:**
+- `src/components/agenda/AgendaDesktopGrid.tsx`
+- `src/components/agenda/AgendaMobileTimeline.tsx`
+- `src/components/agenda/DraggableSession.tsx`
+- `src/pages/Dashboard.tsx`
+- `src/pages/Profissionais.tsx`
+- `src/pages/Prontuarios.tsx`
+- `src/pages/Pacientes.tsx`
+- `src/components/patients/SendOnboardingLinkModal.tsx`
 
-1. O utilizador clica numa sessao existente na agenda (abre o modal que ja existe)
-2. No modal, aparece um novo botao "Duplicar" ao lado de "Remarcar Sessao"
-3. Ao clicar, abre um picker de data e hora (igual ao de remarcar)
-4. Ao confirmar, o sistema cria uma nova sessao com:
-   - Mesmo utente, profissional e servico
-   - Nova data/hora escolhida
-   - Status "agendado" (ou "realizado" se data passada)
-   - Verifica conflitos de horario
-   - Se o servico consome creditos e o utente tem saldo, marca `payment_status = "reservado"`
-   - Se nao tem creditos, marca `payment_status = "pendente"`
+**Correcao:** Adicionar optional chaining completo e fallback: `session.paciente?.full_name?.split(' ')?.[0] ?? ''`
 
-## Ficheiros a alterar
+### 2. `getUser()` residual em Profissionais.tsx
+O ficheiro `src/pages/Profissionais.tsx` (linha 63) ainda usa `supabase.auth.getUser()` — nao foi migrado na optimizacao anterior.
 
-### 1. `src/components/agenda/SessionManagementModal.tsx`
+**Correcao:** Substituir por `getAuthContext()` de `@/lib/auth-helpers`.
 
-**Novas props:**
-- `onDuplicateSession`: callback que recebe os dados da sessao duplicada e cria no banco
+### 3. Funcoes assincronas sem try/catch (crashs silenciosos)
+- `src/pages/Engajamento.tsx` — `fetchAllData()` e `fetchClinicId()` sem try/catch, podem crashar o componente
+- `src/pages/Financeiro.tsx` — `loadFinancialData()` nao mostra toast ao utilizador em caso de erro
 
-**Novo estado:**
-- `isDuplicating` (boolean) -- controla se o formulario de duplicacao esta visivel
-- `dupDate` / `dupHour` -- data e hora da nova sessao
+### 4. Handler global para unhandled rejections ausente
+Promessas rejeitadas sem handler causam crashes silenciosos (tela branca). O `main.tsx` tem ErrorBoundary mas nao captura erros assincronos.
 
-**Novo botao na UI:**
-- Botao "Duplicar" com icone `Copy`, posicionado junto ao botao "Remarcar Sessao"
-- Ao clicar, mostra o picker de data/hora (layout identico ao de remarcar)
+**Correcao:** Adicionar listener `unhandledrejection` no `App.tsx`.
 
-**Handler `handleDuplicate`:**
-- Valida data e hora
-- Chama `onDuplicateSession` passando: `{ pacienteId, profissionalId, servicoId, date, hour, minute, notes }`
-- Mostra toast de sucesso/erro
+### 5. DataContext initLoad sem try/catch
+O `useEffect` em `DataContext.tsx` (linha 517) chama `initLoad()` sem capturar erros. Se `getSession()` falhar, o app trava no estado de loading infinito.
 
-### 2. `src/pages/Agenda.tsx`
+**Correcao:** Envolver em try/catch e definir loading como false mesmo em caso de erro.
 
-**Nova funcao `handleDuplicateSession`:**
-- Recebe os dados da sessao a duplicar + nova data/hora
-- Reutiliza a logica existente de `handleCreateSession` (verificacao de creditos, conflitos, status retroativo)
-- Cria a sessao via `addSession`
-- Executa trigger de automacao se aplicavel
+## Ficheiros a Alterar
 
-**Passar a nova prop ao `SessionManagementModal`:**
-- `onDuplicateSession={handleDuplicateSession}`
+### 1. `src/App.tsx`
+- Adicionar listener global `unhandledrejection` com toast de erro
 
-## Detalhes tecnicos
+### 2. `src/contexts/DataContext.tsx`
+- Adicionar try/catch ao `initLoad` com fallback de loading states
 
-### Logica de creditos na duplicacao
+### 3. `src/pages/Profissionais.tsx`
+- Substituir `getUser()` por `getAuthContext()`
 
-A duplicacao segue exactamente a mesma logica de criacao de sessao avulsa:
-- Verifica `selectedService.consumes_credit`
-- Verifica `getCreditBalance(pacienteId)`
-- Se tem creditos e servico consome: `payment_status = "reservado"`
-- Se nao tem creditos: `payment_status = "pendente"`
-- O credito so e efectivamente descontado quando a sessao for finalizada (fluxo existente)
+### 4. `src/pages/Engajamento.tsx`
+- Envolver `fetchAllData` em try/catch com toast
 
-### Verificacao de conflitos
+### 5. `src/pages/Financeiro.tsx`
+- Adicionar toast.error quando dados financeiros falham
 
-Usa `SessionService.checkConflict()` para garantir que nao ha sobreposicao de horario para o mesmo profissional na nova data/hora.
+### 6-13. Correcoes de optional chaining (8 ficheiros)
+Todos os acessos a `.full_name.split()` serao protegidos com `?.` completo:
 
-### Layout do botao
+- `src/components/agenda/AgendaDesktopGrid.tsx`
+- `src/components/agenda/AgendaMobileTimeline.tsx`
+- `src/components/agenda/DraggableSession.tsx`
+- `src/pages/Dashboard.tsx`
+- `src/pages/Profissionais.tsx`
+- `src/pages/Prontuarios.tsx`
+- `src/pages/Pacientes.tsx`
+- `src/components/patients/SendOnboardingLinkModal.tsx`
 
-O botao "Duplicar" aparece:
-- Apenas quando a sessao NAO esta em status terminal (realizado/cancelado/falta) -- para manter consistencia
-- Tambem disponivel em sessoes terminais (permite reagendar o mesmo utente rapidamente)
-- Na mesma zona dos botoes "Remarcar Sessao", como botao outline com icone `Copy`
+## Detalhes Tecnicos
+
+### Padrao de correcao para `.full_name.split()`:
+
+```text
+ANTES (crash se full_name for undefined):
+  {session.paciente?.full_name.split(' ')[0]}
+
+DEPOIS (seguro):
+  {session.paciente?.full_name?.split(' ')?.[0] ?? ''}
+```
+
+### Padrao para avatar initials:
+
+```text
+ANTES:
+  {patient.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+
+DEPOIS:
+  {(patient.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
+```
+
+### Handler global (App.tsx):
+
+```text
+import { useEffect } from "react";
+import { toast } from "sonner";
+
+// Dentro do App component, antes do return:
+useEffect(() => {
+  const handler = (event: PromiseRejectionEvent) => {
+    console.error("Unhandled rejection:", event.reason);
+    event.preventDefault();
+  };
+  window.addEventListener("unhandledrejection", handler);
+  return () => window.removeEventListener("unhandledrejection", handler);
+}, []);
+```
+
+### DataContext initLoad protegido:
+
+```text
+useEffect(() => {
+  const initLoad = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      cachedUserId.current = session?.user?.id ?? null;
+      await Promise.all([...fetches...]);
+      hasInitiallyLoaded.current = true;
+    } catch (err) {
+      console.error("Error during initial data load:", err);
+      // Garantir que loading termina mesmo com erro
+      setPatientsLoading(false);
+      setSessionsLoading(false);
+      setProfessionalsLoading(false);
+      setServicesLoading(false);
+      setEvolutionsLoading(false);
+    }
+  };
+  initLoad();
+}, []);
+```
+
+## Resultado Esperado
+
+- Eliminacao dos crashes por `null.split()` (causa mais provavel do "Erro Inesperado")
+- Todas as operacoes assincronas protegidas com try/catch
+- Loading states nunca ficam presos em caso de erro
+- Handler global captura rejeicoes nao tratadas
+- Ultima chamada `getUser()` residual eliminada
 
