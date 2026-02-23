@@ -391,7 +391,7 @@ export default function Prontuarios() {
                       >
                         <Avatar className="h-10 w-10">
                           <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                            {patient.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                            {(patient.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
@@ -435,7 +435,7 @@ export default function Prontuarios() {
                     <div className="flex items-center gap-4">
                       <Avatar className="h-14 w-14">
                         <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
-                          {selectedProntuario.paciente?.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                          {(selectedProntuario.paciente?.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
                         </AvatarFallback>
                       </Avatar>
                       <div>

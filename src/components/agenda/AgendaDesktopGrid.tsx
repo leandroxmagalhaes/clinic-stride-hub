@@ -290,7 +290,7 @@ export function AgendaDesktopGrid({
                 <div className="flex items-center gap-1 mb-1">
                   <GripVertical className="h-3 w-3 text-muted-foreground" />
                   <p className="font-medium truncate">
-                    {activeSession.paciente?.full_name.split(' ')[0]}
+                    {activeSession.paciente?.full_name?.split(' ')?.[0] ?? ''}
                   </p>
                 </div>
                 <p className="text-muted-foreground truncate text-[10px]">

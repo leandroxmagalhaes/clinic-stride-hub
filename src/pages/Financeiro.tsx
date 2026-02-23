@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -75,6 +76,7 @@ export default function Financeiro() {
       setTransactions(transactionsData);
     } catch (error) {
       console.error("Error loading financial data:", error);
+      toast.error("Erro ao carregar dados financeiros");
     } finally {
       setIsLoading(false);
     }

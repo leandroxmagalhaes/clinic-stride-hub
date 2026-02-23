@@ -10,7 +10,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { ThemeApplicator } from "@/components/ThemeApplicator";
 import { PersistentLayout } from "@/components/layout/PersistentLayout";
-import { Suspense, lazy, ComponentType } from "react";
+import { Suspense, lazy, useEffect, ComponentType } from "react";
 import { PageLoadingFallback } from "@/components/layout/PageLoadingFallback";
 import type { PermissionModule } from "@/hooks/usePermissions";
 
@@ -100,7 +100,20 @@ function ProtectedPage({
   );
 }
 
+function AppWithGlobalHandler({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    const handler = (event: PromiseRejectionEvent) => {
+      console.error("Unhandled promise rejection:", event.reason);
+      event.preventDefault();
+    };
+    window.addEventListener("unhandledrejection", handler);
+    return () => window.removeEventListener("unhandledrejection", handler);
+  }, []);
+  return <>{children}</>;
+}
+
 const App = () => (
+  <AppWithGlobalHandler>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <LocaleProvider>
@@ -191,6 +204,7 @@ const App = () => (
       </LocaleProvider>
     </TooltipProvider>
   </QueryClientProvider>
+  </AppWithGlobalHandler>
 );
 
 export default App;
