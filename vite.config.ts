@@ -19,4 +19,12 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
+  optimizeDeps: {
+    include: ["d3-array"],
+  },
+  build: {
+    commonjsOptions: {
+      include: [/d3-array/, /node_modules/],
+    },
+  },
 }));
