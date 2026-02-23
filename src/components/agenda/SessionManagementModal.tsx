@@ -53,6 +53,7 @@ import {
   Edit3,
   Trash2,
   Coins,
+  Copy,
 } from "lucide-react";
 import { Session, SessionService } from "@/services/SessionService";
 import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
@@ -90,6 +91,15 @@ interface SessionManagementModalProps {
   onUseCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }>;
   wasCreditUsedForSession: (sessionId: string) => boolean;
   onAddCredits?: (patientId: string, data: CreditPurchaseData) => Promise<void>;
+  onDuplicateSession?: (data: {
+    pacienteId: string;
+    profissionalId: string;
+    servicoId: string;
+    date: Date;
+    hour: number;
+    minute: number;
+    notes: string;
+  }) => Promise<void>;
 }
 
 export function SessionManagementModal({
@@ -104,6 +114,7 @@ export function SessionManagementModal({
   onUseCredit,
   wasCreditUsedForSession,
   onAddCredits,
+  onDuplicateSession,
 }: SessionManagementModalProps) {
   const navigate = useNavigate();
   
@@ -122,12 +133,22 @@ export function SessionManagementModal({
   const [newDate, setNewDate] = useState<Date | undefined>(undefined);
   const [newHour, setNewHour] = useState<number | undefined>(undefined);
 
+  // Duplicate state
+  const [isDuplicating, setIsDuplicating] = useState(false);
+  const [dupDate, setDupDate] = useState<Date | undefined>(undefined);
+  const [dupHour, setDupHour] = useState<number | undefined>(undefined);
+  const [dupMinute, setDupMinute] = useState<number>(0);
+
   // Reset state when session changes
   useEffect(() => {
     if (session) {
       setNewDate(new Date(session.start_time));
       setNewHour(new Date(session.start_time).getHours());
       setIsRescheduling(false);
+      setIsDuplicating(false);
+      setDupDate(undefined);
+      setDupHour(undefined);
+      setDupMinute(0);
       setCancelReason("");
       setNoShowRefund(false);
       setShowEvolutionPrompt(false);
@@ -290,6 +311,35 @@ export function SessionManagementModal({
 
   const isTerminalStatus = currentStatus === "realizado" || currentStatus === "cancelado" || currentStatus === "falta";
 
+  const handleDuplicate = async () => {
+    if (!dupDate || dupHour === undefined) {
+      toast.error("Selecione data e hora para a nova sessão");
+      return;
+    }
+    if (!onDuplicateSession) return;
+
+    setIsLoading(true);
+    try {
+      await onDuplicateSession({
+        pacienteId: session.paciente_id,
+        profissionalId: session.profissional_id,
+        servicoId: session.servico_id || "",
+        date: dupDate,
+        hour: dupHour,
+        minute: dupMinute,
+        notes: session.notes || "",
+      });
+      toast.success("Sessão duplicada com sucesso!");
+      setIsDuplicating(false);
+      onClose();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Erro ao duplicar sessão";
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <>
       <Dialog open={isOpen && !showEvolutionPrompt} onOpenChange={onClose}>
@@ -437,21 +487,127 @@ export function SessionManagementModal({
                       </Button>
                     </div>
                   </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setIsRescheduling(true)}
-                  >
-                    <Edit3 className="h-4 w-4 mr-2" />
-                    Remarcar Sessão
-                  </Button>
-                )}
+                ) : !isDuplicating ? (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setIsRescheduling(true)}
+                    >
+                      <Edit3 className="h-4 w-4 mr-2" />
+                      Remarcar Sessão
+                    </Button>
+                    {onDuplicateSession && (
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setIsDuplicating(true)}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Duplicar
+                      </Button>
+                    )}
+                  </div>
+                ) : null}
               </>
             )}
 
+            {/* Duplicate Section - available for all statuses */}
+            {isDuplicating && (
+              <div className="space-y-3 p-4 border rounded-lg">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Copy className="h-4 w-4" />
+                  Duplicar Sessão (nova data/hora)
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Date Picker */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Data</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dupDate ? format(dupDate, "dd/MM/yyyy") : "Selecionar"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={dupDate}
+                          onSelect={setDupDate}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Hour Picker */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Hora</Label>
+                    <Select
+                      value={dupHour?.toString()}
+                      onValueChange={(v) => setDupHour(parseInt(v))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Hora" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HOURS.map((h) => (
+                          <SelectItem key={h} value={h.toString()}>
+                            {h.toString().padStart(2, "0")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Minute Picker */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Min</Label>
+                    <Select
+                      value={dupMinute.toString()}
+                      onValueChange={(v) => setDupMinute(parseInt(v))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Min" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[0, 15, 30, 45].map((m) => (
+                          <SelectItem key={m} value={m.toString()}>
+                            {m.toString().padStart(2, "0")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsDuplicating(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleDuplicate}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Criando..." : "Confirmar Duplicação"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Status Actions */}
-            {!isTerminalStatus && !isRescheduling && (
+            {!isTerminalStatus && !isRescheduling && !isDuplicating && (
               <div className="grid grid-cols-2 gap-2">
                 {/* Confirm */}
                 {currentStatus === "agendado" && (
@@ -515,9 +671,21 @@ export function SessionManagementModal({
             )}
 
             {/* Terminal Status Message */}
-            {isTerminalStatus && (
-              <div className="text-center text-muted-foreground text-sm py-2">
-                Esta sessão está com status final e não pode ser alterada.
+            {isTerminalStatus && !isDuplicating && (
+              <div className="space-y-3">
+                <div className="text-center text-muted-foreground text-sm py-2">
+                  Esta sessão está com status final e não pode ser alterada.
+                </div>
+                {onDuplicateSession && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setIsDuplicating(true)}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Duplicar Sessão
+                  </Button>
+                )}
               </div>
             )}
           </div>
