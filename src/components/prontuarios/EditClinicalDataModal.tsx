@@ -20,6 +20,9 @@ import { FileText, Loader2, Stethoscope, ClipboardCheck } from "lucide-react";
 import { toast } from "sonner";
 import { SpecialtyService, type SpecialtyTemplate, type StructuredData, type SectionSchema } from "@/services/SpecialtyService";
 import { DynamicFormRenderer } from "./DynamicFormRenderer";
+import { AIAssistButton } from "@/components/ai/AIAssistButton";
+import { AISuggestionPanel } from "@/components/ai/AISuggestionPanel";
+import { AIService } from "@/services/AIService";
 
 interface ClinicalData {
   anamnese: string;
@@ -52,6 +55,30 @@ export function EditClinicalDataModal({
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<SpecialtyTemplate | null>(null);
   const [initialAssessmentData, setInitialAssessmentData] = useState<StructuredData>({});
+  const [aiSuggestion, setAiSuggestion] = useState<{ field: string; text: string } | null>(null);
+
+  const handleAIAssist = async (field: 'anamnese' | 'diagnostico' | 'objetivos' | 'observacoes', mode: 'expand' | 'improve') => {
+    const currentText = formData[field];
+    if (!currentText || currentText.trim().length < 5) {
+      toast.error('Escreva pelo menos algumas palavras antes de usar a IA');
+      return;
+    }
+    const result = await AIService.assistClinicalText({
+      field,
+      currentText,
+      mode,
+      context: { patientName, anamnese: formData.anamnese, diagnostico: formData.diagnostico },
+    });
+    setAiSuggestion({ field, text: result.data.suggestion });
+  };
+
+  const handleAcceptSuggestion = (text: string) => {
+    if (aiSuggestion) {
+      setFormData(prev => ({ ...prev, [aiSuggestion.field]: text }));
+      setAiSuggestion(null);
+      toast.success('Sugestão aplicada!');
+    }
+  };
 
   // Load templates on mount
   useEffect(() => {
@@ -190,7 +217,13 @@ export function EditClinicalDataModal({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="anamnese">Anamnese</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="anamnese">Anamnese</Label>
+              <div className="flex gap-1">
+                <AIAssistButton onClick={() => handleAIAssist('anamnese', 'improve')} tooltip="Melhorar texto" label="Melhorar" />
+                <AIAssistButton onClick={() => handleAIAssist('anamnese', 'expand')} tooltip="Expandir com termos técnicos" label="Expandir" />
+              </div>
+            </div>
             <Textarea
               id="anamnese"
               value={formData.anamnese}
@@ -199,10 +232,19 @@ export function EditClinicalDataModal({
               rows={4}
               className="resize-none"
             />
+            {aiSuggestion?.field === 'anamnese' && (
+              <AISuggestionPanel suggestion={aiSuggestion.text} onAccept={handleAcceptSuggestion} onReject={() => setAiSuggestion(null)} />
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="diagnostico">Diagnóstico</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="diagnostico">Diagnóstico</Label>
+              <div className="flex gap-1">
+                <AIAssistButton onClick={() => handleAIAssist('diagnostico', 'improve')} tooltip="Melhorar texto" label="Melhorar" />
+                <AIAssistButton onClick={() => handleAIAssist('diagnostico', 'expand')} tooltip="Expandir com termos técnicos" label="Expandir" />
+              </div>
+            </div>
             <Textarea
               id="diagnostico"
               value={formData.diagnostico}
@@ -211,10 +253,19 @@ export function EditClinicalDataModal({
               rows={3}
               className="resize-none"
             />
+            {aiSuggestion?.field === 'diagnostico' && (
+              <AISuggestionPanel suggestion={aiSuggestion.text} onAccept={handleAcceptSuggestion} onReject={() => setAiSuggestion(null)} />
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="objetivos">Objetivos do Tratamento</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="objetivos">Objetivos do Tratamento</Label>
+              <div className="flex gap-1">
+                <AIAssistButton onClick={() => handleAIAssist('objetivos', 'improve')} tooltip="Melhorar texto" label="Melhorar" />
+                <AIAssistButton onClick={() => handleAIAssist('objetivos', 'expand')} tooltip="Expandir com termos técnicos" label="Expandir" />
+              </div>
+            </div>
             <Textarea
               id="objetivos"
               value={formData.objetivos}
@@ -223,10 +274,19 @@ export function EditClinicalDataModal({
               rows={3}
               className="resize-none"
             />
+            {aiSuggestion?.field === 'objetivos' && (
+              <AISuggestionPanel suggestion={aiSuggestion.text} onAccept={handleAcceptSuggestion} onReject={() => setAiSuggestion(null)} />
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="observacoes">Observações Gerais</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="observacoes">Observações Gerais</Label>
+              <div className="flex gap-1">
+                <AIAssistButton onClick={() => handleAIAssist('observacoes', 'improve')} tooltip="Melhorar texto" label="Melhorar" />
+                <AIAssistButton onClick={() => handleAIAssist('observacoes', 'expand')} tooltip="Expandir com termos técnicos" label="Expandir" />
+              </div>
+            </div>
             <Textarea
               id="observacoes"
               value={formData.observacoes}
@@ -235,6 +295,9 @@ export function EditClinicalDataModal({
               rows={3}
               className="resize-none"
             />
+            {aiSuggestion?.field === 'observacoes' && (
+              <AISuggestionPanel suggestion={aiSuggestion.text} onAccept={handleAcceptSuggestion} onReject={() => setAiSuggestion(null)} />
+            )}
           </div>
         </div>
 

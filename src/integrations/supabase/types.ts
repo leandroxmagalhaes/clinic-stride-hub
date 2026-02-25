@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage_logs: {
+        Row: {
+          action: string
+          clinic_id: string
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          feature: string
+          id: string
+          model: string | null
+          tokens_used: number | null
+          user_id: string
+        }
+        Insert: {
+          action?: string
+          clinic_id: string
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          feature: string
+          id?: string
+          model?: string | null
+          tokens_used?: number | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          clinic_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          feature?: string
+          id?: string
+          model?: string | null
+          tokens_used?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_logs_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -113,6 +160,9 @@ export type Database = {
       }
       clinic_settings: {
         Row: {
+          ai_clinical_enabled: boolean
+          ai_enabled: boolean
+          ai_management_enabled: boolean
           clinic_id: string
           clinic_name: string | null
           created_at: string
@@ -127,6 +177,9 @@ export type Database = {
           whatsapp_enabled: boolean | null
         }
         Insert: {
+          ai_clinical_enabled?: boolean
+          ai_enabled?: boolean
+          ai_management_enabled?: boolean
           clinic_id: string
           clinic_name?: string | null
           created_at?: string
@@ -141,6 +194,9 @@ export type Database = {
           whatsapp_enabled?: boolean | null
         }
         Update: {
+          ai_clinical_enabled?: boolean
+          ai_enabled?: boolean
+          ai_management_enabled?: boolean
           clinic_id?: string
           clinic_name?: string | null
           created_at?: string
