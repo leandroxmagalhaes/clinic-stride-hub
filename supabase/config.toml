@@ -23,3 +23,18 @@ verify_jwt = false
 
 [functions.ai-clinical-assist]
 verify_jwt = false
+
+[functions.ai-report-draft]
+verify_jwt = false
+
+[functions.ai-churn-analysis]
+verify_jwt = false
+
+[functions.ai-financial-insights]
+verify_jwt = false
+
+[functions.ai-lead-scoring]
+verify_jwt = false
+
+[functions.ai-daily-briefing]
+verify_jwt = false

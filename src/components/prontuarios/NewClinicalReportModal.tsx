@@ -30,6 +30,7 @@ import {
   Download,
   Import,
   Info,
+  Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -44,6 +45,7 @@ import {
 } from "@/services/ClinicalReportService";
 import { generateClinicalReportPDF } from "./ClinicalReportPDF";
 import { useData } from "@/contexts/DataContext";
+import { AIService } from "@/services/AIService";
 
 interface NewClinicalReportModalProps {
   open: boolean;
@@ -75,6 +77,7 @@ export function NewClinicalReportModal({
   const [activeTab, setActiveTab] = useState("dados");
   const [saving, setSaving] = useState(false);
   const [loadingEvolutions, setLoadingEvolutions] = useState(false);
+  const [loadingAIDraft, setLoadingAIDraft] = useState(false);
   const [sessionsCount, setSessionsCount] = useState<number | null>(null);
 
   // Form state
@@ -186,6 +189,36 @@ export function NewClinicalReportModal({
       toast.error("Erro ao importar evoluções");
     } finally {
       setLoadingEvolutions(false);
+    }
+  };
+
+  const handleGenerateAIDraft = async () => {
+    if (!periodoInicio || !periodoFim) {
+      toast.error("Selecione o período primeiro");
+      return;
+    }
+
+    setLoadingAIDraft(true);
+    try {
+      const result = await AIService.generateReportDraft({
+        prontuarioId,
+        patientName: undefined,
+        tipo,
+        periodoInicio: format(periodoInicio, "yyyy-MM-dd"),
+        periodoFim: format(periodoFim, "yyyy-MM-dd"),
+      });
+
+      if (result.data?.draft) {
+        setConteudo(prev =>
+          prev ? `${result.data.draft}\n\n--- Conteúdo anterior ---\n\n${prev}` : result.data.draft
+        );
+        toast.success("Rascunho IA gerado! Revise e edite antes de finalizar.");
+      }
+    } catch (error: any) {
+      console.error("Error generating AI draft:", error);
+      toast.error(error.message || "Erro ao gerar rascunho com IA");
+    } finally {
+      setLoadingAIDraft(false);
     }
   };
 
@@ -506,23 +539,40 @@ export function NewClinicalReportModal({
 
             {/* Tab 2: Conteúdo Clínico */}
             <TabsContent value="conteudo" className="space-y-4 mt-0">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <Label htmlFor="conteudo">Conteúdo do Relatório</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleImportEvolutions}
-                  disabled={loadingEvolutions || !periodoInicio || !periodoFim}
-                  className="gap-2"
-                >
-                  {loadingEvolutions ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Import className="h-4 w-4" />
-                  )}
-                  Importar Evoluções
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateAIDraft}
+                    disabled={loadingAIDraft || !periodoInicio || !periodoFim}
+                    className="gap-2"
+                  >
+                    {loadingAIDraft ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    Gerar com IA
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleImportEvolutions}
+                    disabled={loadingEvolutions || !periodoInicio || !periodoFim}
+                    className="gap-2"
+                  >
+                    {loadingEvolutions ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Import className="h-4 w-4" />
+                    )}
+                    Importar Evoluções
+                  </Button>
+                </div>
               </div>
               <Textarea
                 id="conteudo"

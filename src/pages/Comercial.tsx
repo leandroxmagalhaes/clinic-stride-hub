@@ -18,6 +18,7 @@ import { LeadCard } from "@/components/comercial/LeadCard";
 import { NewLeadModal } from "@/components/comercial/NewLeadModal";
 import { ConvertToPatientModal } from "@/components/comercial/ConvertToPatientModal";
 import { CRMDashboard } from "@/components/comercial/CRMDashboard";
+import { AILeadScoringCard } from "@/components/comercial/AILeadScoringCard";
 import { LeadService, SalesLead, LeadStatus, CreateLeadData } from "@/services/LeadService";
 import { KanbanSkeleton } from "@/components/skeletons/PageSkeletons";
 
@@ -216,6 +217,9 @@ export default function Comercial() {
       <div className="space-y-6">
         {/* Dashboard Stats */}
         <CRMDashboard leads={leads} />
+
+        {/* AI Lead Scoring */}
+        <AILeadScoringCard leads={leads} />
 
       {/* Kanban Board */}
       <div className="overflow-x-auto pb-4">

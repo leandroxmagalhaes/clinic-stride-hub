@@ -18,6 +18,36 @@ export interface AIClinicalAssist {
   mode: 'expand' | 'improve';
 }
 
+export interface AIReportDraft {
+  draft: string;
+}
+
+export interface AIChurnAnalysis {
+  patient_name: string;
+  risk_level: 'critico' | 'alto' | 'moderado';
+  probable_reason: string;
+  reactivation_message: string;
+}
+
+export interface AIFinancialInsight {
+  title: string;
+  description: string;
+  type: 'positivo' | 'neutro' | 'alerta';
+}
+
+export interface AILeadScore {
+  lead_name: string;
+  score: 'alto' | 'medio' | 'baixo';
+  justification: string;
+  next_step: string;
+}
+
+export interface AIDailyBriefing {
+  greeting: string;
+  highlights: Array<{ icon: string; text: string }>;
+  priority: string;
+}
+
 export type AIFeature = 
   | 'clinical-summary'
   | 'clinical-assist'
@@ -32,9 +62,6 @@ export type AIFeature =
  * Never sends prompts from client; all logic lives in backend functions.
  */
 export class AIService {
-  /**
-   * Generate clinical summary from evolutions
-   */
   static async generateClinicalSummary(payload: {
     prontuarioId: string;
     patientName: string;
@@ -51,9 +78,6 @@ export class AIService {
     return this.invoke<AIClinicalSummary>('ai-clinical-summary', payload);
   }
 
-  /**
-   * AI writing assistant for clinical text fields
-   */
   static async assistClinicalText(payload: {
     field: 'anamnese' | 'diagnostico' | 'objetivos' | 'observacoes';
     currentText: string;
@@ -67,16 +91,65 @@ export class AIService {
     return this.invoke<AIClinicalAssist>('ai-clinical-assist', payload);
   }
 
-  /**
-   * Generic invoke with error handling for rate limits and credits
-   */
+  static async generateReportDraft(payload: {
+    prontuarioId: string;
+    patientName?: string;
+    tipo?: string;
+    periodoInicio: string;
+    periodoFim: string;
+  }): Promise<AIResponse<AIReportDraft>> {
+    return this.invoke<AIReportDraft>('ai-report-draft', payload);
+  }
+
+  static async analyzeChurnRisk(payload: {
+    patients: Array<{
+      full_name: string;
+      days_since_last_session: number;
+    }>;
+  }): Promise<AIResponse<{ analyses: AIChurnAnalysis[] }>> {
+    return this.invoke<{ analyses: AIChurnAnalysis[] }>('ai-churn-analysis', payload);
+  }
+
+  static async generateFinancialInsights(payload: {
+    kpis: {
+      salesRevenue: number;
+      executedRevenue: number;
+      averageTicket: number;
+      salesCount: number;
+      sessionsCompleted: number;
+    };
+  }): Promise<AIResponse<{ insights: AIFinancialInsight[] }>> {
+    return this.invoke<{ insights: AIFinancialInsight[] }>('ai-financial-insights', payload);
+  }
+
+  static async scoreLeads(payload: {
+    leads: Array<{
+      name: string;
+      status: string;
+      estimated_value: number | null;
+      source: string | null;
+      created_at: string;
+      notes: string | null;
+    }>;
+  }): Promise<AIResponse<{ scores: AILeadScore[] }>> {
+    return this.invoke<{ scores: AILeadScore[] }>('ai-lead-scoring', payload);
+  }
+
+  static async generateDailyBriefing(payload: {
+    todaySessions: number;
+    activePatients: number;
+    churnRiskCount: number;
+    pendingLeads: number;
+  }): Promise<AIResponse<AIDailyBriefing>> {
+    return this.invoke<AIDailyBriefing>('ai-daily-briefing', payload);
+  }
+
   private static async invoke<T>(functionName: string, body: Record<string, unknown>): Promise<AIResponse<T>> {
     const { data, error } = await supabase.functions.invoke(functionName, {
       body,
     });
 
     if (error) {
-      // Check for specific error codes
       const message = error.message || '';
       if (message.includes('429') || message.includes('rate limit')) {
         throw new AIRateLimitError('Limite de requisições atingido. Tente novamente em alguns segundos.');
@@ -101,7 +174,6 @@ export class AIService {
   }
 }
 
-// Custom error classes for specific handling
 export class AIError extends Error {
   constructor(message: string) {
     super(message);
