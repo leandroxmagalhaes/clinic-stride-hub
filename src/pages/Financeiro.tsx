@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FinancialService, FinancialKPIs, PurchaseTransaction } from "@/services/FinancialService";
 import { TransactionMobileCards } from "@/components/financeiro/TransactionMobileCards";
+import { AIFinancialInsightsCard } from "@/components/financeiro/AIFinancialInsightsCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Bar,
@@ -189,6 +190,9 @@ export default function Financeiro() {
             )}
           </CardContent>
         </Card>
+
+        {/* AI Financial Insights */}
+        <AIFinancialInsightsCard kpis={kpis} />
 
         {/* Transactions Table */}
         <Card>

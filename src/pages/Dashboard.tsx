@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,9 @@ import { toast } from "sonner";
 import { useData } from "@/contexts/DataContext";
 import { SessionService } from "@/services/SessionService";
 import { NewSessionModal } from "@/components/agenda/NewSessionModal";
+import { AIBriefingCard } from "@/components/dashboard/AIBriefingCard";
+import { EngagementService } from "@/services/EngagementService";
+import { LeadService } from "@/services/LeadService";
 export default function Dashboard() {
   const { sessions, patients, professionals, services, addSession, getCreditBalance } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -49,6 +52,17 @@ export default function Dashboard() {
   const weekSessions = sessions.length;
   const completedSessions = sessions.filter(s => s.status === 'finalizado').length;
   const attendanceRate = sessions.length > 0 ? Math.round((completedSessions / sessions.length) * 100) : 0;
+
+  // AI briefing data
+  const [churnCount, setChurnCount] = useState(0);
+  const [pendingLeadsCount, setPendingLeadsCount] = useState(0);
+
+  useEffect(() => {
+    EngagementService.getChurnRiskPatients().then(p => setChurnCount(p.length)).catch(() => {});
+    LeadService.fetchAll().then(leads => {
+      setPendingLeadsCount(leads.filter(l => ['novo', 'agendado', 'proposta'].includes(l.status)).length);
+    }).catch(() => {});
+  }, []);
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
@@ -119,6 +133,14 @@ export default function Dashboard() {
       subtitle={format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
     >
       <div className="space-y-6 animate-fade-in">
+        {/* AI Daily Briefing */}
+        <AIBriefingCard
+          todaySessions={todaysSessions}
+          activePatients={activePatients}
+          churnRiskCount={churnCount}
+          pendingLeads={pendingLeadsCount}
+        />
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
