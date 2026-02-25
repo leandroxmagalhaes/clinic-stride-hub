@@ -19,6 +19,7 @@ import {
   Loader2,
   ClipboardList,
   ArrowLeft,
+  Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -33,6 +34,8 @@ import { ClinicalReportsList } from "@/components/prontuarios/ClinicalReportsLis
 import { SpecialtyService, type SpecialtyTemplate, type StructuredData } from "@/services/SpecialtyService";
 import { supabase } from "@/integrations/supabase/client";
 import { useClinicInfo } from "@/hooks/useClinicInfo";
+import { AIService, type AIClinicalSummary } from "@/services/AIService";
+import { AIAssistButton } from "@/components/ai/AIAssistButton";
 
 // Prontuario data interface
 interface ProntuarioData {
@@ -69,6 +72,7 @@ export default function Prontuarios() {
   
   // Specialty templates cache for displaying structured data
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
+  const [aiSummary, setAiSummary] = useState<AIClinicalSummary | null>(null);
 
   // Load templates on mount
   useEffect(() => {
@@ -326,6 +330,33 @@ export default function Prontuarios() {
     ? getEvolucoesForProntuario(selectedProntuario.id)
     : [];
 
+  const handleGenerateAISummary = async () => {
+    if (!selectedProntuario || prontuarioEvolutions.length === 0) {
+      toast.error("Sem evoluções para analisar");
+      return;
+    }
+    const result = await AIService.generateClinicalSummary({
+      prontuarioId: selectedProntuario.id,
+      patientName: selectedProntuario.paciente?.full_name || "",
+      anamnese: selectedProntuario.anamnese,
+      diagnostico: selectedProntuario.diagnostico,
+      objetivos: selectedProntuario.objetivos,
+      evolutions: prontuarioEvolutions.map(e => ({
+        descricao: e.descricao,
+        escala_dor: e.escala_dor,
+        created_at: e.created_at,
+        structured_data: e.structured_data as Record<string, unknown> | null,
+      })),
+    });
+    setAiSummary(result.data);
+    toast.success("Resumo IA gerado!");
+  };
+
+  // Clear AI summary when changing patient
+  useEffect(() => {
+    setAiSummary(null);
+  }, [selectedProntuario?.id]);
+
   const getPainColor = (level: number) => {
     if (level <= 3) return "text-success";
     if (level <= 6) return "text-warning";
@@ -486,11 +517,56 @@ export default function Prontuarios() {
                 <TabsContent value="evolucoes">
                   <Card className="shadow-card">
                     <CardHeader className="pb-3">
-                      <CardTitle className="font-display text-lg">
-                        Histórico de Evoluções
-                      </CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="font-display text-lg">
+                          Histórico de Evoluções
+                        </CardTitle>
+                        {prontuarioEvolutions.length > 0 && (
+                          <AIAssistButton
+                            onClick={handleGenerateAISummary}
+                            label="Resumo IA"
+                            tooltip="Gerar resumo clínico com IA"
+                            variant="outline"
+                          />
+                        )}
+                      </div>
                     </CardHeader>
                     <CardContent>
+                      {/* AI Summary Panel */}
+                      {aiSummary && (
+                        <div className="mb-6 p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3 animate-fade-in">
+                          <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                            <Sparkles className="h-4 w-4" />
+                            Resumo Clínico IA
+                          </div>
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">{aiSummary.resumo_progresso}</p>
+                          {aiSummary.tendencia_dor && (
+                            <div className="text-sm">
+                              <span className="font-medium text-muted-foreground">Tendência de dor: </span>
+                              {aiSummary.tendencia_dor}
+                            </div>
+                          )}
+                          {aiSummary.alertas_clinicos.length > 0 && (
+                            <div>
+                              <span className="text-xs font-medium text-destructive">Alertas:</span>
+                              <ul className="list-disc list-inside text-sm mt-1">
+                                {aiSummary.alertas_clinicos.map((a, i) => <li key={i}>{a}</li>)}
+                              </ul>
+                            </div>
+                          )}
+                          {aiSummary.focos_terapeuticos.length > 0 && (
+                            <div>
+                              <span className="text-xs font-medium text-primary">Focos terapêuticos:</span>
+                              <ul className="list-disc list-inside text-sm mt-1">
+                                {aiSummary.focos_terapeuticos.map((f, i) => <li key={i}>{f}</li>)}
+                              </ul>
+                            </div>
+                          )}
+                          <p className="text-[10px] text-muted-foreground italic">
+                            ⚠ Sugestão assistida — não substitui o julgamento clínico profissional.
+                          </p>
+                        </div>
+                      )}
                       {prontuarioEvolutions.length > 0 ? (
                         <div className="space-y-4">
                           {prontuarioEvolutions.map((evolucao) => {

@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.patient-onboarding]
 verify_jwt = false
+
+[functions.ai-clinical-summary]
+verify_jwt = false
+
+[functions.ai-clinical-assist]
+verify_jwt = false
