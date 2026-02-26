@@ -1,25 +1,34 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, Loader2, Trash2 } from 'lucide-react';
+import { Bot, X, Send, Loader2, Trash2, Paperclip, FileSpreadsheet, FileText, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import type { CopilotMessage } from '@/hooks/useCopilot';
+import { toast } from 'sonner';
+import type { CopilotMessage, CopilotFileUpload } from '@/hooks/useCopilot';
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ACCEPTED_TYPES = '.xlsx,.xls,.csv,.pdf';
+const ACCEPTED_MIME = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'text/csv',
+  'application/pdf',
+];
 
 interface CopilotChatProps {
   isOpen: boolean;
   onClose: () => void;
   messages: CopilotMessage[];
   isStreaming: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, file?: CopilotFileUpload) => void;
   onClear: () => void;
 }
 
 function MessageBubble({ message }: { message: CopilotMessage }) {
   const isUser = message.role === 'user';
 
-  // Simple formatting: bold (**text**), newlines
   const formatContent = (text: string) => {
     return text.split('\n').map((line, i) => {
       const parts = line.split(/(\*\*[^*]+\*\*)/g).map((part, j) => {
@@ -58,6 +67,24 @@ function MessageBubble({ message }: { message: CopilotMessage }) {
   );
 }
 
+function FileAttachmentPill({ fileName, onRemove }: { fileName: string; onRemove: () => void }) {
+  const isExcel = /\.(xlsx?|csv)$/i.test(fileName);
+
+  return (
+    <div className="flex items-center gap-1.5 bg-accent/50 border border-border rounded-lg px-2.5 py-1.5 text-xs">
+      {isExcel ? (
+        <FileSpreadsheet className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+      ) : (
+        <FileText className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
+      )}
+      <span className="truncate max-w-[180px] text-foreground">{fileName}</span>
+      <button onClick={onRemove} className="ml-0.5 text-muted-foreground hover:text-foreground transition-colors">
+        <XCircle className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 export function CopilotChat({
   isOpen,
   onClose,
@@ -67,8 +94,10 @@ export function CopilotChat({
   onClear,
 }: CopilotChatProps) {
   const [input, setInput] = useState('');
+  const [pendingFile, setPendingFile] = useState<CopilotFileUpload | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -85,10 +114,54 @@ export function CopilotChat({
     }
   }, [isOpen]);
 
+  const processFile = (file: File) => {
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('Ficheiro demasiado grande. Limite: 5MB.');
+      return;
+    }
+
+    if (!ACCEPTED_MIME.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv|pdf)$/i)) {
+      toast.error('Tipo de ficheiro não suportado. Aceita: Excel, CSV ou PDF.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      setPendingFile({
+        name: file.name,
+        base64,
+        mimeType: file.type || 'application/octet-stream',
+      });
+    };
+    reader.onerror = () => toast.error('Erro ao ler o ficheiro.');
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+    // Reset input so same file can be selected again
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   const handleSend = () => {
-    if (!input.trim() || isStreaming) return;
-    onSend(input);
+    if ((!input.trim() && !pendingFile) || isStreaming) return;
+    onSend(input, pendingFile || undefined);
     setInput('');
+    setPendingFile(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -103,6 +176,8 @@ export function CopilotChat({
       <SheetContent
         side="right"
         className="w-full sm:max-w-md p-0 flex flex-col gap-0 [&>button]:hidden"
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
       >
         <SheetTitle className="sr-only">Copiloto</SheetTitle>
 
@@ -138,7 +213,7 @@ export function CopilotChat({
               </div>
               <h3 className="font-medium text-sm mb-1">Olá! Sou o seu Copiloto.</h3>
               <p className="text-xs text-muted-foreground max-w-[260px]">
-                Posso agendar sessões, verificar pendências, consultar disponibilidade e muito mais. Como posso ajudar?
+                Posso agendar sessões, verificar pendências, importar ficheiros e muito mais. Como posso ajudar?
               </p>
               <div className="mt-4 flex flex-wrap gap-1.5 justify-center">
                 {[
@@ -177,20 +252,50 @@ export function CopilotChat({
 
         {/* Input */}
         <div className="border-t p-3 bg-background">
+          {/* Attachment pill */}
+          {pendingFile && (
+            <div className="mb-2">
+              <FileAttachmentPill
+                fileName={pendingFile.name}
+                onRemove={() => setPendingFile(null)}
+              />
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_TYPES}
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 flex-shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isStreaming}
+              title="Anexar ficheiro (Excel, CSV, PDF)"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+
             <Textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Escreva uma mensagem... (Shift+Enter para nova linha)"
+              placeholder={pendingFile ? "Mensagem opcional..." : "Escreva uma mensagem..."}
               className="min-h-[40px] max-h-[120px] resize-none text-sm"
               rows={1}
               disabled={isStreaming}
             />
             <Button
               onClick={handleSend}
-              disabled={!input.trim() || isStreaming}
+              disabled={(!input.trim() && !pendingFile) || isStreaming}
               size="icon"
               className="h-10 w-10 flex-shrink-0"
             >
@@ -202,7 +307,7 @@ export function CopilotChat({
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-            Ctrl+K para abrir/fechar • O copiloto pode cometer erros
+            Ctrl+K para abrir/fechar • Arraste ficheiros Excel/PDF para importar
           </p>
         </div>
       </SheetContent>
