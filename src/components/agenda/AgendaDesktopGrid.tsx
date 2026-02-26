@@ -149,11 +149,11 @@ export function AgendaDesktopGrid({
     <Card className="shadow-card overflow-hidden hidden md:block">
       <CardContent className="p-0">
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="overflow-x-auto scrollbar-thin">
+          <div className="overflow-auto max-h-[600px] scrollbar-thin">
             <div className="min-w-[800px]">
               {/* Header */}
               <div 
-                className="grid border-b bg-muted/30" 
+                className="grid sticky top-0 z-20 border-b bg-muted/30" 
                 style={{ gridTemplateColumns: `60px repeat(${weekDays.length}, 1fr)` }}
               >
                 <div className="p-3 border-r" />
@@ -173,8 +173,7 @@ export function AgendaDesktopGrid({
               </div>
 
               {/* Time Grid Body */}
-              <div className="max-h-[600px] overflow-y-auto scrollbar-thin">
-                <div 
+              <div 
                   className="grid"
                   style={{ gridTemplateColumns: `60px repeat(${weekDays.length}, 1fr)` }}
                 >
@@ -271,8 +270,7 @@ export function AgendaDesktopGrid({
                       </div>
                     );
                   })}
-                </div>
-              </div>
+            </div>
             </div>
           </div>
 
