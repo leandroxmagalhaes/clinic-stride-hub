@@ -38,3 +38,9 @@ verify_jwt = false
 
 [functions.ai-daily-briefing]
 verify_jwt = false
+
+[functions.ai-voice-evolution]
+verify_jwt = false
+
+[functions.ai-briefing-generator]
+verify_jwt = false

@@ -48,6 +48,28 @@ export interface AIDailyBriefing {
   priority: string;
 }
 
+export interface VoiceEvolutionResult {
+  soap: {
+    subjetivo: string;
+    objetivo: string;
+    avaliacao: string;
+    plano: string;
+  };
+  formattedText: string;
+  rawTranscription: string;
+}
+
+export interface PreSessionBriefing {
+  last_evolution_summary: string;
+  today_plan: string;
+  absence_alert: boolean;
+  absence_count: number;
+  last_pain_level: number | null;
+  session_number: string;
+  patient_name: string;
+  last_evolution_date: string | null;
+}
+
 export type AIFeature = 
   | 'clinical-summary'
   | 'clinical-assist'
@@ -55,7 +77,9 @@ export type AIFeature =
   | 'churn-analysis'
   | 'financial-insights'
   | 'lead-scoring'
-  | 'daily-briefing';
+  | 'daily-briefing'
+  | 'voice-evolution'
+  | 'briefing-generator';
 
 /**
  * Centralized AI Service - calls edge functions for each AI feature.
@@ -142,6 +166,21 @@ export class AIService {
     pendingLeads: number;
   }): Promise<AIResponse<AIDailyBriefing>> {
     return this.invoke<AIDailyBriefing>('ai-daily-briefing', payload);
+  }
+
+  static async structureVoiceEvolution(payload: {
+    rawTranscription: string;
+    patientName: string;
+    painLevel?: number;
+  }): Promise<AIResponse<VoiceEvolutionResult>> {
+    return this.invoke<VoiceEvolutionResult>('ai-voice-evolution', payload);
+  }
+
+  static async generatePreSessionBriefing(payload: {
+    patientId: string;
+    sessionId: string;
+  }): Promise<AIResponse<PreSessionBriefing>> {
+    return this.invoke<PreSessionBriefing>('ai-briefing-generator', payload);
   }
 
   private static async invoke<T>(functionName: string, body: Record<string, unknown>): Promise<AIResponse<T>> {
