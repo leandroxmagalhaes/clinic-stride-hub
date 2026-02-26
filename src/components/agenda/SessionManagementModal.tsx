@@ -404,7 +404,7 @@ export function SessionManagementModal({
               </div>
 
               {/* No credits warning with Add Credits button */}
-              {!canFinalize && !isTerminalStatus && (
+              {!canFinalize && !(currentStatus === "cancelado" || currentStatus === "falta") && (
                 <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -436,10 +436,37 @@ export function SessionManagementModal({
               />
             )}
 
+            {/* Terminal status warning */}
+            {isTerminalStatus && !isRescheduling && !isDuplicating && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20 text-warning text-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>Esta sessão já tem status final. Pode alterar se necessário.</span>
+              </div>
+            )}
+
             {/* Reschedule Section */}
-            {!isTerminalStatus && (
-              <>
-                {isRescheduling ? (
+            {!isRescheduling && !isDuplicating ? (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setIsRescheduling(true)}
+                >
+                  <Edit3 className="h-4 w-4 mr-2" />
+                  Remarcar Sessão
+                </Button>
+                {onDuplicateSession && (
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setIsDuplicating(true)}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Duplicar
+                  </Button>
+                )}
+              </div>
+            ) : isRescheduling ? (
                   <div className="space-y-3 p-4 border rounded-lg">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <Edit3 className="h-4 w-4" />
@@ -510,30 +537,7 @@ export function SessionManagementModal({
                       </Button>
                     </div>
                   </div>
-                ) : !isDuplicating ? (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => setIsRescheduling(true)}
-                    >
-                      <Edit3 className="h-4 w-4 mr-2" />
-                      Remarcar Sessão
-                    </Button>
-                    {onDuplicateSession && (
-                      <Button
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() => setIsDuplicating(true)}
-                      >
-                        <Copy className="h-4 w-4 mr-2" />
-                        Duplicar
-                      </Button>
-                    )}
-                  </div>
                 ) : null}
-              </>
-            )}
 
             {/* Duplicate Section - available for all statuses */}
             {isDuplicating && (
@@ -630,9 +634,9 @@ export function SessionManagementModal({
             )}
 
             {/* Status Actions */}
-            {!isTerminalStatus && !isRescheduling && !isDuplicating && (
+            {!isRescheduling && !isDuplicating && (
               <div className="grid grid-cols-2 gap-2">
-                {/* Confirm */}
+                {/* Confirm - only for non-terminal */}
                 {currentStatus === "agendado" && (
                   <Button
                     variant="outline"
@@ -645,16 +649,18 @@ export function SessionManagementModal({
                   </Button>
                 )}
 
-                {/* Complete */}
-                <Button
-                  variant="default"
-                  onClick={handleComplete}
-                  disabled={isLoading || !canFinalize}
-                  title={!canFinalize ? "Utente sem créditos disponíveis" : undefined}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Finalizar
-                </Button>
+                {/* Complete - only for non-terminal */}
+                {!isTerminalStatus && (
+                  <Button
+                    variant="default"
+                    onClick={handleComplete}
+                    disabled={isLoading || !canFinalize}
+                    title={!canFinalize ? "Utente sem créditos disponíveis" : undefined}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Finalizar
+                  </Button>
+                )}
 
                 {/* Cancel */}
                 <Button
@@ -693,24 +699,6 @@ export function SessionManagementModal({
               </div>
             )}
 
-            {/* Terminal Status Message */}
-            {isTerminalStatus && !isDuplicating && (
-              <div className="space-y-3">
-                <div className="text-center text-muted-foreground text-sm py-2">
-                  Esta sessão está com status final e não pode ser alterada.
-                </div>
-                {onDuplicateSession && (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setIsDuplicating(true)}
-                  >
-                    <Copy className="h-4 w-4 mr-2" />
-                    Duplicar Sessão
-                  </Button>
-                )}
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>
