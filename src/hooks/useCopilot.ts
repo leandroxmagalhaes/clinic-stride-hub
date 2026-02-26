@@ -6,11 +6,18 @@ export interface CopilotMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  fileName?: string;
   pendingAction?: {
     actionId: string;
     type: string;
     data: Record<string, unknown>;
   };
+}
+
+export interface CopilotFileUpload {
+  name: string;
+  base64: string;
+  mimeType: string;
 }
 
 interface CopilotContext {
@@ -47,18 +54,26 @@ export function useCopilot() {
   }, [togglePanel]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
-      if (!text.trim() || isStreaming) return;
+    async (text: string, file?: CopilotFileUpload) => {
+      if ((!text.trim() && !file) || isStreaming) return;
+
+      const displayText = file
+        ? text.trim()
+          ? `📎 ${file.name}\n${text.trim()}`
+          : `📎 ${file.name}`
+        : text.trim();
 
       const userMsg: CopilotMessage = {
         id: crypto.randomUUID(),
         role: 'user',
-        content: text.trim(),
+        content: displayText,
+        fileName: file?.name,
       };
       setMessages((prev) => [...prev, userMsg]);
       setIsStreaming(true);
 
-      const apiMessages = [...messages, userMsg].map((m) => ({
+      // Build API messages (without file indicator in content for cleaner AI context)
+      const apiMessages = [...messages, { ...userMsg, content: text.trim() || (file ? `Processar o ficheiro "${file.name}"` : '') }].map((m) => ({
         role: m.role,
         content: m.content,
       }));
@@ -67,6 +82,22 @@ export function useCopilot() {
       const assistantId = crypto.randomUUID();
 
       try {
+        const session = await supabase.auth.getSession();
+        const accessToken = session.data.session?.access_token || '';
+
+        const body: Record<string, unknown> = {
+          messages: apiMessages,
+          context: getContext(),
+        };
+
+        if (file) {
+          body.file_upload = {
+            name: file.name,
+            base64: file.base64,
+            mime_type: file.mimeType,
+          };
+        }
+
         const resp = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-copilot-agent`,
           {
@@ -74,12 +105,9 @@ export function useCopilot() {
             headers: {
               'Content-Type': 'application/json',
               apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`,
+              Authorization: `Bearer ${accessToken}`,
             },
-            body: JSON.stringify({
-              messages: apiMessages,
-              context: getContext(),
-            }),
+            body: JSON.stringify(body),
           }
         );
 
@@ -171,7 +199,6 @@ export function useCopilot() {
           }
         }
 
-        // If no content was streamed, add a fallback
         if (!assistantSoFar) {
           setMessages((prev) => [
             ...prev,

@@ -132,14 +132,123 @@ const toolDefinitions = [
       parameters: { type: "object", properties: { days: { type: "number", description: "Dias de inatividade (default 14)" } }, additionalProperties: false },
     },
   },
+  // ── File import tools ────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "parse_import_file",
+      description: "Processa um ficheiro uploadado (Excel, CSV ou PDF) e extrai dados de agendamentos ou pacientes. Faz fuzzy matching contra a base existente e guarda na fila de importação. Usar quando file_upload estiver presente no contexto.",
+      parameters: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_import_queue",
+      description: "Lista itens pendentes na fila de importação para o utilizador revisar.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Máximo de itens (default 20)" },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "confirm_import_rows",
+      description: "Confirma itens da fila de importação e cria as sessões correspondentes. Requer confirmação explícita do utilizador.",
+      parameters: {
+        type: "object",
+        properties: {
+          row_ids: { type: "array", items: { type: "string" }, description: "Lista de UUIDs dos itens a confirmar. Se vazio, confirma todos os pendentes." },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "register_new_patients",
+      description: "Regista novos pacientes a partir de dados extraídos de ficheiro. Requer confirmação explícita.",
+      parameters: {
+        type: "object",
+        properties: {
+          patients: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                full_name: { type: "string" },
+                phone: { type: "string" },
+                email: { type: "string" },
+              },
+              required: ["full_name"],
+            },
+            description: "Lista de pacientes a registar",
+          },
+        },
+        required: ["patients"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
+
+// ── Fuzzy matching helpers ─────────────────────────────────────────────────
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim();
+}
+
+function fuzzyScore(input: string, candidate: string): number {
+  const a = normalizeText(input);
+  const b = normalizeText(candidate);
+  if (a === b) return 1;
+  if (b.includes(a) || a.includes(b)) return 0.85;
+  const aTokens = a.split(/\s+/);
+  const bTokens = b.split(/\s+/);
+  let matched = 0;
+  for (const t of aTokens) {
+    if (bTokens.some((bt) => bt.includes(t) || t.includes(bt))) matched++;
+  }
+  return aTokens.length > 0 ? matched / Math.max(aTokens.length, bTokens.length) : 0;
+}
+
+// ── Excel/CSV parsing via SheetJS ──────────────────────────────────────────
+async function parseSpreadsheet(base64: string, mimeType: string): Promise<Record<string, string>[]> {
+  const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs");
+
+  const binaryStr = atob(base64);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+  const workbook = XLSX.read(bytes, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+  return rows.slice(0, 500);
+}
 
 // ── Tool execution ─────────────────────────────────────────────────────────
 async function executeTool(
   toolName: string,
   args: Record<string, unknown>,
   supabaseAdmin: ReturnType<typeof createClient>,
-  clinicId: string
+  clinicId: string,
+  extraContext?: { fileUpload?: { name: string; base64: string; mime_type: string }; userId?: string; lovableApiKey?: string }
 ): Promise<string> {
   try {
     switch (toolName) {
@@ -159,8 +268,6 @@ async function executeTool(
         const date = args.date as string;
         const profId = args.professional_id as string | undefined;
         const minTime = args.min_time as string | undefined;
-
-        // Get existing sessions for that day
         const startOfDay = `${date}T00:00:00`;
         const endOfDay = `${date}T23:59:59`;
         let sessionsQuery = supabaseAdmin
@@ -173,7 +280,6 @@ async function executeTool(
         if (profId) sessionsQuery = sessionsQuery.eq("profissional_id", profId);
         const { data: sessions } = await sessionsQuery;
 
-        // Get professionals if not specified
         let professionals: Array<{ id: string; full_name: string }> = [];
         if (!profId) {
           const { data: profs } = await supabaseAdmin
@@ -191,7 +297,6 @@ async function executeTool(
           if (prof) professionals = [prof];
         }
 
-        // Generate available slots (8h-20h, 30min intervals)
         const slots: Array<{ time: string; professional_id: string; professional_name: string }> = [];
         for (const prof of professionals) {
           for (let h = 8; h < 20; h++) {
@@ -216,7 +321,6 @@ async function executeTool(
       }
 
       case "propose_session": {
-        // Just format and return — do NOT create
         const { data: patient } = await supabaseAdmin
           .from("pacientes")
           .select("full_name")
@@ -281,7 +385,6 @@ async function executeTool(
           .order("start_time", { ascending: false })
           .limit(limit);
 
-        // Filter those without evolution
         const sessionIds = (data || []).map((s) => s.id);
         if (sessionIds.length === 0) return JSON.stringify({ pending: [] });
 
@@ -395,7 +498,6 @@ async function executeTool(
 
         if (!patients || patients.length === 0) return JSON.stringify({ inactive: [] });
 
-        // For each patient check last session
         const patientIds = patients.map((p) => p.id);
         const { data: recentSessions } = await supabaseAdmin
           .from("sessoes")
@@ -412,6 +514,391 @@ async function executeTool(
           .map((p) => ({ id: p.id, name: p.full_name, phone: p.phone, email: p.email }));
 
         return JSON.stringify({ inactive, days_threshold: days });
+      }
+
+      // ── File import tools ────────────────────────────────────────────────
+      case "parse_import_file": {
+        const fileUpload = extraContext?.fileUpload;
+        if (!fileUpload) {
+          return JSON.stringify({ error: "Nenhum ficheiro foi enviado. Peça ao utilizador para anexar um ficheiro." });
+        }
+
+        const { name, base64, mime_type } = fileUpload;
+        const isSpreadsheet = mime_type.includes("spreadsheet") || mime_type.includes("excel") ||
+          mime_type === "text/csv" || name.endsWith(".csv") || name.endsWith(".xlsx") || name.endsWith(".xls");
+        const isPdf = mime_type === "application/pdf" || name.endsWith(".pdf");
+
+        if (!isSpreadsheet && !isPdf) {
+          return JSON.stringify({ error: `Tipo de ficheiro não suportado: ${mime_type}. Aceita: Excel (.xlsx/.xls), CSV (.csv) ou PDF (.pdf).` });
+        }
+
+        // Fetch existing patients and professionals for matching
+        const [patientsRes, professionalsRes, servicesRes] = await Promise.all([
+          supabaseAdmin.from("pacientes").select("id, full_name").eq("clinic_id", clinicId).eq("is_active", true),
+          supabaseAdmin.from("profissionais").select("id, full_name").eq("clinic_id", clinicId).eq("is_active", true),
+          supabaseAdmin.from("servicos").select("id, name").eq("clinic_id", clinicId).eq("is_active", true),
+        ]);
+
+        const existingPatients = patientsRes.data || [];
+        const existingProfessionals = professionalsRes.data || [];
+        const existingServices = servicesRes.data || [];
+
+        let extractedRows: Record<string, string>[] = [];
+
+        if (isSpreadsheet) {
+          try {
+            extractedRows = await parseSpreadsheet(base64, mime_type);
+          } catch (e) {
+            return JSON.stringify({ error: `Erro ao ler ficheiro: ${e instanceof Error ? e.message : "formato inválido"}` });
+          }
+        } else if (isPdf) {
+          // For PDF: decode, extract text via AI
+          try {
+            const binaryStr = atob(base64);
+            // Extract readable text (basic – works for text PDFs)
+            let textContent = "";
+            const textParts: string[] = [];
+            for (let i = 0; i < binaryStr.length - 4; i++) {
+              if (binaryStr[i] === "(" ) {
+                let j = i + 1;
+                let s = "";
+                while (j < binaryStr.length && binaryStr[j] !== ")") {
+                  s += binaryStr[j];
+                  j++;
+                }
+                if (s.length > 1 && /[a-zA-Z0-9]/.test(s)) textParts.push(s);
+                i = j;
+              }
+            }
+            textContent = textParts.join(" ").slice(0, 10000);
+
+            if (textContent.length < 20) {
+              return JSON.stringify({ error: "Não foi possível extrair texto do PDF. Tente converter para Excel/CSV antes de importar." });
+            }
+
+            // Use AI to extract structured data from PDF text
+            const lovableApiKey = extraContext?.lovableApiKey;
+            if (!lovableApiKey) {
+              return JSON.stringify({ error: "Chave de API não disponível para processar PDF." });
+            }
+
+            const pdfAiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${lovableApiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: "google/gemini-2.5-flash",
+                messages: [
+                  {
+                    role: "system",
+                    content: `Extraia dados tabulares do texto a seguir. Retorne um JSON array onde cada objeto tem os campos: paciente, profissional, servico, data (YYYY-MM-DD), hora (HH:MM), observacoes. Se algum campo não existir, use string vazia. Retorne APENAS o JSON array, sem markdown.`,
+                  },
+                  { role: "user", content: textContent },
+                ],
+              }),
+            });
+
+            if (pdfAiResp.ok) {
+              const pdfAiData = await pdfAiResp.json();
+              const content = pdfAiData.choices?.[0]?.message?.content || "[]";
+              const cleaned = content.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+              try {
+                extractedRows = JSON.parse(cleaned);
+              } catch {
+                return JSON.stringify({ error: "Não foi possível estruturar os dados do PDF. Tente um ficheiro Excel/CSV." });
+              }
+            } else {
+              return JSON.stringify({ error: "Erro ao processar PDF com IA." });
+            }
+          } catch (e) {
+            return JSON.stringify({ error: `Erro ao processar PDF: ${e instanceof Error ? e.message : "desconhecido"}` });
+          }
+        }
+
+        if (extractedRows.length === 0) {
+          return JSON.stringify({ error: "Nenhuma linha de dados encontrada no ficheiro." });
+        }
+
+        // Normalize column names
+        const normalizedRows = extractedRows.map((row) => {
+          const normalized: Record<string, string> = {};
+          for (const [key, val] of Object.entries(row)) {
+            const nk = normalizeText(key);
+            if (nk.includes("paciente") || nk.includes("cliente") || nk.includes("patient") || nk.includes("nome")) normalized.paciente = String(val);
+            else if (nk.includes("profissional") || nk.includes("terapeuta") || nk.includes("professional")) normalized.profissional = String(val);
+            else if (nk.includes("servico") || nk.includes("service") || nk.includes("tipo")) normalized.servico = String(val);
+            else if (nk.includes("data") || nk.includes("date") || nk.includes("dia")) normalized.data = String(val);
+            else if (nk.includes("hora") || nk.includes("time") || nk.includes("horario")) normalized.hora = String(val);
+            else if (nk.includes("obs") || nk.includes("nota") || nk.includes("note")) normalized.observacoes = String(val);
+            else if (nk.includes("telefone") || nk.includes("phone") || nk.includes("telemovel")) normalized.telefone = String(val);
+            else if (nk.includes("email") || nk.includes("mail")) normalized.email = String(val);
+            // Keep original key too
+            if (!normalized[nk]) normalized[nk] = String(val);
+          }
+          return normalized;
+        });
+
+        // Fuzzy match and insert into import_queue
+        let matchedCount = 0;
+        let needsReviewCount = 0;
+        let notFoundCount = 0;
+        let newPatientsFound: string[] = [];
+        const inserts: any[] = [];
+
+        for (const row of normalizedRows) {
+          const patientName = row.paciente || "";
+          let bestPatient: { id: string; full_name: string } | null = null;
+          let bestScore = 0;
+
+          if (patientName) {
+            for (const p of existingPatients) {
+              const score = fuzzyScore(patientName, p.full_name);
+              if (score > bestScore) {
+                bestScore = score;
+                bestPatient = p;
+              }
+            }
+          }
+
+          if (bestScore >= 0.8) matchedCount++;
+          else if (bestScore >= 0.5) needsReviewCount++;
+          else {
+            notFoundCount++;
+            if (patientName && !newPatientsFound.includes(patientName)) {
+              newPatientsFound.push(patientName);
+            }
+          }
+
+          // Match service
+          let bestService: { id: string; name: string } | null = null;
+          if (row.servico) {
+            let bestSvcScore = 0;
+            for (const s of existingServices) {
+              const score = fuzzyScore(row.servico, s.name);
+              if (score > bestSvcScore) {
+                bestSvcScore = score;
+                bestService = s;
+              }
+            }
+            if (bestSvcScore < 0.4) bestService = null;
+          }
+
+          inserts.push({
+            clinic_id: clinicId,
+            raw_data: row,
+            suggested_patient_id: bestScore >= 0.5 ? bestPatient?.id : null,
+            suggested_service_id: bestService?.id || null,
+            match_confidence: bestScore,
+            status: "pending",
+            created_by: extraContext?.userId || null,
+          });
+        }
+
+        // Batch insert into import_queue
+        const BATCH = 50;
+        let insertedTotal = 0;
+        for (let i = 0; i < inserts.length; i += BATCH) {
+          const batch = inserts.slice(i, i + BATCH);
+          const { error } = await supabaseAdmin.from("import_queue").insert(batch);
+          if (error) {
+            console.error("Import queue insert error:", error);
+            return JSON.stringify({ error: `Erro ao guardar dados: ${error.message}` });
+          }
+          insertedTotal += batch.length;
+        }
+
+        // Log
+        try {
+          await supabaseAdmin.from("ai_usage_logs").insert({
+            clinic_id: clinicId,
+            user_id: extraContext?.userId || "",
+            feature: "copilot",
+            action: "file_import",
+            model: "parse",
+          });
+        } catch { /* ignore */ }
+
+        return JSON.stringify({
+          success: true,
+          file_name: name,
+          total_rows: normalizedRows.length,
+          matched_patients: matchedCount,
+          needs_review: needsReviewCount,
+          not_found: notFoundCount,
+          new_patients_detected: newPatientsFound.slice(0, 10),
+          message: `Extraí ${normalizedRows.length} linhas do ficheiro "${name}". ${matchedCount} pacientes identificados automaticamente, ${needsReviewCount} precisam de verificação e ${notFoundCount} não encontrados.`,
+        });
+      }
+
+      case "get_import_queue": {
+        const limit = (args.limit as number) || 20;
+        const { data, error } = await supabaseAdmin
+          .from("import_queue")
+          .select("id, raw_data, suggested_patient_id, suggested_service_id, match_confidence, status, created_at")
+          .eq("clinic_id", clinicId)
+          .eq("status", "pending")
+          .order("created_at", { ascending: true })
+          .limit(limit);
+
+        if (error) return JSON.stringify({ error: error.message });
+
+        // Enrich with patient names
+        const patientIds = [...new Set((data || []).map((d) => d.suggested_patient_id).filter(Boolean))];
+        let patientMap: Record<string, string> = {};
+        if (patientIds.length > 0) {
+          const { data: patients } = await supabaseAdmin
+            .from("pacientes")
+            .select("id, full_name")
+            .in("id", patientIds);
+          for (const p of patients || []) patientMap[p.id] = p.full_name;
+        }
+
+        const items = (data || []).map((d) => ({
+          id: d.id,
+          raw: d.raw_data,
+          matched_patient: d.suggested_patient_id ? patientMap[d.suggested_patient_id] || "ID: " + d.suggested_patient_id : null,
+          confidence: d.match_confidence,
+          status: d.status,
+        }));
+
+        return JSON.stringify({ queue_items: items, total: items.length });
+      }
+
+      case "confirm_import_rows": {
+        const rowIds = (args.row_ids as string[]) || [];
+
+        // If no IDs, confirm all pending
+        let query = supabaseAdmin
+          .from("import_queue")
+          .select("id, raw_data, suggested_patient_id, suggested_service_id")
+          .eq("clinic_id", clinicId)
+          .eq("status", "pending");
+
+        if (rowIds.length > 0) {
+          query = query.in("id", rowIds);
+        }
+
+        const { data: rows, error } = await query;
+        if (error) return JSON.stringify({ error: error.message });
+        if (!rows || rows.length === 0) return JSON.stringify({ error: "Nenhum item pendente encontrado." });
+
+        // Get first professional as fallback
+        const { data: defaultProf } = await supabaseAdmin
+          .from("profissionais")
+          .select("id")
+          .eq("clinic_id", clinicId)
+          .eq("is_active", true)
+          .limit(1)
+          .single();
+
+        let created = 0;
+        let errors: string[] = [];
+
+        for (const row of rows) {
+          const raw = row.raw_data as Record<string, string>;
+          const patientId = row.suggested_patient_id;
+          if (!patientId) {
+            errors.push(`Linha sem paciente: ${raw.paciente || "desconhecido"}`);
+            continue;
+          }
+
+          // Parse date and time
+          let dateStr = raw.data || "";
+          let timeStr = raw.hora || "09:00";
+
+          // Try to normalize date
+          if (dateStr && !dateStr.includes("-")) {
+            // Try DD/MM/YYYY
+            const parts = dateStr.split(/[\/\.]/);
+            if (parts.length === 3) {
+              const [d, m, y] = parts;
+              dateStr = `${y.length === 2 ? "20" + y : y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+            }
+          }
+
+          if (!dateStr) {
+            errors.push(`Linha sem data: ${raw.paciente || "desconhecido"}`);
+            continue;
+          }
+
+          // Normalize time
+          if (timeStr && !timeStr.includes(":")) {
+            timeStr = timeStr.padStart(4, "0");
+            timeStr = timeStr.slice(0, 2) + ":" + timeStr.slice(2);
+          }
+
+          const startTime = `${dateStr}T${timeStr}:00`;
+          const endDate = new Date(startTime);
+          endDate.setMinutes(endDate.getMinutes() + 60);
+          const endTime = endDate.toISOString();
+
+          const isPast = new Date(startTime) < new Date();
+
+          const { error: sessError } = await supabaseAdmin.from("sessoes").insert({
+            clinic_id: clinicId,
+            paciente_id: patientId,
+            profissional_id: defaultProf?.id || "",
+            servico_id: row.suggested_service_id || null,
+            start_time: startTime,
+            end_time: endTime,
+            notes: raw.observacoes || null,
+            status: isPast ? "realizado" : "agendado",
+            payment_status: "pendente",
+          });
+
+          if (sessError) {
+            errors.push(`Erro para ${raw.paciente || "?"}: ${sessError.message}`);
+          } else {
+            created++;
+            // Mark as confirmed
+            await supabaseAdmin.from("import_queue").update({ status: "confirmed" }).eq("id", row.id);
+          }
+        }
+
+        return JSON.stringify({
+          success: true,
+          sessions_created: created,
+          errors: errors.length > 0 ? errors : undefined,
+          message: `${created} sessões criadas com sucesso.${errors.length > 0 ? ` ${errors.length} erros.` : ""}`,
+        });
+      }
+
+      case "register_new_patients": {
+        const patients = (args.patients as Array<{ full_name: string; phone?: string; email?: string }>) || [];
+        if (patients.length === 0) return JSON.stringify({ error: "Nenhum paciente para registar." });
+
+        let created = 0;
+        const results: Array<{ name: string; id?: string; error?: string }> = [];
+
+        for (const p of patients) {
+          if (!p.full_name || p.full_name.trim().length < 2) {
+            results.push({ name: p.full_name || "", error: "Nome inválido" });
+            continue;
+          }
+
+          const { data, error } = await supabaseAdmin.from("pacientes").insert({
+            clinic_id: clinicId,
+            full_name: p.full_name.trim(),
+            phone: p.phone || null,
+            email: p.email || null,
+          }).select("id").single();
+
+          if (error) {
+            results.push({ name: p.full_name, error: error.message });
+          } else {
+            results.push({ name: p.full_name, id: data?.id });
+            created++;
+          }
+        }
+
+        return JSON.stringify({
+          success: true,
+          patients_created: created,
+          results,
+          message: `${created} pacientes registados com sucesso.`,
+        });
       }
 
       default:
@@ -447,7 +934,16 @@ CAPACIDADES:
 - Listar pagamentos pendentes
 - Verificar packs a vencer
 - Resumo diário completo
-- Listar pacientes inativos`;
+- Listar pacientes inativos
+
+IMPORTAÇÃO DE FICHEIROS:
+- Quando o utilizador envia um ficheiro (Excel, CSV ou PDF), use parse_import_file para extrair e processar os dados.
+- SEMPRE apresente um resumo dos dados extraídos antes de qualquer ação (quantas linhas, quantos matches, quantos precisam revisão).
+- Use get_import_queue para mostrar os dados em formato de tabela quando o utilizador pedir para revisar.
+- Para confirmar a importação, use confirm_import_rows APENAS após confirmação explícita do utilizador.
+- Se houver pacientes não encontrados na base, pergunte se deve registar como novos usando register_new_patients.
+- Apresente os dados extraídos em tabela markdown simples para fácil leitura.
+- Se o ficheiro contiver dados de novos pacientes (com nome, telefone, email), proponha o cadastro antes de criar sessões.`;
 
 // ── Main handler ───────────────────────────────────────────────────────────
 serve(async (req) => {
@@ -500,7 +996,7 @@ serve(async (req) => {
     }
     const clinicId = profile.clinic_id;
 
-    const { messages, context } = await req.json();
+    const { messages, context, file_upload } = await req.json();
 
     // Build context message
     let contextNote = `Contexto: Data/hora atual: ${new Date().toISOString()}. Clinic ID: ${clinicId}.`;
@@ -508,12 +1004,20 @@ serve(async (req) => {
     if (context?.patientId) contextNote += ` Paciente selecionado ID: ${context.patientId}.`;
     if (context?.patientName) contextNote += ` Paciente selecionado: ${context.patientName}.`;
     if (context?.selectedDate) contextNote += ` Data selecionada na agenda: ${context.selectedDate}.`;
+    if (file_upload) contextNote += ` FICHEIRO ANEXADO: "${file_upload.name}" (${file_upload.mime_type}). Use parse_import_file para processar.`;
 
     const fullMessages = [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "system", content: contextNote },
       ...messages,
     ];
+
+    // Extra context for tool execution
+    const toolExtraContext = {
+      fileUpload: file_upload || undefined,
+      userId,
+      lovableApiKey,
+    };
 
     // Call AI with tools — loop for tool calls
     let currentMessages = [...fullMessages];
@@ -530,7 +1034,7 @@ serve(async (req) => {
           model: "google/gemini-3-flash-preview",
           messages: currentMessages,
           tools: toolDefinitions,
-          stream: round === MAX_TOOL_ROUNDS - 1 ? true : false, // Only stream final round
+          stream: round === MAX_TOOL_ROUNDS - 1 ? true : false,
         }),
       });
 
@@ -574,7 +1078,7 @@ serve(async (req) => {
             toolArgs = {};
           }
 
-          const result = await executeTool(tc.function.name, toolArgs, adminClient, clinicId);
+          const result = await executeTool(tc.function.name, toolArgs, adminClient, clinicId, toolExtraContext);
           currentMessages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -594,7 +1098,7 @@ serve(async (req) => {
           clinic_id: clinicId,
           user_id: userId,
           feature: "copilot",
-          action: "chat",
+          action: file_upload ? "file_import_chat" : "chat",
           model: "google/gemini-3-flash-preview",
           tokens_used: responseData.usage?.total_tokens || null,
         });
@@ -606,7 +1110,6 @@ serve(async (req) => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          // Send the content as a single SSE chunk
           const sseData = JSON.stringify({
             choices: [{ delta: { content: textContent }, finish_reason: null }],
           });
