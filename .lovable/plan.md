@@ -1,150 +1,142 @@
 
-Objetivo: adicionar IA ao sistema com impacto real (clínico + gestão), sem quebrar os fluxos atuais e mantendo segurança de dados de pacientes.
+# Plano: Evolucao por Voz + Briefing Pre-Sessao
 
-Diagnóstico da base atual (análise do código)
-- Prontuários já têm ótima base para IA:
-  - Página e fluxo central em `src/pages/Prontuarios.tsx`
-  - Modais de edição clínica e evolução: `EditClinicalDataModal.tsx`, `NewEvolutionModal.tsx`
-  - Relatórios clínicos já estruturados: `ClinicalReportsList.tsx`, `NewClinicalReportModal.tsx`, `ClinicalReportService.ts`
-- Gestão comercial/financeira/engajamento já está pronta para receber “insights IA”:
-  - `src/pages/Comercial.tsx` + `LeadService.ts`
-  - `src/pages/Financeiro.tsx` + `FinancialService.ts`
-  - `src/pages/Engajamento.tsx` + `EngagementService.ts`
-- Notificações e dashboard já existem para distribuição de alertas inteligentes:
-  - `NotificationService.ts`, `NotificationBell.tsx`, `Dashboard.tsx`
-- Backend já usa funções server-side e já possui segredo de IA disponível:
-  - segredo `LOVABLE_API_KEY` configurado
-- Segurança atual está boa por clínica (RLS por `clinic_id`), então IA pode ser adicionada mantendo isolamento por clínica.
+## Visao Geral
 
-Onde incluir IA (prioridade por ROI)
-1) Prontuários: Resumo clínico automático por paciente
-- Botão “Gerar Resumo IA” no tab Evoluções.
-- Entrada: evoluções do prontuário + dor + dados estruturados.
-- Saída: resumo de progresso, alertas clínicos e próximos focos terapêuticos.
-- Benefício: poupa tempo na revisão de histórico.
+Dois recursos complementares que fecham o ciclo clinico: o fisioterapeuta dita a evolucao por voz apos a sessao (Recurso 1), e antes da proxima sessao recebe automaticamente um briefing com o resumo do que aconteceu (Recurso 2).
 
-2) Prontuários: Assistente de escrita em Anamnese/Diagnóstico/Objetivos
-- Botões “Sugerir IA” dentro do `EditClinicalDataModal`.
-- Modo “melhorar texto” e “expandir com linguagem técnica”.
-- Benefício: padroniza linguagem clínica e acelera preenchimento.
+---
 
-3) Relatórios clínicos: rascunho automático
-- Em `NewClinicalReportModal`, adicionar “Gerar com IA” no tab de conteúdo.
-- Usa período + evoluções importadas para montar conteúdo inicial.
-- Benefício: reduz drasticamente o tempo de geração de relatório.
+## Recurso 1 -- Evolucao por Voz com IA
 
-4) Engajamento: risco de churn com explicação e mensagem sugerida
-- Evoluir `ChurnRiskPanel` (hoje baseado só em dias sem sessão).
-- IA gera risco, motivo e texto de reativação personalizado.
-- Benefício: campanhas mais assertivas.
+### O que muda
 
-5) Financeiro: insights acionáveis
-- Novo card “Insights IA” em `Financeiro.tsx`.
-- IA analisa KPIs já existentes (caixa vs competência, ticket, volume).
-- Benefício: transforma números em decisão prática.
+Adicionar um botao de microfone no modal `NewEvolutionModal` ao lado do campo "Descricao do Atendimento". O fluxo: gravar audio -> transcrever -> estruturar em SOAP -> preencher campo para revisao.
 
-6) Comercial: score de lead e próximo passo
-- Em `NewLeadModal` e `LeadCard`, mostrar classificação (alto/médio/baixo potencial).
-- Sugere abordagem comercial.
-- Benefício: priorização de pipeline.
+### Backend
 
-7) Dashboard: briefing diário inteligente
-- Card no topo do dashboard com resumo do dia (agenda, riscos, prioridades).
-- Benefício: visão executiva rápida ao abrir o sistema.
+**Edge Function `ai-voice-evolution`**
+- Recebe o audio em base64 (ou texto ja transcrito)
+- Etapa 1: Transcreve usando Whisper via Lovable AI Gateway (o gateway suporta modelos OpenAI, entao usaremos a API de completions com instrucao para estruturar o texto -- ja que o gateway nao expoe o endpoint /audio/transcriptions diretamente)
+- **Alternativa pratica**: Usar a Web Speech API (nativa do browser) para transcricao no cliente (zero custo, sem API externa), e enviar o texto transcrito para a Edge Function que apenas estrutura em SOAP usando `google/gemini-3-flash-preview`
+- Etapa 2: Estrutura o texto em formato SOAP (Subjetivo, Objetivo, Avaliacao, Plano)
+- Retorna JSON estruturado com transcricao bruta + versao SOAP
+- Loga uso em `ai_usage_logs`
 
-8) Portal do paciente (fase avançada): resumo de diário + orientação não diagnóstica
-- Baseado em `PatientDiaryService`.
-- Benefício: mais engajamento e autocuidado entre sessões.
+**Decisao tecnica**: A Web Speech API (SpeechRecognition) funciona bem em Chrome/Edge e e gratuita. A transcricao acontece no browser, o texto bruto vai para o backend que so faz a estruturacao SOAP. Isso evita enviar audio binario e reduz custos.
 
-Arquitetura proposta (seguindo padrões existentes)
-Frontend
-- Criar `src/services/AIService.ts` para centralizar chamadas às funções backend (padrão semelhante aos serviços atuais).
-- Criar componentes reutilizáveis:
-  - `AIAssistButton` (estado loading, erro, retry)
-  - `AISuggestionPanel` (aceitar/rejeitar sugestão)
-- Importante: não editar `DataContext.tsx` (arquivo sensível/congelado); integrações serão em páginas/componentes e novos serviços.
+### Frontend
 
-Backend (funções)
-- Criar funções dedicadas por caso de uso:
-  - `ai-clinical-summary`
-  - `ai-clinical-assist`
-  - `ai-report-draft`
-  - `ai-churn-analysis`
-  - `ai-financial-insights`
-  - `ai-lead-scoring`
-  - `ai-daily-briefing`
-- Padrão técnico:
-  - validar usuário autenticado
-  - determinar `clinic_id` no backend (não confiar no front)
-  - buscar somente dados da clínica do usuário
-  - enviar prompt ao modelo de IA suportado (ex.: `google/gemini-2.5-flash`)
-  - retornar JSON estruturado (não texto livre solto)
+**Componente `VoiceRecordButton`** (novo)
+- Botao de microfone com estados: idle, recording (pulsa vermelho), transcribing, structuring
+- Usa `webkitSpeechRecognition` / `SpeechRecognition` API
+- Suporte a gravacao continua com `continuous: true` e `interimResults: true`
+- Fallback: se browser nao suporta, mostra tooltip "Nao suportado neste navegador"
+- Ao finalizar: envia texto transcrito para edge function `ai-voice-evolution`
 
-Dados e governança (recomendado)
-- Migração 1: ampliar `clinic_settings` com flags de IA (ex.: `ai_enabled`, `ai_clinical_enabled`, `ai_management_enabled`).
-- Migração 2: nova tabela `ai_usage_logs` (metadados de uso e erros, sem armazenar conteúdo sensível completo).
-- RLS:
-  - leitura por clínica
-  - escrita feita por funções backend com validação de clínica
-- Auditoria:
-  - registrar “gerou sugestão IA” e “aceitou sugestão IA” com usuário e timestamp.
+**Alteracoes em `NewEvolutionModal`**
+- Adicionar `VoiceRecordButton` ao lado do label "Descricao do Atendimento"
+- Quando a IA retorna o SOAP, preencher o campo `descricao` com o texto formatado
+- Mostrar `AISuggestionPanel` com preview do SOAP para aceitar/rejeitar
+- Guardar metadados extras no `structured_data` JSONB: `{ voice_recording_at, raw_transcription, soap_structured: true }`
 
-Sequência de implementação
-Fase 0 (fundação e segurança)
-1. Criar contratos de payload/resposta no frontend (`AIService`).
-2. Criar funções backend base com autenticação, validação e tratamento de erro.
-3. Implementar fallback de erro amigável no frontend (429, 402, timeout, indisponibilidade).
-4. Adicionar flags de IA nas configurações da clínica.
+**Sem alteracoes no banco de dados**: Os campos `descricao` (texto SOAP formatado) e `structured_data` (JSONB com metadados de voz) ja existem na tabela `evolucoes_clinicas`.
 
-Fase 1 (impacto clínico imediato)
-1. Resumo IA em Prontuários.
-2. Assistente IA em Anamnese/Diagnóstico/Objetivos.
-3. Geração IA de rascunho de relatório clínico.
-4. Validação clínica: saída sempre revisável, nunca auto-gravada sem confirmação humana.
+### AIService
 
-Fase 2 (gestão e crescimento)
-1. Churn inteligente em Engajamento.
-2. Insights financeiros em Financeiro.
-3. Lead scoring em Comercial.
+Adicionar metodo:
+```
+static async structureVoiceEvolution(payload: {
+  rawTranscription: string;
+  patientName: string;
+  painLevel?: number;
+}): Promise<AIResponse<VoiceEvolutionResult>>
+```
 
-Fase 3 (orquestração e experiência)
-1. Briefing diário no Dashboard.
-2. Integração com notificações para highlights IA.
-3. (Opcional) módulo no portal do paciente com orientação textual segura.
+---
 
-Regras de segurança e qualidade (obrigatórias)
-- Não substituir julgamento clínico: IA como sugestão assistida.
-- Não auto-salvar texto gerado sem confirmação.
-- Minimização de dados enviados para IA (somente campos necessários).
-- Sanitizar e truncar contexto para evitar excesso de tokens e exposição desnecessária.
-- Mensagens de erro claras com retorno ao fluxo manual.
-- Feature flags para desligar IA por módulo imediatamente, se necessário.
+## Recurso 2 -- Briefing Automatico Pre-Sessao
 
-Testes e validação (aceite)
-1. Teste end-to-end dos fluxos de UI:
-   - gerar resumo IA
-   - sugerir texto e aceitar/rejeitar
-   - gerar relatório IA e editar antes de salvar
-2. Testes de autorização:
-   - usuário de outra clínica nunca acessa dados indevidos
-   - usuário sem permissão de módulo não vê botões IA
-3. Testes de resiliência:
-   - simular 429/402/timeout e garantir fallback funcional
-4. Testes de regressão:
-   - fluxo manual atual continua funcionando sem IA
+### O que muda
 
-Confirmações que preciso obter antes de executar (checkpoint)
-1. Ordem de prioridade inicial:
-- opção recomendada: Resumo clínico + Assistente de escrita + Relatório IA
-2. Política de uso:
-- IA apenas para sugestão (sem auto-save) como padrão
-3. Escopo de perfis:
-- liberar IA para admin/profissional inicialmente
-4. Modelo padrão:
-- `google/gemini-2.5-flash` (equilíbrio custo/velocidade/qualidade)
+Card de briefing que aparece automaticamente na Agenda e no Prontuario 30 minutos antes de cada sessao agendada. Zero cliques.
 
-Resultado esperado ao final
-- Equipa clínica escreve menos e decide melhor.
-- Gestão ganha visão prática (churn, finanças, pipeline).
-- Sistema mantém segurança por clínica e controle operacional.
-- IA entra de forma incremental, com risco baixo e retorno rápido.
+### Backend
+
+**Edge Function `ai-briefing-generator`** (nova)
+- Recebe: `patient_id`, `session_id` (proxima sessao)
+- Consulta no backend: ultima evolucao do paciente, historico de faltas, contagem de sessoes
+- Gera resumo de 2-3 linhas da ultima evolucao
+- Retorna JSON estruturado:
+  - `last_evolution_summary`: resumo IA da ultima evolucao
+  - `today_plan`: campo "Plano" extraido da ultima evolucao (se SOAP)
+  - `absence_alert`: booleano + contagem de faltas recentes
+  - `last_pain_level`: nivel de dor da ultima sessao
+  - `session_number`: "Sessao X de Y"
+- Cache: resultado salvo em nova tabela `session_briefings` para evitar chamadas repetidas
+
+### Base de dados
+
+**Nova tabela `session_briefings`**
+```
+id: uuid (PK)
+clinic_id: uuid (FK clinics, NOT NULL)
+session_id: uuid (FK sessoes, NOT NULL, UNIQUE)
+patient_id: uuid (FK pacientes, NOT NULL)
+briefing_data: jsonb (NOT NULL) -- conteudo do briefing
+generated_at: timestamptz (NOT NULL, DEFAULT now())
+expires_at: timestamptz -- invalida se evolucao for editada
+```
+- RLS: leitura/escrita por clinic_id (mesmo padrao das outras tabelas)
+- Indice unico em `session_id` para garantir 1 briefing por sessao
+
+### Frontend
+
+**Componente `PreSessionBriefingCard`** (novo)
+- Card compacto com: resumo, plano do dia, alerta de faltas, dor, numero da sessao
+- Cores: alerta de faltas em vermelho/amarelo, dor com a mesma escala de cores existente
+- Botao "Atualizar" para forcar regeneracao
+
+**Integracao na Agenda (`AgendaDesktopGrid` e `AgendaMobileTimeline`)**
+- Para sessoes que comecam nos proximos 30 minutos: mostrar indicador visual (icone de briefing)
+- Ao clicar na sessao, o `SessionManagementModal` exibe o briefing card no topo
+
+**Integracao nos Prontuarios**
+- Na aba "Evolucoes", se o paciente tem sessao nas proximas horas, mostrar o briefing card acima da lista de evolucoes
+
+**Logica de carregamento**
+- Hook `usePreSessionBriefing(sessionId, patientId)`:
+  1. Verifica se existe briefing cacheado em `session_briefings`
+  2. Se nao existe ou expirou, chama `ai-briefing-generator`
+  3. Salva resultado no cache
+  4. Retorna dados para o componente
+
+### AIService
+
+Adicionar metodo:
+```
+static async generatePreSessionBriefing(payload: {
+  patientId: string;
+  sessionId: string;
+}): Promise<AIResponse<PreSessionBriefing>>
+```
+
+---
+
+## Sequencia de Implementacao
+
+1. **Migracao**: criar tabela `session_briefings` com RLS
+2. **Edge Functions**: criar `ai-voice-evolution` e `ai-briefing-generator`
+3. **Frontend Recurso 1**: `VoiceRecordButton` + integracao no `NewEvolutionModal`
+4. **Frontend Recurso 2**: `PreSessionBriefingCard` + hook + integracao na Agenda e Prontuarios
+5. **AIService**: adicionar os 2 novos metodos
+6. **Registar funcoes** em `config.toml`
+
+## Detalhes Tecnicos
+
+- Modelo IA: `google/gemini-3-flash-preview` (rapido, bom para estruturacao de texto)
+- Transcricao: Web Speech API (browser-native, zero custo)
+- Cache de briefings: tabela dedicada, 1 registro por sessao, invalidado se nova evolucao for criada
+- Seguranca: autenticacao + validacao clinic_id em ambas edge functions
+- Logging: ambas funcoes registam uso em `ai_usage_logs`
+- Nenhuma alteracao em `DataContext.tsx`
