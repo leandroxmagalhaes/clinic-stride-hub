@@ -22,6 +22,9 @@ import { Activity, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { DynamicFormRenderer } from "./DynamicFormRenderer";
+import { VoiceRecordButton } from "./VoiceRecordButton";
+import { AISuggestionPanel } from "@/components/ai/AISuggestionPanel";
+import { AIService } from "@/services/AIService";
 import { 
   SpecialtyService, 
   type SpecialtyTemplate, 
@@ -64,6 +67,11 @@ export function NewEvolutionModal({
   const [descricao, setDescricao] = useState("");
   const [escalaDor, setEscalaDor] = useState(5);
   const [structuredData, setStructuredData] = useState<StructuredData>({});
+  
+  // Voice + AI state
+  const [isStructuring, setIsStructuring] = useState(false);
+  const [soapSuggestion, setSoapSuggestion] = useState<string | null>(null);
+  const [rawTranscription, setRawTranscription] = useState<string | null>(null);
 
   // Load templates on mount
   useEffect(() => {
@@ -139,11 +147,22 @@ export function NewEvolutionModal({
         selectedTemplate.schema.length > 0 && 
         Object.keys(structuredData).length > 0;
 
+      // Merge voice metadata into structured_data if applicable
+      let finalStructuredData: StructuredData | null = hasStructuredData ? { ...structuredData } : null;
+      if (rawTranscription) {
+        finalStructuredData = {
+          ...(finalStructuredData || {}),
+          voice_recording_at: new Date().toISOString(),
+          raw_transcription: rawTranscription,
+          soap_structured: "true",
+        } as StructuredData;
+      }
+
       onSubmit({
         descricao,
         escala_dor: escalaDor,
         specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId : null,
-        structured_data: hasStructuredData ? structuredData : null,
+        structured_data: finalStructuredData,
       });
 
       // Reset form
@@ -157,6 +176,9 @@ export function NewEvolutionModal({
     setDescricao("");
     setEscalaDor(5);
     setStructuredData({});
+    setSoapSuggestion(null);
+    setRawTranscription(null);
+    setIsStructuring(false);
     // Reset to patient specialty or general
     if (patientSpecialtyId) {
       setSelectedTemplateId(patientSpecialtyId);
@@ -171,6 +193,40 @@ export function NewEvolutionModal({
   const handleClose = () => {
     resetForm();
     onClose();
+  };
+
+  const handleVoiceTranscription = async (rawText: string) => {
+    setRawTranscription(rawText);
+    try {
+      const result = await AIService.structureVoiceEvolution({
+        rawTranscription: rawText,
+        patientName,
+        painLevel: escalaDor,
+      });
+      setSoapSuggestion(result.data.formattedText);
+    } catch (err) {
+      console.error("Error structuring voice:", err);
+      toast.error("Erro ao estruturar texto com IA. O texto bruto foi mantido.");
+      setDescricao(rawText);
+      setSoapSuggestion(null);
+    } finally {
+      setIsStructuring(false);
+    }
+  };
+
+  const handleAcceptSoap = (text: string) => {
+    setDescricao(text);
+    setSoapSuggestion(null);
+    toast.success("Texto SOAP aceite!");
+  };
+
+  const handleRejectSoap = () => {
+    if (rawTranscription) {
+      setDescricao(rawTranscription);
+    }
+    setSoapSuggestion(null);
+    setRawTranscription(null);
+    toast.info("Sugestão rejeitada. Transcrição bruta aplicada.");
   };
 
   const getPainColor = (level: number) => {
@@ -254,11 +310,36 @@ export function NewEvolutionModal({
 
             {/* Description */}
             <div className="space-y-2">
-              <Label>Descrição do Atendimento *</Label>
+              <div className="flex items-center justify-between">
+                <Label>Descrição do Atendimento *</Label>
+                <VoiceRecordButton
+                  onTranscriptionComplete={handleVoiceTranscription}
+                  onStructuringStart={() => setIsStructuring(true)}
+                  disabled={isSubmitting || isStructuring}
+                />
+              </div>
+              
+              {/* SOAP Suggestion Panel */}
+              {soapSuggestion && (
+                <AISuggestionPanel
+                  suggestion={soapSuggestion}
+                  onAccept={handleAcceptSoap}
+                  onReject={handleRejectSoap}
+                  title="Evolução SOAP (por voz)"
+                />
+              )}
+              
+              {isStructuring && (
+                <div className="flex items-center gap-2 p-3 rounded-lg border border-primary/20 bg-primary/5 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  A estruturar transcrição em formato SOAP...
+                </div>
+              )}
+              
               <Textarea
                 value={descricao}
                 onChange={(e) => setDescricao(e.target.value)}
-                placeholder="Descreva a evolução do utente, procedimentos realizados, observações..."
+                placeholder="Descreva a evolução do utente, procedimentos realizados, observações... ou use o microfone para ditar."
                 rows={showDynamicForm ? 4 : 6}
                 className="resize-none"
               />

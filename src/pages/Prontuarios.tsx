@@ -36,6 +36,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useClinicInfo } from "@/hooks/useClinicInfo";
 import { AIService, type AIClinicalSummary } from "@/services/AIService";
 import { AIAssistButton } from "@/components/ai/AIAssistButton";
+import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
+import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 
 // Prontuario data interface
 interface ProntuarioData {
@@ -73,6 +75,7 @@ export default function Prontuarios() {
   // Specialty templates cache for displaying structured data
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
   const [aiSummary, setAiSummary] = useState<AIClinicalSummary | null>(null);
+  const [upcomingSession, setUpcomingSession] = useState<{ id: string; patientId: string } | null>(null);
 
   // Load templates on mount
   useEffect(() => {
@@ -129,6 +132,39 @@ export default function Prontuarios() {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, patients, prontuariosLoading]);
+
+  // Fetch upcoming session for selected patient
+  useEffect(() => {
+    if (!selectedProntuario?.paciente_id) {
+      setUpcomingSession(null);
+      return;
+    }
+    const fetchUpcoming = async () => {
+      const now = new Date().toISOString();
+      const inHours = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("sessoes")
+        .select("id, paciente_id")
+        .eq("paciente_id", selectedProntuario.paciente_id)
+        .gte("start_time", now)
+        .lte("start_time", inHours)
+        .eq("status", "agendado")
+        .order("start_time", { ascending: true })
+        .limit(1);
+      if (data?.[0]) {
+        setUpcomingSession({ id: data[0].id, patientId: data[0].paciente_id });
+      } else {
+        setUpcomingSession(null);
+      }
+    };
+    fetchUpcoming();
+  }, [selectedProntuario?.paciente_id]);
+
+  // Pre-session briefing hook
+  const { briefing: prontuarioBriefing, isLoading: briefingLoading, refresh: refreshBriefing } = usePreSessionBriefing(
+    upcomingSession?.id || null,
+    upcomingSession?.patientId || null
+  );
 
   const filteredPacientes = patients.filter((p) =>
     p.full_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -532,6 +568,16 @@ export default function Prontuarios() {
                       </div>
                     </CardHeader>
                     <CardContent>
+                      {/* Pre-Session Briefing */}
+                      {(prontuarioBriefing || briefingLoading) && upcomingSession && (
+                        <div className="mb-6">
+                          <PreSessionBriefingCard
+                            briefing={prontuarioBriefing!}
+                            isLoading={briefingLoading}
+                            onRefresh={refreshBriefing}
+                          />
+                        </div>
+                      )}
                       {/* AI Summary Panel */}
                       {aiSummary && (
                         <div className="mb-6 p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3 animate-fade-in">

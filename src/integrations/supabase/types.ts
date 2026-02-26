@@ -1411,6 +1411,72 @@ export type Database = {
           },
         ]
       }
+      session_briefings: {
+        Row: {
+          briefing_data: Json
+          clinic_id: string
+          expires_at: string | null
+          generated_at: string
+          id: string
+          patient_id: string
+          session_id: string
+        }
+        Insert: {
+          briefing_data: Json
+          clinic_id: string
+          expires_at?: string | null
+          generated_at?: string
+          id?: string
+          patient_id: string
+          session_id: string
+        }
+        Update: {
+          briefing_data?: Json
+          clinic_id?: string
+          expires_at?: string | null
+          generated_at?: string
+          id?: string
+          patient_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_briefings_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_briefings_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_briefings_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "session_briefings_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "session_briefings_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sessoes: {
         Row: {
           clinic_id: string

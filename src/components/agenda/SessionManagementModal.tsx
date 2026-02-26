@@ -58,6 +58,8 @@ import {
 import { Session, SessionService } from "@/services/SessionService";
 import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
 import { AddCreditsModal, CreditPurchaseData } from "@/components/patients/AddCreditsModal";
+import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
+import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 
 // Session status types matching business rules
 export type SessionStatus = "agendado" | "confirmado" | "realizado" | "cancelado" | "falta";
@@ -138,6 +140,18 @@ export function SessionManagementModal({
   const [dupDate, setDupDate] = useState<Date | undefined>(undefined);
   const [dupHour, setDupHour] = useState<number | undefined>(undefined);
   const [dupMinute, setDupMinute] = useState<number>(0);
+
+  // Pre-session briefing (must be before early return)
+  const { briefing, isLoading: briefingLoading, refresh: refreshBriefing } = usePreSessionBriefing(
+    session?.id || null,
+    session?.paciente_id || null
+  );
+
+  // Check if session is within 30 min — show briefing
+  const isUpcoming = session
+    ? new Date(session.start_time).getTime() - Date.now() < 30 * 60 * 1000 &&
+      new Date(session.start_time).getTime() > Date.now()
+    : false;
 
   // Reset state when session changes
   useEffect(() => {
@@ -412,6 +426,15 @@ export function SessionManagementModal({
             </div>
 
             <Separator />
+
+            {/* Pre-Session Briefing */}
+            {(isUpcoming || briefing) && (
+              <PreSessionBriefingCard
+                briefing={briefing!}
+                isLoading={briefingLoading}
+                onRefresh={refreshBriefing}
+              />
+            )}
 
             {/* Reschedule Section */}
             {!isTerminalStatus && (
