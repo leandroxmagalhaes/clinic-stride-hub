@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.ai-briefing-generator]
 verify_jwt = false
+
+[functions.ai-copilot-agent]
+verify_jwt = false

@@ -5,6 +5,9 @@ import { AppFooter } from './AppFooter';
 import { PersistentHeader } from './PersistentHeader';
 import { PageTransition } from './PageTransition';
 import { PageTitleProvider } from '@/contexts/PageTitleContext';
+import { CopilotFAB } from '@/components/copilot/CopilotFAB';
+import { CopilotChat } from '@/components/copilot/CopilotChat';
+import { useCopilot } from '@/hooks/useCopilot';
 
 interface PersistentLayoutProps {
   children: ReactNode;
@@ -14,6 +17,8 @@ interface PersistentLayoutProps {
 const MemoizedFooter = memo(AppFooter);
 
 export function PersistentLayout({ children }: PersistentLayoutProps) {
+  const { messages, isOpen, isStreaming, togglePanel, sendMessage, clearMessages, setIsOpen } = useCopilot();
+
   return (
     <PageTitleProvider>
       <SidebarProvider>
@@ -28,6 +33,15 @@ export function PersistentLayout({ children }: PersistentLayoutProps) {
           <MemoizedFooter />
         </SidebarInset>
       </SidebarProvider>
+      <CopilotFAB onClick={togglePanel} isOpen={isOpen} />
+      <CopilotChat
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        messages={messages}
+        isStreaming={isStreaming}
+        onSend={sendMessage}
+        onClear={clearMessages}
+      />
     </PageTitleProvider>
   );
 }

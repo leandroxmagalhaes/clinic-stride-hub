@@ -604,6 +604,81 @@ export type Database = {
           },
         ]
       }
+      import_queue: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          import_date: string | null
+          match_confidence: number | null
+          raw_data: Json
+          status: string
+          suggested_patient_id: string | null
+          suggested_service_id: string | null
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          import_date?: string | null
+          match_confidence?: number | null
+          raw_data: Json
+          status?: string
+          suggested_patient_id?: string | null
+          suggested_service_id?: string | null
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          import_date?: string | null
+          match_confidence?: number | null
+          raw_data?: Json
+          status?: string
+          suggested_patient_id?: string | null
+          suggested_service_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_queue_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_queue_suggested_patient_id_fkey"
+            columns: ["suggested_patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_queue_suggested_patient_id_fkey"
+            columns: ["suggested_patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "import_queue_suggested_patient_id_fkey"
+            columns: ["suggested_patient_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "import_queue_suggested_service_id_fkey"
+            columns: ["suggested_service_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pacientes: {
         Row: {
           address: string | null
