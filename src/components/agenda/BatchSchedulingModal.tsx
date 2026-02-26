@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -23,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Upload, Download, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle, Clock, Loader2 } from "lucide-react";
+import { Upload, Download, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle, Clock, Loader2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -32,6 +33,7 @@ import {
   MatchConfidence,
   NamedEntity,
 } from "@/services/BatchSchedulingService";
+import type { Json } from "@/integrations/supabase/types";
 
 interface BatchSchedulingModalProps {
   isOpen: boolean;
@@ -50,6 +52,18 @@ interface BatchSchedulingModalProps {
 }
 
 type Step = "upload" | "review" | "confirm";
+
+interface ImportQueueRow {
+  id: string;
+  raw_data: Record<string, unknown>;
+  suggested_patient_id: string | null;
+  suggested_service_id: string | null;
+  match_confidence: number | null;
+  status: string;
+}
+
+const PAGE_SIZE = 50;
+const BATCH_SIZE = 50;
 
 function ConfidenceBadge({ confidence }: { confidence: MatchConfidence }) {
   switch (confidence) {
@@ -106,6 +120,51 @@ function EntitySelect({
   );
 }
 
+// Serialize ParsedRow to JSON-safe format for import_queue
+function rowToRawData(row: ParsedRow): Json {
+  return {
+    rowIndex: row.rowIndex,
+    rawPaciente: row.rawPaciente,
+    rawProfissional: row.rawProfissional,
+    rawServico: row.rawServico,
+    rawData: row.rawData,
+    rawHora: row.rawHora,
+    rawMinuto: row.rawMinuto,
+    rawObservacoes: row.rawObservacoes,
+    pacienteMatch: row.pacienteMatch,
+    profissionalMatch: row.profissionalMatch,
+    servicoMatch: row.servicoMatch,
+    parsedDate: row.parsedDate?.toISOString() || null,
+    isRetroactive: row.isRetroactive,
+    approved: row.approved,
+    validationError: row.validationError,
+  } as unknown as Json;
+}
+
+// Deserialize from import_queue raw_data back to ParsedRow
+function rawDataToRow(raw: Record<string, unknown>, queueId: string): ParsedRow & { queueId: string } {
+  return {
+    queueId,
+    rowIndex: raw.rowIndex as number,
+    rawPaciente: raw.rawPaciente as string,
+    rawProfissional: raw.rawProfissional as string,
+    rawServico: raw.rawServico as string,
+    rawData: raw.rawData as string,
+    rawHora: raw.rawHora as number | null,
+    rawMinuto: raw.rawMinuto as number | null,
+    rawObservacoes: (raw.rawObservacoes as string) || "",
+    pacienteMatch: raw.pacienteMatch as ParsedRow["pacienteMatch"],
+    profissionalMatch: raw.profissionalMatch as ParsedRow["profissionalMatch"],
+    servicoMatch: raw.servicoMatch as ParsedRow["servicoMatch"],
+    parsedDate: raw.parsedDate ? new Date(raw.parsedDate as string) : null,
+    isRetroactive: raw.isRetroactive as boolean,
+    approved: raw.approved as boolean,
+    validationError: raw.validationError as string | null,
+  };
+}
+
+type PersistedRow = ParsedRow & { queueId: string };
+
 export function BatchSchedulingModal({
   isOpen,
   onClose,
@@ -116,9 +175,12 @@ export function BatchSchedulingModal({
   onSessionsCreated,
 }: BatchSchedulingModalProps) {
   const [step, setStep] = useState<Step>("upload");
-  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [rows, setRows] = useState<PersistedRow[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingQueue, setIsLoadingQueue] = useState(false);
+  const [page, setPage] = useState(0);
+  const [saveProgress, setSaveProgress] = useState<{ current: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const patientEntities: NamedEntity[] = useMemo(
@@ -134,21 +196,55 @@ export function BatchSchedulingModal({
     [services]
   );
 
-  const resetModal = useCallback(() => {
-    setStep("upload");
-    setRows([]);
-    setIsParsing(false);
-    setIsSaving(false);
-  }, []);
+  // Load existing pending rows from import_queue on modal open
+  useEffect(() => {
+    if (!isOpen || !clinicId) return;
+    
+    let cancelled = false;
+    
+    async function loadPendingQueue() {
+      setIsLoadingQueue(true);
+      try {
+        const { data, error } = await supabase
+          .from("import_queue")
+          .select("id, raw_data, suggested_patient_id, suggested_service_id, match_confidence, status")
+          .eq("clinic_id", clinicId)
+          .eq("status", "pending")
+          .order("created_at", { ascending: true });
+
+        if (error) throw error;
+        if (cancelled) return;
+
+        if (data && data.length > 0) {
+          const loaded = data.map((item) =>
+            rawDataToRow(item.raw_data as Record<string, unknown>, item.id)
+          );
+          setRows(loaded);
+          setStep("review");
+          setPage(0);
+        }
+      } catch (err) {
+        console.error("Error loading import queue:", err);
+      } finally {
+        if (!cancelled) setIsLoadingQueue(false);
+      }
+    }
+
+    loadPendingQueue();
+    return () => { cancelled = true; };
+  }, [isOpen, clinicId]);
 
   const handleClose = () => {
-    resetModal();
+    // Don't reset rows - they're persisted
+    setStep(rows.length > 0 ? "review" : "upload");
+    setIsParsing(false);
+    setIsSaving(false);
+    setSaveProgress(null);
     onClose();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Parse file, then persist to import_queue in batches
+  const handleFileUpload = async (file: File) => {
     setIsParsing(true);
     try {
       const parsed = await BatchSchedulingService.parseFile(
@@ -157,53 +253,134 @@ export function BatchSchedulingModal({
         professionalEntities,
         serviceEntities
       );
-      setRows(parsed);
+
+      // Save to import_queue in batches
+      setSaveProgress({ current: 0, total: parsed.length });
+      const persistedRows: PersistedRow[] = [];
+
+      for (let i = 0; i < parsed.length; i += BATCH_SIZE) {
+        const batch = parsed.slice(i, i + BATCH_SIZE);
+        const inserts = batch.map((row) => ({
+          clinic_id: clinicId,
+          raw_data: rowToRawData(row),
+          suggested_patient_id: row.pacienteMatch.id || null,
+          suggested_service_id: row.servicoMatch.id || null,
+          match_confidence: row.pacienteMatch.confidence === "exato" ? 1.0
+            : row.pacienteMatch.confidence === "sugestao" ? 0.7 : 0.0,
+          status: "pending" as const,
+        }));
+
+        const { data, error } = await supabase
+          .from("import_queue")
+          .insert(inserts)
+          .select("id");
+
+        if (error) throw error;
+
+        // Map queue IDs back to rows
+        batch.forEach((row, idx) => {
+          persistedRows.push({ ...row, queueId: data![idx].id });
+        });
+
+        setSaveProgress({ current: Math.min(i + BATCH_SIZE, parsed.length), total: parsed.length });
+        // Yield to UI
+        await new Promise((r) => setTimeout(r, 30));
+      }
+
+      setRows(persistedRows);
       setStep("review");
+      setPage(0);
+      setSaveProgress(null);
+      toast.success(`${parsed.length} linhas importadas e guardadas`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao processar ficheiro");
     } finally {
       setIsParsing(false);
+      setSaveProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await handleFileUpload(file);
   };
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault();
       const file = e.dataTransfer.files?.[0];
-      if (!file) return;
-      setIsParsing(true);
-      try {
-        const parsed = await BatchSchedulingService.parseFile(
-          file,
-          patientEntities,
-          professionalEntities,
-          serviceEntities
-        );
-        setRows(parsed);
-        setStep("review");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Erro ao processar ficheiro");
-      } finally {
-        setIsParsing(false);
-      }
+      if (file) await handleFileUpload(file);
     },
-    [patientEntities, professionalEntities, serviceEntities]
+    [clinicId, patientEntities, professionalEntities, serviceEntities]
   );
 
+  // Update a row locally AND in import_queue
   const updateRow = (index: number, updates: Partial<ParsedRow>) => {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...updates } : r)));
+    setRows((prev) => {
+      const globalIndex = page * PAGE_SIZE + index;
+      const updated = [...prev];
+      const row = { ...updated[globalIndex], ...updates };
+      updated[globalIndex] = row;
+
+      // Persist update to import_queue (fire-and-forget)
+      supabase
+        .from("import_queue")
+        .update({
+          raw_data: rowToRawData(row),
+          suggested_patient_id: row.pacienteMatch.id || null,
+          suggested_service_id: row.servicoMatch.id || null,
+        })
+        .eq("id", row.queueId)
+        .then();
+
+      return updated;
+    });
   };
 
   const allApproved = rows.length > 0 && rows.every((r) => r.approved);
   const toggleAll = () => {
     const newVal = !allApproved;
     setRows((prev) => prev.map((r) => ({ ...r, approved: newVal })));
+    // Batch update approved state in import_queue (fire-and-forget)
+    const ids = rows.map((r) => r.queueId);
+    // Update in chunks
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      supabase
+        .from("import_queue")
+        .update({ raw_data: rows[i] ? rowToRawData({ ...rows[i], approved: newVal }) : {} })
+        .in("id", chunk)
+        .then();
+    }
   };
 
   const approvedRows = rows.filter((r) => r.approved);
   const retroactiveCount = approvedRows.filter((r) => r.isRetroactive).length;
 
+  // Pagination
+  const totalPages = Math.ceil(rows.length / PAGE_SIZE);
+  const pageRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Discard entire import queue
+  const handleDiscardQueue = async () => {
+    try {
+      const { error } = await supabase
+        .from("import_queue")
+        .delete()
+        .eq("clinic_id", clinicId)
+        .eq("status", "pending");
+      if (error) throw error;
+      setRows([]);
+      setStep("upload");
+      setPage(0);
+      toast.success("Importação descartada");
+    } catch (err) {
+      toast.error("Erro ao descartar importação");
+    }
+  };
+
+  // Save approved rows as sessions, in batches with progress
   const handleSave = async () => {
     const toInsert = approvedRows.filter(
       (r) =>
@@ -219,39 +396,74 @@ export function BatchSchedulingModal({
     }
 
     setIsSaving(true);
+    setSaveProgress({ current: 0, total: toInsert.length });
+
     try {
-      const inserts = toInsert.map((r) => {
-        const startTime = new Date(r.parsedDate!);
-        startTime.setHours(r.rawHora!, r.rawMinuto ?? 0, 0, 0);
+      let created = 0;
 
-        const svc = services.find((s) => s.id === r.servicoMatch.id);
-        const durationMinutes = svc?.duration_minutes ?? 60;
+      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+        const batch = toInsert.slice(i, i + BATCH_SIZE);
 
-        const endTime = new Date(startTime);
-        endTime.setMinutes(endTime.getMinutes() + durationMinutes);
+        const inserts = batch.map((r) => {
+          const startTime = new Date(r.parsedDate!);
+          startTime.setHours(r.rawHora!, r.rawMinuto ?? 0, 0, 0);
 
-        const isRetro = startTime < new Date();
+          const svc = services.find((s) => s.id === r.servicoMatch.id);
+          const durationMinutes = svc?.duration_minutes ?? 60;
 
-        return {
-          clinic_id: clinicId,
-          paciente_id: r.pacienteMatch.id!,
-          profissional_id: r.profissionalMatch.id!,
-          servico_id: r.servicoMatch.id || null,
-          start_time: startTime.toISOString(),
-          end_time: endTime.toISOString(),
-          status: isRetro ? "realizado" : "agendado",
-          notes: r.rawObservacoes || null,
-          price: svc ? Number(svc.price) : 0,
-          payment_status: "pendente" as const,
-        };
-      });
+          const endTime = new Date(startTime);
+          endTime.setMinutes(endTime.getMinutes() + durationMinutes);
 
-      const { error } = await supabase.from("sessoes").insert(inserts);
-      if (error) throw error;
+          const isRetro = startTime < new Date();
+
+          return {
+            clinic_id: clinicId,
+            paciente_id: r.pacienteMatch.id!,
+            profissional_id: r.profissionalMatch.id!,
+            servico_id: r.servicoMatch.id || null,
+            start_time: startTime.toISOString(),
+            end_time: endTime.toISOString(),
+            status: isRetro ? "realizado" : "agendado",
+            notes: r.rawObservacoes || null,
+            price: svc ? Number(svc.price) : 0,
+            payment_status: "pendente" as const,
+          };
+        });
+
+        const { error } = await supabase.from("sessoes").insert(inserts);
+        if (error) throw error;
+
+        // Mark these queue rows as confirmed
+        const queueIds = batch.map((r) => r.queueId);
+        await supabase
+          .from("import_queue")
+          .update({ status: "confirmed" })
+          .in("id", queueIds);
+
+        created += batch.length;
+        setSaveProgress({ current: created, total: toInsert.length });
+
+        // Yield to UI
+        await new Promise((r) => setTimeout(r, 30));
+      }
+
+      // Mark rejected rows
+      const rejectedIds = rows.filter((r) => !r.approved).map((r) => r.queueId);
+      if (rejectedIds.length > 0) {
+        for (let i = 0; i < rejectedIds.length; i += 100) {
+          await supabase
+            .from("import_queue")
+            .update({ status: "rejected" })
+            .in("id", rejectedIds.slice(i, i + 100));
+        }
+      }
 
       await onSessionsCreated();
-      toast.success(`${inserts.length} sessões agendadas com sucesso!`);
-      handleClose();
+      toast.success(`${created} sessões agendadas com sucesso!`);
+      setRows([]);
+      setStep("upload");
+      setSaveProgress(null);
+      onClose();
     } catch (err) {
       toast.error(
         "Erro ao gravar sessões: " +
@@ -259,6 +471,7 @@ export function BatchSchedulingModal({
       );
     } finally {
       setIsSaving(false);
+      setSaveProgress(null);
     }
   };
 
@@ -269,7 +482,7 @@ export function BatchSchedulingModal({
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
             Agendamento em Lote
-            {step === "review" && (
+            {rows.length > 0 && (
               <Badge variant="outline" className="ml-2">
                 {rows.length} linhas
               </Badge>
@@ -277,8 +490,16 @@ export function BatchSchedulingModal({
           </DialogTitle>
         </DialogHeader>
 
+        {/* Loading queue indicator */}
+        {isLoadingQueue && (
+          <div className="flex items-center justify-center gap-2 py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">A carregar importação anterior...</p>
+          </div>
+        )}
+
         {/* ── Step 1: Upload ── */}
-        {step === "upload" && (
+        {step === "upload" && !isLoadingQueue && (
           <div className="space-y-4">
             <div
               className="border-2 border-dashed rounded-lg p-10 text-center cursor-pointer hover:border-primary/50 transition-colors"
@@ -289,7 +510,17 @@ export function BatchSchedulingModal({
               {isParsing ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">A processar ficheiro...</p>
+                  <p className="text-sm text-muted-foreground">
+                    {saveProgress
+                      ? `A guardar... ${saveProgress.current}/${saveProgress.total}`
+                      : "A processar ficheiro..."}
+                  </p>
+                  {saveProgress && (
+                    <Progress
+                      value={(saveProgress.current / saveProgress.total) * 100}
+                      className="w-64"
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2">
@@ -319,7 +550,7 @@ export function BatchSchedulingModal({
         )}
 
         {/* ── Step 2: Review ── */}
-        {step === "review" && (
+        {step === "review" && !isLoadingQueue && (
           <div className="space-y-4">
             <div className="rounded-md border overflow-x-auto">
               <Table>
@@ -341,9 +572,9 @@ export function BatchSchedulingModal({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((row, idx) => (
+                  {pageRows.map((row, idx) => (
                     <TableRow
-                      key={idx}
+                      key={row.queueId}
                       className={row.validationError ? "bg-destructive/5" : ""}
                     >
                       <TableCell>
@@ -443,7 +674,7 @@ export function BatchSchedulingModal({
                           </Badge>
                         ) : row.isRetroactive ? (
                           <Badge variant="secondary" className="text-xs gap-1">
-                            <Clock className="h-3 w-3" /> Retroativa
+                            <Clock className="h-3 w-3" /> Retro
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="text-xs">
@@ -457,10 +688,43 @@ export function BatchSchedulingModal({
               </Table>
             </div>
 
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Página {page + 1} de {totalPages} ({rows.length} linhas)
+                </p>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages - 1}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep("upload")}>
-                Voltar
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => { setStep("upload"); }}>
+                  Novo ficheiro
+                </Button>
+                <Button variant="destructive" size="sm" onClick={handleDiscardQueue} className="gap-1">
+                  <Trash2 className="h-4 w-4" />
+                  Descartar tudo
+                </Button>
+              </div>
               <Button
                 onClick={() => setStep("confirm")}
                 disabled={approvedRows.length === 0}
@@ -498,8 +762,19 @@ export function BatchSchedulingModal({
               </p>
             )}
 
+            {saveProgress && (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  A criar sessões... {saveProgress.current}/{saveProgress.total}
+                </p>
+                <Progress
+                  value={(saveProgress.current / saveProgress.total) * 100}
+                />
+              </div>
+            )}
+
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep("review")}>
+              <Button variant="outline" onClick={() => setStep("review")} disabled={isSaving}>
                 Voltar
               </Button>
               <Button onClick={handleSave} disabled={isSaving} className="gap-2">
