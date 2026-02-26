@@ -99,6 +99,8 @@ export class SessionService {
 
     const hasConflict = sessions.some((s) => {
       if (s.profissional_id !== profissionalId) return false;
+      // Exclude cancelled/no-show sessions from conflict check
+      if (s.status === "cancelado" || s.status === "falta" || s.status === "faltou") return false;
       if (!isSameDay(new Date(s.start_time), newStart)) return false;
       
       const existingStart = new Date(s.start_time);
