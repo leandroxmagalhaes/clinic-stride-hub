@@ -1,45 +1,104 @@
 
 
-# Plano: Permitir Editar/Excluir Sessoes em Status Final e Registrar No-Show com Reutilizacao de Horario
+# Plano: Notificacoes em Tempo Real com Tabela Dedicada
 
-## Problema Atual
+## Resumo
 
-1. Sessoes com status "realizado", "cancelado" ou "falta" estao bloqueadas -- nao e possivel editar, remarcar, cancelar ou apagar. O modal exibe apenas "Duplicar Sessao".
-2. Ao marcar uma sessao como no-show (falta), o sistema impede agendar outro paciente no mesmo horario porque a verificacao de conflito no frontend nao exclui sessoes com status terminal.
+Criar uma tabela `notifications` na base de dados, atualizar a Edge Function `patient-onboarding` para inserir notificacoes ao registar novos utentes, e reescrever o `NotificationBell` para combinar as notificacoes agregadas existentes com as notificacoes persistentes da nova tabela, incluindo Realtime e toasts.
 
-## Alteracoes
+---
 
-### 1. Remover bloqueio de acoes em status terminal (`SessionManagementModal.tsx`)
+## 1. Criar tabela `notifications` (Migration)
 
-- Substituir a logica `isTerminalStatus` que esconde todos os botoes de acao.
-- Para sessoes em status terminal, exibir as seguintes acoes:
-  - **Remarcar**: permite mover a sessao para outro horario (util para correcoes retroativas)
-  - **Cancelar**: permite mudar status para cancelado (com motivo)
-  - **Falta (No-Show)**: permite marcar como falta
-  - **Apagar**: permite remover permanentemente
-  - **Duplicar**: ja funciona, manter
-- Manter os botoes "Confirmar" e "Finalizar" apenas para sessoes nao-terminais (faz sentido logico).
-- Exibir um aviso informativo amarelo: "Esta sessao ja tem status final. Pode alterar se necessario." em vez da mensagem bloqueante atual.
+```sql
+CREATE TABLE notifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  clinic_id uuid NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
+  type text NOT NULL,
+  title text NOT NULL,
+  message text NOT NULL,
+  patient_id uuid REFERENCES pacientes(id) ON DELETE CASCADE,
+  read boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
 
-### 2. Excluir sessoes canceladas/falta da verificacao de conflito (`SessionService.ts`)
+CREATE INDEX ON notifications(clinic_id, read, created_at DESC);
 
-- No metodo `checkConflict`, filtrar sessoes com status `cancelado` ou `falta` antes de verificar sobreposicao.
-- Isto permite agendar um novo paciente no mesmo horario de uma sessao marcada como no-show, mantendo o registo historico do no-show intacto.
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
-### 3. Ajustar fluxo de No-Show para sessoes ja finalizadas
+CREATE POLICY "clinic members can manage notifications"
+ON notifications FOR ALL
+USING (clinic_id = get_user_clinic_id(auth.uid()));
 
-- Se a sessao estava como "realizado" e o utilizador muda para "falta", oferecer opcao de estorno de credito (caso tenha sido descontado).
-- A nota automatica "[FALTA] Utente nao compareceu" e adicionada ao registo.
+-- Ativar Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+```
 
-## Resumo Tecnico
+---
 
-**Ficheiros a editar:**
+## 2. Edge Function `patient-onboarding/index.ts`
 
-1. `src/components/agenda/SessionManagementModal.tsx`
-   - Linhas 326, 440, 633-693, 697-713: remover condicao `isTerminalStatus` dos botoes de acao (remarcar, cancelar, falta, apagar). Manter Confirmar/Finalizar condicionados a status nao-terminal.
-   - Substituir mensagem "nao pode ser alterada" por aviso informativo nao-bloqueante.
+No bloco POST do modo `clinic_id` (linhas 123-136):
 
-2. `src/services/SessionService.ts`
-   - Metodo `checkConflict` (linha 100): adicionar filtro para excluir sessoes com status `cancelado` ou `falta` da verificacao de sobreposicao.
+- Trocar `.insert(insertData)` por `.insert(insertData).select("id").single()`
+- Apos INSERT bem-sucedido, inserir notificacao na tabela `notifications` usando service role
+- Retornar `{ success: true, patient_id: newPatient.id }`
 
-**Sem alteracoes na base de dados** -- o trigger `check_session_overlap` ja exclui corretamente sessoes com status `cancelado` e `falta`.
+---
+
+## 3. Atualizar `NotificationService.ts`
+
+Adicionar novo tipo `new_patient` ao `NotificationType`.
+
+Adicionar dois metodos:
+- `getDbNotifications()`: busca notificacoes nao lidas da tabela `notifications`
+- `markAsRead(id)` e `markAllAsRead()`: atualiza o campo `read`
+
+Atualizar `getNotifications()` para combinar notificacoes agregadas existentes com as da tabela.
+
+---
+
+## 4. Reescrever `NotificationBell.tsx`
+
+Manter a estrutura visual atual (popover com categorias), mas adicionar:
+- Subscricao Realtime ao montar, filtrada por `clinic_id`
+- Quando chega notificacao nova via Realtime, adiciona-la ao estado e mostrar toast com acao "Ver ficha"
+- Botao "Marcar todas como lidas" no footer do dropdown
+- Clicar numa notificacao `new_patient` navega para `/pacientes?id={patient_id}&edit=true` e marca como lida
+
+---
+
+## 5. Atualizar `NotificationItem.tsx`
+
+Adicionar suporte ao novo tipo `new_patient`:
+- Icone `UserPlus` para notificacoes de novo utente
+- Tempo relativo usando `date-fns` (`formatDistanceToNow`)
+- Handler de clique que marca como lida e navega
+
+---
+
+## 6. Nenhuma alteracao no layout
+
+O `NotificationBell` ja esta integrado no `PersistentHeader.tsx` (linha 36). Nao e necessario alterar o layout.
+
+---
+
+## Sequencia de Implementacao
+
+1. Migration: criar tabela `notifications` + RLS + Realtime
+2. Edge Function: atualizar `patient-onboarding` para inserir notificacao
+3. Service: estender `NotificationService` com metodos de DB
+4. Componentes: atualizar `NotificationBell` e `NotificationItem` com Realtime + toast
+
+---
+
+## Ficheiros a Editar
+
+| Ficheiro | Acao |
+|---|---|
+| Migration SQL | Criar tabela `notifications` |
+| `supabase/functions/patient-onboarding/index.ts` | INSERT com `.select("id").single()` + notificacao |
+| `src/services/NotificationService.ts` | Novos metodos DB + tipo `new_patient` |
+| `src/components/notifications/NotificationBell.tsx` | Realtime + toast + mark as read |
+| `src/components/notifications/NotificationItem.tsx` | Tipo `new_patient` + tempo relativo |
+
