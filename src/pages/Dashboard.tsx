@@ -16,21 +16,26 @@ import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 import { AIBriefingCard } from "@/components/dashboard/AIBriefingCard";
 import { EngagementService } from "@/services/EngagementService";
 import { LeadService } from "@/services/LeadService";
+
 export default function Dashboard() {
-  const { sessions, patients, professionals, services, addSession, getCreditBalance } = useData();
+  const { sessions, patients, professionals, services, addSession, getCreditBalance, refreshPatients } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Form state for new session modal
   const [selectedPaciente, setSelectedPaciente] = useState("");
   const [selectedProfissional, setSelectedProfissional] = useState("");
   const [selectedServico, setSelectedServico] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Filter upcoming sessions (today and future, not finished)
+  const [localPatients, setLocalPatients] = useState(patients);
+
+  useEffect(() => {
+    setLocalPatients(patients);
+  }, [patients]);
+
   const upcomingSessions = sessions
     .filter((s) => {
       const startTime = s.start_time instanceof Date ? s.start_time : new Date(s.start_time);
-      return (isToday(startTime) || isFuture(startTime)) && s.status !== 'finalizado' && s.status !== 'cancelado';
+      return (isToday(startTime) || isFuture(startTime)) && s.status !== "finalizado" && s.status !== "cancelado";
     })
     .sort((a, b) => {
       const aTime = a.start_time instanceof Date ? a.start_time : new Date(a.start_time);
@@ -39,29 +44,30 @@ export default function Dashboard() {
     })
     .slice(0, 5);
 
-  // Recent patients
-  const recentPatients = patients.slice(0, 4);
+  const recentPatients = localPatients.slice(0, 4);
 
-  // Dashboard stats from context data
   const todaysSessions = sessions.filter((s) => {
     const startTime = s.start_time instanceof Date ? s.start_time : new Date(s.start_time);
     return isToday(startTime);
   }).length;
 
-  const activePatients = patients.filter(p => p.is_active).length;
+  const activePatients = localPatients.filter((p) => p.is_active).length;
   const weekSessions = sessions.length;
-  const completedSessions = sessions.filter(s => s.status === 'finalizado').length;
+  const completedSessions = sessions.filter((s) => s.status === "finalizado").length;
   const attendanceRate = sessions.length > 0 ? Math.round((completedSessions / sessions.length) * 100) : 0;
 
-  // AI briefing data
   const [churnCount, setChurnCount] = useState(0);
   const [pendingLeadsCount, setPendingLeadsCount] = useState(0);
 
   useEffect(() => {
-    EngagementService.getChurnRiskPatients().then(p => setChurnCount(p.length)).catch(() => {});
-    LeadService.fetchAll().then(leads => {
-      setPendingLeadsCount(leads.filter(l => ['novo', 'agendado', 'proposta'].includes(l.status)).length);
-    }).catch(() => {});
+    EngagementService.getChurnRiskPatients()
+      .then((p) => setChurnCount(p.length))
+      .catch(() => {});
+    LeadService.fetchAll()
+      .then((leads) => {
+        setPendingLeadsCount(leads.filter((l) => ["novo", "agendado", "proposta"].includes(l.status)).length);
+      })
+      .catch(() => {});
   }, []);
 
   const handleCloseModal = () => {
@@ -80,12 +86,11 @@ export default function Dashboard() {
   }) => {
     try {
       const now = new Date();
-      const selectedService = services.find(s => s.id === data.servicoId);
-      
-      // Determine payment_status BEFORE creating session (no credit consumption on scheduling)
+      const selectedService = services.find((s) => s.id === data.servicoId);
+
       const balance = getCreditBalance(data.pacienteId);
       const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
-      const paymentStatus = (serviceConsumesCredit && balance > 0) ? "reservado" : "pendente";
+      const paymentStatus = serviceConsumesCredit && balance > 0 ? "reservado" : "pendente";
 
       const newSession = SessionService.create(
         {
@@ -97,29 +102,26 @@ export default function Dashboard() {
           notes: data.notes,
         },
         sessions,
-        'clinic-id', // Will be set properly by backend
+        "clinic-id",
         {
-          services: services.map(s => ({
+          services: services.map((s) => ({
             id: s.id,
             name: s.name,
-            color: s.color || '#10B981',
+            color: s.color || "#10B981",
             duration_minutes: s.duration_minutes,
             price: Number(s.price),
             consumes_credit: s.consumes_credit,
           })),
-          patients: patients.map(p => ({ id: p.id, full_name: p.full_name })),
-          professionals: professionals.map(p => ({ id: p.id, full_name: p.full_name })),
-        }
+          patients: localPatients.map((p) => ({ id: p.id, full_name: p.full_name })),
+          professionals: professionals.map((p) => ({ id: p.id, full_name: p.full_name })),
+        },
       );
 
-      // Set payment_status before insert (NO credit deduction on scheduling)
       newSession.payment_status = paymentStatus;
 
       await addSession(newSession);
       toast.success(
-        paymentStatus === "pendente"
-          ? "Sessão agendada com pagamento pendente"
-          : "Sessão agendada com sucesso!"
+        paymentStatus === "pendente" ? "Sessão agendada com pagamento pendente" : "Sessão agendada com sucesso!",
       );
       handleCloseModal();
     } catch (error) {
@@ -128,12 +130,8 @@ export default function Dashboard() {
   };
 
   return (
-    <AppLayout 
-      title="Dashboard" 
-      subtitle={format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
-    >
+    <AppLayout title="Dashboard" subtitle={format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}>
       <div className="space-y-6 animate-fade-in">
-        {/* AI Daily Briefing */}
         <AIBriefingCard
           todaySessions={todaysSessions}
           activePatients={activePatients}
@@ -141,7 +139,6 @@ export default function Dashboard() {
           pendingLeads={pendingLeadsCount}
         />
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Atendimentos Hoje"
@@ -149,16 +146,8 @@ export default function Dashboard() {
             icon={Calendar}
             trend={{ value: 12, positive: true }}
           />
-          <StatCard
-            title="Pacientes Ativos"
-            value={activePatients}
-            icon={Users}
-          />
-          <StatCard
-            title="Sessões na Semana"
-            value={weekSessions}
-            icon={Activity}
-          />
+          <StatCard title="Pacientes Ativos" value={activePatients} icon={Users} />
+          <StatCard title="Sessões na Semana" value={weekSessions} icon={Activity} />
           <StatCard
             title="Taxa de Comparecimento"
             value={`${attendanceRate}%`}
@@ -167,9 +156,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Upcoming Sessions */}
           <Card className="lg:col-span-2 shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="font-display text-lg font-semibold flex items-center gap-2">
@@ -191,7 +178,8 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-3">
                   {upcomingSessions.map((session) => {
-                    const startTime = session.start_time instanceof Date ? session.start_time : new Date(session.start_time);
+                    const startTime =
+                      session.start_time instanceof Date ? session.start_time : new Date(session.start_time);
                     return (
                       <div
                         key={session.id}
@@ -199,13 +187,11 @@ export default function Dashboard() {
                       >
                         <div
                           className="w-1 h-12 rounded-full"
-                          style={{ backgroundColor: session.servico?.color || '#10B981' }}
+                          style={{ backgroundColor: session.servico?.color || "#10B981" }}
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <p className="font-medium text-sm truncate">
-                              {session.paciente?.full_name}
-                            </p>
+                            <p className="font-medium text-sm truncate">{session.paciente?.full_name}</p>
                             <StatusBadge status={session.status as any} />
                           </div>
                           <p className="text-xs text-muted-foreground">
@@ -213,9 +199,7 @@ export default function Dashboard() {
                           </p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-sm font-medium">
-                            {format(startTime, "HH:mm")}
-                          </p>
+                          <p className="text-sm font-medium">{format(startTime, "HH:mm")}</p>
                           <p className="text-xs text-muted-foreground">
                             {isToday(startTime) ? "Hoje" : format(startTime, "dd/MM")}
                           </p>
@@ -228,7 +212,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Recent Patients */}
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="font-display text-lg font-semibold flex items-center gap-2">
@@ -250,7 +233,12 @@ export default function Dashboard() {
                   >
                     <Avatar className="h-9 w-9">
                       <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                        {(patient.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
+                        {(patient.full_name ?? "")
+                          .split(" ")
+                          .filter(Boolean)
+                          .map((n) => n[0])
+                          .join("")
+                          .slice(0, 2) || "?"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
@@ -264,15 +252,14 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Quick Actions */}
         <Card className="shadow-card">
           <CardHeader className="pb-3">
             <CardTitle className="font-display text-lg font-semibold">Ações Rápidas</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30"
                 onClick={() => setIsModalOpen(true)}
               >
@@ -280,19 +267,28 @@ export default function Dashboard() {
                 <span className="text-xs font-medium">Nova Sessão</span>
               </Button>
               <Link to="/pacientes" className="w-full">
-                <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30">
+                <Button
+                  variant="outline"
+                  className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30"
+                >
                   <Users className="h-5 w-5 text-primary" />
                   <span className="text-xs font-medium">Novo Paciente</span>
                 </Button>
               </Link>
               <Link to="/prontuarios" className="w-full">
-                <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30">
+                <Button
+                  variant="outline"
+                  className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30"
+                >
                   <Activity className="h-5 w-5 text-primary" />
                   <span className="text-xs font-medium">Nova Evolução</span>
                 </Button>
               </Link>
               <Link to="/profissionais" className="w-full">
-                <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30">
+                <Button
+                  variant="outline"
+                  className="w-full h-auto py-4 flex flex-col gap-2 hover:bg-primary/5 hover:border-primary/30"
+                >
                   <TrendingUp className="h-5 w-5 text-primary" />
                   <span className="text-xs font-medium">Ver Relatórios</span>
                 </Button>
@@ -303,11 +299,11 @@ export default function Dashboard() {
       </div>
 
       {/* New Session Modal */}
- <NewSessionModal
+      <NewSessionModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         selectedSlot={{ date: new Date(), hour: new Date().getHours() }}
-        patients={patients}
+        patients={localPatients}
         professionals={professionals}
         services={services}
         selectedPaciente={selectedPaciente}
@@ -321,6 +317,10 @@ export default function Dashboard() {
         onSubmit={handleSubmitSession}
         getCreditBalance={getCreditBalance}
         onPatientCreated={(newPatient) => {
-          setPatients((prev) => [...prev, newPatient].sort((a, b) => a.full_name.localeCompare(b.full_name)));
+          setLocalPatients((prev) => [...prev, newPatient].sort((a, b) => a.full_name.localeCompare(b.full_name)));
+          if (refreshPatients) refreshPatients();
         }}
       />
+    </AppLayout>
+  );
+}
