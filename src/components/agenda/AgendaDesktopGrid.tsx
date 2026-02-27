@@ -56,11 +56,12 @@ interface PositionedItem {
   total: number;
 }
 
-function computeOverlapPositions<T extends { startMin: number; endMin: number }>(items: T[]): (T & { index: number; total: number })[] {
+function computeOverlapPositions<T extends { startMin: number; endMin: number }>(
+  items: T[],
+): (T & { index: number; total: number })[] {
   if (items.length === 0) return [];
   const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
-  
-  // Group overlapping items
+
   const groups: (typeof sorted)[] = [];
   let currentGroup = [sorted[0]];
   let groupEnd = sorted[0].endMin;
@@ -77,16 +78,20 @@ function computeOverlapPositions<T extends { startMin: number; endMin: number }>
   }
   groups.push(currentGroup);
 
-  return groups.flatMap(group => 
-    group.map((item, idx) => ({ ...item, index: idx, total: group.length }))
-  );
+  return groups.flatMap((group) => group.map((item, idx) => ({ ...item, index: idx, total: group.length })));
 }
 
-function getItemStyle(startMin: number, endMin: number, firstHour: number, index: number, total: number): React.CSSProperties {
+function getItemStyle(
+  startMin: number,
+  endMin: number,
+  firstHour: number,
+  index: number,
+  total: number,
+): React.CSSProperties {
   const offsetMin = startMin - firstHour * 60;
   const durationMin = endMin - startMin;
   return {
-    position: 'absolute' as const,
+    position: "absolute" as const,
     top: `${(offsetMin / 60) * HOUR_HEIGHT}px`,
     height: `${Math.max((durationMin / 60) * HOUR_HEIGHT, 20)}px`,
     left: `${(index / total) * 100}%`,
@@ -95,9 +100,9 @@ function getItemStyle(startMin: number, endMin: number, firstHour: number, index
   };
 }
 
-export function AgendaDesktopGrid({ 
-  weekDays, 
-  hours, 
+export function AgendaDesktopGrid({
+  weekDays,
+  hours,
   sessions,
   reservedSlotOccurrences = [],
   onSlotClick,
@@ -112,16 +117,16 @@ export function AgendaDesktopGrid({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
-    })
+    }),
   );
 
   const getSessionsForDay = (date: Date) => {
-    return sessions.filter(s => isSameDay(s.start_time, date));
+    return sessions.filter((s) => isSameDay(s.start_time, date));
   };
 
   const getReservationsForDay = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    return reservedSlotOccurrences.filter(occ => occ.date === dateStr);
+    return reservedSlotOccurrences.filter((occ) => occ.date === dateStr);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -136,7 +141,7 @@ export function AgendaDesktopGrid({
 
     const sessionId = active.id as string;
     const { date, hour } = over.data.current as { date: Date; hour: number };
-    const session = sessions.find(s => s.id === sessionId);
+    const session = sessions.find((s) => s.id === sessionId);
     if (session) {
       const isSameSlot = isSameDay(session.start_time, date) && session.start_time.getHours() === hour;
       if (!isSameSlot) onSessionReschedule(sessionId, date, hour);
@@ -151,20 +156,28 @@ export function AgendaDesktopGrid({
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="overflow-auto max-h-[600px] scrollbar-thin">
             <div className="min-w-[800px]">
-              {/* Header */}
-              <div 
-                className="grid sticky top-0 z-20 border-b bg-muted/30" 
+              {/* ── Header com fundo sólido e sticky ── */}
+              <div
+                className="grid sticky top-0 z-20 border-b bg-white dark:bg-gray-950 shadow-sm"
                 style={{ gridTemplateColumns: `60px repeat(${weekDays.length}, 1fr)` }}
               >
-                <div className="p-3 border-r" />
+                {/* Célula vazia do canto (coluna de horas) */}
+                <div className="p-3 border-r bg-white dark:bg-gray-950" />
+
                 {weekDays.map((day, index) => {
                   const isToday = isSameDay(day, new Date());
                   return (
-                    <div key={index} className={cn("p-3 text-center border-r last:border-r-0", isToday && "bg-primary/5")}>
-                      <p className="text-xs text-muted-foreground uppercase">
+                    <div
+                      key={index}
+                      className={cn(
+                        "p-3 text-center border-r last:border-r-0",
+                        isToday ? "bg-primary/10 dark:bg-primary/20" : "bg-white dark:bg-gray-950",
+                      )}
+                    >
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">
                         {format(day, "EEE", { locale: ptBR })}
                       </p>
-                      <p className={cn("text-lg font-semibold mt-1", isToday && "text-primary")}>
+                      <p className={cn("text-lg font-semibold mt-1", isToday ? "text-primary" : "text-foreground")}>
                         {format(day, "d")}
                       </p>
                     </div>
@@ -172,105 +185,106 @@ export function AgendaDesktopGrid({
                 })}
               </div>
 
-              {/* Time Grid Body */}
-              <div 
-                  className="grid"
-                  style={{ gridTemplateColumns: `60px repeat(${weekDays.length}, 1fr)` }}
-                >
-                  {/* Hour labels column */}
-                  <div className="border-r bg-muted/20" style={{ height: `${totalHeight}px` }}>
-                    {hours.map(hour => (
-                      <div 
-                        key={hour} 
-                        className="text-xs text-muted-foreground text-right pr-3 flex items-start justify-end pt-1"
-                        style={{ height: `${HOUR_HEIGHT}px` }}
-                      >
-                        {String(hour).padStart(2, '0')}:00
-                      </div>
-                    ))}
-                  </div>
+              {/* ── Body da grade ── */}
+              <div className="grid" style={{ gridTemplateColumns: `60px repeat(${weekDays.length}, 1fr)` }}>
+                {/* Coluna de horas */}
+                <div className="border-r bg-muted/20" style={{ height: `${totalHeight}px` }}>
+                  {hours.map((hour) => (
+                    <div
+                      key={hour}
+                      className="text-xs text-muted-foreground text-right pr-3 flex items-start justify-end pt-1"
+                      style={{ height: `${HOUR_HEIGHT}px` }}
+                    >
+                      {String(hour).padStart(2, "0")}:00
+                    </div>
+                  ))}
+                </div>
 
-                  {/* Day columns */}
-                  {weekDays.map((day, dayIndex) => {
-                    const isToday = isSameDay(day, new Date());
-                    const daySessions = getSessionsForDay(day);
-                    const dayReservations = getReservationsForDay(day);
+                {/* Colunas dos dias */}
+                {weekDays.map((day, dayIndex) => {
+                  const isToday = isSameDay(day, new Date());
+                  const daySessions = getSessionsForDay(day);
+                  const dayReservations = getReservationsForDay(day);
 
-                    // Build items for overlap calculation
-                    const sessionItems = daySessions.map(s => {
-                      const start = new Date(s.start_time);
-                      const end = new Date(s.end_time);
-                      return {
-                        type: 'session' as const,
-                        session: s,
-                        startMin: start.getHours() * 60 + start.getMinutes(),
-                        endMin: end.getHours() * 60 + end.getMinutes(),
-                      };
-                    });
+                  const sessionItems = daySessions.map((s) => {
+                    const start = new Date(s.start_time);
+                    const end = new Date(s.end_time);
+                    return {
+                      type: "session" as const,
+                      session: s,
+                      startMin: start.getHours() * 60 + start.getMinutes(),
+                      endMin: end.getHours() * 60 + end.getMinutes(),
+                    };
+                  });
 
-                    const reservationItems = dayReservations.map(occ => {
-                      const [h, m] = occ.time.split(':').map(Number);
-                      return {
-                        type: 'reservation' as const,
-                        occ,
-                        startMin: h * 60 + (m || 0),
-                        endMin: h * 60 + (m || 0) + occ.reservation.duracao_minutos,
-                      };
-                    });
+                  const reservationItems = dayReservations.map((occ) => {
+                    const [h, m] = occ.time.split(":").map(Number);
+                    return {
+                      type: "reservation" as const,
+                      occ,
+                      startMin: h * 60 + (m || 0),
+                      endMin: h * 60 + (m || 0) + occ.reservation.duracao_minutos,
+                    };
+                  });
 
-                    const allItems = [...sessionItems, ...reservationItems];
-                    const positioned = computeOverlapPositions(allItems);
+                  const allItems = [...sessionItems, ...reservationItems];
+                  const positioned = computeOverlapPositions(allItems);
 
-                    return (
-                      <div key={dayIndex} className="relative border-r last:border-r-0" style={{ height: `${totalHeight}px` }}>
-                        {/* Background: drop zones per hour */}
-                        {hours.map(hour => (
-                          <DroppableSlot
-                            key={hour}
-                            id={`${day.toISOString()}-${hour}`}
-                            date={day}
-                            hour={hour}
-                            isToday={isToday}
-                            onSlotClick={() => onSlotClick(day, hour)}
-                          />
-                        ))}
+                  return (
+                    <div
+                      key={dayIndex}
+                      className="relative border-r last:border-r-0"
+                      style={{ height: `${totalHeight}px` }}
+                    >
+                      {/* Drop zones por hora */}
+                      {hours.map((hour) => (
+                        <DroppableSlot
+                          key={hour}
+                          id={`${day.toISOString()}-${hour}`}
+                          date={day}
+                          hour={hour}
+                          isToday={isToday}
+                          onSlotClick={() => onSlotClick(day, hour)}
+                        />
+                      ))}
 
-                        {/* Foreground: absolutely positioned sessions & reservations */}
-                        {positioned.map(item => {
-                          const style = getItemStyle(item.startMin, item.endMin, firstHour, item.index, item.total);
+                      {/* Cards posicionados */}
+                      {positioned.map((item) => {
+                        const style = getItemStyle(item.startMin, item.endMin, firstHour, item.index, item.total);
 
-                          if (item.type === 'session') {
-                            const s = item.session;
-                            const patientId = s.paciente?.id;
-                            const hasCredits = patientId && getCreditBalance ? getCreditBalance(patientId) > 0 : undefined;
-                            const sessionTime = format(new Date(s.start_time), "HH:mm");
-                            return (
-                              <DraggableSession
-                                key={s.id}
-                                session={s}
-                                onClick={onSessionClick}
-                                hasCredits={hasCredits}
-                                displayTime={sessionTime}
-                                positionStyle={style}
-                              />
-                            );
-                          } else {
-                            const occ = item.occ;
-                            return (
-                              <ReservedSlotCard
-                                key={`reserved-${occ.reservation.id}-${occ.date}-${occ.time}`}
-                                reservation={occ.reservation}
-                                time={occ.time}
-                                onClick={() => onReservedSlotClick?.(occ.reservation)}
-                                positionStyle={style}
-                              />
-                            );
-                          }
-                        })}
-                      </div>
-                    );
-                  })}
-            </div>
+                        if (item.type === "session") {
+                          const s = item.session;
+                          const patientId = s.paciente?.id;
+                          const hasCredits =
+                            patientId && getCreditBalance ? getCreditBalance(patientId) > 0 : undefined;
+                          const sessionTime = format(new Date(s.start_time), "HH:mm");
+                          return (
+                            <DraggableSession
+                              key={s.id}
+                              session={s}
+                              onClick={onSessionClick}
+                              hasCredits={hasCredits}
+                              displayTime={sessionTime}
+                              positionStyle={style}
+                            />
+                          );
+                        } else {
+                          const occ = item.occ;
+                          return (
+                            <ReservedSlotCard
+                              key={`reserved-${occ.reservation.id}-${occ.date}-${occ.time}`}
+                              reservation={occ.reservation}
+                              time={occ.time}
+                              onClick={() => onReservedSlotClick?.(occ.reservation)}
+                              positionStyle={style}
+                            />
+                          );
+                        }
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -282,18 +296,14 @@ export function AgendaDesktopGrid({
                 style={{
                   backgroundColor: `${activeSession.servico?.color}30`,
                   borderLeft: `3px solid ${activeSession.servico?.color}`,
-                  width: '150px',
+                  width: "150px",
                 }}
               >
                 <div className="flex items-center gap-1 mb-1">
                   <GripVertical className="h-3 w-3 text-muted-foreground" />
-                  <p className="font-medium truncate">
-                    {activeSession.paciente?.full_name?.split(' ')?.[0] ?? ''}
-                  </p>
+                  <p className="font-medium truncate">{activeSession.paciente?.full_name?.split(" ")?.[0] ?? ""}</p>
                 </div>
-                <p className="text-muted-foreground truncate text-[10px]">
-                  {activeSession.servico?.name}
-                </p>
+                <p className="text-muted-foreground truncate text-[10px]">{activeSession.servico?.name}</p>
               </div>
             )}
           </DragOverlay>
