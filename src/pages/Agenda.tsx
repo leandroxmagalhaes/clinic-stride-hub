@@ -101,6 +101,13 @@ export default function Agenda() {
   const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
 
+  // Local patients state para suportar cadastro rápido
+  const [localPatients, setLocalPatients] = useState(patients);
+
+  useEffect(() => {
+    setLocalPatients(patients);
+  }, [patients]);
+
   // ── Preferências: inicializa com valores default; substitui após carregar userId ──
   const [prefs, setPrefs] = useState<AgendaPrefs>(PREFS_DEFAULT);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -266,7 +273,7 @@ export default function Agenda() {
     }
 
     try {
-      const selectedPatient = patients.find((p) => p.id === data.pacienteId);
+      const selectedPatient = localPatients.find((p) => p.id === data.pacienteId);
       const selectedProfessional = professionals.find((p) => p.id === data.profissionalId);
       const selectedService = services.find((s) => s.id === data.servicoId);
 
@@ -357,7 +364,7 @@ export default function Agenda() {
             price: Number(s.price),
             consumes_credit: s.consumes_credit,
           })),
-          patients: patients.map((p) => ({ id: p.id, full_name: p.full_name })),
+          patients: localPatients.map((p) => ({ id: p.id, full_name: p.full_name })),
           professionals: professionals.map((p) => ({ id: p.id, full_name: p.full_name })),
         },
       );
@@ -545,7 +552,7 @@ export default function Agenda() {
         isOpen={isModalOpen}
         onClose={handleModalClose}
         selectedSlot={selectedSlot}
-        patients={patients}
+        patients={localPatients}
         professionals={professionals}
         services={services}
         onSubmit={handleCreateSession}
@@ -559,9 +566,23 @@ export default function Agenda() {
         setNotes={setNotes}
         getCreditBalance={getCreditBalance}
         onPatientCreated={(newPatient) => {
-          setPatients((prev) => [...prev, newPatient].sort((a, b) => a.full_name.localeCompare(b.full_name)));
+          setLocalPatients((prev) =>
+            [...prev, newPatient as any].sort((a, b) => a.full_name.localeCompare(b.full_name)),
+          );
         }}
       />
+
+      {clinicId && (
+        <NewReservedSlotModal
+          isOpen={isReservedSlotModalOpen}
+          onClose={() => setIsReservedSlotModalOpen(false)}
+          patients={patients}
+          professionals={professionals}
+          services={services}
+          clinicId={clinicId}
+          onSubmit={handleCreateReservedSlot}
+        />
+      )}
 
       <SessionManagementModal
         isOpen={isSessionModalOpen}
