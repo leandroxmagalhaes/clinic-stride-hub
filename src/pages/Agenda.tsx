@@ -2,12 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Plus, Lock, FileSpreadsheet } from "lucide-react";
-import { 
-  startOfWeek, 
-  addDays, 
-  addWeeks, 
-  subWeeks, 
-} from "date-fns";
+import { startOfWeek, addDays, addWeeks, subWeeks } from "date-fns";
 import { toast } from "sonner";
 
 // Services and Context (SRP Architecture)
@@ -31,43 +26,91 @@ import { NewReservedSlotModal } from "@/components/agenda/NewReservedSlotModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotManagementModal";
 import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
-
 import { BatchSchedulingModal } from "@/components/agenda/BatchSchedulingModal";
 
 // Full range of available hours (06:00 to 23:00)
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
+// ── Preferências da agenda ──────────────────────────────────────────────────
+interface AgendaPrefs {
+  hourFilter: { start: number; end: number };
+  viewMode: "week" | "day";
+}
+
+const PREFS_DEFAULT: AgendaPrefs = {
+  hourFilter: { start: 7, end: 19 },
+  viewMode: "week",
+};
+
+function loadPrefs(userId: string): AgendaPrefs {
+  try {
+    const raw = localStorage.getItem(`physione_agenda_prefs_${userId}`);
+    if (!raw) return PREFS_DEFAULT;
+    const parsed = JSON.parse(raw) as Partial<AgendaPrefs>;
+    return {
+      hourFilter: parsed.hourFilter ?? PREFS_DEFAULT.hourFilter,
+      viewMode: parsed.viewMode ?? PREFS_DEFAULT.viewMode,
+    };
+  } catch {
+    return PREFS_DEFAULT;
+  }
+}
+
+function savePrefs(userId: string, prefs: AgendaPrefs) {
+  try {
+    localStorage.setItem(`physione_agenda_prefs_${userId}`, JSON.stringify(prefs));
+  } catch {
+    // localStorage indisponível — falha silenciosa
+  }
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export default function Agenda() {
-  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, getCreditBalance, refundCredit, useCredit, wasCreditUsedForSession, addCredits, refreshCreditBalances, refreshSessions } = useData();
+  const {
+    sessions,
+    addSession,
+    updateSession,
+    deleteSession,
+    patients,
+    professionals,
+    services,
+    getCreditBalance,
+    refundCredit,
+    useCredit,
+    wasCreditUsedForSession,
+    addCredits,
+    refreshCreditBalances,
+    refreshSessions,
+  } = useData();
   const { user } = useAuth();
-  const { 
-    reservedSlots, 
-    createReservedSlot, 
+  const {
+    reservedSlots,
+    createReservedSlot,
     updateReservedSlot,
     cancelReservedSlot,
-    getOccurrencesForWeek, 
+    getOccurrencesForWeek,
     getOccurrencesForDate,
     isSlotReserved,
     fetchReservedSlots,
-    isLoading: reservedSlotsLoading 
+    isLoading: reservedSlotsLoading,
   } = useReservedSlots();
-  
+
   const [clinicId, setClinicId] = useState<string | null>(null);
   const [isReservedSlotModalOpen, setIsReservedSlotModalOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
-  
-  // Fetch clinic_id for the current user
+
+  // ── Preferências: inicializa com valores default; substitui após carregar userId ──
+  const [prefs, setPrefs] = useState<AgendaPrefs>(PREFS_DEFAULT);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  // Fetch clinic_id + carregar preferências do utilizador
   useEffect(() => {
     async function fetchClinicId() {
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("clinic_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const { data, error } = await supabase.from("profiles").select("clinic_id").eq("user_id", user.id).maybeSingle();
 
       if (error) {
         console.error("Error fetching clinic_id:", error);
@@ -77,24 +120,43 @@ export default function Agenda() {
       if (data?.clinic_id) {
         setClinicId(data.clinic_id);
       }
+
+      // Carregar preferências assim que temos o userId
+      const saved = loadPrefs(user.id);
+      setPrefs(saved);
+      setPrefsLoaded(true);
     }
     fetchClinicId();
   }, [user]);
-  
+
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
-  
-  // Hour filter for visualization (default: 07:00 to 19:00)
-  const [hourFilter, setHourFilter] = useState({ start: 7, end: 19 });
-  const displayedHours = ALL_HOURS.filter(h => h >= hourFilter.start && h <= hourFilter.end);
+
+  // viewMode e hourFilter vêm das prefs
+  const viewMode = prefs.viewMode;
+  const hourFilter = prefs.hourFilter;
+
+  const setViewMode = (mode: "week" | "day") => {
+    const next = { ...prefs, viewMode: mode };
+    setPrefs(next);
+    if (user) savePrefs(user.id, next);
+  };
+
+  const setHourFilter = (filter: { start: number; end: number }) => {
+    const next = { ...prefs, hourFilter: filter };
+    setPrefs(next);
+    if (user) savePrefs(user.id, next);
+  };
+
+  const displayedHours = ALL_HOURS.filter((h) => h >= hourFilter.start && h <= hourFilter.end);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ date: Date; hour: number } | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
-  
+
   // Automation trigger state
   const [automationTrigger, setAutomationTrigger] = useState<AutomationTriggerResult | null>(null);
-  
+
   // Form state
   const [selectedPaciente, setSelectedPaciente] = useState("");
   const [selectedProfissional, setSelectedProfissional] = useState("");
@@ -102,12 +164,12 @@ export default function Agenda() {
   const [notes, setNotes] = useState("");
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: viewMode === 'week' ? 7 : 1 }, (_, i) => 
-    viewMode === 'week' ? addDays(weekStart, i) : currentDate
+  const weekDays = Array.from({ length: viewMode === "week" ? 7 : 1 }, (_, i) =>
+    viewMode === "week" ? addDays(weekStart, i) : currentDate,
   );
 
   const goToPrevious = () => {
-    if (viewMode === 'week') {
+    if (viewMode === "week") {
       setCurrentDate(subWeeks(currentDate, 1));
     } else {
       setCurrentDate(addDays(currentDate, -1));
@@ -115,7 +177,7 @@ export default function Agenda() {
   };
 
   const goToNext = () => {
-    if (viewMode === 'week') {
+    if (viewMode === "week") {
       setCurrentDate(addWeeks(currentDate, 1));
     } else {
       setCurrentDate(addDays(currentDate, 1));
@@ -126,7 +188,6 @@ export default function Agenda() {
     setCurrentDate(new Date());
   };
 
-  // Mobile always navigates by day
   const goToPreviousMobile = () => {
     setCurrentDate(addDays(currentDate, -1));
   };
@@ -153,7 +214,7 @@ export default function Agenda() {
   const handleReservationManageClose = () => {
     setIsReservationManageOpen(false);
     setSelectedReservation(null);
-    fetchReservedSlots(); // Refresh after changes
+    fetchReservedSlots();
   };
 
   const handleSessionModalClose = () => {
@@ -161,26 +222,29 @@ export default function Agenda() {
     setSelectedSession(null);
   };
 
-  const handleSessionReschedule = useCallback(async (sessionId: string, newDate: Date, newHour: number) => {
-    const session = sessions.find((s) => s.id === sessionId);
-    if (!session) return;
+  const handleSessionReschedule = useCallback(
+    async (sessionId: string, newDate: Date, newHour: number) => {
+      const session = sessions.find((s) => s.id === sessionId);
+      if (!session) return;
 
-    const result = SessionService.reschedule(session, newDate, newHour, sessions);
-    
-    if (result.success && result.updatedSession) {
-      try {
-        await updateSession(sessionId, {
-          start_time: result.updatedSession.start_time,
-          end_time: result.updatedSession.end_time,
-        });
-        toast.success("Sessão remarcada com sucesso!");
-      } catch (error) {
-        toast.error("Erro ao guardar remarcação");
+      const result = SessionService.reschedule(session, newDate, newHour, sessions);
+
+      if (result.success && result.updatedSession) {
+        try {
+          await updateSession(sessionId, {
+            start_time: result.updatedSession.start_time,
+            end_time: result.updatedSession.end_time,
+          });
+          toast.success("Sessão remarcada com sucesso!");
+        } catch (error) {
+          toast.error("Erro ao guardar remarcação");
+        }
+      } else {
+        toast.error(result.error || "Erro ao remarcar sessão");
       }
-    } else {
-      toast.error(result.error || "Erro ao remarcar sessão");
-    }
-  }, [sessions, updateSession]);
+    },
+    [sessions, updateSession],
+  );
 
   const handleCreateSession = async (data: {
     pacienteId: string;
@@ -192,7 +256,6 @@ export default function Agenda() {
     minute?: number;
     packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
   }) => {
-    // Use provided date/hour or fall back to selectedSlot
     const finalDate = data.date || selectedSlot?.date;
     const finalHour = data.hour ?? selectedSlot?.hour;
     const finalMinute = data.minute ?? 0;
@@ -203,19 +266,17 @@ export default function Agenda() {
     }
 
     try {
-      const selectedPatient = patients.find(p => p.id === data.pacienteId);
-      const selectedProfessional = professionals.find(p => p.id === data.profissionalId);
-      const selectedService = services.find(s => s.id === data.servicoId);
+      const selectedPatient = patients.find((p) => p.id === data.pacienteId);
+      const selectedProfessional = professionals.find((p) => p.id === data.profissionalId);
+      const selectedService = services.find((s) => s.id === data.servicoId);
 
       const balance = getCreditBalance(data.pacienteId);
       const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
-      const paymentStatus = (serviceConsumesCredit && balance > 0) ? "reservado" : "pendente";
+      const paymentStatus = serviceConsumesCredit && balance > 0 ? "reservado" : "pendente";
 
-      // ── Package / Recurring mode ──
       if (data.packageData && data.packageData.generatedDates.length > 0) {
         const { packageData } = data;
 
-        // 1. Create scheduling_packages record
         const { getAuthContext } = await import("@/lib/auth-helpers");
         const { userId: currentUserId, clinicId: userClinicId } = await getAuthContext();
 
@@ -242,7 +303,6 @@ export default function Agenda() {
 
         if (pkgError) throw pkgError;
 
-        // 2. Create all sessions in batch
         const sessionInserts = packageData.generatedDates.map((gd) => {
           const startTime = new Date(gd.date);
           startTime.setHours(gd.hour, gd.minute, 0, 0);
@@ -276,7 +336,6 @@ export default function Agenda() {
         return;
       }
 
-      // ── Single session mode (avulso) ──
       const newSession = SessionService.create(
         {
           pacienteId: data.pacienteId,
@@ -288,23 +347,22 @@ export default function Agenda() {
           notes: data.notes,
         },
         sessions,
-        'clinic-id',
+        "clinic-id",
         {
-          services: services.map(s => ({
+          services: services.map((s) => ({
             id: s.id,
             name: s.name,
-            color: s.color || '#10B981',
+            color: s.color || "#10B981",
             duration_minutes: s.duration_minutes,
             price: Number(s.price),
             consumes_credit: s.consumes_credit,
           })),
-          patients: patients.map(p => ({ id: p.id, full_name: p.full_name })),
-          professionals: professionals.map(p => ({ id: p.id, full_name: p.full_name })),
-        }
+          patients: patients.map((p) => ({ id: p.id, full_name: p.full_name })),
+          professionals: professionals.map((p) => ({ id: p.id, full_name: p.full_name })),
+        },
       );
 
       newSession.payment_status = paymentStatus;
-      // Mark retroactive sessions as "realizado"
       const sessionStart = new Date(newSession.start_time);
       if (sessionStart < new Date()) {
         newSession.status = "realizado";
@@ -315,9 +373,9 @@ export default function Agenda() {
       resetForm();
 
       const triggerResult = await checkAppointmentCreatedTrigger({
-        patientName: selectedPatient?.full_name || '',
+        patientName: selectedPatient?.full_name || "",
         patientPhone: selectedPatient?.phone || undefined,
-        professionalName: selectedProfessional?.full_name || '',
+        professionalName: selectedProfessional?.full_name || "",
         serviceName: selectedService?.name,
         date: finalDate,
         hour: finalHour,
@@ -327,9 +385,7 @@ export default function Agenda() {
         setAutomationTrigger(triggerResult);
       } else {
         toast.success(
-          paymentStatus === "pendente"
-            ? "Sessão agendada com pagamento pendente"
-            : "Sessão agendada com sucesso!"
+          paymentStatus === "pendente" ? "Sessão agendada com pagamento pendente" : "Sessão agendada com sucesso!",
         );
       }
     } catch (error) {
@@ -351,7 +407,6 @@ export default function Agenda() {
     resetForm();
   };
 
-  // Add credits from session modal
   const handleAddCredits = async (patientId: string, data: CreditPurchaseData) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -380,13 +435,10 @@ export default function Agenda() {
       throw new Error(msg);
     }
 
-    // Update local state for immediate UI feedback
     await addCredits(patientId, data.amount);
     await refreshCreditBalances();
   };
 
-
-  // Handle duplicate session
   const handleDuplicateSession = async (data: {
     pacienteId: string;
     profissionalId: string;
@@ -407,30 +459,24 @@ export default function Agenda() {
     });
   };
 
-  // Handle create reserved slot
   const handleCreateReservedSlot = async (data: CreateReservedSlotData) => {
     await createReservedSlot(data);
   };
 
+  // Não renderiza até as preferências estarem carregadas (evita flash de layout)
+  if (!prefsLoaded) return null;
+
   return (
-    <AppLayout 
-      title="Agenda" 
+    <AppLayout
+      title="Agenda"
       subtitle="Gerencie os agendamentos da clínica"
       actions={
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={() => setIsBatchModalOpen(true)} 
-            className="gap-2 min-h-[44px]"
-          >
+          <Button variant="outline" onClick={() => setIsBatchModalOpen(true)} className="gap-2 min-h-[44px]">
             <FileSpreadsheet className="h-4 w-4" />
             <span className="hidden sm:inline">Lote</span>
           </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => setIsReservedSlotModalOpen(true)} 
-            className="gap-2 min-h-[44px]"
-          >
+          <Button variant="outline" onClick={() => setIsReservedSlotModalOpen(true)} className="gap-2 min-h-[44px]">
             <Lock className="h-4 w-4" />
             <span className="hidden sm:inline">Reservar</span>
           </Button>
@@ -457,7 +503,7 @@ export default function Agenda() {
           />
         </div>
 
-        {/* Mobile Controls - simplified, always day navigation */}
+        {/* Mobile Controls */}
         <div className="md:hidden">
           <AgendaControls
             currentDate={currentDate}
@@ -465,13 +511,12 @@ export default function Agenda() {
             onPrevious={goToPreviousMobile}
             onNext={goToNextMobile}
             onToday={goToToday}
-            onViewModeChange={() => {}} // No-op on mobile
+            onViewModeChange={() => {}}
             hourFilter={hourFilter}
             onHourFilterChange={setHourFilter}
           />
         </div>
 
-        {/* Desktop: Weekly/Daily Grid */}
         <AgendaDesktopGrid
           weekDays={weekDays}
           hours={displayedHours}
@@ -484,7 +529,6 @@ export default function Agenda() {
           getCreditBalance={getCreditBalance}
         />
 
-        {/* Mobile: Timeline View */}
         <AgendaMobileTimeline
           currentDate={currentDate}
           hours={displayedHours}
@@ -497,7 +541,6 @@ export default function Agenda() {
         />
       </div>
 
-      {/* New Session Modal */}
       <NewSessionModal
         isOpen={isModalOpen}
         onClose={handleModalClose}
@@ -517,7 +560,6 @@ export default function Agenda() {
         getCreditBalance={getCreditBalance}
       />
 
-      {/* New Reserved Slot Modal */}
       {clinicId && (
         <NewReservedSlotModal
           isOpen={isReservedSlotModalOpen}
@@ -530,7 +572,6 @@ export default function Agenda() {
         />
       )}
 
-      {/* Session Management Modal */}
       <SessionManagementModal
         isOpen={isSessionModalOpen}
         onClose={handleSessionModalClose}
@@ -546,25 +587,25 @@ export default function Agenda() {
         onDuplicateSession={handleDuplicateSession}
       />
 
-      {/* Reserved Slot Management Modal */}
       <ReservedSlotManagementModal
         isOpen={isReservationManageOpen}
         onClose={handleReservationManageClose}
         reservation={selectedReservation}
         onUpdate={updateReservedSlot}
         onCancel={cancelReservedSlot}
-        onDelete={async (id) => { await ReservedSlotService.delete(id); }}
-        onPause={async (id) => { await ReservedSlotService.pause(id); }}
-        onActivate={async (id) => { await ReservedSlotService.activate(id); }}
+        onDelete={async (id) => {
+          await ReservedSlotService.delete(id);
+        }}
+        onPause={async (id) => {
+          await ReservedSlotService.pause(id);
+        }}
+        onActivate={async (id) => {
+          await ReservedSlotService.activate(id);
+        }}
       />
 
-      {/* Automation Trigger Toast/Modal */}
-      <AutomationTriggerToast
-        triggerResult={automationTrigger}
-        onDismiss={() => setAutomationTrigger(null)}
-      />
+      <AutomationTriggerToast triggerResult={automationTrigger} onDismiss={() => setAutomationTrigger(null)} />
 
-      {/* Batch Scheduling Modal */}
       {clinicId && (
         <BatchSchedulingModal
           isOpen={isBatchModalOpen}
