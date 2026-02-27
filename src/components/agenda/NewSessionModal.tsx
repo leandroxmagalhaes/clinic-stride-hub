@@ -187,9 +187,33 @@ export function NewSessionModal({
         return;
       }
 
-      const insertData: { full_name: string; user_id: string; phone?: string; email?: string } = {
+      // Buscar clinic_id do usuário
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("clinic_id")
+        .eq("id", userData.user.id)
+        .single();
+
+      if (!profileData?.clinic_id) {
+        toast.error("Clínica não identificada. Faça login novamente.");
+        setIsCreatingPatient(false);
+        return;
+      }
+
+      const insertData: {
+        full_name: string;
+        clinic_id: string;
+        phone?: string;
+        email?: string;
+        is_active: boolean;
+        health_tags: string[];
+        privacy_consent_at: string;
+      } = {
         full_name: trimmedName,
-        user_id: userData.user.id,
+        clinic_id: profileData.clinic_id,
+        is_active: true,
+        health_tags: [],
+        privacy_consent_at: new Date().toISOString(),
       };
 
       if (quickPatientPhone.trim()) {
@@ -199,7 +223,7 @@ export function NewSessionModal({
         insertData.email = quickPatientEmail.trim();
       }
 
-      const { data, error } = await supabase.from("patients").insert(insertData).select().single();
+      const { data, error } = await supabase.from("pacientes").insert(insertData).select().single();
 
       if (error) throw error;
       if (!data) throw new Error("Nenhum dado retornado");
