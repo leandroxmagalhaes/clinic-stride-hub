@@ -679,6 +679,68 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          clinic_id: string
+          created_at: string | null
+          id: string
+          message: string
+          patient_id: string | null
+          read: boolean | null
+          title: string
+          type: string
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string | null
+          id?: string
+          message: string
+          patient_id?: string | null
+          read?: boolean | null
+          title: string
+          type: string
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string | null
+          id?: string
+          message?: string
+          patient_id?: string | null
+          read?: boolean | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "notifications_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+        ]
+      }
       pacientes: {
         Row: {
           address: string | null

@@ -6,7 +6,8 @@ export type NotificationType =
   | 'report_expired' 
   | 'report_expiring' 
   | 'sessions_today'
-  | 'inactive_patient';
+  | 'inactive_patient'
+  | 'new_patient';
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
@@ -19,25 +20,25 @@ export interface AppNotification {
   link?: string;
   createdAt: Date;
   count?: number;
+  patientId?: string;
+  isDbNotification?: boolean;
 }
 
 export class NotificationService {
   /**
-   * Get all notifications aggregated from multiple sources
+   * Get all notifications aggregated from multiple sources + DB
    */
   static async getNotifications(): Promise<AppNotification[]> {
-    const notifications: AppNotification[] = [];
-
-    const [birthdays, reports, sessions, inactive] = await Promise.all([
+    const [birthdays, reports, sessions, inactive, dbNotifications] = await Promise.all([
       this.getBirthdayNotifications(),
       this.getReportAlerts(),
       this.getTodaySessions(),
-      this.getInactivePatientNotifications()
+      this.getInactivePatientNotifications(),
+      this.getDbNotifications(),
     ]);
 
-    notifications.push(...birthdays, ...reports, ...sessions, ...inactive);
+    const notifications = [...birthdays, ...reports, ...sessions, ...inactive, ...dbNotifications];
 
-    // Sort by priority (high first) then by date
     return notifications.sort((a, b) => {
       const priorityOrder = { high: 0, medium: 1, low: 2 };
       if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
@@ -45,6 +46,60 @@ export class NotificationService {
       }
       return b.createdAt.getTime() - a.createdAt.getTime();
     });
+  }
+
+  /**
+   * Get unread notifications from the database
+   */
+  static async getDbNotifications(): Promise<AppNotification[]> {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('read', false)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching DB notifications:', error);
+        return [];
+      }
+
+      return (data || []).map((n: any) => ({
+        id: n.id,
+        type: n.type as NotificationType,
+        title: n.title,
+        message: n.message,
+        priority: n.type === 'new_patient' ? 'high' as NotificationPriority : 'medium' as NotificationPriority,
+        link: n.patient_id ? `/pacientes?id=${n.patient_id}&edit=true` : undefined,
+        createdAt: new Date(n.created_at),
+        patientId: n.patient_id,
+        isDbNotification: true,
+      }));
+    } catch (error) {
+      console.error('Error fetching DB notifications:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Mark a single notification as read
+   */
+  static async markAsRead(id: string): Promise<void> {
+    await supabase
+      .from('notifications')
+      .update({ read: true } as any)
+      .eq('id', id);
+  }
+
+  /**
+   * Mark all notifications as read
+   */
+  static async markAllAsRead(): Promise<void> {
+    await supabase
+      .from('notifications')
+      .update({ read: true } as any)
+      .eq('read', false);
   }
 
   /**
