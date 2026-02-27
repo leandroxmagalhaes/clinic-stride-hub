@@ -558,19 +558,10 @@ export default function Agenda() {
         notes={notes}
         setNotes={setNotes}
         getCreditBalance={getCreditBalance}
+        onPatientCreated={(newPatient) => {
+          setPatients((prev) => [...prev, newPatient].sort((a, b) => a.full_name.localeCompare(b.full_name)));
+        }}
       />
-
-      {clinicId && (
-        <NewReservedSlotModal
-          isOpen={isReservedSlotModalOpen}
-          onClose={() => setIsReservedSlotModalOpen(false)}
-          patients={patients}
-          professionals={professionals}
-          services={services}
-          clinicId={clinicId}
-          onSubmit={handleCreateReservedSlot}
-        />
-      )}
 
       <SessionManagementModal
         isOpen={isSessionModalOpen}
