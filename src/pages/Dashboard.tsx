@@ -317,7 +317,9 @@ export default function Dashboard() {
         onSubmit={handleSubmitSession}
         getCreditBalance={getCreditBalance}
         onPatientCreated={(newPatient) => {
-          setLocalPatients((prev) => [...prev, newPatient].sort((a, b) => a.full_name.localeCompare(b.full_name)));
+          setLocalPatients((prev) =>
+            [...prev, newPatient as any].sort((a, b) => a.full_name.localeCompare(b.full_name)),
+          );
           if (refreshPatients) refreshPatients();
         }}
       />
