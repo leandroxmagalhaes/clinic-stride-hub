@@ -1,12 +1,15 @@
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Cake, AlertTriangle, FileText, Calendar, UserX } from 'lucide-react';
+import { Cake, AlertTriangle, FileText, Calendar, UserX, UserPlus } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import type { AppNotification, NotificationType } from '@/services/NotificationService';
 
 interface NotificationItemProps {
   notification: AppNotification;
   onClose: () => void;
+  onMarkAsRead?: (id: string) => void;
 }
 
 const iconMap: Record<NotificationType, React.ElementType> = {
@@ -15,6 +18,7 @@ const iconMap: Record<NotificationType, React.ElementType> = {
   report_expiring: FileText,
   sessions_today: Calendar,
   inactive_patient: UserX,
+  new_patient: UserPlus,
 };
 
 const priorityStyles: Record<string, string> = {
@@ -31,17 +35,26 @@ const iconStyles: Record<string, string> = {
 
 export const NotificationItem = memo(function NotificationItem({ 
   notification, 
-  onClose 
+  onClose,
+  onMarkAsRead,
 }: NotificationItemProps) {
   const navigate = useNavigate();
   const Icon = iconMap[notification.type];
 
   const handleClick = () => {
+    if (notification.isDbNotification && onMarkAsRead) {
+      onMarkAsRead(notification.id);
+    }
     if (notification.link) {
       navigate(notification.link);
       onClose();
     }
   };
+
+  const timeAgo = formatDistanceToNow(notification.createdAt, {
+    addSuffix: true,
+    locale: pt,
+  });
 
   return (
     <button
@@ -70,6 +83,9 @@ export const NotificationItem = memo(function NotificationItem({
           </p>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
             {notification.message}
+          </p>
+          <p className="text-[10px] text-muted-foreground/70 mt-1">
+            {timeAgo}
           </p>
         </div>
       </div>

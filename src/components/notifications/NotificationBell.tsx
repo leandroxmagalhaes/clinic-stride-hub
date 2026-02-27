@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useCallback } from 'react';
-import { Bell } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -7,11 +8,14 @@ import { Separator } from '@/components/ui/separator';
 import { NotificationItem } from './NotificationItem';
 import { NotificationService, type AppNotification } from '@/services/NotificationService';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 export const NotificationBell = memo(function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -27,11 +31,79 @@ export const NotificationBell = memo(function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications();
-    
-    // Refresh notifications every 5 minutes
     const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
+
+  // Realtime subscription
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const setupRealtime = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('clinic_id')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (!profile?.clinic_id) return;
+
+      channel = supabase
+        .channel('notifications-realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `clinic_id=eq.${profile.clinic_id}`,
+          },
+          (payload) => {
+            const n = payload.new as any;
+            const newNotification: AppNotification = {
+              id: n.id,
+              type: n.type,
+              title: n.title,
+              message: n.message,
+              priority: 'high',
+              link: n.patient_id ? `/pacientes?id=${n.patient_id}&edit=true` : undefined,
+              createdAt: new Date(n.created_at),
+              patientId: n.patient_id,
+              isDbNotification: true,
+            };
+
+            setNotifications(prev => [newNotification, ...prev]);
+
+            // Show toast
+            toast({
+              title: `🔔 ${n.title}`,
+              description: n.message,
+              action: n.patient_id ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/pacientes?id=${n.patient_id}&edit=true`)}
+                >
+                  Ver ficha →
+                </Button>
+              ) : undefined,
+            });
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [navigate]);
 
   const highPriorityCount = NotificationService.getHighPriorityCount(notifications);
   const hasNotifications = notifications.length > 0;
@@ -40,10 +112,22 @@ export const NotificationBell = memo(function NotificationBell() {
     setOpen(false);
   }, []);
 
+  const handleMarkAsRead = useCallback(async (id: string) => {
+    await NotificationService.markAsRead(id);
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
+
+  const handleMarkAllAsRead = useCallback(async () => {
+    await NotificationService.markAllAsRead();
+    setNotifications(prev => prev.filter(n => !n.isDbNotification));
+  }, []);
+
   // Group notifications by priority
   const highPriority = notifications.filter(n => n.priority === 'high');
   const mediumPriority = notifications.filter(n => n.priority === 'medium');
   const lowPriority = notifications.filter(n => n.priority === 'low');
+
+  const hasDbNotifications = notifications.some(n => n.isDbNotification);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -109,6 +193,7 @@ export const NotificationBell = memo(function NotificationBell() {
                       key={notification.id} 
                       notification={notification}
                       onClose={handleClose}
+                      onMarkAsRead={handleMarkAsRead}
                     />
                   ))}
                 </>
@@ -125,6 +210,7 @@ export const NotificationBell = memo(function NotificationBell() {
                       key={notification.id} 
                       notification={notification}
                       onClose={handleClose}
+                      onMarkAsRead={handleMarkAsRead}
                     />
                   ))}
                 </>
@@ -141,6 +227,7 @@ export const NotificationBell = memo(function NotificationBell() {
                       key={notification.id} 
                       notification={notification}
                       onClose={handleClose}
+                      onMarkAsRead={handleMarkAsRead}
                     />
                   ))}
                 </>
@@ -148,6 +235,23 @@ export const NotificationBell = memo(function NotificationBell() {
             </div>
           )}
         </ScrollArea>
+
+        {hasDbNotifications && (
+          <>
+            <Separator />
+            <div className="p-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs text-muted-foreground"
+                onClick={handleMarkAllAsRead}
+              >
+                <CheckCheck className="h-3.5 w-3.5 mr-1.5" />
+                Marcar todas como lidas
+              </Button>
+            </div>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );

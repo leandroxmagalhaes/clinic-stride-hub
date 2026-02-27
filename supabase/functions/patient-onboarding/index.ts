@@ -120,9 +120,9 @@ Deno.serve(async (req) => {
         }
         insertData.onboarding_completed_at = new Date().toISOString();
 
-        const { error } = await supabase.from("pacientes").insert(insertData);
+        const { data: newPatient, error } = await supabase.from("pacientes").insert(insertData).select("id").single();
 
-        if (error) {
+        if (error || !newPatient) {
           console.error("Insert error:", error);
           return new Response(
             JSON.stringify({ error: "Erro ao criar registo" }),
@@ -130,8 +130,19 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Insert notification for the clinic
+        await supabase.from("notifications").insert({
+          clinic_id: clinicId,
+          type: "new_patient",
+          title: "Novo utente registado",
+          message: `${body.full_name} submeteu o pré-registo`,
+          patient_id: newPatient.id,
+          read: false,
+          created_at: new Date().toISOString(),
+        });
+
         return new Response(
-          JSON.stringify({ success: true }),
+          JSON.stringify({ success: true, patient_id: newPatient.id }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
