@@ -7,9 +7,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Clock, CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
+import { Clock, CalendarIcon, Check, ChevronsUpDown, UserPlus, Loader2 } from "lucide-react";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { ScheduleWarningAlert } from "@/components/agenda/ScheduleWarningAlert";
@@ -24,6 +25,7 @@ import {
 } from "@/services/PackageSchedulingService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Patient {
   id: string;
@@ -78,6 +80,7 @@ interface NewSessionModalProps {
   notes: string;
   setNotes: (value: string) => void;
   getCreditBalance?: (patientId: string) => number;
+  onPatientCreated?: (patient: Patient) => void;
 }
 
 // Full range of available hours (06:00 to 23:00)
@@ -101,6 +104,7 @@ export function NewSessionModal({
   notes,
   setNotes,
   getCreditBalance,
+  onPatientCreated,
 }: NewSessionModalProps) {
   const [manualDate, setManualDate] = useState<Date | undefined>(undefined);
   const [manualHour, setManualHour] = useState<string>("");
@@ -114,6 +118,13 @@ export function NewSessionModal({
   const [flexible, setFlexible] = useState(false);
   const [totalSessions, setTotalSessions] = useState(4);
   const [customSessionCount, setCustomSessionCount] = useState("");
+
+  // Quick patient registration state
+  const [showQuickPatient, setShowQuickPatient] = useState(false);
+  const [quickPatientName, setQuickPatientName] = useState("");
+  const [quickPatientPhone, setQuickPatientPhone] = useState("");
+  const [quickPatientEmail, setQuickPatientEmail] = useState("");
+  const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
   // Reset when modal opens/closes
   useEffect(() => {
@@ -133,6 +144,11 @@ export function NewSessionModal({
       setFlexible(false);
       setTotalSessions(4);
       setCustomSessionCount("");
+      // Reset quick patient form
+      setShowQuickPatient(false);
+      setQuickPatientName("");
+      setQuickPatientPhone("");
+      setQuickPatientEmail("");
     }
   }, [isOpen, selectedSlot]);
 
@@ -153,12 +169,74 @@ export function NewSessionModal({
       frequency,
       fixedDays: selectedDays,
       flexible,
-      totalSessions: modality === "recorrente" ? 12 : totalSessions, // recorrente generates 12 by default
+      totalSessions: modality === "recorrente" ? 12 : totalSessions,
       startDate: finalDate,
       hour: finalHour,
       minute: finalMinute,
     });
   }, [isPackageMode, modality, frequency, selectedDays, flexible, totalSessions, finalDate, finalHour, finalMinute]);
+
+  // Quick patient creation handler
+  const handleQuickPatientCreate = async () => {
+    const trimmedName = quickPatientName.trim();
+    if (!trimmedName) {
+      toast.error("Nome do paciente é obrigatório");
+      return;
+    }
+
+    setIsCreatingPatient(true);
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        toast.error("Usuário não autenticado");
+        setIsCreatingPatient(false);
+        return;
+      }
+
+      const newPatient: Record<string, string> = {
+        full_name: trimmedName,
+        user_id: userData.user.id,
+      };
+
+      if (quickPatientPhone.trim()) {
+        newPatient.phone = quickPatientPhone.trim();
+      }
+      if (quickPatientEmail.trim()) {
+        newPatient.email = quickPatientEmail.trim();
+      }
+
+      const { data, error } = await supabase.from("patients").insert(newPatient).select("id, full_name").single();
+
+      if (error) throw error;
+
+      const createdPatient: Patient = {
+        id: data.id,
+        full_name: data.full_name,
+      };
+
+      // Notify parent to refresh patient list
+      if (onPatientCreated) {
+        onPatientCreated(createdPatient);
+      }
+
+      // Auto-select the new patient
+      setSelectedPaciente(data.id);
+
+      // Reset and close quick form
+      setShowQuickPatient(false);
+      setQuickPatientName("");
+      setQuickPatientPhone("");
+      setQuickPatientEmail("");
+
+      toast.success(`Paciente "${data.full_name}" cadastrado e selecionado!`);
+    } catch (error: any) {
+      console.error("Erro ao cadastrar paciente:", error);
+      toast.error("Erro ao cadastrar paciente: " + (error.message || "Tente novamente"));
+    } finally {
+      setIsCreatingPatient(false);
+    }
+  };
 
   const handleSubmit = () => {
     if (!finalDate || finalHour === undefined) {
@@ -341,50 +419,139 @@ export function NewSessionModal({
             </div>
           )}
 
-          {/* Patient selector */}
+          {/* Patient selector with quick registration */}
           <div className="space-y-2">
-            <Label>Paciente *</Label>
-            <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={patientSearchOpen}
-                  className="w-full justify-between min-h-[44px] font-normal"
-                >
-                  {selectedPaciente
-                    ? patients.find((p) => p.id === selectedPaciente)?.full_name
-                    : "Selecione o paciente"}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Pesquisar paciente..." className="h-10" />
-                  <CommandList>
-                    <CommandEmpty>Nenhum paciente encontrado.</CommandEmpty>
-                    <CommandGroup>
-                      {patients.map((p) => (
-                        <CommandItem
-                          key={p.id}
-                          value={p.full_name}
-                          onSelect={() => {
-                            setSelectedPaciente(p.id);
-                            setPatientSearchOpen(false);
-                          }}
-                          className="min-h-[44px]"
-                        >
-                          <Check
-                            className={cn("mr-2 h-4 w-4", selectedPaciente === p.id ? "opacity-100" : "opacity-0")}
-                          />
-                          {p.full_name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <div className="flex items-center justify-between">
+              <Label>Paciente *</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-primary hover:text-primary/80 gap-1 px-2"
+                onClick={() => setShowQuickPatient(!showQuickPatient)}
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                {showQuickPatient ? "Cancelar" : "Novo Paciente"}
+              </Button>
+            </div>
+
+            {/* Quick patient registration form */}
+            {showQuickPatient && (
+              <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                <p className="text-xs font-medium text-primary">Cadastro rápido de paciente</p>
+
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Nome completo *"
+                    value={quickPatientName}
+                    onChange={(e) => setQuickPatientName(e.target.value)}
+                    className="min-h-[40px] text-sm"
+                    autoFocus
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Telefone"
+                      value={quickPatientPhone}
+                      onChange={(e) => setQuickPatientPhone(e.target.value)}
+                      className="min-h-[40px] text-sm"
+                      type="tel"
+                    />
+                    <Input
+                      placeholder="Email"
+                      value={quickPatientEmail}
+                      onChange={(e) => setQuickPatientEmail(e.target.value)}
+                      className="min-h-[40px] text-sm"
+                      type="email"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 min-h-[36px] text-xs"
+                    onClick={() => {
+                      setShowQuickPatient(false);
+                      setQuickPatientName("");
+                      setQuickPatientPhone("");
+                      setQuickPatientEmail("");
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="flex-1 min-h-[36px] text-xs gap-1"
+                    onClick={handleQuickPatientCreate}
+                    disabled={isCreatingPatient || !quickPatientName.trim()}
+                  >
+                    {isCreatingPatient ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Cadastrando...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Cadastrar e Selecionar
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground">
+                  Dados completos podem ser preenchidos depois no cadastro do paciente.
+                </p>
+              </div>
+            )}
+
+            {/* Existing patient search (hidden when quick form is open) */}
+            {!showQuickPatient && (
+              <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={patientSearchOpen}
+                    className="w-full justify-between min-h-[44px] font-normal"
+                  >
+                    {selectedPaciente
+                      ? patients.find((p) => p.id === selectedPaciente)?.full_name
+                      : "Selecione o paciente"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Pesquisar paciente..." className="h-10" />
+                    <CommandList>
+                      <CommandEmpty>Nenhum paciente encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {patients.map((p) => (
+                          <CommandItem
+                            key={p.id}
+                            value={p.full_name}
+                            onSelect={() => {
+                              setSelectedPaciente(p.id);
+                              setPatientSearchOpen(false);
+                            }}
+                            className="min-h-[44px]"
+                          >
+                            <Check
+                              className={cn("mr-2 h-4 w-4", selectedPaciente === p.id ? "opacity-100" : "opacity-0")}
+                            />
+                            {p.full_name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            )}
 
             {selectedPatientData && (
               <div className="flex flex-wrap items-center gap-2 mt-2">
