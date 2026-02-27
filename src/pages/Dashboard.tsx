@@ -303,7 +303,7 @@ export default function Dashboard() {
       </div>
 
       {/* New Session Modal */}
-      <NewSessionModal
+ <NewSessionModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         selectedSlot={{ date: new Date(), hour: new Date().getHours() }}
@@ -320,7 +320,7 @@ export default function Dashboard() {
         setNotes={setNotes}
         onSubmit={handleSubmitSession}
         getCreditBalance={getCreditBalance}
+        onPatientCreated={(newPatient) => {
+          setPatients((prev) => [...prev, newPatient].sort((a, b) => a.full_name.localeCompare(b.full_name)));
+        }}
       />
-    </AppLayout>
-  );
-}
