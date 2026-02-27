@@ -83,7 +83,6 @@ interface NewSessionModalProps {
   onPatientCreated?: (patient: Patient) => void;
 }
 
-// Full range of available hours (06:00 to 23:00)
 const AVAILABLE_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 const AVAILABLE_MINUTES = [0, 15, 30, 45];
 
@@ -111,7 +110,6 @@ export function NewSessionModal({
   const [patientSearchOpen, setPatientSearchOpen] = useState(false);
   const [manualMinute, setManualMinute] = useState<string>("0");
 
-  // Package/modality state
   const [modality, setModality] = useState<SchedulingModality>("avulso");
   const [frequency, setFrequency] = useState<SchedulingFrequency>("semanal");
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
@@ -119,14 +117,12 @@ export function NewSessionModal({
   const [totalSessions, setTotalSessions] = useState(4);
   const [customSessionCount, setCustomSessionCount] = useState("");
 
-  // Quick patient registration state
   const [showQuickPatient, setShowQuickPatient] = useState(false);
   const [quickPatientName, setQuickPatientName] = useState("");
   const [quickPatientPhone, setQuickPatientPhone] = useState("");
   const [quickPatientEmail, setQuickPatientEmail] = useState("");
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
-  // Reset when modal opens/closes
   useEffect(() => {
     if (isOpen && selectedSlot) {
       setManualDate(selectedSlot.date);
@@ -144,7 +140,6 @@ export function NewSessionModal({
       setFlexible(false);
       setTotalSessions(4);
       setCustomSessionCount("");
-      // Reset quick patient form
       setShowQuickPatient(false);
       setQuickPatientName("");
       setQuickPatientPhone("");
@@ -159,7 +154,6 @@ export function NewSessionModal({
 
   const isPackageMode = modality !== "avulso";
 
-  // Generate preview dates for packages
   const generatedDates = useMemo(() => {
     if (!isPackageMode || !finalDate || finalHour === undefined || selectedDays.length === 0) {
       return [];
@@ -176,7 +170,6 @@ export function NewSessionModal({
     });
   }, [isPackageMode, modality, frequency, selectedDays, flexible, totalSessions, finalDate, finalHour, finalMinute]);
 
-  // Quick patient creation handler
   const handleQuickPatientCreate = async () => {
     const trimmedName = quickPatientName.trim();
     if (!trimmedName) {
@@ -194,42 +187,40 @@ export function NewSessionModal({
         return;
       }
 
-      const newPatient: Record<string, string> = {
+      const insertData: { full_name: string; user_id: string; phone?: string; email?: string } = {
         full_name: trimmedName,
         user_id: userData.user.id,
       };
 
       if (quickPatientPhone.trim()) {
-        newPatient.phone = quickPatientPhone.trim();
+        insertData.phone = quickPatientPhone.trim();
       }
       if (quickPatientEmail.trim()) {
-        newPatient.email = quickPatientEmail.trim();
+        insertData.email = quickPatientEmail.trim();
       }
 
-      const { data, error } = await supabase.from("patients").insert(newPatient).select("id, full_name").single();
+      const { data, error } = await supabase.from("patients").insert(insertData).select().single();
 
       if (error) throw error;
+      if (!data) throw new Error("Nenhum dado retornado");
 
       const createdPatient: Patient = {
-        id: data.id,
-        full_name: data.full_name,
+        id: (data as any).id,
+        full_name: (data as any).full_name,
       };
 
-      // Notify parent to refresh patient list
       if (onPatientCreated) {
         onPatientCreated(createdPatient);
       }
 
-      // Auto-select the new patient
-      setSelectedPaciente(data.id);
+      setSelectedPaciente(createdPatient.id);
 
-      // Reset and close quick form
       setShowQuickPatient(false);
       setQuickPatientName("");
       setQuickPatientPhone("");
       setQuickPatientEmail("");
 
-      toast.success(`Paciente "${data.full_name}" cadastrado e selecionado!`);
+      toast.success(`Paciente "${createdPatient.full_name}" cadastrado e selecionado!`);
     } catch (error: any) {
       console.error("Erro ao cadastrar paciente:", error);
       toast.error("Erro ao cadastrar paciente: " + (error.message || "Tente novamente"));
@@ -269,7 +260,6 @@ export function NewSessionModal({
     });
   };
 
-  // Patient data
   const selectedPatientData = useMemo(
     () => patients.find((p) => p.id === selectedPaciente),
     [patients, selectedPaciente],
@@ -312,7 +302,6 @@ export function NewSessionModal({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Modality Selector */}
           <ModalityFields
             modality={modality}
             setModality={setModality}
@@ -328,7 +317,6 @@ export function NewSessionModal({
             setCustomSessionCount={setCustomSessionCount}
           />
 
-          {/* Date/Time Selection */}
           {!isManualMode && finalDate && finalHour !== undefined ? (
             <div className="p-3 rounded-lg bg-muted/50 text-sm">
               <p className="font-medium">{format(finalDate, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
@@ -409,7 +397,6 @@ export function NewSessionModal({
             </div>
           )}
 
-          {/* Retroactive date warning */}
           {finalDate && finalDate < new Date(new Date().setHours(0, 0, 0, 0)) && (
             <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning-foreground">
               <p className="font-medium">📅 Data retroativa</p>
@@ -435,7 +422,6 @@ export function NewSessionModal({
               </Button>
             </div>
 
-            {/* Quick patient registration form */}
             {showQuickPatient && (
               <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                 <p className="text-xs font-medium text-primary">Cadastro rápido de paciente</p>
@@ -508,7 +494,6 @@ export function NewSessionModal({
               </div>
             )}
 
-            {/* Existing patient search (hidden when quick form is open) */}
             {!showQuickPatient && (
               <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
                 <PopoverTrigger asChild>
@@ -587,7 +572,7 @@ export function NewSessionModal({
           </div>
 
           <div className="space-y-2">
-            <Label>Tipo de Serviço *</Label>
+            <Label>Tipo de Serviço </Label>
             <Select value={selectedServico} onValueChange={setSelectedServico}>
               <SelectTrigger className="min-h-[44px]">
                 <SelectValue placeholder="Selecione o serviço" />
@@ -616,7 +601,6 @@ export function NewSessionModal({
             />
           </div>
 
-          {/* Package preview */}
           {isPackageMode && generatedDates.length > 0 && <PackageSchedulePreview dates={generatedDates} />}
         </div>
 
