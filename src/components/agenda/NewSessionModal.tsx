@@ -8,9 +8,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Clock, CalendarIcon, Check, ChevronsUpDown, UserPlus, X, Loader2 } from "lucide-react";
+import { Clock, CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { ScheduleWarningAlert } from "@/components/agenda/ScheduleWarningAlert";
@@ -25,8 +24,6 @@ import {
 } from "@/services/PackageSchedulingService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { getAuthContext } from "@/lib/auth-helpers";
 
 interface Patient {
   id: string;
@@ -87,182 +84,6 @@ interface NewSessionModalProps {
 const AVAILABLE_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 const AVAILABLE_MINUTES = [0, 15, 30, 45];
 
-// ── Formulário de cadastro rápido de paciente ───────────────────────────────
-interface QuickPatientFormData {
-  full_name: string;
-  phone: string;
-  email: string;
-  birth_date: string;
-  nif: string;
-  notes: string;
-}
-
-interface QuickPatientFormProps {
-  onSave: (patient: Patient) => void;
-  onCancel: () => void;
-}
-
-function QuickPatientForm({ onSave, onCancel }: QuickPatientFormProps) {
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<QuickPatientFormData>({
-    full_name: "",
-    phone: "",
-    email: "",
-    birth_date: "",
-    nif: "",
-    notes: "",
-  });
-
-  const handleChange = (field: keyof QuickPatientFormData, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleSave = async () => {
-    if (!form.full_name.trim()) {
-      toast.error("Nome completo é obrigatório");
-      return;
-    }
-    if (!form.phone.trim()) {
-      toast.error("Telefone é obrigatório");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const { clinicId } = await getAuthContext();
-
-      const insertData: Record<string, any> = {
-        clinic_id: clinicId,
-        full_name: form.full_name.trim(),
-        phone: form.phone.trim(),
-        cadastro_incompleto: true,
-      };
-
-      if (form.email.trim()) insertData.email = form.email.trim();
-      if (form.birth_date) insertData.birth_date = form.birth_date;
-      if (form.nif.trim()) insertData.nif = form.nif.trim();
-      if (form.notes.trim()) insertData.notes = form.notes.trim();
-
-      const { data, error } = await supabase.from("pacientes").insert(insertData).select("id, full_name").single();
-
-      if (error) throw error;
-
-      toast.success(`Paciente "${data.full_name}" cadastrado com sucesso!`);
-      onSave({ id: data.id, full_name: data.full_name });
-    } catch (err: any) {
-      console.error("Erro ao cadastrar paciente:", err);
-      toast.error(err?.message || "Erro ao cadastrar paciente");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="border border-primary/30 rounded-lg bg-primary/5 p-4 space-y-3 mt-2">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <UserPlus className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-primary">Novo paciente</span>
-        </div>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onCancel}>
-          <X className="h-3 w-3" />
-        </Button>
-      </div>
-
-      {/* Campos */}
-      <div className="space-y-2">
-        <div>
-          <Label className="text-xs">Nome completo *</Label>
-          <Input
-            value={form.full_name}
-            onChange={(e) => handleChange("full_name", e.target.value)}
-            placeholder="Nome completo do paciente"
-            className="mt-1 h-9 text-sm"
-            autoFocus
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label className="text-xs">Telefone *</Label>
-            <Input
-              value={form.phone}
-              onChange={(e) => handleChange("phone", e.target.value)}
-              placeholder="+351 9xx xxx xxx"
-              className="mt-1 h-9 text-sm"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Email</Label>
-            <Input
-              value={form.email}
-              onChange={(e) => handleChange("email", e.target.value)}
-              placeholder="email@exemplo.com"
-              type="email"
-              className="mt-1 h-9 text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label className="text-xs">Data de nascimento</Label>
-            <Input
-              value={form.birth_date}
-              onChange={(e) => handleChange("birth_date", e.target.value)}
-              type="date"
-              className="mt-1 h-9 text-sm"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">NIF / Documento</Label>
-            <Input
-              value={form.nif}
-              onChange={(e) => handleChange("nif", e.target.value)}
-              placeholder="NIF ou documento"
-              className="mt-1 h-9 text-sm"
-            />
-          </div>
-        </div>
-
-        <div>
-          <Label className="text-xs">Observações rápidas</Label>
-          <Input
-            value={form.notes}
-            onChange={(e) => handleChange("notes", e.target.value)}
-            placeholder="Notas iniciais (opcional)"
-            className="mt-1 h-9 text-sm"
-          />
-        </div>
-      </div>
-
-      {/* Badge de cadastro incompleto */}
-      <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-        <span>⚠️</span>
-        <span>Cadastro marcado como incompleto — complete os dados depois em Pacientes.</span>
-      </div>
-
-      {/* Botões */}
-      <div className="flex gap-2 pt-1">
-        <Button variant="outline" size="sm" onClick={onCancel} className="flex-1" disabled={saving}>
-          Cancelar
-        </Button>
-        <Button size="sm" onClick={handleSave} className="flex-1" disabled={saving}>
-          {saving ? (
-            <>
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />A guardar...
-            </>
-          ) : (
-            "Guardar e selecionar"
-          )}
-        </Button>
-      </div>
-    </div>
-  );
-}
-// ───────────────────────────────────────────────────────────────────────────
-
 export function NewSessionModal({
   isOpen,
   onClose,
@@ -285,18 +106,6 @@ export function NewSessionModal({
   const [manualHour, setManualHour] = useState<string>("");
   const [patientSearchOpen, setPatientSearchOpen] = useState(false);
   const [manualMinute, setManualMinute] = useState<string>("0");
-
-  // Estado do formulário rápido de paciente
-  const [showQuickPatientForm, setShowQuickPatientForm] = useState(false);
-  // Lista local de pacientes (inclui recém-criados antes do refresh)
-  const [localPatients, setLocalPatients] = useState<Patient[]>([]);
-
-  // Lista combinada: pacientes originais + criados localmente nesta sessão
-  const allPatients = useMemo(() => {
-    const existingIds = new Set(patients.map((p) => p.id));
-    const newOnes = localPatients.filter((p) => !existingIds.has(p.id));
-    return [...patients, ...newOnes];
-  }, [patients, localPatients]);
 
   // Package/modality state
   const [modality, setModality] = useState<SchedulingModality>("avulso");
@@ -324,7 +133,6 @@ export function NewSessionModal({
       setFlexible(false);
       setTotalSessions(4);
       setCustomSessionCount("");
-      setShowQuickPatientForm(false);
     }
   }, [isOpen, selectedSlot]);
 
@@ -335,6 +143,7 @@ export function NewSessionModal({
 
   const isPackageMode = modality !== "avulso";
 
+  // Generate preview dates for packages
   const generatedDates = useMemo(() => {
     if (!isPackageMode || !finalDate || finalHour === undefined || selectedDays.length === 0) {
       return [];
@@ -344,7 +153,7 @@ export function NewSessionModal({
       frequency,
       fixedDays: selectedDays,
       flexible,
-      totalSessions: modality === "recorrente" ? 12 : totalSessions,
+      totalSessions: modality === "recorrente" ? 12 : totalSessions, // recorrente generates 12 by default
       startDate: finalDate,
       hour: finalHour,
       minute: finalMinute,
@@ -382,18 +191,10 @@ export function NewSessionModal({
     });
   };
 
-  // Após guardar novo paciente: selecionar automaticamente e fechar formulário
-  const handleQuickPatientSaved = (newPatient: Patient) => {
-    setLocalPatients((prev) => [...prev, newPatient]);
-    setSelectedPaciente(newPatient.id);
-    setShowQuickPatientForm(false);
-    setPatientSearchOpen(false);
-  };
-
   // Patient data
   const selectedPatientData = useMemo(
-    () => allPatients.find((p) => p.id === selectedPaciente),
-    [allPatients, selectedPaciente],
+    () => patients.find((p) => p.id === selectedPaciente),
+    [patients, selectedPaciente],
   );
   const patientHealthTags = useMemo(
     () => HealthTagService.parseTags(selectedPatientData?.health_tags as string[] | undefined),
@@ -540,104 +341,56 @@ export function NewSessionModal({
             </div>
           )}
 
-          {/* ── Patient selector com botão "+ Novo paciente" ── */}
+          {/* Patient selector */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Paciente *</Label>
-              {!showQuickPatientForm && (
+            <Label>Paciente *</Label>
+            <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
+              <PopoverTrigger asChild>
                 <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-primary hover:text-primary gap-1 px-2"
-                  onClick={() => {
-                    setShowQuickPatientForm(true);
-                    setPatientSearchOpen(false);
-                  }}
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={patientSearchOpen}
+                  className="w-full justify-between min-h-[44px] font-normal"
                 >
-                  <UserPlus className="h-3 w-3" />
-                  Novo paciente
+                  {selectedPaciente
+                    ? patients.find((p) => p.id === selectedPaciente)?.full_name
+                    : "Selecione o paciente"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
-              )}
-            </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Pesquisar paciente..." className="h-10" />
+                  <CommandList>
+                    <CommandEmpty>Nenhum paciente encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {patients.map((p) => (
+                        <CommandItem
+                          key={p.id}
+                          value={p.full_name}
+                          onSelect={() => {
+                            setSelectedPaciente(p.id);
+                            setPatientSearchOpen(false);
+                          }}
+                          className="min-h-[44px]"
+                        >
+                          <Check
+                            className={cn("mr-2 h-4 w-4", selectedPaciente === p.id ? "opacity-100" : "opacity-0")}
+                          />
+                          {p.full_name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
 
-            {!showQuickPatientForm ? (
-              <>
-                <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={patientSearchOpen}
-                      className="w-full justify-between min-h-[44px] font-normal"
-                    >
-                      {selectedPaciente
-                        ? allPatients.find((p) => p.id === selectedPaciente)?.full_name
-                        : "Selecione o paciente"}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Pesquisar paciente..." className="h-10" />
-                      <CommandList>
-                        <CommandEmpty>
-                          <div className="py-3 text-center space-y-2">
-                            <p className="text-sm text-muted-foreground">Nenhum paciente encontrado.</p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1.5 text-primary border-primary/30"
-                              onClick={() => {
-                                setPatientSearchOpen(false);
-                                setShowQuickPatientForm(true);
-                              }}
-                            >
-                              <UserPlus className="h-3.5 w-3.5" />
-                              Cadastrar novo paciente
-                            </Button>
-                          </div>
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {allPatients.map((p) => (
-                            <CommandItem
-                              key={p.id}
-                              value={p.full_name}
-                              onSelect={() => {
-                                setSelectedPaciente(p.id);
-                                setPatientSearchOpen(false);
-                              }}
-                              className="min-h-[44px]"
-                            >
-                              <Check
-                                className={cn("mr-2 h-4 w-4", selectedPaciente === p.id ? "opacity-100" : "opacity-0")}
-                              />
-                              <span>{p.full_name}</span>
-                              {/* Badge para cadastros incompletos vindos desta sessão */}
-                              {localPatients.some((lp) => lp.id === p.id) && (
-                                <span className="ml-auto text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                                  incompleto
-                                </span>
-                              )}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-
-                {selectedPatientData && (
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    {patientHealthTags.length > 0 && (
-                      <HealthTagList tags={patientHealthTags} maxVisible={3} size="sm" />
-                    )}
-                    {patientBalance !== null && <CreditBalanceBadge balance={patientBalance} size="sm" />}
-                  </div>
-                )}
-              </>
-            ) : (
-              // Formulário rápido inline
-              <QuickPatientForm onSave={handleQuickPatientSaved} onCancel={() => setShowQuickPatientForm(false)} />
+            {selectedPatientData && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {patientHealthTags.length > 0 && <HealthTagList tags={patientHealthTags} maxVisible={3} size="sm" />}
+                {patientBalance !== null && <CreditBalanceBadge balance={patientBalance} size="sm" />}
+              </div>
             )}
           </div>
 
@@ -704,7 +457,7 @@ export function NewSessionModal({
           <Button variant="outline" onClick={onClose} className="min-h-[44px] w-full sm:w-auto">
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} className="min-h-[44px] w-full sm:w-auto" disabled={showQuickPatientForm}>
+          <Button onClick={handleSubmit} className="min-h-[44px] w-full sm:w-auto">
             {isPackageMode
               ? `Agendar ${generatedDates.length} sessões`
               : hasInsufficientCredits
