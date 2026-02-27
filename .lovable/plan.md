@@ -1,104 +1,77 @@
 
+# Plano: URL Amigavel com Slug e Identidade Visual na Pagina Publica
 
-# Plano: Notificacoes em Tempo Real com Tabela Dedicada
-
-## Resumo
-
-Criar uma tabela `notifications` na base de dados, atualizar a Edge Function `patient-onboarding` para inserir notificacoes ao registar novos utentes, e reescrever o `NotificationBell` para combinar as notificacoes agregadas existentes com as notificacoes persistentes da nova tabela, incluindo Realtime e toasts.
-
----
-
-## 1. Criar tabela `notifications` (Migration)
+## 1. Migration: Adicionar coluna `slug` a tabela `clinics`
 
 ```sql
-CREATE TABLE notifications (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  clinic_id uuid NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
-  type text NOT NULL,
-  title text NOT NULL,
-  message text NOT NULL,
-  patient_id uuid REFERENCES pacientes(id) ON DELETE CASCADE,
-  read boolean DEFAULT false,
-  created_at timestamptz DEFAULT now()
-);
-
-CREATE INDEX ON notifications(clinic_id, read, created_at DESC);
-
-ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "clinic members can manage notifications"
-ON notifications FOR ALL
-USING (clinic_id = get_user_clinic_id(auth.uid()));
-
--- Ativar Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+ALTER TABLE clinics ADD COLUMN slug text UNIQUE;
+UPDATE clinics SET slug = 'respira-desenvolve';
+ALTER TABLE clinics ALTER COLUMN slug SET NOT NULL;
 ```
 
----
+## 2. Edge Function: Suportar slug como parametro
 
-## 2. Edge Function `patient-onboarding/index.ts`
+No `patient-onboarding/index.ts`, alem de `clinic_id` e `token`, aceitar um novo parametro `slug`:
 
-No bloco POST do modo `clinic_id` (linhas 123-136):
+- GET com `?slug=respira-desenvolve`: buscar clinica por slug, retornar `{ clinic, clinic_id, mode: "new" }` incluindo `primary_color` da `clinic_settings`
+- POST com `?slug=respira-desenvolve`: resolver slug para clinic_id internamente e executar a mesma logica de criacao de paciente
+- GET com `?clinic_id=...`: manter compatibilidade, retornar tambem `primary_color`
+- Incluir `primary_color` na resposta buscando de `clinic_settings` pelo clinic_id
 
-- Trocar `.insert(insertData)` por `.insert(insertData).select("id").single()`
-- Apos INSERT bem-sucedido, inserir notificacao na tabela `notifications` usando service role
-- Retornar `{ success: true, patient_id: newPatient.id }`
+## 3. Nova rota `/r/:slug` no App.tsx
 
----
+Adicionar rota publica `/r/:slug` que renderiza o mesmo componente `PreRegisto`.
 
-## 3. Atualizar `NotificationService.ts`
+## 4. Atualizar `PreRegisto.tsx`
 
-Adicionar novo tipo `new_patient` ao `NotificationType`.
+### Detetar modo por rota
+- Se a rota e `/r/:slug`, usar o parametro `slug` para buscar a clinica via edge function com `?slug=...`
+- Se a rota e `/pre-registo/novo?c=UUID`, redirecionar para `/r/:slug` (buscar slug primeiro, depois redirect)
+- Se a rota e `/pre-registo/:token` (UUID), manter comportamento atual (modo edicao)
 
-Adicionar dois metodos:
-- `getDbNotifications()`: busca notificacoes nao lidas da tabela `notifications`
-- `markAsRead(id)` e `markAllAsRead()`: atualiza o campo `read`
+### Interface `ClinicInfo` expandida
+```typescript
+interface ClinicInfo {
+  name: string;
+  logo_url: string;
+  primary_color: string;
+  clinic_id: string; // necessario para o POST
+}
+```
 
-Atualizar `getNotifications()` para combinar notificacoes agregadas existentes com as da tabela.
+### Identidade visual
+- Header: logo da clinica (ou iniciais em circulo colorido como fallback), nome da clinica, subtitulo
+- Cor primaria aplicada ao botao de submit e elementos de destaque via `style={{ backgroundColor: clinic.primary_color }}`
+- Footer discreto: "Powered by Physione"
+- Loading state com skeleton enquanto busca dados da clinica
 
----
+## 5. Atualizar link de partilha em `Pacientes.tsx`
 
-## 4. Reescrever `NotificationBell.tsx`
+Trocar a geracao do link generico de:
+```
+/pre-registo/novo?c=${clinicId}
+```
+Para:
+```
+/r/${clinicSlug}
+```
 
-Manter a estrutura visual atual (popover com categorias), mas adicionar:
-- Subscricao Realtime ao montar, filtrada por `clinic_id`
-- Quando chega notificacao nova via Realtime, adiciona-la ao estado e mostrar toast com acao "Ver ficha"
-- Botao "Marcar todas como lidas" no footer do dropdown
-- Clicar numa notificacao `new_patient` navega para `/pacientes?id={patient_id}&edit=true` e marca como lida
+Buscar o slug da clinica a partir dos dados ja disponiveis ou da tabela `clinics`.
 
----
-
-## 5. Atualizar `NotificationItem.tsx`
-
-Adicionar suporte ao novo tipo `new_patient`:
-- Icone `UserPlus` para notificacoes de novo utente
-- Tempo relativo usando `date-fns` (`formatDistanceToNow`)
-- Handler de clique que marca como lida e navega
-
----
-
-## 6. Nenhuma alteracao no layout
-
-O `NotificationBell` ja esta integrado no `PersistentHeader.tsx` (linha 36). Nao e necessario alterar o layout.
-
----
-
-## Sequencia de Implementacao
-
-1. Migration: criar tabela `notifications` + RLS + Realtime
-2. Edge Function: atualizar `patient-onboarding` para inserir notificacao
-3. Service: estender `NotificationService` com metodos de DB
-4. Componentes: atualizar `NotificationBell` e `NotificationItem` com Realtime + toast
-
----
-
-## Ficheiros a Editar
+## Ficheiros a editar
 
 | Ficheiro | Acao |
 |---|---|
-| Migration SQL | Criar tabela `notifications` |
-| `supabase/functions/patient-onboarding/index.ts` | INSERT com `.select("id").single()` + notificacao |
-| `src/services/NotificationService.ts` | Novos metodos DB + tipo `new_patient` |
-| `src/components/notifications/NotificationBell.tsx` | Realtime + toast + mark as read |
-| `src/components/notifications/NotificationItem.tsx` | Tipo `new_patient` + tempo relativo |
+| Migration SQL | Adicionar coluna `slug` a `clinics` |
+| `supabase/functions/patient-onboarding/index.ts` | Aceitar `slug`, retornar `primary_color` e `clinic_id` |
+| `src/App.tsx` | Adicionar rota `/r/:slug` |
+| `src/pages/PreRegisto.tsx` | Suportar slug, identidade visual, redirect, footer |
+| `src/pages/Pacientes.tsx` | Gerar link com slug em vez de UUID |
 
+## Detalhes tecnicos
+
+- A coluna `slug` e `text UNIQUE NOT NULL` -- cada clinica tem um slug unico
+- O slug e usado apenas na URL publica; internamente tudo continua a usar UUID
+- A Edge Function resolve slug para clinic_id com uma query simples: `select id from clinics where slug = $1`
+- A cor primaria vem de `clinic_settings.primary_color` (ja existe na tabela)
+- Nenhuma logica de submissao ou notificacao e alterada
