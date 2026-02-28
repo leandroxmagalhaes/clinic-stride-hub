@@ -31,17 +31,14 @@ interface DraggableSessionProps {
 function formatServico(name: string): string {
   if (!name) return "";
 
-  // Mapa de abreviações específicas
   const abreviacoes: Record<string, string> = {
     neurodesenvolvimental: "Neurodes.",
     neurodesenvolvimento: "Neurodes.",
     neurodevelopmental: "Neurodes.",
   };
 
-  // Remove prefixo "Fisioterapia " (case-insensitive)
   let result = name.replace(/^fisioterapia\s+/i, "").trim();
 
-  // Verifica se a palavra resultante tem abreviação
   const lower = result.toLowerCase();
   if (abreviacoes[lower]) {
     return abreviacoes[lower];
@@ -63,7 +60,6 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
 
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
 
-  // Serviço abreviado + primeiro nome do profissional na mesma linha
   const servicoFormatado = formatServico(session.servico?.name ?? "");
   const profissionalNome = session.profissional?.full_name?.split(" ")?.[0] ?? "";
   const servicoLinha = profissionalNome ? `${servicoFormatado} (${profissionalNome})` : servicoFormatado;
@@ -73,8 +69,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     backgroundColor: isFalta ? "#f974161a" : `${session.servico?.color}15`,
     borderLeft: isFalta ? "3px solid #f97316" : `3px solid ${session.servico?.color}`,
     ...positionStyle,
-    minHeight: isCompact ? undefined : "64px",
-    height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "64px"})` : undefined,
+    minHeight: isCompact ? undefined : "60px",
+    height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "60px"})` : undefined,
   };
 
   if (transform) {
@@ -117,7 +113,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       )}
 
       {isCompact ? (
-        /* ── Ultra-compacto ── */
+        /* ── Ultra-compacto: tudo numa linha ── */
         <div className="flex items-center gap-1 p-1 min-w-0">
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0">
             <GripVertical className="h-3 w-3 text-muted-foreground opacity-60" />
@@ -132,9 +128,10 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
               {displayTime}
             </span>
           )}
+          {/* Nome truncado numa linha no compacto */}
           <p
             className={cn(
-              "font-semibold text-[10px] break-words leading-tight flex-1",
+              "font-semibold text-[10px] truncate leading-tight flex-1 min-w-0",
               isFalta ? "text-orange-700" : "text-foreground",
             )}
           >
@@ -143,11 +140,11 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
           <StatusBadge status={session.status as any} className="scale-75 flex-shrink-0" />
         </div>
       ) : (
-        /* ── Layout normal — 3 linhas ── */
+        /* ── Layout normal — 3 linhas fixas ── */
         <div className="p-2 flex flex-col gap-0.5">
           {/* Linha 1: Hora + Status */}
           <div className="flex items-center justify-between gap-1">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 min-w-0">
               <div
                 {...attributes}
                 {...listeners}
@@ -155,14 +152,17 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
               >
                 <GripVertical
                   className={cn(
-                    "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity",
+                    "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity flex-shrink-0",
                     isFalta ? "text-orange-400" : "text-muted-foreground",
                   )}
                 />
               </div>
               {displayTime && (
                 <span
-                  className={cn("text-[10px] font-semibold", isFalta ? "text-orange-600" : "text-muted-foreground")}
+                  className={cn(
+                    "text-[10px] font-semibold flex-shrink-0",
+                    isFalta ? "text-orange-600" : "text-muted-foreground",
+                  )}
                 >
                   {displayTime}
                 </span>
@@ -171,19 +171,25 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             <StatusBadge status={session.status as any} className="scale-90 flex-shrink-0" />
           </div>
 
-          {/* Linha 2: Nome completo do paciente */}
+          {/* Linha 2: Nome — UMA linha, truncado com "..." se for longo */}
           <p
             className={cn(
-              "font-semibold text-[11px] leading-tight break-words",
+              "font-semibold text-[11px] leading-tight truncate w-full",
               isFalta ? "text-orange-700" : "text-foreground",
             )}
+            title={session.paciente?.full_name ?? ""}
           >
             {session.paciente?.full_name ?? ""}
           </p>
 
-          {/* Linha 3: Especialidade (Profissional) — tudo numa linha */}
+          {/* Linha 3: Especialidade (Profissional) — UMA linha, truncado se necessário */}
           {servicoLinha && (
-            <p className={cn("text-[10px] leading-tight", isFalta ? "text-orange-500" : "text-muted-foreground")}>
+            <p
+              className={cn(
+                "text-[10px] leading-tight truncate w-full",
+                isFalta ? "text-orange-500" : "text-muted-foreground",
+              )}
+            >
               {servicoLinha}
             </p>
           )}
