@@ -1,118 +1,98 @@
-// NewEvolutionModal - Modal for creating clinical evolutions with specialty templates
+// EditEvolutionModal - Modal for editing existing clinical evolutions
 import { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Activity, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { DynamicFormRenderer } from "./DynamicFormRenderer";
-import { VoiceRecordButton } from "./VoiceRecordButton";
-import { AISuggestionPanel } from "@/components/ai/AISuggestionPanel";
-import { AIService } from "@/services/AIService";
-import { 
-  SpecialtyService, 
-  type SpecialtyTemplate, 
-  type StructuredData 
-} from "@/services/SpecialtyService";
+import { SpecialtyService, type SpecialtyTemplate, type StructuredData } from "@/services/SpecialtyService";
 
-interface NewEvolutionModalProps {
+export interface EvolutionToEdit {
+  id: string;
+  descricao: string;
+  escala_dor: number;
+  specialty_id: string | null;
+  structured_data: Record<string, unknown> | null;
+  created_at: string;
+}
+
+interface EditEvolutionModalProps {
   isOpen: boolean;
   onClose: () => void;
   patientName: string;
-  prontuarioId: string;
-  patientSpecialtyId?: string | null; // Pre-configured specialty from anamnesis
-  onSubmit: (data: {
-    descricao: string;
-    escala_dor: number;
-    specialty_id: string | null;
-    structured_data: StructuredData | null;
-  }) => void;
+  evolution: EvolutionToEdit | null;
+  patientSpecialtyId?: string | null;
+  onSubmit: (
+    evolutionId: string,
+    data: {
+      descricao: string;
+      escala_dor: number;
+      specialty_id: string | null;
+      structured_data: StructuredData | null;
+    },
+  ) => Promise<void>;
 }
 
-export function NewEvolutionModal({
+export function EditEvolutionModal({
   isOpen,
   onClose,
   patientName,
-  prontuarioId,
+  evolution,
   patientSpecialtyId,
   onSubmit,
-}: NewEvolutionModalProps) {
-  // State
+}: EditEvolutionModalProps) {
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<SpecialtyTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Track if specialty is locked (came from patient profile)
-  const hasPatientSpecialty = !!patientSpecialtyId;
 
-  // Form data
   const [descricao, setDescricao] = useState("");
   const [escalaDor, setEscalaDor] = useState(5);
   const [structuredData, setStructuredData] = useState<StructuredData>({});
-  
-  // Voice + AI state
-  const [isStructuring, setIsStructuring] = useState(false);
-  const [soapSuggestion, setSoapSuggestion] = useState<string | null>(null);
-  const [rawTranscription, setRawTranscription] = useState<string | null>(null);
 
-  // Load templates on mount
+  // Carrega templates e pré-preenche com dados da evolução existente
   useEffect(() => {
-    if (isOpen) {
-      loadTemplates();
+    if (isOpen && evolution) {
+      loadTemplatesAndFill();
     }
-  }, [isOpen]);
+  }, [isOpen, evolution?.id]);
 
-  // Update selected template when selection changes
+  // Atualiza template selecionado
   useEffect(() => {
-    if (selectedTemplateId) {
+    if (selectedTemplateId && templates.length > 0) {
       const template = templates.find((t) => t.id === selectedTemplateId);
       setSelectedTemplate(template || null);
-      
-      // Initialize structured data with empty values
-      if (template && template.schema.length > 0) {
-        setStructuredData(SpecialtyService.createEmptyStructuredData(template.schema));
-      } else {
-        setStructuredData({});
-      }
     } else {
       setSelectedTemplate(null);
-      setStructuredData({});
     }
   }, [selectedTemplateId, templates]);
 
-  const loadTemplates = async () => {
+  const loadTemplatesAndFill = async () => {
+    if (!evolution) return;
     setIsLoading(true);
     try {
       const data = await SpecialtyService.getTemplates();
       setTemplates(data);
-      
-      // If patient has a specialty configured, use it
-      if (patientSpecialtyId) {
-        setSelectedTemplateId(patientSpecialtyId);
+
+      // Pré-preenche com dados existentes
+      setDescricao(evolution.descricao || "");
+      setEscalaDor(evolution.escala_dor ?? 5);
+
+      // Especialidade
+      const specialtyId = evolution.specialty_id || patientSpecialtyId || "";
+      setSelectedTemplateId(specialtyId);
+
+      // Dados estruturados
+      if (evolution.structured_data && Object.keys(evolution.structured_data).length > 0) {
+        setStructuredData(evolution.structured_data as StructuredData);
       } else {
-        // Default to "Geral" template if available (fallback)
-        const geralTemplate = data.find((t) => t.name === "Geral");
-        if (geralTemplate) {
-          setSelectedTemplateId(geralTemplate.id);
-        }
+        setStructuredData({});
       }
     } catch (error) {
       console.error("Error loading templates:", error);
@@ -123,17 +103,14 @@ export function NewEvolutionModal({
   };
 
   const handleSubmit = async () => {
+    if (!evolution) return;
     if (!descricao.trim()) {
       toast.error("A descrição do atendimento é obrigatória");
       return;
     }
 
-    // Validate structured data if specialty selected
     if (selectedTemplate && selectedTemplate.schema.length > 0) {
-      const validation = SpecialtyService.validateStructuredData(
-        selectedTemplate.schema,
-        structuredData
-      );
+      const validation = SpecialtyService.validateStructuredData(selectedTemplate.schema, structuredData);
       if (!validation.valid) {
         toast.error(validation.errors[0]);
         return;
@@ -142,91 +119,26 @@ export function NewEvolutionModal({
 
     setIsSubmitting(true);
     try {
-      const hasStructuredData = 
-        selectedTemplate && 
-        selectedTemplate.schema.length > 0 && 
-        Object.keys(structuredData).length > 0;
+      const hasStructuredData =
+        selectedTemplate && selectedTemplate.schema.length > 0 && Object.keys(structuredData).length > 0;
 
-      // Merge voice metadata into structured_data if applicable
-      let finalStructuredData: StructuredData | null = hasStructuredData ? { ...structuredData } : null;
-      if (rawTranscription) {
-        finalStructuredData = {
-          ...(finalStructuredData || {}),
-          voice_recording_at: new Date().toISOString(),
-          raw_transcription: rawTranscription,
-          soap_structured: "true",
-        } as StructuredData;
-      }
-
-      onSubmit({
+      await onSubmit(evolution.id, {
         descricao,
         escala_dor: escalaDor,
-        specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId : null,
-        structured_data: finalStructuredData,
+        specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId || null : null,
+        structured_data: hasStructuredData ? { ...structuredData } : null,
       });
-
-      // Reset form
-      resetForm();
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const resetForm = () => {
+  const handleClose = () => {
     setDescricao("");
     setEscalaDor(5);
     setStructuredData({});
-    setSoapSuggestion(null);
-    setRawTranscription(null);
-    setIsStructuring(false);
-    // Reset to patient specialty or general
-    if (patientSpecialtyId) {
-      setSelectedTemplateId(patientSpecialtyId);
-    } else {
-      const geralTemplate = templates.find((t) => t.name === "Geral");
-      if (geralTemplate) {
-        setSelectedTemplateId(geralTemplate.id);
-      }
-    }
-  };
-
-  const handleClose = () => {
-    resetForm();
+    setSelectedTemplateId("");
     onClose();
-  };
-
-  const handleVoiceTranscription = async (rawText: string) => {
-    setRawTranscription(rawText);
-    try {
-      const result = await AIService.structureVoiceEvolution({
-        rawTranscription: rawText,
-        patientName,
-        painLevel: escalaDor,
-      });
-      setSoapSuggestion(result.data.formattedText);
-    } catch (err) {
-      console.error("Error structuring voice:", err);
-      toast.error("Erro ao estruturar texto com IA. O texto bruto foi mantido.");
-      setDescricao(rawText);
-      setSoapSuggestion(null);
-    } finally {
-      setIsStructuring(false);
-    }
-  };
-
-  const handleAcceptSoap = (text: string) => {
-    setDescricao(text);
-    setSoapSuggestion(null);
-    toast.success("Texto SOAP aceite!");
-  };
-
-  const handleRejectSoap = () => {
-    if (rawTranscription) {
-      setDescricao(rawTranscription);
-    }
-    setSoapSuggestion(null);
-    setRawTranscription(null);
-    toast.info("Sugestão rejeitada. Transcrição bruta aplicada.");
   };
 
   const getPainColor = (level: number) => {
@@ -243,7 +155,7 @@ export function NewEvolutionModal({
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
             <Activity className="h-5 w-5 text-primary" />
-            Nova Evolução Clínica
+            Editar Evolução Clínica
           </DialogTitle>
           <p className="text-sm text-muted-foreground">{patientName}</p>
         </DialogHeader>
@@ -256,18 +168,8 @@ export function NewEvolutionModal({
           <div className="space-y-6 py-4">
             {/* Specialty Selector */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                Especialidade
-                {hasPatientSpecialty && (
-                  <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    Padrão (Anamnese)
-                  </span>
-                )}
-              </Label>
-              <Select
-                value={selectedTemplateId}
-                onValueChange={setSelectedTemplateId}
-              >
+              <Label>Especialidade</Label>
+              <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a especialidade..." />
                 </SelectTrigger>
@@ -277,24 +179,13 @@ export function NewEvolutionModal({
                       <div className="flex flex-col">
                         <span>{template.name}</span>
                         {template.description && (
-                          <span className="text-xs text-muted-foreground">
-                            {template.description}
-                          </span>
+                          <span className="text-xs text-muted-foreground">{template.description}</span>
                         )}
                       </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {hasPatientSpecialty ? (
-                <p className="text-xs text-muted-foreground">
-                  ℹ️ Pode alterar a especialidade para esta sessão específica
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  💡 Defina a especialidade na Anamnese para pré-carregar automaticamente
-                </p>
-              )}
             </div>
 
             {/* Dynamic Form Fields */}
@@ -310,36 +201,11 @@ export function NewEvolutionModal({
 
             {/* Description */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Descrição do Atendimento *</Label>
-                <VoiceRecordButton
-                  onTranscriptionComplete={handleVoiceTranscription}
-                  onStructuringStart={() => setIsStructuring(true)}
-                  disabled={isSubmitting || isStructuring}
-                />
-              </div>
-              
-              {/* SOAP Suggestion Panel */}
-              {soapSuggestion && (
-                <AISuggestionPanel
-                  suggestion={soapSuggestion}
-                  onAccept={handleAcceptSoap}
-                  onReject={handleRejectSoap}
-                  title="Evolução SOAP (por voz)"
-                />
-              )}
-              
-              {isStructuring && (
-                <div className="flex items-center gap-2 p-3 rounded-lg border border-primary/20 bg-primary/5 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  A estruturar transcrição em formato SOAP...
-                </div>
-              )}
-              
+              <Label>Descrição do Atendimento *</Label>
               <Textarea
                 value={descricao}
                 onChange={(e) => setDescricao(e.target.value)}
-                placeholder="Descreva a evolução do utente, procedimentos realizados, observações... ou use o microfone para ditar."
+                placeholder="Descreva a evolução do utente, procedimentos realizados, observações..."
                 rows={showDynamicForm ? 4 : 6}
                 className="resize-none"
               />
@@ -349,9 +215,7 @@ export function NewEvolutionModal({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label>Escala de Dor (EVA)</Label>
-                <span className={cn("font-semibold text-lg", getPainColor(escalaDor))}>
-                  {escalaDor}/10
-                </span>
+                <span className={cn("font-semibold text-lg", getPainColor(escalaDor))}>{escalaDor}/10</span>
               </div>
               <Slider
                 value={[escalaDor]}
@@ -378,18 +242,13 @@ export function NewEvolutionModal({
           >
             Cancelar
           </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={isLoading || isSubmitting}
-            className="min-h-[44px] w-full sm:w-auto"
-          >
+          <Button onClick={handleSubmit} disabled={isLoading || isSubmitting} className="min-h-[44px] w-full sm:w-auto">
             {isSubmitting ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                A registar...
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />A guardar...
               </>
             ) : (
-              "Registar Evolução"
+              "Guardar Alterações"
             )}
           </Button>
         </DialogFooter>

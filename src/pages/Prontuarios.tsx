@@ -20,7 +20,6 @@ import {
   ClipboardList,
   ArrowLeft,
   Sparkles,
-  ArrowUpDown,
   ArrowDown,
   ArrowUp,
 } from "lucide-react";
@@ -32,6 +31,7 @@ import { useData } from "@/contexts/DataContext";
 import { EvolutionService } from "@/services/EvolutionService";
 import { EditClinicalDataModal } from "@/components/prontuarios/EditClinicalDataModal";
 import { NewEvolutionModal } from "@/components/prontuarios/NewEvolutionModal";
+import { EditEvolutionModal, type EvolutionToEdit } from "@/components/prontuarios/EditEvolutionModal";
 import { StructuredDataViewer } from "@/components/prontuarios/StructuredDataViewer";
 import { ClinicalReportsList } from "@/components/prontuarios/ClinicalReportsList";
 import { SpecialtyService, type SpecialtyTemplate, type StructuredData } from "@/services/SpecialtyService";
@@ -71,13 +71,12 @@ export default function Prontuarios() {
   const [selectedProntuario, setSelectedProntuario] = useState<ProntuarioData | null>(null);
   const [isNewEvolucaoOpen, setIsNewEvolucaoOpen] = useState(false);
   const [isEditClinicalOpen, setIsEditClinicalOpen] = useState(false);
-
-  // ── Ordenação das evoluções ───────────────────────────────────────────────
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc"); // mais recente primeiro
-  // ─────────────────────────────────────────────────────────────────────────
-
-  // ── Data pré-preenchida vinda da agenda ───────────────────────────────────
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
+
+  // ── Estado para edição de evolução ───────────────────────────────────────
+  const [editingEvolution, setEditingEvolution] = useState<EvolutionToEdit | null>(null);
+  const [isEditEvolutionOpen, setIsEditEvolutionOpen] = useState(false);
   // ─────────────────────────────────────────────────────────────────────────
 
   const [prontuariosData, setProntuariosData] = useState<Record<string, ProntuarioData>>({});
@@ -123,24 +122,18 @@ export default function Prontuarios() {
     fetchProntuarios();
   }, []);
 
-  // ── Auto-selecionar paciente + abrir modal se vier da agenda ─────────────
   useEffect(() => {
     const pacienteId = searchParams.get("paciente");
     const sessaoData = searchParams.get("sessao_data");
     const autoEvolucao = searchParams.get("auto_evolucao");
-
     if (pacienteId && patients.length > 0 && !prontuariosLoading && !selectedProntuario) {
       if (sessaoData) setPrefilledDate(sessaoData);
       handleSelectPatient(pacienteId).then(() => {
-        if (autoEvolucao === "1") {
-          // Pequeno delay para garantir que o prontuário foi carregado
-          setTimeout(() => setIsNewEvolucaoOpen(true), 300);
-        }
+        if (autoEvolucao === "1") setTimeout(() => setIsNewEvolucaoOpen(true), 300);
       });
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, patients, prontuariosLoading]);
-  // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!selectedProntuario?.paciente_id) {
@@ -173,14 +166,12 @@ export default function Prontuarios() {
   const filteredPacientes = patients.filter((p) => p.full_name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const getProntuarioForPatient = (pacienteId: string) => prontuariosData[pacienteId];
-
   const getEvolucoesForProntuario = (prontuarioId: string) =>
     EvolutionService.getByProntuario(evolutions, prontuarioId);
 
   const handleSelectPatient = async (pacienteId: string) => {
     const existingProntuario = getProntuarioForPatient(pacienteId);
     const paciente = patients.find((p) => p.id === pacienteId);
-
     if (existingProntuario) {
       setSelectedProntuario({
         ...existingProntuario,
@@ -244,14 +235,10 @@ export default function Prontuarios() {
       toast.error("Nenhum profissional disponível");
       return;
     }
-
     try {
-      // ── Usa a data da sessão se disponível, caso contrário usa agora ──────
       const createdAt = data.evolution_date
         ? new Date(data.evolution_date + "T12:00:00").toISOString()
         : new Date().toISOString();
-      // ─────────────────────────────────────────────────────────────────────
-
       const { data: newEvol, error } = await supabase
         .from("evolucoes_clinicas")
         .insert({
@@ -266,14 +253,12 @@ export default function Prontuarios() {
         })
         .select("*")
         .single();
-
       if (error) {
         console.error("Error creating evolution:", error);
         toast.error("Erro ao registar evolução");
         return;
       }
-
-      const evolution = {
+      addEvolution({
         id: newEvol.id,
         clinic_id: newEvol.clinic_id,
         prontuario_id: newEvol.prontuario_id,
@@ -286,9 +271,7 @@ export default function Prontuarios() {
         specialty_id: newEvol.specialty_id,
         structured_data: newEvol.structured_data as Record<string, unknown> | null,
         profissional: { id: defaultProfessional.id, full_name: defaultProfessional.full_name },
-      };
-
-      addEvolution(evolution);
+      });
       toast.success("Evolução registada com sucesso!");
       setIsNewEvolucaoOpen(false);
       setPrefilledDate(null);
@@ -296,6 +279,47 @@ export default function Prontuarios() {
       toast.error(error instanceof Error ? error.message : "Erro ao registar evolução");
     }
   };
+
+  // ── Guardar edição de evolução ────────────────────────────────────────────
+  const handleEditEvolucao = async (
+    evolutionId: string,
+    data: {
+      descricao: string;
+      escala_dor: number;
+      specialty_id: string | null;
+      structured_data: StructuredData | null;
+    },
+  ) => {
+    try {
+      const { error } = await supabase
+        .from("evolucoes_clinicas")
+        .update({
+          descricao: data.descricao,
+          escala_dor: data.escala_dor,
+          specialty_id: data.specialty_id,
+          structured_data: data.structured_data,
+        })
+        .eq("id", evolutionId);
+
+      if (error) {
+        console.error("Error updating evolution:", error);
+        toast.error("Erro ao guardar evolução");
+        return;
+      }
+
+      // Atualiza local state via reload da página de evoluções
+      toast.success("Evolução atualizada com sucesso!");
+      setIsEditEvolutionOpen(false);
+      setEditingEvolution(null);
+
+      // Força re-fetch das evoluções actualizando o contexto
+      window.location.reload();
+    } catch (err) {
+      console.error("Exception updating evolution:", err);
+      toast.error("Erro ao guardar evolução");
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const getTemplateForEvolution = (specialtyId: string | null | undefined): SpecialtyTemplate | null => {
     if (!specialtyId) return null;
@@ -345,17 +369,15 @@ export default function Prontuarios() {
     }
   };
 
-  // ── Evoluções ordenadas ───────────────────────────────────────────────────
   const prontuarioEvolutions = selectedProntuario
     ? getEvolucoesForProntuario(selectedProntuario.id)
         .slice()
         .sort((a, b) => {
-          const timeA = new Date(a.created_at).getTime();
-          const timeB = new Date(b.created_at).getTime();
-          return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
+          const tA = new Date(a.created_at).getTime();
+          const tB = new Date(b.created_at).getTime();
+          return sortOrder === "desc" ? tB - tA : tA - tB;
         })
     : [];
-  // ─────────────────────────────────────────────────────────────────────────
 
   const handleGenerateAISummary = async () => {
     if (!selectedProntuario || prontuarioEvolutions.length === 0) {
@@ -417,7 +439,6 @@ export default function Prontuarios() {
               </div>
             </CardContent>
           </Card>
-
           <Card className="shadow-card">
             <CardContent className="p-0">
               {filteredPacientes.length === 0 ? (
@@ -483,7 +504,6 @@ export default function Prontuarios() {
                 Voltar à lista
               </Button>
 
-              {/* Patient Header */}
               <Card className="shadow-card">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -525,7 +545,6 @@ export default function Prontuarios() {
                 </CardContent>
               </Card>
 
-              {/* Tabs */}
               <Tabs defaultValue="evolucoes" className="space-y-4">
                 <TabsList className="bg-muted/50">
                   <TabsTrigger value="evolucoes" className="gap-2">
@@ -548,25 +567,24 @@ export default function Prontuarios() {
                       <div className="flex items-center justify-between">
                         <CardTitle className="font-display text-lg">Histórico de Evoluções</CardTitle>
                         <div className="flex items-center gap-2">
-                          {/* ── Botão de ordenação ─────────────────────────── */}
                           <Button
                             variant="outline"
                             size="sm"
                             className="gap-1 text-xs"
                             onClick={() => setSortOrder((o) => (o === "desc" ? "asc" : "desc"))}
-                            title={sortOrder === "desc" ? "Mais recente primeiro" : "Mais antigo primeiro"}
                           >
                             {sortOrder === "desc" ? (
                               <>
-                                <ArrowDown className="h-3 w-3" /> Recente
+                                <ArrowDown className="h-3 w-3" />
+                                Recente
                               </>
                             ) : (
                               <>
-                                <ArrowUp className="h-3 w-3" /> Antigo
+                                <ArrowUp className="h-3 w-3" />
+                                Antigo
                               </>
                             )}
                           </Button>
-                          {/* ────────────────────────────────────────────────── */}
                           {prontuarioEvolutions.length > 0 && (
                             <AIAssistButton
                               onClick={handleGenerateAISummary}
@@ -637,7 +655,7 @@ export default function Prontuarios() {
                             return (
                               <div
                                 key={evolucao.id}
-                                className="border rounded-lg p-4 hover:bg-muted/30 transition-colors"
+                                className="border rounded-lg p-4 hover:bg-muted/30 transition-colors group"
                               >
                                 <div className="flex items-start justify-between mb-3">
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -658,8 +676,29 @@ export default function Prontuarios() {
                                         Dor: {evolucao.escala_dor}/10
                                       </Badge>
                                     )}
+                                    {/* ── Botão Editar ──────────────────────── */}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={() => {
+                                        setEditingEvolution({
+                                          id: evolucao.id,
+                                          descricao: evolucao.descricao,
+                                          escala_dor: evolucao.escala_dor,
+                                          specialty_id: evolucao.specialty_id || null,
+                                          structured_data: evolucao.structured_data as Record<string, unknown> | null,
+                                          created_at: evolucao.created_at,
+                                        });
+                                        setIsEditEvolutionOpen(true);
+                                      }}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    {/* ───────────────────────────────────────── */}
                                   </div>
                                 </div>
+
                                 {hasStructuredData && template && (
                                   <div className="mb-3 p-3 bg-muted/20 rounded-md">
                                     <StructuredDataViewer
@@ -786,7 +825,6 @@ export default function Prontuarios() {
         </div>
       </div>
 
-      {/* New Evolution Modal */}
       <NewEvolutionModal
         isOpen={isNewEvolucaoOpen}
         onClose={() => {
@@ -799,6 +837,20 @@ export default function Prontuarios() {
         patientSpecialtyId={selectedProntuario?.primary_specialty_id}
         prefilledDate={prefilledDate}
       />
+
+      {/* ── Modal de edição de evolução ─────────────────────────────────────── */}
+      <EditEvolutionModal
+        isOpen={isEditEvolutionOpen}
+        onClose={() => {
+          setIsEditEvolutionOpen(false);
+          setEditingEvolution(null);
+        }}
+        onSubmit={handleEditEvolucao}
+        patientName={selectedProntuario?.paciente?.full_name || ""}
+        evolution={editingEvolution}
+        patientSpecialtyId={selectedProntuario?.primary_specialty_id}
+      />
+      {/* ──────────────────────────────────────────────────────────────────────── */}
 
       {selectedProntuario && (
         <EditClinicalDataModal
