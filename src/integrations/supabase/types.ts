@@ -222,6 +222,7 @@ export type Database = {
           logo_url: string | null
           name: string
           phone: string | null
+          slug: string
           updated_at: string
           website: string | null
         }
@@ -234,6 +235,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           phone?: string | null
+          slug: string
           updated_at?: string
           website?: string | null
         }
@@ -246,6 +248,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           phone?: string | null
+          slug?: string
           updated_at?: string
           website?: string | null
         }

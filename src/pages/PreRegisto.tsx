@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, Loader2, User, Phone, FileText, ShieldCheck, Copy, AlertTriangle } from "lucide-react";
 
@@ -48,22 +49,85 @@ interface PatientData {
 interface ClinicInfo {
   name: string;
   logo_url: string;
+  primary_color: string;
+  clinic_id: string;
+}
+
+function ClinicHeader({ clinic }: { clinic: ClinicInfo }) {
+  const initials = clinic.name
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+      <div className="max-w-lg mx-auto flex flex-col items-center gap-3">
+        {clinic.logo_url ? (
+          <img
+            src={clinic.logo_url}
+            alt={clinic.name}
+            className="h-14 object-contain"
+          />
+        ) : (
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg"
+            style={{ backgroundColor: clinic.primary_color }}
+          >
+            {initials}
+          </div>
+        )}
+        <div className="text-center">
+          <h1 className="text-lg font-semibold text-foreground">{clinic.name}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Preencha os seus dados para iniciar o seu acompanhamento
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+        <div className="max-w-lg mx-auto flex flex-col items-center gap-3">
+          <Skeleton className="h-14 w-14 rounded-full" />
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+      </div>
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
+        <Skeleton className="h-8 w-56 mx-auto" />
+        <Skeleton className="h-4 w-72 mx-auto" />
+        <Skeleton className="h-48 w-full rounded-lg" />
+        <Skeleton className="h-48 w-full rounded-lg" />
+        <Skeleton className="h-12 w-full rounded-lg" />
+      </div>
+    </div>
+  );
 }
 
 export default function PreRegisto() {
-  const { token } = useParams<{ token: string }>();
+  const { token, slug } = useParams<{ token?: string; slug?: string }>();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
 
-  // Determine mode: "new" if token is "novo", otherwise "edit"
-  const isNewMode = token === "novo";
-  const clinicIdParam = isNewMode ? searchParams.get("c") : null;
+  // Determine mode
+  const isSlugMode = location.pathname.startsWith("/r/") && !!slug;
+  const isNewMode = isSlugMode || token === "novo";
+  const clinicIdParam = !isSlugMode && isNewMode ? searchParams.get("c") : null;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [clinic, setClinic] = useState<ClinicInfo>({ name: "", logo_url: "" });
+  const [clinic, setClinic] = useState<ClinicInfo>({ name: "", logo_url: "", primary_color: "#10B981", clinic_id: "" });
   const [noNif, setNoNif] = useState(false);
 
   const [form, setForm] = useState<PatientData>({
@@ -86,10 +150,12 @@ export default function PreRegisto() {
   });
 
   useEffect(() => {
-    if (isNewMode) {
+    if (isSlugMode) {
+      fetchClinicBySlug();
+    } else if (isNewMode) {
       if (!clinicIdParam) {
-        setError("Link inválido. Parâmetro de clínica em falta.");
-        setLoading(false);
+        // Old format /pre-registo/novo?c=UUID — try to redirect to slug
+        redirectToSlug();
         return;
       }
       fetchClinicOnly();
@@ -97,7 +163,73 @@ export default function PreRegisto() {
       if (!token) return;
       fetchPatientData();
     }
-  }, [token, isNewMode, clinicIdParam]);
+  }, [token, slug, isSlugMode, isNewMode, clinicIdParam]);
+
+  const redirectToSlug = async () => {
+    const cParam = searchParams.get("c");
+    if (!cParam) {
+      setError("Link inválido. Parâmetro de clínica em falta.");
+      setLoading(false);
+      return;
+    }
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-onboarding?clinic_id=${cParam}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setClinic({
+          name: data.clinic?.name || "",
+          logo_url: data.clinic?.logo_url || "",
+          primary_color: data.clinic?.primary_color || "#10B981",
+          clinic_id: data.clinic_id || cParam,
+        });
+        setLoading(false);
+      } else {
+        setError("Link inválido ou clínica não encontrada.");
+        setLoading(false);
+      }
+    } catch {
+      setError("Erro ao carregar dados.");
+      setLoading(false);
+    }
+  };
+
+  const fetchClinicBySlug = async () => {
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-onboarding?slug=${slug}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        setError("Link inválido ou clínica não encontrada.");
+        setLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      setClinic({
+        name: data.clinic?.name || "",
+        logo_url: data.clinic?.logo_url || "",
+        primary_color: data.clinic?.primary_color || "#10B981",
+        clinic_id: data.clinic_id || "",
+      });
+    } catch {
+      setError("Erro ao carregar dados.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchClinicOnly = async () => {
     try {
@@ -117,7 +249,12 @@ export default function PreRegisto() {
       }
 
       const data = await response.json();
-      setClinic(data.clinic);
+      setClinic({
+        name: data.clinic?.name || "",
+        logo_url: data.clinic?.logo_url || "",
+        primary_color: data.clinic?.primary_color || "#10B981",
+        clinic_id: data.clinic_id || clinicIdParam || "",
+      });
     } catch {
       setError("Erro ao carregar dados.");
     } finally {
@@ -143,7 +280,12 @@ export default function PreRegisto() {
       }
 
       const data = await response.json();
-      setClinic(data.clinic);
+      setClinic({
+        name: data.clinic?.name || "",
+        logo_url: data.clinic?.logo_url || "",
+        primary_color: data.clinic?.primary_color || "#10B981",
+        clinic_id: "",
+      });
 
       const p = data.patient;
       setForm({
@@ -239,7 +381,14 @@ export default function PreRegisto() {
 
     setSubmitting(true);
     try {
-      const queryParam = isNewMode ? `clinic_id=${clinicIdParam}` : `token=${token}`;
+      let queryParam: string;
+      if (isSlugMode) {
+        queryParam = `slug=${slug}`;
+      } else if (isNewMode) {
+        queryParam = `clinic_id=${clinic.clinic_id || clinicIdParam}`;
+      } else {
+        queryParam = `token=${token}`;
+      }
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-onboarding?${queryParam}`;
       const response = await fetch(url, {
         method: "POST",
@@ -274,11 +423,7 @@ export default function PreRegisto() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadingSkeleton />;
   }
 
   if (error) {
@@ -301,8 +446,11 @@ export default function PreRegisto() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-6">
         <div className="text-center space-y-4 animate-in fade-in zoom-in duration-500">
-          <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
-            <CheckCircle className="h-10 w-10 text-primary" />
+          <div
+            className="w-20 h-20 mx-auto rounded-full flex items-center justify-center"
+            style={{ backgroundColor: `${clinic.primary_color}1A` }}
+          >
+            <CheckCircle className="h-10 w-10" style={{ color: clinic.primary_color }} />
           </div>
           <h1 className="text-xl font-semibold text-foreground">
             {isNewMode ? "O seu registo foi criado com sucesso!" : "Os seus dados foram atualizados com sucesso!"}
@@ -321,23 +469,11 @@ export default function PreRegisto() {
   const disabled = success || submitting;
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex items-center justify-center">
-        {clinic.logo_url ? (
-          <img
-            src={clinic.logo_url}
-            alt={clinic.name}
-            className="h-10 object-contain"
-          />
-        ) : (
-          <h1 className="text-lg font-semibold text-foreground">
-            {clinic.name || "Pré-Registo"}
-          </h1>
-        )}
-      </div>
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Clinic Header */}
+      <ClinicHeader clinic={clinic} />
 
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-6 flex-1">
         <div className="text-center space-y-1">
           <h2 className="text-xl font-semibold text-foreground">
             Ficha de Pré-Registo
@@ -356,7 +492,7 @@ export default function PreRegisto() {
           <AccordionItem value="pessoal" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-primary" />
+                <User className="h-4 w-4" style={{ color: clinic.primary_color }} />
                 <span className="font-medium">Dados Pessoais</span>
               </div>
             </AccordionTrigger>
@@ -479,7 +615,7 @@ export default function PreRegisto() {
           <AccordionItem value="contactos" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-primary" />
+                <Phone className="h-4 w-4" style={{ color: clinic.primary_color }} />
                 <span className="font-medium">Contactos</span>
               </div>
             </AccordionTrigger>
@@ -538,7 +674,7 @@ export default function PreRegisto() {
           <AccordionItem value="faturacao" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
+                <FileText className="h-4 w-4" style={{ color: clinic.primary_color }} />
                 <span className="font-medium">Dados de Faturação</span>
               </div>
             </AccordionTrigger>
@@ -631,7 +767,7 @@ export default function PreRegisto() {
           <AccordionItem value="consentimentos" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-primary" />
+                <ShieldCheck className="h-4 w-4" style={{ color: clinic.primary_color }} />
                 <span className="font-medium">Consentimentos</span>
               </div>
             </AccordionTrigger>
@@ -666,7 +802,8 @@ export default function PreRegisto() {
         <Button
           onClick={handleSubmit}
           disabled={disabled}
-          className="w-full h-12 text-base"
+          className="w-full h-12 text-base text-white"
+          style={{ backgroundColor: clinic.primary_color }}
         >
           {submitting ? (
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -679,6 +816,13 @@ export default function PreRegisto() {
           Os seus dados são tratados de forma confidencial e segura.
         </p>
       </div>
+
+      {/* Footer */}
+      <footer className="py-4 text-center">
+        <p className="text-[11px] text-muted-foreground/60">
+          Powered by <span className="font-medium">Physione</span>
+        </p>
+      </footer>
     </div>
   );
 }
