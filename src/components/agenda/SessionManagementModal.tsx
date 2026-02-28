@@ -3,29 +3,13 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, setHours, setMinutes, addMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,7 +45,6 @@ import { AddCreditsModal, CreditPurchaseData } from "@/components/patients/AddCr
 import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 
-// Session status types matching business rules
 export type SessionStatus = "agendado" | "confirmado" | "realizado" | "cancelado" | "falta";
 
 const STATUS_CONFIG: Record<SessionStatus, { label: string; color: string; icon: React.ReactNode }> = {
@@ -72,14 +55,9 @@ const STATUS_CONFIG: Record<SessionStatus, { label: string; color: string; icon:
   falta: { label: "Falta", color: "bg-warning", icon: <AlertTriangle className="h-4 w-4" /> },
 };
 
-const CANCELLATION_REASONS = [
-  "Utente desmarcou",
-  "Clínica desmarcou",
-  "Doença do utente",
-  "Outro motivo",
-];
+const CANCELLATION_REASONS = ["Utente desmarcou", "Clínica desmarcou", "Doença do utente", "Outro motivo"];
 
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 to 18:00
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 7);
 
 interface SessionManagementModalProps {
   isOpen: boolean;
@@ -90,7 +68,10 @@ interface SessionManagementModalProps {
   onUpdateSession: (id: string, data: Partial<Session>) => Promise<void>;
   onDeleteSession?: (sessionId: string, reason?: string) => Promise<void>;
   onRefundCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
-  onUseCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }>;
+  onUseCredit: (
+    patientId: string,
+    sessionId: string,
+  ) => Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }>;
   wasCreditUsedForSession: (sessionId: string) => boolean;
   onAddCredits?: (patientId: string, data: CreditPurchaseData) => Promise<void>;
   onDuplicateSession?: (data: {
@@ -119,8 +100,7 @@ export function SessionManagementModal({
   onDuplicateSession,
 }: SessionManagementModalProps) {
   const navigate = useNavigate();
-  
-  // State
+
   const [isLoading, setIsLoading] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showNoShowDialog, setShowNoShowDialog] = useState(false);
@@ -129,31 +109,27 @@ export function SessionManagementModal({
   const [cancelReason, setCancelReason] = useState<string>("");
   const [noShowRefund, setNoShowRefund] = useState(false);
   const [showEvolutionPrompt, setShowEvolutionPrompt] = useState(false);
-  
-  // Reschedule state
+
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [newDate, setNewDate] = useState<Date | undefined>(undefined);
   const [newHour, setNewHour] = useState<number | undefined>(undefined);
 
-  // Duplicate state
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [dupDate, setDupDate] = useState<Date | undefined>(undefined);
   const [dupHour, setDupHour] = useState<number | undefined>(undefined);
   const [dupMinute, setDupMinute] = useState<number>(0);
 
-  // Pre-session briefing (must be before early return)
-  const { briefing, isLoading: briefingLoading, refresh: refreshBriefing } = usePreSessionBriefing(
-    session?.id || null,
-    session?.paciente_id || null
-  );
+  const {
+    briefing,
+    isLoading: briefingLoading,
+    refresh: refreshBriefing,
+  } = usePreSessionBriefing(session?.id || null, session?.paciente_id || null);
 
-  // Check if session is within 30 min — show briefing
   const isUpcoming = session
     ? new Date(session.start_time).getTime() - Date.now() < 30 * 60 * 1000 &&
       new Date(session.start_time).getTime() > Date.now()
     : false;
 
-  // Reset state when session changes
   useEffect(() => {
     if (session) {
       setNewDate(new Date(session.start_time));
@@ -179,6 +155,9 @@ export function SessionManagementModal({
   const professionalName = session.profissional?.full_name || "Profissional";
   const sessionDateTime = format(new Date(session.start_time), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR });
 
+  // Data da sessão no formato ISO para passar para o prontuário
+  const sessionDateISO = format(new Date(session.start_time), "yyyy-MM-dd");
+
   // ========== ACTION HANDLERS ==========
 
   const handleConfirm = async () => {
@@ -197,10 +176,8 @@ export function SessionManagementModal({
       toast.error("Selecione um motivo para o cancelamento");
       return;
     }
-
     setIsLoading(true);
     try {
-      // If credit was used, refund it
       if (creditWasUsed) {
         const refundResult = await onRefundCredit(session.paciente_id, session.id);
         if (refundResult.success) {
@@ -209,7 +186,6 @@ export function SessionManagementModal({
           toast.error(refundResult.error || "Erro ao estornar crédito");
         }
       }
-
       await onUpdateSession(session.id, {
         status: "cancelado",
         notes: `${session.notes || ""}\n[CANCELADO] ${cancelReason}`.trim(),
@@ -222,21 +198,16 @@ export function SessionManagementModal({
     }
   };
 
-  // Check if session can be finalized (has credits or credit already used)
   const canFinalize = creditWasUsed || creditBalance > 0;
 
   const handleComplete = async () => {
-    // Block if no credits available
     if (!canFinalize) {
       toast.error("Não é possível finalizar: o utente não possui créditos. Adicione créditos antes de finalizar.");
       return;
     }
-
     setIsLoading(true);
     try {
-      // Check if credit was already deducted
       if (!creditWasUsed) {
-        // Deduct credit now (persisted to database)
         const result = await onUseCredit(session.paciente_id, session.id);
         if (!result.success) {
           toast.error(result.error || "Erro ao descontar crédito");
@@ -248,11 +219,8 @@ export function SessionManagementModal({
           toast.success("Crédito descontado!");
         }
       }
-
       await onUpdateSession(session.id, { status: "realizado", payment_status: "pago" });
       toast.success("Sessão finalizada!");
-
-      // Show evolution prompt
       setShowEvolutionPrompt(true);
     } finally {
       setIsLoading(false);
@@ -262,7 +230,6 @@ export function SessionManagementModal({
   const handleNoShow = async () => {
     setIsLoading(true);
     try {
-      // Optionally refund based on clinic policy
       if (noShowRefund && creditWasUsed) {
         const refundResult = await onRefundCredit(session.paciente_id, session.id);
         if (refundResult.success) {
@@ -271,7 +238,6 @@ export function SessionManagementModal({
       } else if (creditWasUsed) {
         toast.info("Crédito mantido (política da clínica)");
       }
-
       await onUpdateSession(session.id, {
         status: "falta",
         notes: `${session.notes || ""}\n[FALTA] Utente não compareceu`.trim(),
@@ -289,11 +255,9 @@ export function SessionManagementModal({
       toast.error("Selecione data e hora");
       return;
     }
-
     setIsLoading(true);
     try {
       const result = SessionService.reschedule(session, newDate, newHour, sessions);
-      
       if (result.success && result.updatedSession) {
         await onUpdateSession(session.id, {
           start_time: result.updatedSession.start_time,
@@ -310,11 +274,12 @@ export function SessionManagementModal({
     }
   };
 
+  // ── Navega para prontuários com data da sessão pré-preenchida ─────────────
   const handleGoToEvolution = () => {
     onClose();
-    // Navigate to prontuarios with patient context
-    navigate(`/prontuarios?paciente=${session.paciente_id}`);
+    navigate(`/prontuarios?paciente=${session.paciente_id}&sessao_data=${sessionDateISO}&auto_evolucao=1`);
   };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const handleDeleteSession = async () => {
     if (!onDeleteSession) return;
@@ -331,7 +296,6 @@ export function SessionManagementModal({
       return;
     }
     if (!onDuplicateSession) return;
-
     setIsLoading(true);
     try {
       await onDuplicateSession({
@@ -373,23 +337,17 @@ export function SessionManagementModal({
             <div className="p-4 rounded-lg bg-muted/50 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-lg font-semibold">{patientName}</span>
-                <Badge
-                  className={cn(
-                    "text-white",
-                    STATUS_CONFIG[currentStatus]?.color || "bg-muted"
-                  )}
-                >
+                <Badge className={cn("text-white", STATUS_CONFIG[currentStatus]?.color || "bg-muted")}>
                   {STATUS_CONFIG[currentStatus]?.icon}
                   <span className="ml-1">{STATUS_CONFIG[currentStatus]?.label}</span>
                 </Badge>
               </div>
-              
+
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CalendarIcon className="h-4 w-4" />
                 <span className="capitalize">{sessionDateTime}</span>
               </div>
 
-              {/* Credit Balance Indicator */}
               <div className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">Saldo de créditos:</span>
@@ -403,7 +361,6 @@ export function SessionManagementModal({
                 )}
               </div>
 
-              {/* No credits warning with Add Credits button */}
               {!canFinalize && !(currentStatus === "cancelado" || currentStatus === "falta") && (
                 <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
                   <div className="flex items-center gap-2">
@@ -429,11 +386,7 @@ export function SessionManagementModal({
 
             {/* Pre-Session Briefing */}
             {(isUpcoming || briefing) && (
-              <PreSessionBriefingCard
-                briefing={briefing!}
-                isLoading={briefingLoading}
-                onRefresh={refreshBriefing}
-              />
+              <PreSessionBriefingCard briefing={briefing!} isLoading={briefingLoading} onRefresh={refreshBriefing} />
             )}
 
             {/* Terminal status warning */}
@@ -444,119 +397,103 @@ export function SessionManagementModal({
               </div>
             )}
 
-            {/* Reschedule Section */}
+            {/* ── BOTÃO EVOLUÇÃO — sempre visível ─────────────────────────── */}
+            {!isRescheduling && !isDuplicating && (
+              <Button
+                variant="outline"
+                className="w-full border-primary text-primary hover:bg-primary/10 gap-2"
+                onClick={handleGoToEvolution}
+              >
+                <FileText className="h-4 w-4" />
+                Evolução
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {format(new Date(session.start_time), "dd/MM/yyyy")}
+                </span>
+              </Button>
+            )}
+            {/* ─────────────────────────────────────────────────────────────── */}
+
+            {/* Reschedule / Duplicate buttons */}
             {!isRescheduling && !isDuplicating ? (
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setIsRescheduling(true)}
-                >
+                <Button variant="outline" className="flex-1" onClick={() => setIsRescheduling(true)}>
                   <Edit3 className="h-4 w-4 mr-2" />
                   Remarcar Sessão
                 </Button>
                 {onDuplicateSession && (
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setIsDuplicating(true)}
-                  >
+                  <Button variant="outline" className="flex-1" onClick={() => setIsDuplicating(true)}>
                     <Copy className="h-4 w-4 mr-2" />
                     Duplicar
                   </Button>
                 )}
               </div>
             ) : isRescheduling ? (
-                  <div className="space-y-3 p-4 border rounded-lg">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <Edit3 className="h-4 w-4" />
-                      Remarcar Sessão
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Date Picker */}
-                      <div className="space-y-1">
-                        <Label className="text-xs">Nova Data</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="w-full justify-start text-left font-normal"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {newDate ? format(newDate, "dd/MM/yyyy") : "Selecionar"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={newDate}
-                              onSelect={setNewDate}
-                              initialFocus
-                              className="pointer-events-auto"
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      {/* Hour Picker */}
-                      <div className="space-y-1">
-                        <Label className="text-xs">Novo Horário</Label>
-                        <Select
-                          value={newHour?.toString()}
-                          onValueChange={(v) => setNewHour(parseInt(v))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Hora" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {HOURS.map((h) => (
-                              <SelectItem key={h} value={h.toString()}>
-                                {h.toString().padStart(2, "0")}:00
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsRescheduling(false)}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleReschedule}
-                        disabled={isLoading}
-                      >
-                        {isLoading ? "Salvando..." : "Confirmar Remarcação"}
-                      </Button>
-                    </div>
+              <div className="space-y-3 p-4 border rounded-lg">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Edit3 className="h-4 w-4" />
+                  Remarcar Sessão
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Nova Data</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {newDate ? format(newDate, "dd/MM/yyyy") : "Selecionar"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={newDate}
+                          onSelect={setNewDate}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                ) : null}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Novo Horário</Label>
+                    <Select value={newHour?.toString()} onValueChange={(v) => setNewHour(parseInt(v))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Hora" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HOURS.map((h) => (
+                          <SelectItem key={h} value={h.toString()}>
+                            {h.toString().padStart(2, "0")}:00
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setIsRescheduling(false)}>
+                    Cancelar
+                  </Button>
+                  <Button size="sm" onClick={handleReschedule} disabled={isLoading}>
+                    {isLoading ? "Salvando..." : "Confirmar Remarcação"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
-            {/* Duplicate Section - available for all statuses */}
+            {/* Duplicate Section */}
             {isDuplicating && (
               <div className="space-y-3 p-4 border rounded-lg">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Copy className="h-4 w-4" />
                   Duplicar Sessão (nova data/hora)
                 </div>
-
                 <div className="grid grid-cols-3 gap-3">
-                  {/* Date Picker */}
                   <div className="space-y-1">
                     <Label className="text-xs">Data</Label>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                        >
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {dupDate ? format(dupDate, "dd/MM/yyyy") : "Selecionar"}
                         </Button>
@@ -572,14 +509,9 @@ export function SessionManagementModal({
                       </PopoverContent>
                     </Popover>
                   </div>
-
-                  {/* Hour Picker */}
                   <div className="space-y-1">
                     <Label className="text-xs">Hora</Label>
-                    <Select
-                      value={dupHour?.toString()}
-                      onValueChange={(v) => setDupHour(parseInt(v))}
-                    >
+                    <Select value={dupHour?.toString()} onValueChange={(v) => setDupHour(parseInt(v))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Hora" />
                       </SelectTrigger>
@@ -592,14 +524,9 @@ export function SessionManagementModal({
                       </SelectContent>
                     </Select>
                   </div>
-
-                  {/* Minute Picker */}
                   <div className="space-y-1">
                     <Label className="text-xs">Min</Label>
-                    <Select
-                      value={dupMinute.toString()}
-                      onValueChange={(v) => setDupMinute(parseInt(v))}
-                    >
+                    <Select value={dupMinute.toString()} onValueChange={(v) => setDupMinute(parseInt(v))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Min" />
                       </SelectTrigger>
@@ -613,20 +540,11 @@ export function SessionManagementModal({
                     </Select>
                   </div>
                 </div>
-
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsDuplicating(false)}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setIsDuplicating(false)}>
                     Cancelar
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleDuplicate}
-                    disabled={isLoading}
-                  >
+                  <Button size="sm" onClick={handleDuplicate} disabled={isLoading}>
                     {isLoading ? "Criando..." : "Confirmar Duplicação"}
                   </Button>
                 </div>
@@ -636,7 +554,6 @@ export function SessionManagementModal({
             {/* Status Actions */}
             {!isRescheduling && !isDuplicating && (
               <div className="grid grid-cols-2 gap-2">
-                {/* Confirm - only for non-terminal */}
                 {currentStatus === "agendado" && (
                   <Button
                     variant="outline"
@@ -649,7 +566,6 @@ export function SessionManagementModal({
                   </Button>
                 )}
 
-                {/* Complete - only for non-terminal */}
                 {!isTerminalStatus && (
                   <Button
                     variant="default"
@@ -662,7 +578,6 @@ export function SessionManagementModal({
                   </Button>
                 )}
 
-                {/* Cancel */}
                 <Button
                   variant="outline"
                   className="border-destructive text-destructive hover:bg-destructive/10"
@@ -673,7 +588,6 @@ export function SessionManagementModal({
                   Cancelar
                 </Button>
 
-                {/* No-Show */}
                 <Button
                   variant="outline"
                   className="border-warning text-warning hover:bg-warning/10"
@@ -684,7 +598,6 @@ export function SessionManagementModal({
                   Falta
                 </Button>
 
-                {/* Delete Session Button */}
                 {onDeleteSession && (
                   <Button
                     variant="outline"
@@ -698,7 +611,6 @@ export function SessionManagementModal({
                 )}
               </div>
             )}
-
           </div>
         </DialogContent>
       </Dialog>
@@ -710,14 +622,11 @@ export function SessionManagementModal({
             <AlertDialogTitle>Cancelar Sessão</AlertDialogTitle>
             <AlertDialogDescription>
               {creditWasUsed && (
-                <span className="block mb-2 text-green-600">
-                  ✓ O crédito será automaticamente estornado ao utente.
-                </span>
+                <span className="block mb-2 text-green-600">✓ O crédito será automaticamente estornado ao utente.</span>
               )}
               Selecione o motivo do cancelamento:
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
           <Select value={cancelReason} onValueChange={setCancelReason}>
             <SelectTrigger>
               <SelectValue placeholder="Motivo do cancelamento" />
@@ -730,7 +639,6 @@ export function SessionManagementModal({
               ))}
             </SelectContent>
           </Select>
-
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
             <AlertDialogAction
@@ -750,14 +658,9 @@ export function SessionManagementModal({
             <AlertDialogTitle>Registrar Falta (No-Show)</AlertDialogTitle>
             <AlertDialogDescription>
               O utente não compareceu à sessão.
-              {creditWasUsed && (
-                <span className="block mt-2">
-                  O crédito já foi descontado. Deseja estornar?
-                </span>
-              )}
+              {creditWasUsed && <span className="block mt-2">O crédito já foi descontado. Deseja estornar?</span>}
             </AlertDialogDescription>
           </AlertDialogHeader>
-
           {creditWasUsed && (
             <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
               <input
@@ -772,7 +675,6 @@ export function SessionManagementModal({
               </label>
             </div>
           )}
-
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
             <AlertDialogAction
@@ -785,7 +687,7 @@ export function SessionManagementModal({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Evolution Prompt Dialog */}
+      {/* Evolution Prompt Dialog — aparece após finalizar */}
       <AlertDialog open={showEvolutionPrompt} onOpenChange={setShowEvolutionPrompt}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -793,11 +695,8 @@ export function SessionManagementModal({
               <FileText className="h-5 w-5 text-primary" />
               Sessão Finalizada!
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Deseja registrar a evolução clínica do utente agora?
-            </AlertDialogDescription>
+            <AlertDialogDescription>Deseja registrar a evolução clínica do utente agora?</AlertDialogDescription>
           </AlertDialogHeader>
-
           <AlertDialogFooter>
             <AlertDialogCancel onClick={onClose}>Mais Tarde</AlertDialogCancel>
             <AlertDialogAction onClick={handleGoToEvolution}>
@@ -815,7 +714,7 @@ export function SessionManagementModal({
         onConfirm={handleDeleteSession}
         title="Apagar Sessão"
         description="A sessão será removida permanentemente do sistema."
-        entityName={`${patientName} - ${format(new Date(session.start_time), 'dd/MM HH:mm')}`}
+        entityName={`${patientName} - ${format(new Date(session.start_time), "dd/MM HH:mm")}`}
         warnings={creditWasUsed ? ["O crédito já foi descontado desta sessão"] : []}
       />
 
