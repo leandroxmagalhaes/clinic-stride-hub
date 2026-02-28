@@ -40,12 +40,14 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   // Compacto apenas se altura muito reduzida
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
 
+  // Só o primeiro nome do profissional
+  const profissionalPrimeiroNome = session.profissional?.full_name?.split(" ")?.[0] ?? "";
+
   const internalStyle: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     backgroundColor: isFalta ? "#f974161a" : `${session.servico?.color}15`,
     borderLeft: isFalta ? "3px solid #f97316" : `3px solid ${session.servico?.color}`,
     ...positionStyle,
-    // Garantir altura mínima para mostrar conteúdo completo
     minHeight: isCompact ? undefined : "72px",
     height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "72px"})` : undefined,
   };
@@ -144,7 +146,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             <StatusBadge status={session.status as any} className="scale-90 flex-shrink-0" />
           </div>
 
-          {/* Linha 2: Nome completo — sem truncar, com wrap */}
+          {/* Linha 2: Nome completo do paciente */}
           <p
             className={cn(
               "font-semibold text-[11px] leading-tight break-words",
@@ -154,7 +156,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             {session.paciente?.full_name ?? ""}
           </p>
 
-          {/* Linha 3: Serviço completo — sem truncar, com wrap */}
+          {/* Linha 3: Serviço completo */}
           <p
             className={cn(
               "text-[10px] leading-tight break-words",
@@ -164,15 +166,10 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             {session.servico?.name ?? ""}
           </p>
 
-          {/* Linha 4: Profissional */}
-          {session.profissional?.full_name && (
-            <p
-              className={cn(
-                "text-[10px] leading-tight break-words",
-                isFalta ? "text-orange-400" : "text-muted-foreground/70",
-              )}
-            >
-              • {session.profissional.full_name}
+          {/* Linha 4: Só o primeiro nome do profissional */}
+          {profissionalPrimeiroNome && (
+            <p className={cn("text-[10px] leading-tight", isFalta ? "text-orange-400" : "text-muted-foreground/70")}>
+              • {profissionalPrimeiroNome}
             </p>
           )}
         </div>
