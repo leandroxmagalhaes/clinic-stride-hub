@@ -134,6 +134,11 @@ const App = () => (
                     <PreRegisto />
                   </Suspense>
                 } />
+                <Route path="/r/:slug" element={
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <PreRegisto />
+                  </Suspense>
+                } />
                 
                 {/* Protected routes with persistent layout */}
                 <Route path="/" element={

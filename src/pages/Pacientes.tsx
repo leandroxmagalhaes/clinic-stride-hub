@@ -285,8 +285,18 @@ export default function Pacientes() {
                 toast.error("Clínica não identificada.");
                 return;
               }
-              const genericUrl = `${getPublicBaseUrl()}/pre-registo/novo?c=${clinicId}`;
               try {
+                // Fetch slug for the clinic
+                const { data: clinicData } = await supabase
+                  .from("clinics")
+                  .select("slug")
+                  .eq("id", clinicId)
+                  .maybeSingle();
+                
+                const genericUrl = clinicData?.slug
+                  ? `${getPublicBaseUrl()}/r/${clinicData.slug}`
+                  : `${getPublicBaseUrl()}/pre-registo/novo?c=${clinicId}`;
+                
                 await navigator.clipboard.writeText(genericUrl);
                 setGenericLinkCopied(true);
                 toast.success("Link genérico copiado!");
