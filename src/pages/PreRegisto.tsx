@@ -4,19 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, Loader2, User, Phone, FileText, ShieldCheck, Copy, AlertTriangle } from "lucide-react";
@@ -66,11 +55,7 @@ function ClinicHeader({ clinic }: { clinic: ClinicInfo }) {
     <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
       <div className="max-w-lg mx-auto flex flex-col items-center gap-3">
         {clinic.logo_url ? (
-          <img
-            src={clinic.logo_url}
-            alt={clinic.name}
-            className="h-14 object-contain"
-          />
+          <img src={clinic.logo_url} alt={clinic.name} className="h-14 object-contain" />
         ) : (
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg"
@@ -118,7 +103,6 @@ export default function PreRegisto() {
   const location = useLocation();
   const { toast } = useToast();
 
-  // Determine mode
   const isSlugMode = location.pathname.startsWith("/r/") && !!slug;
   const isNewMode = isSlugMode || token === "novo";
   const clinicIdParam = !isSlugMode && isNewMode ? searchParams.get("c") : null;
@@ -154,7 +138,6 @@ export default function PreRegisto() {
       fetchClinicBySlug();
     } else if (isNewMode) {
       if (!clinicIdParam) {
-        // Old format /pre-registo/novo?c=UUID — try to redirect to slug
         redirectToSlug();
         return;
       }
@@ -210,13 +193,11 @@ export default function PreRegisto() {
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
       });
-
       if (!response.ok) {
         setError("Link inválido ou clínica não encontrada.");
         setLoading(false);
         return;
       }
-
       const data = await response.json();
       setClinic({
         name: data.clinic?.name || "",
@@ -241,13 +222,11 @@ export default function PreRegisto() {
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
       });
-
       if (!response.ok) {
         setError("Link inválido ou clínica não encontrada.");
         setLoading(false);
         return;
       }
-
       const data = await response.json();
       setClinic({
         name: data.clinic?.name || "",
@@ -272,13 +251,11 @@ export default function PreRegisto() {
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
       });
-
       if (!response.ok) {
         setError("Link inválido ou expirado.");
         setLoading(false);
         return;
       }
-
       const data = await response.json();
       setClinic({
         name: data.clinic?.name || "",
@@ -286,7 +263,6 @@ export default function PreRegisto() {
         primary_color: data.clinic?.primary_color || "#10B981",
         clinic_id: "",
       });
-
       const p = data.patient;
       setForm({
         full_name: p.full_name || "",
@@ -306,7 +282,6 @@ export default function PreRegisto() {
         data_consent: p.data_consent || false,
         onboarding_completed_at: p.onboarding_completed_at || null,
       });
-
       if (p.onboarding_completed_at) {
         setSuccess(true);
       }
@@ -349,16 +324,10 @@ export default function PreRegisto() {
       });
       return;
     }
-
     if (!form.full_name.trim()) {
-      toast({
-        title: "Nome obrigatório",
-        description: "Por favor, preencha o nome completo.",
-        variant: "destructive",
-      });
+      toast({ title: "Nome obrigatório", description: "Por favor, preencha o nome completo.", variant: "destructive" });
       return;
     }
-
     if (isNewMode && !form.phone?.trim()) {
       toast({
         title: "Telemóvel obrigatório",
@@ -367,7 +336,6 @@ export default function PreRegisto() {
       });
       return;
     }
-
     if (!noNif) {
       if (!form.cpf?.trim() || form.cpf.replace(/\D/g, "").length !== 9) {
         toast({
@@ -398,33 +366,20 @@ export default function PreRegisto() {
         },
         body: JSON.stringify(form),
       });
-
       const result = await response.json();
-
       if (!response.ok) {
-        toast({
-          title: "Erro",
-          description: result.error || "Erro ao atualizar dados.",
-          variant: "destructive",
-        });
+        toast({ title: "Erro", description: result.error || "Erro ao atualizar dados.", variant: "destructive" });
         return;
       }
-
       setSuccess(true);
     } catch {
-      toast({
-        title: "Erro",
-        description: "Erro de ligação. Tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "Erro de ligação. Tente novamente.", variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
-    return <LoadingSkeleton />;
-  }
+  if (loading) return <LoadingSkeleton />;
 
   if (error) {
     return (
@@ -434,9 +389,7 @@ export default function PreRegisto() {
             <ShieldCheck className="h-8 w-8 text-destructive" />
           </div>
           <h1 className="text-xl font-semibold text-foreground">{error}</h1>
-          <p className="text-muted-foreground text-sm">
-            Verifique se o link está correto ou contacte a clínica.
-          </p>
+          <p className="text-muted-foreground text-sm">Verifique se o link está correto ou contacte a clínica.</p>
         </div>
       </div>
     );
@@ -455,12 +408,8 @@ export default function PreRegisto() {
           <h1 className="text-xl font-semibold text-foreground">
             {isNewMode ? "O seu registo foi criado com sucesso!" : "Os seus dados foram atualizados com sucesso!"}
           </h1>
-          <p className="text-muted-foreground text-sm">
-            Pode fechar esta página. Obrigado!
-          </p>
-          {clinic.name && (
-            <p className="text-xs text-muted-foreground">{clinic.name}</p>
-          )}
+          <p className="text-muted-foreground text-sm">Pode fechar esta página. Obrigado!</p>
+          {clinic.name && <p className="text-xs text-muted-foreground">{clinic.name}</p>}
         </div>
       </div>
     );
@@ -470,17 +419,12 @@ export default function PreRegisto() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Clinic Header */}
       <ClinicHeader clinic={clinic} />
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-6 flex-1">
         <div className="text-center space-y-1">
-          <h2 className="text-xl font-semibold text-foreground">
-            Ficha de Pré-Registo
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Preencha os seus dados antes da consulta.
-          </p>
+          <h2 className="text-xl font-semibold text-foreground">Ficha de Pré-Registo</h2>
+          <p className="text-sm text-muted-foreground">Preencha os seus dados antes da consulta.</p>
         </div>
 
         <Accordion
@@ -520,15 +464,12 @@ export default function PreRegisto() {
                 </div>
                 <div>
                   <Label htmlFor="gender">Género</Label>
-                  <Select
-                    value={form.gender || ""}
-                    onValueChange={(v) => updateField("gender", v)}
-                    disabled={disabled}
-                  >
+                  {/* ── FIX: portal={false} evita crash em páginas públicas sem providers ── */}
+                  <Select value={form.gender || ""} onValueChange={(v) => updateField("gender", v)} disabled={disabled}>
                     <SelectTrigger id="gender">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" side="bottom" avoidCollisions={false}>
                       <SelectItem value="M">Masculino</SelectItem>
                       <SelectItem value="F">Feminino</SelectItem>
                       <SelectItem value="O">Outro</SelectItem>
@@ -556,9 +497,7 @@ export default function PreRegisto() {
                     checked={noNif}
                     onCheckedChange={(checked) => {
                       setNoNif(!!checked);
-                      if (checked) {
-                        updateField("cpf", null);
-                      }
+                      if (checked) updateField("cpf", null);
                     }}
                     disabled={disabled}
                   />
@@ -582,9 +521,7 @@ export default function PreRegisto() {
                     id="height_cm"
                     type="number"
                     value={form.height_cm ?? ""}
-                    onChange={(e) =>
-                      updateField("height_cm", e.target.value ? parseInt(e.target.value) : null)
-                    }
+                    onChange={(e) => updateField("height_cm", e.target.value ? parseInt(e.target.value) : null)}
                     placeholder="170"
                     disabled={disabled}
                     min={50}
@@ -597,9 +534,7 @@ export default function PreRegisto() {
                     id="weight_kg"
                     type="number"
                     value={form.weight_kg ?? ""}
-                    onChange={(e) =>
-                      updateField("weight_kg", e.target.value ? parseFloat(e.target.value) : null)
-                    }
+                    onChange={(e) => updateField("weight_kg", e.target.value ? parseFloat(e.target.value) : null)}
                     placeholder="70"
                     disabled={disabled}
                     min={10}
@@ -791,8 +726,8 @@ export default function PreRegisto() {
                   disabled={disabled}
                 />
                 <Label htmlFor="data_consent" className="text-sm leading-relaxed cursor-pointer">
-                  Declaro que estou de acordo com o armazenamento e tratamento dos meus dados
-                  pessoais. <span className="text-destructive">*</span>
+                  Declaro que estou de acordo com o armazenamento e tratamento dos meus dados pessoais.{" "}
+                  <span className="text-destructive">*</span>
                 </Label>
               </div>
             </AccordionContent>
@@ -807,8 +742,10 @@ export default function PreRegisto() {
         >
           {submitting ? (
             <Loader2 className="h-5 w-5 animate-spin" />
+          ) : isNewMode ? (
+            "Submeter Registo"
           ) : (
-            isNewMode ? "Submeter Registo" : "Atualizar Ficha"
+            "Atualizar Ficha"
           )}
         </Button>
 
@@ -817,7 +754,6 @@ export default function PreRegisto() {
         </p>
       </div>
 
-      {/* Footer */}
       <footer className="py-4 text-center">
         <p className="text-[11px] text-muted-foreground/60">
           Powered by <span className="font-medium">Physione</span>
