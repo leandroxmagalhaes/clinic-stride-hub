@@ -27,6 +27,30 @@ interface DraggableSessionProps {
   positionStyle?: React.CSSProperties;
 }
 
+// ── Formata o nome do serviço: remove "Fisioterapia" e abrevia ──────────────
+function formatServico(name: string): string {
+  if (!name) return "";
+
+  // Mapa de abreviações específicas
+  const abreviacoes: Record<string, string> = {
+    neurodesenvolvimental: "Neurodes.",
+    neurodesenvolvimento: "Neurodes.",
+    neurodevelopmental: "Neurodes.",
+  };
+
+  // Remove prefixo "Fisioterapia " (case-insensitive)
+  let result = name.replace(/^fisioterapia\s+/i, "").trim();
+
+  // Verifica se a palavra resultante tem abreviação
+  const lower = result.toLowerCase();
+  if (abreviacoes[lower]) {
+    return abreviacoes[lower];
+  }
+
+  return result;
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle }: DraggableSessionProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: session.id,
@@ -37,19 +61,20 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const hasCreditAvailable = hasCredits === true;
   const isFalta = session.status === "falta" || session.status === "Falta" || session.status === "no-show";
 
-  // Compacto apenas se altura muito reduzida
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
 
-  // Só o primeiro nome do profissional
-  const profissionalPrimeiroNome = session.profissional?.full_name?.split(" ")?.[0] ?? "";
+  // Serviço abreviado + primeiro nome do profissional na mesma linha
+  const servicoFormatado = formatServico(session.servico?.name ?? "");
+  const profissionalNome = session.profissional?.full_name?.split(" ")?.[0] ?? "";
+  const servicoLinha = profissionalNome ? `${servicoFormatado} (${profissionalNome})` : servicoFormatado;
 
   const internalStyle: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     backgroundColor: isFalta ? "#f974161a" : `${session.servico?.color}15`,
     borderLeft: isFalta ? "3px solid #f97316" : `3px solid ${session.servico?.color}`,
     ...positionStyle,
-    minHeight: isCompact ? undefined : "72px",
-    height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "72px"})` : undefined,
+    minHeight: isCompact ? undefined : "64px",
+    height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "64px"})` : undefined,
   };
 
   if (transform) {
@@ -118,7 +143,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
           <StatusBadge status={session.status as any} className="scale-75 flex-shrink-0" />
         </div>
       ) : (
-        /* ── Layout normal completo ── */
+        /* ── Layout normal — 3 linhas ── */
         <div className="p-2 flex flex-col gap-0.5">
           {/* Linha 1: Hora + Status */}
           <div className="flex items-center justify-between gap-1">
@@ -156,20 +181,10 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             {session.paciente?.full_name ?? ""}
           </p>
 
-          {/* Linha 3: Serviço completo */}
-          <p
-            className={cn(
-              "text-[10px] leading-tight break-words",
-              isFalta ? "text-orange-500" : "text-muted-foreground",
-            )}
-          >
-            {session.servico?.name ?? ""}
-          </p>
-
-          {/* Linha 4: Só o primeiro nome do profissional */}
-          {profissionalPrimeiroNome && (
-            <p className={cn("text-[10px] leading-tight", isFalta ? "text-orange-400" : "text-muted-foreground/70")}>
-              • {profissionalPrimeiroNome}
+          {/* Linha 3: Especialidade (Profissional) — tudo numa linha */}
+          {servicoLinha && (
+            <p className={cn("text-[10px] leading-tight", isFalta ? "text-orange-500" : "text-muted-foreground")}>
+              {servicoLinha}
             </p>
           )}
         </div>
