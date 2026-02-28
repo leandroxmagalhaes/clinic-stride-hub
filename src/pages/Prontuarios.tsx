@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Search, 
-  Plus, 
-  FileText, 
+import {
+  Search,
+  Plus,
+  FileText,
   Activity,
   Clock,
   User,
@@ -20,6 +20,9 @@ import {
   ClipboardList,
   ArrowLeft,
   Sparkles,
+  ArrowUpDown,
+  ArrowDown,
+  ArrowUp,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -39,7 +42,6 @@ import { AIAssistButton } from "@/components/ai/AIAssistButton";
 import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 
-// Prontuario data interface
 interface ProntuarioData {
   id: string;
   clinic_id: string;
@@ -59,6 +61,8 @@ interface ProntuarioData {
   };
 }
 
+type SortOrder = "desc" | "asc";
+
 export default function Prontuarios() {
   const { patients, patientsLoading, professionals, evolutions, addEvolution } = useData();
   const { data: clinicInfo } = useClinicInfo();
@@ -67,37 +71,34 @@ export default function Prontuarios() {
   const [selectedProntuario, setSelectedProntuario] = useState<ProntuarioData | null>(null);
   const [isNewEvolucaoOpen, setIsNewEvolucaoOpen] = useState(false);
   const [isEditClinicalOpen, setIsEditClinicalOpen] = useState(false);
-  
-  // Prontuarios from database
+
+  // ── Ordenação das evoluções ───────────────────────────────────────────────
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc"); // mais recente primeiro
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Data pré-preenchida vinda da agenda ───────────────────────────────────
+  const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const [prontuariosData, setProntuariosData] = useState<Record<string, ProntuarioData>>({});
   const [prontuariosLoading, setProntuariosLoading] = useState(true);
-  
-  // Specialty templates cache for displaying structured data
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
   const [aiSummary, setAiSummary] = useState<AIClinicalSummary | null>(null);
   const [upcomingSession, setUpcomingSession] = useState<{ id: string; patientId: string } | null>(null);
 
-  // Load templates on mount
   useEffect(() => {
-    SpecialtyService.getTemplates()
-      .then(setTemplates)
-      .catch(console.error);
+    SpecialtyService.getTemplates().then(setTemplates).catch(console.error);
   }, []);
 
-  // Fetch prontuarios from database
   useEffect(() => {
     const fetchProntuarios = async () => {
       setProntuariosLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("prontuarios")
-          .select("*");
-
+        const { data, error } = await supabase.from("prontuarios").select("*");
         if (error) {
           console.error("Error fetching prontuarios:", error);
           return;
         }
-
         const prontuarios: Record<string, ProntuarioData> = {};
         (data || []).forEach((p: any) => {
           prontuarios[p.paciente_id] = {
@@ -119,21 +120,28 @@ export default function Prontuarios() {
         setProntuariosLoading(false);
       }
     };
-
     fetchProntuarios();
   }, []);
 
-  // Auto-select patient from URL query param
+  // ── Auto-selecionar paciente + abrir modal se vier da agenda ─────────────
   useEffect(() => {
     const pacienteId = searchParams.get("paciente");
+    const sessaoData = searchParams.get("sessao_data");
+    const autoEvolucao = searchParams.get("auto_evolucao");
+
     if (pacienteId && patients.length > 0 && !prontuariosLoading && !selectedProntuario) {
-      handleSelectPatient(pacienteId);
-      // Clear the query param after selecting
+      if (sessaoData) setPrefilledDate(sessaoData);
+      handleSelectPatient(pacienteId).then(() => {
+        if (autoEvolucao === "1") {
+          // Pequeno delay para garantir que o prontuário foi carregado
+          setTimeout(() => setIsNewEvolucaoOpen(true), 300);
+        }
+      });
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, patients, prontuariosLoading]);
+  // ─────────────────────────────────────────────────────────────────────────
 
-  // Fetch upcoming session for selected patient
   useEffect(() => {
     if (!selectedProntuario?.paciente_id) {
       setUpcomingSession(null);
@@ -151,52 +159,38 @@ export default function Prontuarios() {
         .eq("status", "agendado")
         .order("start_time", { ascending: true })
         .limit(1);
-      if (data?.[0]) {
-        setUpcomingSession({ id: data[0].id, patientId: data[0].paciente_id });
-      } else {
-        setUpcomingSession(null);
-      }
+      setUpcomingSession(data?.[0] ? { id: data[0].id, patientId: data[0].paciente_id } : null);
     };
     fetchUpcoming();
   }, [selectedProntuario?.paciente_id]);
 
-  // Pre-session briefing hook
-  const { briefing: prontuarioBriefing, isLoading: briefingLoading, refresh: refreshBriefing } = usePreSessionBriefing(
-    upcomingSession?.id || null,
-    upcomingSession?.patientId || null
-  );
+  const {
+    briefing: prontuarioBriefing,
+    isLoading: briefingLoading,
+    refresh: refreshBriefing,
+  } = usePreSessionBriefing(upcomingSession?.id || null, upcomingSession?.patientId || null);
 
-  const filteredPacientes = patients.filter((p) =>
-    p.full_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPacientes = patients.filter((p) => p.full_name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  const getProntuarioForPatient = (pacienteId: string): ProntuarioData | undefined => {
-    return prontuariosData[pacienteId];
-  };
+  const getProntuarioForPatient = (pacienteId: string) => prontuariosData[pacienteId];
 
-  const getEvolucoesForProntuario = (prontuarioId: string) => {
-    return EvolutionService.getByProntuario(evolutions, prontuarioId);
-  };
+  const getEvolucoesForProntuario = (prontuarioId: string) =>
+    EvolutionService.getByProntuario(evolutions, prontuarioId);
 
   const handleSelectPatient = async (pacienteId: string) => {
     const existingProntuario = getProntuarioForPatient(pacienteId);
     const paciente = patients.find((p) => p.id === pacienteId);
-    
+
     if (existingProntuario) {
       setSelectedProntuario({
         ...existingProntuario,
-        paciente: {
-          ...paciente as any,
-          primary_specialty_id: existingProntuario.primary_specialty_id,
-        },
+        paciente: { ...(paciente as any), primary_specialty_id: existingProntuario.primary_specialty_id },
       });
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (paciente) {
-      // Create new prontuario for patient in database
       try {
         const { getAuthContext } = await import("@/lib/auth-helpers");
         const { clinicId } = await getAuthContext();
-
         const { data: newPront, error } = await supabase
           .from("prontuarios")
           .insert({
@@ -209,12 +203,10 @@ export default function Prontuarios() {
           })
           .select()
           .single();
-
         if (error) {
           console.error("Error creating prontuario:", error);
           return;
         }
-
         const newProntuario: ProntuarioData = {
           id: newPront.id,
           clinic_id: newPront.clinic_id,
@@ -225,18 +217,11 @@ export default function Prontuarios() {
           observacoes: "",
           primary_specialty_id: null,
           initial_assessment_data: null,
-          paciente: {
-            ...paciente as any,
-            primary_specialty_id: null,
-          },
+          paciente: { ...(paciente as any), primary_specialty_id: null },
         };
-
-        setProntuariosData(prev => ({
-          ...prev,
-          [pacienteId]: newProntuario,
-        }));
+        setProntuariosData((prev) => ({ ...prev, [pacienteId]: newProntuario }));
         setSelectedProntuario(newProntuario);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: "smooth" });
       } catch (err) {
         console.error("Exception creating prontuario:", err);
       }
@@ -248,13 +233,12 @@ export default function Prontuarios() {
     escala_dor: number;
     specialty_id: string | null;
     structured_data: StructuredData | null;
+    evolution_date?: string | null;
   }) => {
     if (!selectedProntuario) {
       toast.error("Selecione um utente primeiro");
       return;
     }
-
-    // Get first professional as default (in real app, would be the logged user)
     const defaultProfessional = professionals[0];
     if (!defaultProfessional) {
       toast.error("Nenhum profissional disponível");
@@ -262,7 +246,12 @@ export default function Prontuarios() {
     }
 
     try {
-      // Insert into database
+      // ── Usa a data da sessão se disponível, caso contrário usa agora ──────
+      const createdAt = data.evolution_date
+        ? new Date(data.evolution_date + "T12:00:00").toISOString()
+        : new Date().toISOString();
+      // ─────────────────────────────────────────────────────────────────────
+
       const { data: newEvol, error } = await supabase
         .from("evolucoes_clinicas")
         .insert({
@@ -273,6 +262,7 @@ export default function Prontuarios() {
           escala_dor: data.escala_dor,
           specialty_id: data.specialty_id,
           structured_data: data.structured_data,
+          created_at: createdAt,
         })
         .select("*")
         .single();
@@ -283,7 +273,6 @@ export default function Prontuarios() {
         return;
       }
 
-      // Add to local state with the professional info we already have
       const evolution = {
         id: newEvol.id,
         clinic_id: newEvol.clinic_id,
@@ -302,29 +291,30 @@ export default function Prontuarios() {
       addEvolution(evolution);
       toast.success("Evolução registada com sucesso!");
       setIsNewEvolucaoOpen(false);
+      setPrefilledDate(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao registar evolução");
     }
   };
 
-  // Get template for an evolution
   const getTemplateForEvolution = (specialtyId: string | null | undefined): SpecialtyTemplate | null => {
     if (!specialtyId) return null;
-    return templates.find(t => t.id === specialtyId) || null;
+    return templates.find((t) => t.id === specialtyId) || null;
   };
 
-  const handleSaveClinicalData = async (_prontuarioId: string, data: {
-    anamnese: string;
-    diagnostico: string;
-    objetivos: string;
-    observacoes: string;
-    primary_specialty_id: string | null;
-    initial_assessment_data: StructuredData | null;
-  }) => {
+  const handleSaveClinicalData = async (
+    _prontuarioId: string,
+    data: {
+      anamnese: string;
+      diagnostico: string;
+      objetivos: string;
+      observacoes: string;
+      primary_specialty_id: string | null;
+      initial_assessment_data: StructuredData | null;
+    },
+  ) => {
     if (!selectedProntuario) return;
-
     try {
-      // Update in database
       const { error } = await supabase
         .from("prontuarios")
         .update({
@@ -334,26 +324,19 @@ export default function Prontuarios() {
           observacoes: data.observacoes,
         })
         .eq("id", selectedProntuario.id);
-
       if (error) {
         console.error("Error updating prontuario:", error);
         toast.error("Erro ao guardar dados clínicos");
         return;
       }
-
       const updated: ProntuarioData = {
         ...selectedProntuario,
         ...data,
-        paciente: selectedProntuario.paciente ? {
-          ...selectedProntuario.paciente,
-          primary_specialty_id: data.primary_specialty_id,
-        } : undefined,
+        paciente: selectedProntuario.paciente
+          ? { ...selectedProntuario.paciente, primary_specialty_id: data.primary_specialty_id }
+          : undefined,
       };
-
-      setProntuariosData(prev => ({
-        ...prev,
-        [selectedProntuario.paciente_id]: updated,
-      }));
+      setProntuariosData((prev) => ({ ...prev, [selectedProntuario.paciente_id]: updated }));
       setSelectedProntuario(updated);
       toast.success("Dados clínicos guardados!");
     } catch (err) {
@@ -362,9 +345,17 @@ export default function Prontuarios() {
     }
   };
 
-  const prontuarioEvolutions = selectedProntuario 
+  // ── Evoluções ordenadas ───────────────────────────────────────────────────
+  const prontuarioEvolutions = selectedProntuario
     ? getEvolucoesForProntuario(selectedProntuario.id)
+        .slice()
+        .sort((a, b) => {
+          const timeA = new Date(a.created_at).getTime();
+          const timeB = new Date(b.created_at).getTime();
+          return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
+        })
     : [];
+  // ─────────────────────────────────────────────────────────────────────────
 
   const handleGenerateAISummary = async () => {
     if (!selectedProntuario || prontuarioEvolutions.length === 0) {
@@ -377,7 +368,7 @@ export default function Prontuarios() {
       anamnese: selectedProntuario.anamnese,
       diagnostico: selectedProntuario.diagnostico,
       objetivos: selectedProntuario.objetivos,
-      evolutions: prontuarioEvolutions.map(e => ({
+      evolutions: prontuarioEvolutions.map((e) => ({
         descricao: e.descricao,
         escala_dor: e.escala_dor,
         created_at: e.created_at,
@@ -388,7 +379,6 @@ export default function Prontuarios() {
     toast.success("Resumo IA gerado!");
   };
 
-  // Clear AI summary when changing patient
   useEffect(() => {
     setAiSummary(null);
   }, [selectedProntuario?.id]);
@@ -401,10 +391,7 @@ export default function Prontuarios() {
 
   if (patientsLoading || prontuariosLoading) {
     return (
-      <AppLayout
-        title="Prontuários"
-        subtitle="Histórico clínico dos pacientes"
-      >
+      <AppLayout title="Prontuários" subtitle="Histórico clínico dos pacientes">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
@@ -413,10 +400,7 @@ export default function Prontuarios() {
   }
 
   return (
-    <AppLayout
-      title="Prontuários"
-      subtitle="Histórico clínico dos pacientes"
-    >
+    <AppLayout title="Prontuários" subtitle="Histórico clínico dos pacientes">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
         {/* Patient List */}
         <div className={cn("lg:col-span-4 space-y-4", selectedProntuario && "hidden lg:block")}>
@@ -446,19 +430,23 @@ export default function Prontuarios() {
                   {filteredPacientes.map((patient) => {
                     const hasProntuario = !!getProntuarioForPatient(patient.id);
                     const isSelected = selectedProntuario?.paciente_id === patient.id;
-
                     return (
                       <div
                         key={patient.id}
                         className={cn(
                           "flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50 transition-colors",
-                          isSelected && "bg-primary/5 border-l-2 border-l-primary"
+                          isSelected && "bg-primary/5 border-l-2 border-l-primary",
                         )}
                         onClick={() => handleSelectPatient(patient.id)}
                       >
                         <Avatar className="h-10 w-10">
                           <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                            {(patient.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
+                            {(patient.full_name ?? "")
+                              .split(" ")
+                              .filter(Boolean)
+                              .map((n) => n[0])
+                              .join("")
+                              .slice(0, 2) || "?"}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
@@ -483,9 +471,8 @@ export default function Prontuarios() {
 
         {/* Prontuario Detail */}
         <div className="lg:col-span-8">
-           {selectedProntuario ? (
+          {selectedProntuario ? (
             <div className="space-y-4">
-              {/* Back button - mobile only */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -495,6 +482,7 @@ export default function Prontuarios() {
                 <ArrowLeft className="h-4 w-4" />
                 Voltar à lista
               </Button>
+
               {/* Patient Header */}
               <Card className="shadow-card">
                 <CardContent className="p-4">
@@ -502,29 +490,33 @@ export default function Prontuarios() {
                     <div className="flex items-center gap-4">
                       <Avatar className="h-14 w-14">
                         <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
-                          {(selectedProntuario.paciente?.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
+                          {(selectedProntuario.paciente?.full_name ?? "")
+                            .split(" ")
+                            .filter(Boolean)
+                            .map((n) => n[0])
+                            .join("")
+                            .slice(0, 2) || "?"}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <h2 className="font-display text-xl font-semibold">
-                          {selectedProntuario.paciente?.full_name}
-                        </h2>
+                        <h2 className="font-display text-xl font-semibold">{selectedProntuario.paciente?.full_name}</h2>
                         <p className="text-sm text-muted-foreground">
                           {selectedProntuario.paciente?.phone} • {selectedProntuario.paciente?.email}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => setIsEditClinicalOpen(true)}
-                        className="gap-2"
-                      >
+                      <Button variant="outline" size="sm" onClick={() => setIsEditClinicalOpen(true)} className="gap-2">
                         <Pencil className="h-4 w-4" />
                         Editar Dados Clínicos
                       </Button>
-                      <Button onClick={() => setIsNewEvolucaoOpen(true)} className="gap-2">
+                      <Button
+                        onClick={() => {
+                          setPrefilledDate(null);
+                          setIsNewEvolucaoOpen(true);
+                        }}
+                        className="gap-2"
+                      >
                         <Plus className="h-4 w-4" />
                         Nova Evolução
                       </Button>
@@ -554,21 +546,39 @@ export default function Prontuarios() {
                   <Card className="shadow-card">
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
-                        <CardTitle className="font-display text-lg">
-                          Histórico de Evoluções
-                        </CardTitle>
-                        {prontuarioEvolutions.length > 0 && (
-                          <AIAssistButton
-                            onClick={handleGenerateAISummary}
-                            label="Resumo IA"
-                            tooltip="Gerar resumo clínico com IA"
+                        <CardTitle className="font-display text-lg">Histórico de Evoluções</CardTitle>
+                        <div className="flex items-center gap-2">
+                          {/* ── Botão de ordenação ─────────────────────────── */}
+                          <Button
                             variant="outline"
-                          />
-                        )}
+                            size="sm"
+                            className="gap-1 text-xs"
+                            onClick={() => setSortOrder((o) => (o === "desc" ? "asc" : "desc"))}
+                            title={sortOrder === "desc" ? "Mais recente primeiro" : "Mais antigo primeiro"}
+                          >
+                            {sortOrder === "desc" ? (
+                              <>
+                                <ArrowDown className="h-3 w-3" /> Recente
+                              </>
+                            ) : (
+                              <>
+                                <ArrowUp className="h-3 w-3" /> Antigo
+                              </>
+                            )}
+                          </Button>
+                          {/* ────────────────────────────────────────────────── */}
+                          {prontuarioEvolutions.length > 0 && (
+                            <AIAssistButton
+                              onClick={handleGenerateAISummary}
+                              label="Resumo IA"
+                              tooltip="Gerar resumo clínico com IA"
+                              variant="outline"
+                            />
+                          )}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      {/* Pre-Session Briefing */}
                       {(prontuarioBriefing || briefingLoading) && upcomingSession && (
                         <div className="mb-6">
                           <PreSessionBriefingCard
@@ -578,7 +588,7 @@ export default function Prontuarios() {
                           />
                         </div>
                       )}
-                      {/* AI Summary Panel */}
+
                       {aiSummary && (
                         <div className="mb-6 p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3 animate-fade-in">
                           <div className="flex items-center gap-2 text-sm font-medium text-primary">
@@ -596,7 +606,9 @@ export default function Prontuarios() {
                             <div>
                               <span className="text-xs font-medium text-destructive">Alertas:</span>
                               <ul className="list-disc list-inside text-sm mt-1">
-                                {aiSummary.alertas_clinicos.map((a, i) => <li key={i}>{a}</li>)}
+                                {aiSummary.alertas_clinicos.map((a, i) => (
+                                  <li key={i}>{a}</li>
+                                ))}
                               </ul>
                             </div>
                           )}
@@ -604,7 +616,9 @@ export default function Prontuarios() {
                             <div>
                               <span className="text-xs font-medium text-primary">Focos terapêuticos:</span>
                               <ul className="list-disc list-inside text-sm mt-1">
-                                {aiSummary.focos_terapeuticos.map((f, i) => <li key={i}>{f}</li>)}
+                                {aiSummary.focos_terapeuticos.map((f, i) => (
+                                  <li key={i}>{f}</li>
+                                ))}
                               </ul>
                             </div>
                           )}
@@ -613,14 +627,13 @@ export default function Prontuarios() {
                           </p>
                         </div>
                       )}
+
                       {prontuarioEvolutions.length > 0 ? (
                         <div className="space-y-4">
                           {prontuarioEvolutions.map((evolucao) => {
                             const template = getTemplateForEvolution(evolucao.specialty_id);
-                            const hasStructuredData = evolucao.structured_data && 
-                              template && 
-                              Object.keys(evolucao.structured_data).length > 0;
-
+                            const hasStructuredData =
+                              evolucao.structured_data && template && Object.keys(evolucao.structured_data).length > 0;
                             return (
                               <div
                                 key={evolucao.id}
@@ -638,27 +651,27 @@ export default function Prontuarios() {
                                       </Badge>
                                     )}
                                     {evolucao.escala_dor !== null && (
-                                      <Badge variant="outline" className={cn("text-xs", getPainColor(evolucao.escala_dor))}>
+                                      <Badge
+                                        variant="outline"
+                                        className={cn("text-xs", getPainColor(evolucao.escala_dor))}
+                                      >
                                         Dor: {evolucao.escala_dor}/10
                                       </Badge>
                                     )}
                                   </div>
                                 </div>
-
-                                {/* Structured Data Display */}
                                 {hasStructuredData && template && (
                                   <div className="mb-3 p-3 bg-muted/20 rounded-md">
                                     <StructuredDataViewer
                                       schema={template.schema}
-                                      data={evolucao.structured_data as Record<string, string | number | string[] | null>}
+                                      data={
+                                        evolucao.structured_data as Record<string, string | number | string[] | null>
+                                      }
                                       compact
                                     />
                                   </div>
                                 )}
-
-                                <p className="text-sm leading-relaxed mb-3">
-                                  {evolucao.descricao}
-                                </p>
+                                <p className="text-sm leading-relaxed mb-3">{evolucao.descricao}</p>
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                   <User className="h-3 w-3" />
                                   {evolucao.profissional?.full_name}
@@ -689,12 +702,16 @@ export default function Prontuarios() {
                     patientId={selectedProntuario.paciente_id}
                     prontuarioId={selectedProntuario.id}
                     clinicId={selectedProntuario.clinic_id}
-                    clinicInfo={clinicInfo ? {
-                      name: clinicInfo.name,
-                      address: clinicInfo.address || undefined,
-                      phone: clinicInfo.phone || undefined,
-                      email: clinicInfo.email || undefined,
-                    } : undefined}
+                    clinicInfo={
+                      clinicInfo
+                        ? {
+                            name: clinicInfo.name,
+                            address: clinicInfo.address || undefined,
+                            phone: clinicInfo.phone || undefined,
+                            email: clinicInfo.email || undefined,
+                          }
+                        : undefined
+                    }
                   />
                 </TabsContent>
 
@@ -702,66 +719,54 @@ export default function Prontuarios() {
                   <Card className="shadow-card">
                     <CardHeader className="pb-3 flex flex-row items-center justify-between">
                       <CardTitle className="font-display text-lg">Dados Clínicos</CardTitle>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => setIsEditClinicalOpen(true)}
-                        className="gap-2"
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditClinicalOpen(true)} className="gap-2">
                         <Pencil className="h-4 w-4" />
                         Editar
                       </Button>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                      {/* Specialty Badge */}
                       {selectedProntuario.primary_specialty_id && (
                         <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
                           <Badge variant="secondary" className="bg-primary/10 text-primary">
-                            {templates.find(t => t.id === selectedProntuario.primary_specialty_id)?.name || "Especialidade"}
+                            {templates.find((t) => t.id === selectedProntuario.primary_specialty_id)?.name ||
+                              "Especialidade"}
                           </Badge>
                         </div>
                       )}
-
-                      {/* Initial Assessment Structured Data */}
                       {selectedProntuario.initial_assessment_data && selectedProntuario.primary_specialty_id && (
                         <div className="p-4 rounded-lg border bg-muted/20">
                           <h4 className="font-medium text-sm mb-3">Avaliação Inicial</h4>
                           {(() => {
-                            const template = templates.find(t => t.id === selectedProntuario.primary_specialty_id);
+                            const template = templates.find((t) => t.id === selectedProntuario.primary_specialty_id);
                             return template ? (
                               <StructuredDataViewer
                                 schema={template.schema}
-                                data={selectedProntuario.initial_assessment_data as Record<string, string | number | string[] | null>}
+                                data={
+                                  selectedProntuario.initial_assessment_data as Record<
+                                    string,
+                                    string | number | string[] | null
+                                  >
+                                }
                               />
                             ) : null;
                           })()}
                         </div>
                       )}
-
-                      <div>
-                        <h4 className="font-medium text-sm mb-2 text-muted-foreground">Anamnese</h4>
-                        <p className="text-sm leading-relaxed">
-                          {selectedProntuario.anamnese || <span className="text-muted-foreground italic">Não preenchido</span>}
-                        </p>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-sm mb-2 text-muted-foreground">Diagnóstico</h4>
-                        <p className="text-sm leading-relaxed">
-                          {selectedProntuario.diagnostico || <span className="text-muted-foreground italic">Não preenchido</span>}
-                        </p>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-sm mb-2 text-muted-foreground">Objetivos</h4>
-                        <p className="text-sm leading-relaxed">
-                          {selectedProntuario.objetivos || <span className="text-muted-foreground italic">Não preenchido</span>}
-                        </p>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-sm mb-2 text-muted-foreground">Observações</h4>
-                        <p className="text-sm leading-relaxed">
-                          {selectedProntuario.observacoes || <span className="text-muted-foreground italic">Não preenchido</span>}
-                        </p>
-                      </div>
+                      {[
+                        { label: "Anamnese", key: "anamnese" },
+                        { label: "Diagnóstico", key: "diagnostico" },
+                        { label: "Objetivos", key: "objetivos" },
+                        { label: "Observações", key: "observacoes" },
+                      ].map(({ label, key }) => (
+                        <div key={key}>
+                          <h4 className="font-medium text-sm mb-2 text-muted-foreground">{label}</h4>
+                          <p className="text-sm leading-relaxed">
+                            {(selectedProntuario as any)[key] || (
+                              <span className="text-muted-foreground italic">Não preenchido</span>
+                            )}
+                          </p>
+                        </div>
+                      ))}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -771,9 +776,7 @@ export default function Prontuarios() {
             <Card className="shadow-card hidden lg:block">
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <FileText className="h-16 w-16 text-muted-foreground/50 mb-4" />
-                <h3 className="font-display text-lg font-semibold mb-2">
-                  Selecione um Utente
-                </h3>
+                <h3 className="font-display text-lg font-semibold mb-2">Selecione um Utente</h3>
                 <p className="text-sm text-muted-foreground text-center max-w-sm">
                   Escolha um utente na lista para visualizar ou criar o prontuário clínico
                 </p>
@@ -786,14 +789,17 @@ export default function Prontuarios() {
       {/* New Evolution Modal */}
       <NewEvolutionModal
         isOpen={isNewEvolucaoOpen}
-        onClose={() => setIsNewEvolucaoOpen(false)}
+        onClose={() => {
+          setIsNewEvolucaoOpen(false);
+          setPrefilledDate(null);
+        }}
         onSubmit={handleCreateEvolucao}
         patientName={selectedProntuario?.paciente?.full_name || ""}
         prontuarioId={selectedProntuario?.id || ""}
         patientSpecialtyId={selectedProntuario?.primary_specialty_id}
+        prefilledDate={prefilledDate}
       />
 
-      {/* Edit Clinical Data Modal */}
       {selectedProntuario && (
         <EditClinicalDataModal
           isOpen={isEditClinicalOpen}
