@@ -32,12 +32,10 @@ interface Patient {
   full_name: string;
   health_tags?: HealthTag[];
 }
-
 interface Professional {
   id: string;
   full_name: string;
 }
-
 interface Service {
   id: string;
   name: string;
@@ -69,6 +67,8 @@ interface NewSessionModalProps {
     date?: Date;
     hour?: number;
     minute?: number;
+    endHour?: number;
+    endMinute?: number;
     packageData?: PackageSubmitData;
   }) => void;
   selectedPaciente: string;
@@ -107,8 +107,13 @@ export function NewSessionModal({
 }: NewSessionModalProps) {
   const [manualDate, setManualDate] = useState<Date | undefined>(undefined);
   const [manualHour, setManualHour] = useState<string>("");
-  const [patientSearchOpen, setPatientSearchOpen] = useState(false);
   const [manualMinute, setManualMinute] = useState<string>("0");
+  const [patientSearchOpen, setPatientSearchOpen] = useState(false);
+
+  // ── Hora de fim editável ─────────────────────────────────────────────────
+  const [manualEndHour, setManualEndHour] = useState<string>("");
+  const [manualEndMinute, setManualEndMinute] = useState<string>("0");
+  // ─────────────────────────────────────────────────────────────────────────
 
   const [modality, setModality] = useState<SchedulingModality>("avulso");
   const [frequency, setFrequency] = useState<SchedulingFrequency>("semanal");
@@ -128,10 +133,20 @@ export function NewSessionModal({
       setManualDate(selectedSlot.date);
       setManualHour(String(selectedSlot.hour));
       setManualMinute(String(selectedSlot.minute ?? 0));
+
+      // ── Hora fim automática = hora início + duração do serviço seleccionado ──
+      const svc = services.find((s) => s.id === selectedServico);
+      const dur = svc?.duration_minutes || 60;
+      const endH = selectedSlot.hour + Math.floor(((selectedSlot.minute ?? 0) + dur) / 60);
+      const endM = ((selectedSlot.minute ?? 0) + dur) % 60;
+      setManualEndHour(String(Math.min(endH, 23)));
+      setManualEndMinute(String(endM));
     } else if (isOpen && !selectedSlot) {
       setManualDate(undefined);
       setManualHour("");
       setManualMinute("0");
+      setManualEndHour("");
+      setManualEndMinute("0");
     }
     if (isOpen) {
       setModality("avulso");
@@ -147,17 +162,30 @@ export function NewSessionModal({
     }
   }, [isOpen, selectedSlot]);
 
+  // ── Actualiza hora fim quando muda serviço ────────────────────────────────
+  useEffect(() => {
+    if (!manualHour) return;
+    const svc = services.find((s) => s.id === selectedServico);
+    if (!svc) return;
+    const startH = parseInt(manualHour, 10);
+    const startM = parseInt(manualMinute, 10);
+    const totalMin = startH * 60 + startM + svc.duration_minutes;
+    setManualEndHour(String(Math.floor(totalMin / 60)));
+    setManualEndMinute(String(totalMin % 60));
+  }, [selectedServico]);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const isManualMode = !selectedSlot;
   const finalDate = selectedSlot?.date ?? manualDate;
   const finalHour = selectedSlot?.hour ?? (manualHour ? parseInt(manualHour, 10) : undefined);
   const finalMinute = selectedSlot?.minute ?? parseInt(manualMinute, 10);
+  const finalEndHour = manualEndHour ? parseInt(manualEndHour, 10) : undefined;
+  const finalEndMinute = manualEndMinute ? parseInt(manualEndMinute, 10) : 0;
 
   const isPackageMode = modality !== "avulso";
 
   const generatedDates = useMemo(() => {
-    if (!isPackageMode || !finalDate || finalHour === undefined || selectedDays.length === 0) {
-      return [];
-    }
+    if (!isPackageMode || !finalDate || finalHour === undefined || selectedDays.length === 0) return [];
     return PackageSchedulingService.generateDates({
       modality,
       frequency,
@@ -176,77 +204,43 @@ export function NewSessionModal({
       toast.error("Nome do paciente é obrigatório");
       return;
     }
-
     setIsCreatingPatient(true);
-
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
         toast.error("Usuário não autenticado");
-        setIsCreatingPatient(false);
         return;
       }
-
-      // Buscar clinic_id do usuário
       const { data: profileData } = await supabase
         .from("profiles")
         .select("clinic_id")
         .eq("id", userData.user.id)
         .single();
-
       if (!profileData?.clinic_id) {
         toast.error("Clínica não identificada. Faça login novamente.");
-        setIsCreatingPatient(false);
         return;
       }
-
-      const insertData: {
-        full_name: string;
-        clinic_id: string;
-        phone?: string;
-        email?: string;
-        is_active: boolean;
-        health_tags: string[];
-        privacy_consent_at: string;
-      } = {
+      const insertData: any = {
         full_name: trimmedName,
         clinic_id: profileData.clinic_id,
         is_active: true,
         health_tags: [],
         privacy_consent_at: new Date().toISOString(),
       };
-
-      if (quickPatientPhone.trim()) {
-        insertData.phone = quickPatientPhone.trim();
-      }
-      if (quickPatientEmail.trim()) {
-        insertData.email = quickPatientEmail.trim();
-      }
-
+      if (quickPatientPhone.trim()) insertData.phone = quickPatientPhone.trim();
+      if (quickPatientEmail.trim()) insertData.email = quickPatientEmail.trim();
       const { data, error } = await supabase.from("pacientes").insert(insertData).select().single();
-
       if (error) throw error;
       if (!data) throw new Error("Nenhum dado retornado");
-
-      const createdPatient: Patient = {
-        id: (data as any).id,
-        full_name: (data as any).full_name,
-      };
-
-      if (onPatientCreated) {
-        onPatientCreated(createdPatient);
-      }
-
+      const createdPatient: Patient = { id: (data as any).id, full_name: (data as any).full_name };
+      if (onPatientCreated) onPatientCreated(createdPatient);
       setSelectedPaciente(createdPatient.id);
-
       setShowQuickPatient(false);
       setQuickPatientName("");
       setQuickPatientPhone("");
       setQuickPatientEmail("");
-
       toast.success(`Paciente "${createdPatient.full_name}" cadastrado e selecionado!`);
     } catch (error: any) {
-      console.error("Erro ao cadastrar paciente:", error);
       toast.error("Erro ao cadastrar paciente: " + (error.message || "Tente novamente"));
     } finally {
       setIsCreatingPatient(false);
@@ -262,7 +256,6 @@ export function NewSessionModal({
       toast.error("Selecione pelo menos um dia da semana");
       return;
     }
-
     onSubmit({
       pacienteId: selectedPaciente,
       profissionalId: selectedProfissional,
@@ -271,6 +264,8 @@ export function NewSessionModal({
       date: finalDate,
       hour: finalHour,
       minute: finalMinute,
+      endHour: finalEndHour,
+      endMinute: finalEndMinute,
       packageData: isPackageMode
         ? {
             modality,
@@ -341,13 +336,48 @@ export function NewSessionModal({
             setCustomSessionCount={setCustomSessionCount}
           />
 
+          {/* ── Data e horário ─────────────────────────────────────────────── */}
           {!isManualMode && finalDate && finalHour !== undefined ? (
-            <div className="p-3 rounded-lg bg-muted/50 text-sm">
-              <p className="font-medium">{format(finalDate, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
-              <p className="text-muted-foreground">
-                {String(finalHour).padStart(2, "0")}:{String(finalMinute).padStart(2, "0")}
-              </p>
-              {isPackageMode && <p className="text-xs text-muted-foreground mt-1">Data de início do pacote</p>}
+            <div className="space-y-3">
+              <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                <p className="font-medium">{format(finalDate, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
+                <p className="text-muted-foreground">
+                  {String(finalHour).padStart(2, "0")}:{String(finalMinute).padStart(2, "0")}
+                </p>
+                {isPackageMode && <p className="text-xs text-muted-foreground mt-1">Data de início do pacote</p>}
+              </div>
+              {/* Hora de fim — sempre editável */}
+              {!isPackageMode && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Hora de fim</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select value={manualEndHour} onValueChange={setManualEndHour}>
+                      <SelectTrigger className="min-h-[40px]">
+                        <SelectValue placeholder="Hora" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AVAILABLE_HOURS.map((h) => (
+                          <SelectItem key={h} value={String(h)}>
+                            {String(h).padStart(2, "0")}h
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={manualEndMinute} onValueChange={setManualEndMinute}>
+                      <SelectTrigger className="min-h-[40px]">
+                        <SelectValue placeholder="Min" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AVAILABLE_MINUTES.map((m) => (
+                          <SelectItem key={m} value={String(m)}>
+                            {String(m).padStart(2, "0")}min
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -372,15 +402,16 @@ export function NewSessionModal({
                       selected={manualDate}
                       onSelect={setManualDate}
                       initialFocus
-                      className={cn("p-3 pointer-events-auto")}
+                      className="p-3 pointer-events-auto"
                     />
                   </PopoverContent>
                 </Popover>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Hora *</Label>
+              {/* ── Início ──────────────────────────────────────────────── */}
+              <div className="space-y-1">
+                <Label className="text-xs">Hora de início *</Label>
+                <div className="grid grid-cols-2 gap-3">
                   <Select value={manualHour} onValueChange={setManualHour}>
                     <SelectTrigger className="min-h-[44px]">
                       <SelectValue placeholder="Hora" />
@@ -393,10 +424,6 @@ export function NewSessionModal({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Minutos</Label>
                   <Select value={manualMinute} onValueChange={setManualMinute}>
                     <SelectTrigger className="min-h-[44px]">
                       <SelectValue placeholder="Min" />
@@ -412,14 +439,48 @@ export function NewSessionModal({
                 </div>
               </div>
 
-              {manualHour && (
-                <p className="text-sm text-muted-foreground text-center">
-                  Horário: {String(parseInt(manualHour, 10)).padStart(2, "0")}:
-                  {String(parseInt(manualMinute, 10)).padStart(2, "0")}
-                </p>
+              {/* ── Fim ─────────────────────────────────────────────────── */}
+              {!isPackageMode && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Hora de fim</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Select value={manualEndHour} onValueChange={setManualEndHour}>
+                      <SelectTrigger className="min-h-[44px]">
+                        <SelectValue placeholder="Hora" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AVAILABLE_HOURS.map((hour) => (
+                          <SelectItem key={hour} value={String(hour)} className="min-h-[44px]">
+                            {String(hour).padStart(2, "0")}h
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={manualEndMinute} onValueChange={setManualEndMinute}>
+                      <SelectTrigger className="min-h-[44px]">
+                        <SelectValue placeholder="Min" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AVAILABLE_MINUTES.map((minute) => (
+                          <SelectItem key={minute} value={String(minute)} className="min-h-[44px]">
+                            {String(minute).padStart(2, "0")}min
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {manualHour && manualEndHour && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      {String(parseInt(manualHour)).padStart(2, "0")}:{String(parseInt(manualMinute)).padStart(2, "0")}{" "}
+                      → {String(parseInt(manualEndHour)).padStart(2, "0")}:
+                      {String(parseInt(manualEndMinute)).padStart(2, "0")}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}
+          {/* ─────────────────────────────────────────────────────────────── */}
 
           {finalDate && finalDate < new Date(new Date().setHours(0, 0, 0, 0)) && (
             <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning-foreground">
@@ -430,7 +491,7 @@ export function NewSessionModal({
             </div>
           )}
 
-          {/* Patient selector with quick registration */}
+          {/* Patient selector */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>Paciente *</Label>
@@ -449,7 +510,6 @@ export function NewSessionModal({
             {showQuickPatient && (
               <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                 <p className="text-xs font-medium text-primary">Cadastro rápido de paciente</p>
-
                 <div className="space-y-2">
                   <Input
                     placeholder="Nome completo *"
@@ -475,7 +535,6 @@ export function NewSessionModal({
                     />
                   </div>
                 </div>
-
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -511,7 +570,6 @@ export function NewSessionModal({
                     )}
                   </Button>
                 </div>
-
                 <p className="text-[10px] text-muted-foreground">
                   Dados completos podem ser preenchidos depois no cadastro do paciente.
                 </p>
@@ -521,12 +579,7 @@ export function NewSessionModal({
             {!showQuickPatient && (
               <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={patientSearchOpen}
-                    className="w-full justify-between min-h-[44px] font-normal"
-                  >
+                  <Button variant="outline" role="combobox" className="w-full justify-between min-h-[44px] font-normal">
                     {selectedPaciente
                       ? patients.find((p) => p.id === selectedPaciente)?.full_name
                       : "Selecione o paciente"}
@@ -596,7 +649,7 @@ export function NewSessionModal({
           </div>
 
           <div className="space-y-2">
-            <Label>Tipo de Serviço </Label>
+            <Label>Tipo de Serviço</Label>
             <Select value={selectedServico} onValueChange={setSelectedServico}>
               <SelectTrigger className="min-h-[44px]">
                 <SelectValue placeholder="Selecione o serviço" />
