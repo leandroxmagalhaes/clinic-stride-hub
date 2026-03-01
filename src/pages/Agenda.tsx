@@ -2,10 +2,19 @@ import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Plus, Lock, FileSpreadsheet } from "lucide-react";
-import { startOfWeek, addDays, addWeeks, subWeeks } from "date-fns";
+import { startOfWeek, addDays, addWeeks, subWeeks, setHours, setMinutes, addMinutes } from "date-fns";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-// Services and Context (SRP Architecture)
 import { useData } from "@/contexts/DataContext";
 import { SessionService, Session } from "@/services/SessionService";
 import { Patient } from "@/services/PatientService";
@@ -17,7 +26,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useReservedSlots } from "@/hooks/useReservedSlots";
 import { CreateReservedSlotData, ReservedSlot, ReservedSlotService } from "@/services/ReservedSlotService";
 
-// Components
 import { AgendaControls } from "@/components/agenda/AgendaControls";
 import { AgendaDesktopGrid } from "@/components/agenda/AgendaDesktopGrid";
 import { AgendaMobileTimeline } from "@/components/agenda/AgendaMobileTimeline";
@@ -28,10 +36,8 @@ import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotMan
 import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
 import { BatchSchedulingModal } from "@/components/agenda/BatchSchedulingModal";
 
-// Full range of available hours (06:00 to 23:00)
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
-// ── Preferências da agenda ──────────────────────────────────────────────────
 interface AgendaPrefs {
   hourFilter: { start: number; end: number };
   viewMode: "week" | "day";
@@ -59,11 +65,23 @@ function loadPrefs(userId: string): AgendaPrefs {
 function savePrefs(userId: string, prefs: AgendaPrefs) {
   try {
     localStorage.setItem(`physione_agenda_prefs_${userId}`, JSON.stringify(prefs));
-  } catch {
-    // localStorage indisponível — falha silenciosa
-  }
+  } catch {}
 }
-// ───────────────────────────────────────────────────────────────────────────
+
+// ── Dados pendentes quando há conflito ───────────────────────────────────────
+interface PendingSessionData {
+  pacienteId: string;
+  profissionalId: string;
+  servicoId: string;
+  notes: string;
+  date: Date;
+  hour: number;
+  minute: number;
+  endHour?: number;
+  endMinute?: number;
+  packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Agenda() {
   const {
@@ -100,35 +118,24 @@ export default function Agenda() {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
-
-  // Local patients state para suportar cadastro rápido
   const [localPatients, setLocalPatients] = useState(patients);
 
   useEffect(() => {
     setLocalPatients(patients);
   }, [patients]);
 
-  // ── Preferências: inicializa com valores default; substitui após carregar userId ──
   const [prefs, setPrefs] = useState<AgendaPrefs>(PREFS_DEFAULT);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
-  // Fetch clinic_id + carregar preferências do utilizador
   useEffect(() => {
     async function fetchClinicId() {
       if (!user) return;
-
       const { data, error } = await supabase.from("profiles").select("clinic_id").eq("user_id", user.id).maybeSingle();
-
       if (error) {
         console.error("Error fetching clinic_id:", error);
         return;
       }
-
-      if (data?.clinic_id) {
-        setClinicId(data.clinic_id);
-      }
-
-      // Carregar preferências assim que temos o userId
+      if (data?.clinic_id) setClinicId(data.clinic_id);
       const saved = loadPrefs(user.id);
       setPrefs(saved);
       setPrefsLoaded(true);
@@ -137,8 +144,6 @@ export default function Agenda() {
   }, [user]);
 
   const [currentDate, setCurrentDate] = useState(new Date());
-
-  // viewMode e hourFilter vêm das prefs
   const viewMode = prefs.viewMode;
   const hourFilter = prefs.hourFilter;
 
@@ -160,11 +165,14 @@ export default function Agenda() {
   const [selectedSlot, setSelectedSlot] = useState<{ date: Date; hour: number } | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
-
-  // Automation trigger state
   const [automationTrigger, setAutomationTrigger] = useState<AutomationTriggerResult | null>(null);
 
-  // Form state
+  // ── Estado do popup de conflito ───────────────────────────────────────────
+  const [conflictDialog, setConflictDialog] = useState(false);
+  const [conflictMessage, setConflictMessage] = useState("");
+  const [pendingSession, setPendingSession] = useState<PendingSessionData | null>(null);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const [selectedPaciente, setSelectedPaciente] = useState("");
   const [selectedProfissional, setSelectedProfissional] = useState("");
   const [selectedServico, setSelectedServico] = useState("");
@@ -175,55 +183,31 @@ export default function Agenda() {
     viewMode === "week" ? addDays(weekStart, i) : currentDate,
   );
 
-  const goToPrevious = () => {
-    if (viewMode === "week") {
-      setCurrentDate(subWeeks(currentDate, 1));
-    } else {
-      setCurrentDate(addDays(currentDate, -1));
-    }
-  };
-
-  const goToNext = () => {
-    if (viewMode === "week") {
-      setCurrentDate(addWeeks(currentDate, 1));
-    } else {
-      setCurrentDate(addDays(currentDate, 1));
-    }
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-
-  const goToPreviousMobile = () => {
-    setCurrentDate(addDays(currentDate, -1));
-  };
-
-  const goToNextMobile = () => {
-    setCurrentDate(addDays(currentDate, 1));
-  };
+  const goToPrevious = () =>
+    viewMode === "week" ? setCurrentDate(subWeeks(currentDate, 1)) : setCurrentDate(addDays(currentDate, -1));
+  const goToNext = () =>
+    viewMode === "week" ? setCurrentDate(addWeeks(currentDate, 1)) : setCurrentDate(addDays(currentDate, 1));
+  const goToToday = () => setCurrentDate(new Date());
+  const goToPreviousMobile = () => setCurrentDate(addDays(currentDate, -1));
+  const goToNextMobile = () => setCurrentDate(addDays(currentDate, 1));
 
   const handleSlotClick = (date: Date, hour: number) => {
     setSelectedSlot({ date, hour });
     setIsModalOpen(true);
   };
-
   const handleSessionClick = (session: Session) => {
     setSelectedSession(session);
     setIsSessionModalOpen(true);
   };
-
   const handleReservedSlotClick = (reservation: ReservedSlot) => {
     setSelectedReservation(reservation);
     setIsReservationManageOpen(true);
   };
-
   const handleReservationManageClose = () => {
     setIsReservationManageOpen(false);
     setSelectedReservation(null);
     fetchReservedSlots();
   };
-
   const handleSessionModalClose = () => {
     setIsSessionModalOpen(false);
     setSelectedSession(null);
@@ -233,9 +217,7 @@ export default function Agenda() {
     async (sessionId: string, newDate: Date, newHour: number) => {
       const session = sessions.find((s) => s.id === sessionId);
       if (!session) return;
-
       const result = SessionService.reschedule(session, newDate, newHour, sessions);
-
       if (result.success && result.updatedSession) {
         try {
           await updateSession(sessionId, {
@@ -243,7 +225,7 @@ export default function Agenda() {
             end_time: result.updatedSession.end_time,
           });
           toast.success("Sessão remarcada com sucesso!");
-        } catch (error) {
+        } catch {
           toast.error("Erro ao guardar remarcação");
         }
       } else {
@@ -253,6 +235,133 @@ export default function Agenda() {
     [sessions, updateSession],
   );
 
+  // ── Função que efectivamente cria a sessão (após conflito resolvido) ──────
+  const doCreateSession = async (data: PendingSessionData, skipConflict: boolean) => {
+    const { date: finalDate, hour: finalHour, minute: finalMinute } = data;
+
+    const selectedPatient = localPatients.find((p) => p.id === data.pacienteId);
+    const selectedProfessional = professionals.find((p) => p.id === data.profissionalId);
+    const selectedService = services.find((s) => s.id === data.servicoId);
+
+    const balance = getCreditBalance(data.pacienteId);
+    const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
+    const paymentStatus = serviceConsumesCredit && balance > 0 ? "reservado" : "pendente";
+
+    // Pacote
+    if (data.packageData && data.packageData.generatedDates.length > 0) {
+      const { packageData } = data;
+      const { getAuthContext } = await import("@/lib/auth-helpers");
+      const { userId: currentUserId, clinicId: userClinicId } = await getAuthContext();
+
+      const { data: pkg, error: pkgError } = await supabase
+        .from("scheduling_packages")
+        .insert({
+          clinic_id: userClinicId,
+          paciente_id: data.pacienteId,
+          profissional_id: data.profissionalId,
+          servico_id: data.servicoId,
+          modality: packageData.modality,
+          frequency: packageData.frequency || null,
+          fixed_days: packageData.fixedDays,
+          flexible: packageData.flexible,
+          total_sessions: packageData.totalSessions,
+          sessions_created: packageData.generatedDates.length,
+          status: "ativo",
+          start_date: finalDate.toISOString().split("T")[0],
+          notes: data.notes || null,
+          created_by: currentUserId,
+        })
+        .select("id")
+        .single();
+
+      if (pkgError) throw pkgError;
+
+      const sessionInserts = packageData.generatedDates.map((gd) => {
+        const startTime = new Date(gd.date);
+        startTime.setHours(gd.hour, gd.minute, 0, 0);
+        const endTime = new Date(startTime);
+        endTime.setMinutes(endTime.getMinutes() + (selectedService?.duration_minutes || 60));
+        return {
+          clinic_id: userClinicId,
+          paciente_id: data.pacienteId,
+          profissional_id: data.profissionalId,
+          servico_id: data.servicoId,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          status: startTime < new Date() ? "realizado" : "agendado",
+          notes: data.notes,
+          price: selectedService ? Number(selectedService.price) : 0,
+          payment_status: paymentStatus,
+          package_id: pkg.id,
+        };
+      });
+
+      const { error: batchError } = await supabase.from("sessoes").insert(sessionInserts);
+      if (batchError) throw batchError;
+
+      setIsModalOpen(false);
+      resetForm();
+      await refreshSessions();
+      toast.success(`${packageData.generatedDates.length} sessões agendadas com sucesso!`);
+      return;
+    }
+
+    // Sessão avulsa
+    const newSession = SessionService.create(
+      {
+        pacienteId: data.pacienteId,
+        profissionalId: data.profissionalId,
+        servicoId: data.servicoId,
+        date: finalDate,
+        hour: finalHour,
+        minute: finalMinute,
+        endHour: data.endHour,
+        endMinute: data.endMinute,
+        notes: data.notes,
+      },
+      sessions,
+      "clinic-id",
+      {
+        services: services.map((s) => ({
+          id: s.id,
+          name: s.name,
+          color: s.color || "#10B981",
+          duration_minutes: s.duration_minutes,
+          price: Number(s.price),
+          consumes_credit: s.consumes_credit,
+        })),
+        patients: localPatients.map((p) => ({ id: p.id, full_name: p.full_name })),
+        professionals: professionals.map((p) => ({ id: p.id, full_name: p.full_name })),
+      },
+      skipConflict, // ← passa flag
+    );
+
+    newSession.payment_status = paymentStatus;
+    if (new Date(newSession.start_time) < new Date()) newSession.status = "realizado";
+    await addSession(newSession);
+
+    setIsModalOpen(false);
+    resetForm();
+
+    const triggerResult = await checkAppointmentCreatedTrigger({
+      patientName: selectedPatient?.full_name || "",
+      patientPhone: selectedPatient?.phone || undefined,
+      professionalName: selectedProfessional?.full_name || "",
+      serviceName: selectedService?.name,
+      date: finalDate,
+      hour: finalHour,
+    });
+
+    if (triggerResult.shouldTrigger) {
+      setAutomationTrigger(triggerResult);
+    } else {
+      toast.success(
+        paymentStatus === "pendente" ? "Sessão agendada com pagamento pendente" : "Sessão agendada com sucesso!",
+      );
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const handleCreateSession = async (data: {
     pacienteId: string;
     profissionalId: string;
@@ -261,6 +370,8 @@ export default function Agenda() {
     date?: Date;
     hour?: number;
     minute?: number;
+    endHour?: number;
+    endMinute?: number;
     packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
   }) => {
     const finalDate = data.date || selectedSlot?.date;
@@ -272,134 +383,71 @@ export default function Agenda() {
       return;
     }
 
-    try {
-      const selectedPatient = localPatients.find((p) => p.id === data.pacienteId);
-      const selectedProfessional = professionals.find((p) => p.id === data.profissionalId);
+    const pending: PendingSessionData = {
+      pacienteId: data.pacienteId,
+      profissionalId: data.profissionalId,
+      servicoId: data.servicoId,
+      notes: data.notes,
+      date: finalDate,
+      hour: finalHour,
+      minute: finalMinute,
+      endHour: data.endHour,
+      endMinute: data.endMinute,
+      packageData: data.packageData,
+    };
+
+    // ── Verificar conflito ANTES de criar ─────────────────────────────────
+    if (!data.packageData) {
       const selectedService = services.find((s) => s.id === data.servicoId);
+      const durationMinutes = selectedService?.duration_minutes || 60;
 
-      const balance = getCreditBalance(data.pacienteId);
-      const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
-      const paymentStatus = serviceConsumesCredit && balance > 0 ? "reservado" : "pendente";
-
-      if (data.packageData && data.packageData.generatedDates.length > 0) {
-        const { packageData } = data;
-
-        const { getAuthContext } = await import("@/lib/auth-helpers");
-        const { userId: currentUserId, clinicId: userClinicId } = await getAuthContext();
-
-        const { data: pkg, error: pkgError } = await supabase
-          .from("scheduling_packages")
-          .insert({
-            clinic_id: userClinicId,
-            paciente_id: data.pacienteId,
-            profissional_id: data.profissionalId,
-            servico_id: data.servicoId,
-            modality: packageData.modality,
-            frequency: packageData.frequency || null,
-            fixed_days: packageData.fixedDays,
-            flexible: packageData.flexible,
-            total_sessions: packageData.totalSessions,
-            sessions_created: packageData.generatedDates.length,
-            status: "ativo",
-            start_date: finalDate.toISOString().split("T")[0],
-            notes: data.notes || null,
-            created_by: currentUserId,
-          })
-          .select("id")
-          .single();
-
-        if (pkgError) throw pkgError;
-
-        const sessionInserts = packageData.generatedDates.map((gd) => {
-          const startTime = new Date(gd.date);
-          startTime.setHours(gd.hour, gd.minute, 0, 0);
-          const endTime = new Date(startTime);
-          endTime.setMinutes(endTime.getMinutes() + (selectedService?.duration_minutes || 60));
-
-          const isRetroactive = startTime < new Date();
-          return {
-            clinic_id: userClinicId,
-            paciente_id: data.pacienteId,
-            profissional_id: data.profissionalId,
-            servico_id: data.servicoId,
-            start_time: startTime.toISOString(),
-            end_time: endTime.toISOString(),
-            status: isRetroactive ? "realizado" : "agendado",
-            notes: data.notes,
-            price: selectedService ? Number(selectedService.price) : 0,
-            payment_status: paymentStatus,
-            package_id: pkg.id,
-          };
-        });
-
-        const { error: batchError } = await supabase.from("sessoes").insert(sessionInserts);
-        if (batchError) throw batchError;
-
-        setIsModalOpen(false);
-        resetForm();
-        await refreshSessions();
-
-        toast.success(`${packageData.generatedDates.length} sessões agendadas com sucesso!`);
-        return;
-      }
-
-      const newSession = SessionService.create(
-        {
-          pacienteId: data.pacienteId,
-          profissionalId: data.profissionalId,
-          servicoId: data.servicoId,
-          date: finalDate,
-          hour: finalHour,
-          minute: finalMinute,
-          notes: data.notes,
-        },
+      const conflict = SessionService.checkConflict(
         sessions,
-        "clinic-id",
-        {
-          services: services.map((s) => ({
-            id: s.id,
-            name: s.name,
-            color: s.color || "#10B981",
-            duration_minutes: s.duration_minutes,
-            price: Number(s.price),
-            consumes_credit: s.consumes_credit,
-          })),
-          patients: localPatients.map((p) => ({ id: p.id, full_name: p.full_name })),
-          professionals: professionals.map((p) => ({ id: p.id, full_name: p.full_name })),
-        },
+        data.profissionalId,
+        finalDate,
+        finalHour,
+        finalMinute,
+        durationMinutes,
+        data.endHour,
+        data.endMinute,
       );
 
-      newSession.payment_status = paymentStatus;
-      const sessionStart = new Date(newSession.start_time);
-      if (sessionStart < new Date()) {
-        newSession.status = "realizado";
+      if (conflict.hasConflict) {
+        // Guarda dados pendentes e mostra popup
+        setPendingSession(pending);
+        setConflictMessage(conflict.message || "Conflito de horário detectado.");
+        setConflictDialog(true);
+        return; // não prossegue — aguarda decisão do utilizador
       }
-      await addSession(newSession);
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
-      setIsModalOpen(false);
-      resetForm();
-
-      const triggerResult = await checkAppointmentCreatedTrigger({
-        patientName: selectedPatient?.full_name || "",
-        patientPhone: selectedPatient?.phone || undefined,
-        professionalName: selectedProfessional?.full_name || "",
-        serviceName: selectedService?.name,
-        date: finalDate,
-        hour: finalHour,
-      });
-
-      if (triggerResult.shouldTrigger) {
-        setAutomationTrigger(triggerResult);
-      } else {
-        toast.success(
-          paymentStatus === "pendente" ? "Sessão agendada com pagamento pendente" : "Sessão agendada com sucesso!",
-        );
-      }
+    try {
+      await doCreateSession(pending, false);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : (error as any)?.message || "Erro ao agendar sessão";
-      toast.error(msg);
+      toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
     }
   };
+
+  // ── Utilizador decide ignorar conflito e agendar na mesma ────────────────
+  const handleIgnoreConflict = async () => {
+    setConflictDialog(false);
+    if (!pendingSession) return;
+    try {
+      await doCreateSession(pendingSession, true); // skipConflict = true
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
+    } finally {
+      setPendingSession(null);
+    }
+  };
+
+  const handleCancelConflict = () => {
+    setConflictDialog(false);
+    setPendingSession(null);
+    // Modal de agendamento fica aberto para o utilizador ajustar
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const resetForm = () => {
     setSelectedPaciente("");
@@ -416,32 +464,27 @@ export default function Agenda() {
 
   const handleAddCredits = async (patientId: string, data: CreditPurchaseData) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
     if (!uuidRegex.test(patientId)) {
       const msg = `patient_id inválido: ${patientId}`;
       toast.error(msg);
       throw new Error(msg);
     }
-
     if (!clinicId) {
       const msg = "Clínica não identificada. Faça login novamente.";
       toast.error(msg);
       throw new Error(msg);
     }
-
     const result = await CreditService.purchaseCredits(clinicId, patientId, data.amount, {
       description: data.description,
       monetaryValue: data.monetaryValue,
       paymentMethod: data.paymentMethod,
       paymentStatus: data.paymentStatus,
     });
-
     if (!result.success) {
       const msg = result.error || "Erro ao adicionar créditos";
       toast.error(msg);
       throw new Error(msg);
     }
-
     await addCredits(patientId, data.amount);
     await refreshCreditBalances();
   };
@@ -455,22 +498,13 @@ export default function Agenda() {
     minute: number;
     notes: string;
   }) => {
-    await handleCreateSession({
-      pacienteId: data.pacienteId,
-      profissionalId: data.profissionalId,
-      servicoId: data.servicoId,
-      notes: data.notes,
-      date: data.date,
-      hour: data.hour,
-      minute: data.minute,
-    });
+    await handleCreateSession({ ...data });
   };
 
   const handleCreateReservedSlot = async (data: CreateReservedSlotData) => {
     await createReservedSlot(data);
   };
 
-  // Não renderiza até as preferências estarem carregadas (evita flash de layout)
   if (!prefsLoaded) return null;
 
   return (
@@ -496,7 +530,6 @@ export default function Agenda() {
       }
     >
       <div className="space-y-4 animate-fade-in">
-        {/* Desktop Controls */}
         <div className="hidden md:block">
           <AgendaControls
             currentDate={currentDate}
@@ -509,8 +542,6 @@ export default function Agenda() {
             onHourFilterChange={setHourFilter}
           />
         </div>
-
-        {/* Mobile Controls */}
         <div className="md:hidden">
           <AgendaControls
             currentDate={currentDate}
@@ -535,7 +566,6 @@ export default function Agenda() {
           onReservedSlotClick={handleReservedSlotClick}
           getCreditBalance={getCreditBalance}
         />
-
         <AgendaMobileTimeline
           currentDate={currentDate}
           hours={displayedHours}
@@ -629,6 +659,33 @@ export default function Agenda() {
           onSessionsCreated={refreshSessions}
         />
       )}
+
+      {/* ── Popup de conflito de horário ─────────────────────────────────── */}
+      <AlertDialog open={conflictDialog} onOpenChange={setConflictDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">⚠️ Conflito de Horário</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">{conflictMessage}</span>
+              <span className="block text-sm text-muted-foreground">
+                Pode ignorar e agendar na mesma, ou voltar para ajustar o horário.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel onClick={handleCancelConflict} className="w-full sm:w-auto">
+              Verificar horário
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleIgnoreConflict}
+              className="w-full sm:w-auto bg-warning text-warning-foreground hover:bg-warning/90"
+            >
+              Ignorar e Agendar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* ─────────────────────────────────────────────────────────────────── */}
     </AppLayout>
   );
 }
