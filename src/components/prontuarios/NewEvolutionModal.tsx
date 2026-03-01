@@ -1,4 +1,4 @@
-// EditEvolutionModal - Modal for editing existing clinical evolutions
+// NewEvolutionModal - Modal for creating clinical evolutions with specialty templates
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,89 +10,83 @@ import { Activity, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { DynamicFormRenderer } from "./DynamicFormRenderer";
+import { VoiceRecordButton } from "./VoiceRecordButton";
+import { AISuggestionPanel } from "@/components/ai/AISuggestionPanel";
+import { AIService } from "@/services/AIService";
 import { SpecialtyService, type SpecialtyTemplate, type StructuredData } from "@/services/SpecialtyService";
 
-export interface EvolutionToEdit {
-  id: string;
-  descricao: string;
-  escala_dor: number;
-  specialty_id: string | null;
-  structured_data: Record<string, unknown> | null;
-  created_at: string;
-}
-
-interface EditEvolutionModalProps {
+interface NewEvolutionModalProps {
   isOpen: boolean;
   onClose: () => void;
   patientName: string;
-  evolution: EvolutionToEdit | null;
+  prontuarioId: string;
   patientSpecialtyId?: string | null;
-  onSubmit: (
-    evolutionId: string,
-    data: {
-      descricao: string;
-      escala_dor: number;
-      specialty_id: string | null;
-      structured_data: StructuredData | null;
-    },
-  ) => Promise<void>;
+  prefilledDate?: string | null; // ── Data pré-preenchida vinda da agenda
+  onSubmit: (data: {
+    descricao: string;
+    escala_dor: number;
+    specialty_id: string | null;
+    structured_data: StructuredData | null;
+    evolution_date?: string | null;
+  }) => void;
 }
 
-export function EditEvolutionModal({
+export function NewEvolutionModal({
   isOpen,
   onClose,
   patientName,
-  evolution,
+  prontuarioId,
   patientSpecialtyId,
+  prefilledDate,
   onSubmit,
-}: EditEvolutionModalProps) {
+}: NewEvolutionModalProps) {
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<SpecialtyTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const hasPatientSpecialty = !!patientSpecialtyId;
+
   const [descricao, setDescricao] = useState("");
   const [escalaDor, setEscalaDor] = useState(5);
   const [structuredData, setStructuredData] = useState<StructuredData>({});
 
-  // Carrega templates e pré-preenche com dados da evolução existente
-  useEffect(() => {
-    if (isOpen && evolution) {
-      loadTemplatesAndFill();
-    }
-  }, [isOpen, evolution?.id]);
+  const [isStructuring, setIsStructuring] = useState(false);
+  const [soapSuggestion, setSoapSuggestion] = useState<string | null>(null);
+  const [rawTranscription, setRawTranscription] = useState<string | null>(null);
 
-  // Atualiza template selecionado
   useEffect(() => {
-    if (selectedTemplateId && templates.length > 0) {
+    if (isOpen) {
+      loadTemplates();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (selectedTemplateId) {
       const template = templates.find((t) => t.id === selectedTemplateId);
       setSelectedTemplate(template || null);
+      if (template && template.schema.length > 0) {
+        setStructuredData(SpecialtyService.createEmptyStructuredData(template.schema));
+      } else {
+        setStructuredData({});
+      }
     } else {
       setSelectedTemplate(null);
+      setStructuredData({});
     }
   }, [selectedTemplateId, templates]);
 
-  const loadTemplatesAndFill = async () => {
-    if (!evolution) return;
+  const loadTemplates = async () => {
     setIsLoading(true);
     try {
       const data = await SpecialtyService.getTemplates();
       setTemplates(data);
-
-      // Pré-preenche com dados existentes
-      setDescricao(evolution.descricao || "");
-      setEscalaDor(evolution.escala_dor ?? 5);
-
-      // Especialidade
-      const specialtyId = evolution.specialty_id || patientSpecialtyId || "";
-      setSelectedTemplateId(specialtyId);
-
-      // Dados estruturados
-      if (evolution.structured_data && Object.keys(evolution.structured_data).length > 0) {
-        setStructuredData(evolution.structured_data as StructuredData);
+      if (patientSpecialtyId) {
+        setSelectedTemplateId(patientSpecialtyId);
       } else {
-        setStructuredData({});
+        const geralTemplate = data.find((t) => t.name === "Geral");
+        if (geralTemplate) setSelectedTemplateId(geralTemplate.id);
       }
     } catch (error) {
       console.error("Error loading templates:", error);
@@ -103,7 +97,6 @@ export function EditEvolutionModal({
   };
 
   const handleSubmit = async () => {
-    if (!evolution) return;
     if (!descricao.trim()) {
       toast.error("A descrição do atendimento é obrigatória");
       return;
@@ -122,23 +115,80 @@ export function EditEvolutionModal({
       const hasStructuredData =
         selectedTemplate && selectedTemplate.schema.length > 0 && Object.keys(structuredData).length > 0;
 
-      await onSubmit(evolution.id, {
+      let finalStructuredData: StructuredData | null = hasStructuredData ? { ...structuredData } : null;
+      if (rawTranscription) {
+        finalStructuredData = {
+          ...(finalStructuredData || {}),
+          voice_recording_at: new Date().toISOString(),
+          raw_transcription: rawTranscription,
+          soap_structured: "true",
+        } as StructuredData;
+      }
+
+      onSubmit({
         descricao,
         escala_dor: escalaDor,
-        specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId || null : null,
-        structured_data: hasStructuredData ? { ...structuredData } : null,
+        specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId : null,
+        structured_data: finalStructuredData,
+        evolution_date: prefilledDate || null, // ── passa data da sessão
       });
+
+      resetForm();
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleClose = () => {
+  const resetForm = () => {
     setDescricao("");
     setEscalaDor(5);
     setStructuredData({});
-    setSelectedTemplateId("");
+    setSoapSuggestion(null);
+    setRawTranscription(null);
+    setIsStructuring(false);
+    if (patientSpecialtyId) {
+      setSelectedTemplateId(patientSpecialtyId);
+    } else {
+      const geralTemplate = templates.find((t) => t.name === "Geral");
+      if (geralTemplate) setSelectedTemplateId(geralTemplate.id);
+    }
+  };
+
+  const handleClose = () => {
+    resetForm();
     onClose();
+  };
+
+  const handleVoiceTranscription = async (rawText: string) => {
+    setRawTranscription(rawText);
+    try {
+      const result = await AIService.structureVoiceEvolution({
+        rawTranscription: rawText,
+        patientName,
+        painLevel: escalaDor,
+      });
+      setSoapSuggestion(result.data.formattedText);
+    } catch (err) {
+      console.error("Error structuring voice:", err);
+      toast.error("Erro ao estruturar texto com IA. O texto bruto foi mantido.");
+      setDescricao(rawText);
+      setSoapSuggestion(null);
+    } finally {
+      setIsStructuring(false);
+    }
+  };
+
+  const handleAcceptSoap = (text: string) => {
+    setDescricao(text);
+    setSoapSuggestion(null);
+    toast.success("Texto SOAP aceite!");
+  };
+
+  const handleRejectSoap = () => {
+    if (rawTranscription) setDescricao(rawTranscription);
+    setSoapSuggestion(null);
+    setRawTranscription(null);
+    toast.info("Sugestão rejeitada. Transcrição bruta aplicada.");
   };
 
   const getPainColor = (level: number) => {
@@ -155,9 +205,17 @@ export function EditEvolutionModal({
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
             <Activity className="h-5 w-5 text-primary" />
-            Editar Evolução Clínica
+            Nova Evolução Clínica
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">{patientName}</p>
+          <p className="text-sm text-muted-foreground">
+            {patientName}
+            {/* ── Mostra data da sessão se veio da agenda ── */}
+            {prefilledDate && (
+              <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                Sessão de {new Date(prefilledDate + "T12:00:00").toLocaleDateString("pt-PT")}
+              </span>
+            )}
+          </p>
         </DialogHeader>
 
         {isLoading ? (
@@ -168,7 +226,12 @@ export function EditEvolutionModal({
           <div className="space-y-6 py-4">
             {/* Specialty Selector */}
             <div className="space-y-2">
-              <Label>Especialidade</Label>
+              <Label className="flex items-center gap-2">
+                Especialidade
+                {hasPatientSpecialty && (
+                  <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">Padrão (Anamnese)</span>
+                )}
+              </Label>
               <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a especialidade..." />
@@ -186,9 +249,17 @@ export function EditEvolutionModal({
                   ))}
                 </SelectContent>
               </Select>
+              {hasPatientSpecialty ? (
+                <p className="text-xs text-muted-foreground">
+                  ℹ️ Pode alterar a especialidade para esta sessão específica
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  💡 Defina a especialidade na Anamnese para pré-carregar automaticamente
+                </p>
+              )}
             </div>
 
-            {/* Dynamic Form Fields */}
             {showDynamicForm && (
               <div className="border rounded-lg p-4 bg-muted/20">
                 <DynamicFormRenderer
@@ -199,19 +270,40 @@ export function EditEvolutionModal({
               </div>
             )}
 
-            {/* Description */}
             <div className="space-y-2">
-              <Label>Descrição do Atendimento *</Label>
+              <div className="flex items-center justify-between">
+                <Label>Descrição do Atendimento *</Label>
+                <VoiceRecordButton
+                  onTranscriptionComplete={handleVoiceTranscription}
+                  onStructuringStart={() => setIsStructuring(true)}
+                  disabled={isSubmitting || isStructuring}
+                />
+              </div>
+
+              {soapSuggestion && (
+                <AISuggestionPanel
+                  suggestion={soapSuggestion}
+                  onAccept={handleAcceptSoap}
+                  onReject={handleRejectSoap}
+                  title="Evolução SOAP (por voz)"
+                />
+              )}
+
+              {isStructuring && (
+                <div className="flex items-center gap-2 p-3 rounded-lg border border-primary/20 bg-primary/5 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />A estruturar transcrição em formato SOAP...
+                </div>
+              )}
+
               <Textarea
                 value={descricao}
                 onChange={(e) => setDescricao(e.target.value)}
-                placeholder="Descreva a evolução do utente, procedimentos realizados, observações..."
+                placeholder="Descreva a evolução do utente, procedimentos realizados, observações... ou use o microfone para ditar."
                 rows={showDynamicForm ? 4 : 6}
                 className="resize-none"
               />
             </div>
 
-            {/* Pain Scale */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label>Escala de Dor (EVA)</Label>
@@ -245,10 +337,10 @@ export function EditEvolutionModal({
           <Button onClick={handleSubmit} disabled={isLoading || isSubmitting} className="min-h-[44px] w-full sm:w-auto">
             {isSubmitting ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />A guardar...
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />A registar...
               </>
             ) : (
-              "Guardar Alterações"
+              "Registar Evolução"
             )}
           </Button>
         </DialogFooter>
