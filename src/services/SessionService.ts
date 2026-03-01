@@ -14,15 +14,8 @@ export interface Session {
   payment_status: string;
   payment_method: string | null;
   notes: string | null;
-  // Joined data for display
-  paciente?: {
-    id: string;
-    full_name: string;
-  };
-  profissional?: {
-    id: string;
-    full_name: string;
-  };
+  paciente?: { id: string; full_name: string };
+  profissional?: { id: string; full_name: string };
   servico?: {
     id: string;
     name: string;
@@ -38,7 +31,9 @@ export interface CreateSessionData {
   servicoId: string;
   date: Date;
   hour: number;
-  minute?: number; // 0-59, defaults to 0
+  minute?: number;
+  endHour?: number; // ── hora de fim editável
+  endMinute?: number; // ── minuto de fim editável
   notes?: string;
 }
 
@@ -66,100 +61,103 @@ export interface ValidationResult {
   error?: string;
 }
 
-export class SessionService {
-  // Validate session data before creation
-  static validate(data: CreateSessionData): ValidationResult {
-    if (!data.pacienteId) {
-      return { isValid: false, error: "Selecione um paciente" };
-    }
-    if (!data.profissionalId) {
-      return { isValid: false, error: "Selecione um profissional" };
-    }
-    if (!data.servicoId) {
-      return { isValid: false, error: "Selecione um serviço" };
-    }
-    if (!data.date || !data.hour) {
-      return { isValid: false, error: "Data e hora são obrigatórios" };
-    }
+// ── Resultado de conflito — não bloqueia, apenas informa ─────────────────────
+export interface ConflictResult {
+  hasConflict: boolean;
+  message?: string;
+  conflictingSession?: Session;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
+export class SessionService {
+  static validate(data: CreateSessionData): ValidationResult {
+    if (!data.pacienteId) return { isValid: false, error: "Selecione um paciente" };
+    if (!data.profissionalId) return { isValid: false, error: "Selecione um profissional" };
+    if (!data.servicoId) return { isValid: false, error: "Selecione um serviço" };
+    if (!data.date || data.hour === undefined) return { isValid: false, error: "Data e hora são obrigatórios" };
     return { isValid: true };
   }
 
-  // Check for scheduling conflicts (interval overlap)
+  // ── Verifica conflito mas NÃO bloqueia — retorna info para o caller decidir ──
   static checkConflict(
     sessions: Session[],
     profissionalId: string,
     date: Date,
     hour: number,
     minute: number = 0,
-    durationMinutes: number = 60
-  ): ValidationResult {
+    durationMinutes: number = 60,
+    endHour?: number,
+    endMinute?: number,
+  ): ConflictResult {
     const newStart = setMinutes(setHours(new Date(date), hour), minute);
-    const newEnd = addMinutes(newStart, durationMinutes);
+    const newEnd =
+      endHour !== undefined
+        ? setMinutes(setHours(new Date(date), endHour), endMinute ?? 0)
+        : addMinutes(newStart, durationMinutes);
 
-    const hasConflict = sessions.some((s) => {
+    const conflicting = sessions.find((s) => {
       if (s.profissional_id !== profissionalId) return false;
-      // Exclude cancelled/no-show sessions from conflict check
       if (s.status === "cancelado" || s.status === "falta" || s.status === "faltou") return false;
       if (!isSameDay(new Date(s.start_time), newStart)) return false;
-      
       const existingStart = new Date(s.start_time);
       const existingEnd = new Date(s.end_time);
-      
-      // Check for overlap: newStart < existingEnd AND newEnd > existingStart
       return newStart < existingEnd && newEnd > existingStart;
     });
 
-    if (hasConflict) {
+    if (conflicting) {
       return {
-        isValid: false,
-        error: "Conflito de horário: já existe um agendamento para este profissional neste intervalo",
+        hasConflict: true,
+        message: `Conflito de horário: já existe uma sessão para este profissional neste intervalo`,
+        conflictingSession: conflicting,
       };
     }
 
-    return { isValid: true };
+    return { hasConflict: false };
   }
 
-  // Create session data (clinic_id provided by caller)
+  // ── create() NÃO verifica conflito — o caller já decidiu se ignora ou não ──
   static create(
-    data: CreateSessionData, 
+    data: CreateSessionData,
     existingSessions: Session[],
     clinicId: string,
     lookupData?: {
       services?: ServiceData[];
       patients?: PatientData[];
       professionals?: ProfessionalData[];
-    }
+    },
+    skipConflictCheck: boolean = false,
   ): Session {
-    // Validate required fields
     const validation = this.validate(data);
-    if (!validation.isValid) {
-      throw new Error(validation.error);
-    }
+    if (!validation.isValid) throw new Error(validation.error);
 
-    // Get service details for duration
     const servico = lookupData?.services?.find((s) => s.id === data.servicoId);
     const durationMinutes = servico?.duration_minutes || 60;
 
-    // Check for conflicts with interval overlap
-    const conflictCheck = this.checkConflict(
-      existingSessions,
-      data.profissionalId,
-      data.date,
-      data.hour,
-      data.minute ?? 0,
-      durationMinutes
-    );
-    if (!conflictCheck.isValid) {
-      throw new Error(conflictCheck.error);
+    // Só verifica conflito se skipConflictCheck === false
+    if (!skipConflictCheck) {
+      const conflict = this.checkConflict(
+        existingSessions,
+        data.profissionalId,
+        data.date,
+        data.hour,
+        data.minute ?? 0,
+        durationMinutes,
+        data.endHour,
+        data.endMinute,
+      );
+      if (conflict.hasConflict) {
+        throw new Error(conflict.message);
+      }
     }
 
-    // Get patient and professional details
     const paciente = lookupData?.patients?.find((p) => p.id === data.pacienteId);
     const profissional = lookupData?.professionals?.find((p) => p.id === data.profissionalId);
 
     const startTime = setMinutes(setHours(new Date(data.date), data.hour), data.minute ?? 0);
-    const endTime = addMinutes(startTime, durationMinutes);
+    const endTime =
+      data.endHour !== undefined
+        ? setMinutes(setHours(new Date(data.date), data.endHour), data.endMinute ?? 0)
+        : addMinutes(startTime, durationMinutes);
 
     return {
       id: `sess-${Date.now()}`,
@@ -174,7 +172,6 @@ export class SessionService {
       payment_status: "pendente",
       payment_method: null,
       notes: data.notes || null,
-      // Joined data
       paciente: paciente ? { id: paciente.id, full_name: paciente.full_name } : undefined,
       profissional: profissional ? { id: profissional.id, full_name: profissional.full_name } : undefined,
       servico: servico
@@ -189,57 +186,40 @@ export class SessionService {
     };
   }
 
-  // Filter sessions by date
   static filterByDate(sessions: Session[], date: Date): Session[] {
     return sessions.filter((s) => isSameDay(new Date(s.start_time), date));
   }
 
-  // Filter sessions by professional
   static filterByProfessional(sessions: Session[], profissionalId: string): Session[] {
     return sessions.filter((s) => s.profissional_id === profissionalId);
   }
 
-  // Get sessions for a specific time slot
   static getForTimeSlot(sessions: Session[], date: Date, hour: number): Session[] {
     return sessions.filter(
-      (s) =>
-        isSameDay(new Date(s.start_time), date) &&
-        new Date(s.start_time).getHours() === hour
+      (s) => isSameDay(new Date(s.start_time), date) && new Date(s.start_time).getHours() === hour,
     );
   }
 
-  // Reschedule a session to a new date/time
   static reschedule(
     session: Session,
     newDate: Date,
     newHour: number,
-    existingSessions: Session[]
+    existingSessions: Session[],
   ): { success: boolean; error?: string; updatedSession?: Session } {
-    // Check for conflicts (excluding the session being moved)
     const otherSessions = existingSessions.filter((s) => s.id !== session.id);
-    const conflictCheck = this.checkConflict(
-      otherSessions,
-      session.profissional_id,
-      newDate,
-      newHour
-    );
+    const conflict = this.checkConflict(otherSessions, session.profissional_id, newDate, newHour);
 
-    if (!conflictCheck.isValid) {
-      return { success: false, error: conflictCheck.error };
+    if (conflict.hasConflict) {
+      return { success: false, error: conflict.message };
     }
 
-    // Calculate new times
     const duration = session.servico?.duration_minutes || 60;
     const newStartTime = setMinutes(setHours(new Date(newDate), newHour), 0);
     const newEndTime = addMinutes(newStartTime, duration);
 
     return {
       success: true,
-      updatedSession: {
-        ...session,
-        start_time: newStartTime,
-        end_time: newEndTime,
-      },
+      updatedSession: { ...session, start_time: newStartTime, end_time: newEndTime },
     };
   }
 }
