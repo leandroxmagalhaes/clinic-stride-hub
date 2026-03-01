@@ -15,7 +15,7 @@ import { SpecialtyService, type SpecialtyTemplate, type StructuredData } from "@
 export interface EvolutionToEdit {
   id: string;
   descricao: string;
-  escala_dor: number | null;
+  escala_dor: number;
   specialty_id: string | null;
   structured_data: Record<string, unknown> | null;
   created_at: string;
@@ -35,7 +35,7 @@ interface EditEvolutionModalProps {
       specialty_id: string | null;
       structured_data: StructuredData | null;
     },
-  ) => void;
+  ) => Promise<void>;
 }
 
 export function EditEvolutionModal({
@@ -56,45 +56,43 @@ export function EditEvolutionModal({
   const [escalaDor, setEscalaDor] = useState(5);
   const [structuredData, setStructuredData] = useState<StructuredData>({});
 
-  // Populate form when evolution changes
+  // Carrega templates e pré-preenche com dados da evolução existente
   useEffect(() => {
-    if (evolution) {
-      setDescricao(evolution.descricao || "");
-      setEscalaDor(evolution.escala_dor ?? 5);
-      setStructuredData((evolution.structured_data as StructuredData) || {});
-      setSelectedTemplateId(evolution.specialty_id || "");
+    if (isOpen && evolution) {
+      loadTemplatesAndFill();
     }
-  }, [evolution]);
+  }, [isOpen, evolution?.id]);
 
-  useEffect(() => {
-    if (isOpen) loadTemplates();
-  }, [isOpen]);
-
+  // Atualiza template selecionado
   useEffect(() => {
     if (selectedTemplateId && templates.length > 0) {
       const template = templates.find((t) => t.id === selectedTemplateId);
       setSelectedTemplate(template || null);
-      // Only reset structured data if switching to a NEW template (not on initial load)
-      if (template && template.schema.length > 0 && !evolution?.specialty_id) {
-        setStructuredData(SpecialtyService.createEmptyStructuredData(template.schema));
-      }
     } else {
       setSelectedTemplate(null);
     }
   }, [selectedTemplateId, templates]);
 
-  const loadTemplates = async () => {
+  const loadTemplatesAndFill = async () => {
+    if (!evolution) return;
     setIsLoading(true);
     try {
       const data = await SpecialtyService.getTemplates();
       setTemplates(data);
-      if (evolution?.specialty_id) {
-        setSelectedTemplateId(evolution.specialty_id);
-      } else if (patientSpecialtyId) {
-        setSelectedTemplateId(patientSpecialtyId);
+
+      // Pré-preenche com dados existentes
+      setDescricao(evolution.descricao || "");
+      setEscalaDor(evolution.escala_dor ?? 5);
+
+      // Especialidade
+      const specialtyId = evolution.specialty_id || patientSpecialtyId || "";
+      setSelectedTemplateId(specialtyId);
+
+      // Dados estruturados
+      if (evolution.structured_data && Object.keys(evolution.structured_data).length > 0) {
+        setStructuredData(evolution.structured_data as StructuredData);
       } else {
-        const geralTemplate = data.find((t) => t.name === "Geral");
-        if (geralTemplate) setSelectedTemplateId(geralTemplate.id);
+        setStructuredData({});
       }
     } catch (error) {
       console.error("Error loading templates:", error);
@@ -104,7 +102,7 @@ export function EditEvolutionModal({
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!evolution) return;
     if (!descricao.trim()) {
       toast.error("A descrição do atendimento é obrigatória");
@@ -124,15 +122,23 @@ export function EditEvolutionModal({
       const hasStructuredData =
         selectedTemplate && selectedTemplate.schema.length > 0 && Object.keys(structuredData).length > 0;
 
-      onSubmit(evolution.id, {
+      await onSubmit(evolution.id, {
         descricao,
         escala_dor: escalaDor,
-        specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId : null,
-        structured_data: hasStructuredData ? structuredData : null,
+        specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId || null : null,
+        structured_data: hasStructuredData ? { ...structuredData } : null,
       });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleClose = () => {
+    setDescricao("");
+    setEscalaDor(5);
+    setStructuredData({});
+    setSelectedTemplateId("");
+    onClose();
   };
 
   const getPainColor = (level: number) => {
@@ -144,21 +150,14 @@ export function EditEvolutionModal({
   const showDynamicForm = selectedTemplate && selectedTemplate.schema.length > 0;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
             <Activity className="h-5 w-5 text-primary" />
             Editar Evolução Clínica
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            {patientName}
-            {evolution && (
-              <span className="ml-2 text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                {new Date(evolution.created_at).toLocaleDateString("pt-PT")}
-              </span>
-            )}
-          </p>
+          <p className="text-sm text-muted-foreground">{patientName}</p>
         </DialogHeader>
 
         {isLoading ? (
@@ -177,13 +176,19 @@ export function EditEvolutionModal({
                 <SelectContent>
                   {templates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
-                      {template.name}
+                      <div className="flex flex-col">
+                        <span>{template.name}</span>
+                        {template.description && (
+                          <span className="text-xs text-muted-foreground">{template.description}</span>
+                        )}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
+            {/* Dynamic Form Fields */}
             {showDynamicForm && (
               <div className="border rounded-lg p-4 bg-muted/20">
                 <DynamicFormRenderer
@@ -194,17 +199,19 @@ export function EditEvolutionModal({
               </div>
             )}
 
+            {/* Description */}
             <div className="space-y-2">
               <Label>Descrição do Atendimento *</Label>
               <Textarea
                 value={descricao}
                 onChange={(e) => setDescricao(e.target.value)}
-                placeholder="Descreva a evolução do utente..."
+                placeholder="Descreva a evolução do utente, procedimentos realizados, observações..."
                 rows={showDynamicForm ? 4 : 6}
                 className="resize-none"
               />
             </div>
 
+            {/* Pain Scale */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label>Escala de Dor (EVA)</Label>
@@ -227,7 +234,12 @@ export function EditEvolutionModal({
         )}
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={onClose} disabled={isSubmitting} className="min-h-[44px] w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={handleClose}
+            disabled={isSubmitting}
+            className="min-h-[44px] w-full sm:w-auto"
+          >
             Cancelar
           </Button>
           <Button onClick={handleSubmit} disabled={isLoading || isSubmitting} className="min-h-[44px] w-full sm:w-auto">
