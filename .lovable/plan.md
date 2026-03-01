@@ -1,30 +1,12 @@
 
 
-# Plano: URL Amigavel com Slug e Identidade Visual
+# Fix: Create missing EditEvolutionModal module
 
-## Estado Atual
-✅ **IMPLEMENTADO** — Todas as partes do plano foram implementadas.
+The build error indicates that `src/pages/Prontuarios.tsx` imports from `@/components/prontuarios/EditEvolutionModal`, but this file does not exist.
 
-## O que foi feito
+## Step
 
-### 1. ✅ Migration: Coluna `slug` adicionada a `clinics`
-- Coluna `slug` (text, unique, not null) adicionada
-- Clínica existente populada com `'respira-desenvolve'`
+Create `src/components/prontuarios/EditEvolutionModal.tsx` with a minimal placeholder export (`export {};`) to resolve the TypeScript module resolution error immediately.
 
-### 2. ✅ Edge Function `patient-onboarding/index.ts`
-- Aceita parâmetro `slug` para resolver clinic_id
-- Retorna `primary_color` da `clinic_settings`
-- Mantém compatibilidade com `clinic_id` e `token`
+If the Prontuarios page actually uses a named export from this module (e.g., `EditEvolutionModal` component), we may need to add a proper stub component in a follow-up step.
 
-### 3. ✅ Nova rota `/r/:slug` no `App.tsx`
-- Rota pública adicionada
-
-### 4. ✅ `PreRegisto.tsx` atualizado
-- Suporta slug, identidade visual completa
-- Header com logo/iniciais, nome, subtítulo
-- Cor primária nos botões e ícones
-- Footer "Powered by Physione"
-- Loading skeleton
-
-### 5. ✅ Link genérico em `Pacientes.tsx`
-- Gera link com slug (`/r/respira-desenvolve`)
