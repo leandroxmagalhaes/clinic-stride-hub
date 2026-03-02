@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { getPublicBaseUrl } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink, FileUp, Send, Link2, Check } from "lucide-react";
+import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink, FileUp, Send, Link2, Check, FileBarChart2, ArrowUpDown, ArrowUp, ArrowDown, Download } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { ImportPatientsModal } from "@/components/patients/ImportPatientsModal";
 import { SendOnboardingLinkModal } from "@/components/patients/SendOnboardingLinkModal";
 import { toast } from "sonner";
@@ -83,6 +86,68 @@ export default function Pacientes() {
   const [isOnboardingLinkModalOpen, setIsOnboardingLinkModalOpen] = useState(false);
   const [genericLinkCopied, setGenericLinkCopied] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+
+  // Report state
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  type ReportSortField = "created_at" | "full_name" | "origin";
+  type ReportSortDir = "asc" | "desc";
+  type OriginFilter = "all" | "sistema" | "link";
+  const [reportSearch, setReportSearch] = useState("");
+  const [reportOrigin, setReportOrigin] = useState<OriginFilter>("all");
+  const [reportSortField, setReportSortField] = useState<ReportSortField>("created_at");
+  const [reportSortDir, setReportSortDir] = useState<ReportSortDir>("desc");
+  const reportTableRef = useRef<HTMLDivElement>(null);
+
+  function detectOrigin(patient: Patient): "sistema" | "link" {
+    const p = patient as any;
+    if (p.source === "link" || p.onboarding_token || p.onboarding_completed_at) return "link";
+    return "sistema";
+  }
+
+  const reportData = useMemo(() => {
+    let data = [...patients];
+    if (reportOrigin !== "all") data = data.filter((p) => detectOrigin(p) === reportOrigin);
+    if (reportSearch.trim()) {
+      const term = reportSearch.toLowerCase();
+      data = data.filter((p) => p.full_name?.toLowerCase().includes(term) || p.email?.toLowerCase().includes(term) || p.phone?.toLowerCase().includes(term));
+    }
+    data.sort((a, b) => {
+      let valA = "", valB = "";
+      if (reportSortField === "created_at") { valA = (a as any).created_at || ""; valB = (b as any).created_at || ""; }
+      else if (reportSortField === "full_name") { valA = a.full_name || ""; valB = b.full_name || ""; }
+      else if (reportSortField === "origin") { valA = detectOrigin(a); valB = detectOrigin(b); }
+      const cmp = valA.localeCompare(valB, "pt-PT");
+      return reportSortDir === "asc" ? cmp : -cmp;
+    });
+    return data;
+  }, [patients, reportSearch, reportOrigin, reportSortField, reportSortDir]);
+
+  const toggleSort = (field: ReportSortField) => {
+    if (reportSortField === field) setReportSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setReportSortField(field); setReportSortDir("asc"); }
+  };
+
+  const handleExportCSV = () => {
+    const headers = ["Data Cadastro","Hora","Nome Completo","Origem","Telefone","Email","Estado"];
+    const rows = reportData.map((p) => {
+      const dt = (p as any).created_at ? new Date((p as any).created_at) : null;
+      return [dt ? format(dt,"dd/MM/yyyy",{locale:ptBR}) : "-", dt ? format(dt,"HH:mm",{locale:ptBR}) : "-", p.full_name||"-", detectOrigin(p)==="link"?"Link (cliente)":"Sistema", p.phone||"-", p.email||"-", p.is_active?"Ativo":"Inativo"];
+    });
+    const csv = [headers,...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href=url; a.download=`pacientes_${format(new Date(),"yyyy-MM-dd")}.csv`; a.click(); URL.revokeObjectURL(url);
+    toast.success("CSV exportado!");
+  };
+
+  const handleExportPDF = () => {
+    const dateStr = format(new Date(),"dd/MM/yyyy HH:mm",{locale:ptBR});
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório Pacientes</title><style>body{font-family:system-ui,sans-serif;padding:20px;font-size:12px}h1{font-size:18px;margin-bottom:4px}p.sub{color:#666;margin-bottom:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-weight:600}.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px}.link{background:#dbeafe;color:#1d4ed8}.sistema{background:#f0fdf4;color:#15803d}.ativo{background:#f0fdf4;color:#15803d}.inativo{background:#fef2f2;color:#dc2626}@media print{body{padding:0}}</style></head><body><h1>Relatório de Pacientes</h1><p class="sub">Gerado em ${dateStr} · ${reportData.length} paciente(s)</p><table><thead><tr><th>Data</th><th>Hora</th><th>Nome</th><th>Origem</th><th>Telefone</th><th>Email</th><th>Estado</th></tr></thead><tbody>${reportData.map((p)=>{const dt=(p as any).created_at?new Date((p as any).created_at):null;const o=detectOrigin(p);return`<tr><td>${dt?format(dt,"dd/MM/yyyy",{locale:ptBR}):"-"}</td><td>${dt?format(dt,"HH:mm",{locale:ptBR}):"-"}</td><td>${p.full_name||"-"}</td><td><span class="badge ${o}">${o==="link"?"Link":"Sistema"}</span></td><td>${p.phone||"-"}</td><td>${p.email||"-"}</td><td><span class="badge ${p.is_active?"ativo":"inativo"}">${p.is_active?"Ativo":"Inativo"}</span></td></tr>`;}).join("")}</tbody></table></body></html>`;
+    const win = window.open("","_blank");
+    if(!win){toast.error("Permita popups para exportar PDF");return;}
+    win.document.write(html); win.document.close(); win.focus();
+    setTimeout(()=>{win.print();win.close();},400);
+  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -277,7 +342,11 @@ export default function Pacientes() {
       title="Pacientes"
       subtitle={`${patients.length} pacientes cadastrados`}
       actions={
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setIsReportModalOpen(true)} className="gap-2 min-h-[44px]">
+            <FileBarChart2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Relatório</span>
+          </Button>
           <Button
             variant="outline"
             onClick={async () => {
@@ -602,6 +671,97 @@ export default function Pacientes() {
         onClose={() => setIsOnboardingLinkModalOpen(false)}
         patients={patients}
       />
+
+      {/* Report Modal */}
+      <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
+        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display">Relatório de Cadastros</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Pesquisar nome, email ou telefone..." value={reportSearch} onChange={(e) => setReportSearch(e.target.value)} className="pl-9" />
+              </div>
+              <Select value={reportOrigin} onValueChange={(v) => setReportOrigin(v as OriginFilter)}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Origem" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as origens</SelectItem>
+                  <SelectItem value="sistema">Sistema (utilizador)</SelectItem>
+                  <SelectItem value="link">Link (cliente)</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1">
+                  <Download className="h-4 w-4" /> CSV
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-1">
+                  <Download className="h-4 w-4" /> PDF
+                </Button>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">{reportData.length} paciente(s) encontrado(s)</p>
+
+            <div className="overflow-x-auto rounded-md border" ref={reportTableRef}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
+                      Data {reportSortField === "created_at" ? (reportSortDir === "asc" ? <ArrowUp className="inline h-3 w-3" /> : <ArrowDown className="inline h-3 w-3" />) : <ArrowUpDown className="inline h-3 w-3 opacity-40" />}
+                    </TableHead>
+                    <TableHead>Hora</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("full_name")}>
+                      Nome {reportSortField === "full_name" ? (reportSortDir === "asc" ? <ArrowUp className="inline h-3 w-3" /> : <ArrowDown className="inline h-3 w-3" />) : <ArrowUpDown className="inline h-3 w-3 opacity-40" />}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("origin")}>
+                      Origem {reportSortField === "origin" ? (reportSortDir === "asc" ? <ArrowUp className="inline h-3 w-3" /> : <ArrowDown className="inline h-3 w-3" />) : <ArrowUpDown className="inline h-3 w-3 opacity-40" />}
+                    </TableHead>
+                    <TableHead>Telefone</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Estado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportData.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum paciente encontrado</TableCell></TableRow>
+                  ) : reportData.map((patient) => {
+                    const dt = (patient as any).created_at ? new Date((patient as any).created_at) : null;
+                    const origin = detectOrigin(patient);
+                    return (
+                      <TableRow key={patient.id}>
+                        <TableCell>{dt ? format(dt, "dd/MM/yyyy", { locale: ptBR }) : "—"}</TableCell>
+                        <TableCell>{dt ? format(dt, "HH:mm", { locale: ptBR }) : "—"}</TableCell>
+                        <TableCell className="font-medium">{patient.full_name}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={origin === "link" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"}>
+                            {origin === "link" ? "🔗 Link (cliente)" : "💻 Sistema"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{patient.phone || "—"}</TableCell>
+                        <TableCell>{patient.email || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={patient.is_active ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}>
+                            {patient.is_active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReportModalOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Import Patients Modal */}
       {clinicId && (
