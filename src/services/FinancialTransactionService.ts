@@ -1,245 +1,201 @@
-// FinancialTransactionService - Dedicated layer for financial transaction operations
-// Handles queries, filters, and CRUD on credit_transactions
+// FinancialTransactionService - Entradas avulsas e despesas em localStorage
+// Complementa os dados de packs que vêm do Supabase
 
-import { supabase } from "@/integrations/supabase/client";
+export type TransactionKind = "entrada" | "saida";
 
-export interface FinancialTransaction {
+export type TransactionCategory =
+  // Entradas
+  | "consulta_avulsa"
+  | "produto"
+  | "outro_entrada"
+  // Saídas
+  | "renda"
+  | "material"
+  | "salario"
+  | "equipamento"
+  | "marketing"
+  | "outro_saida";
+
+export const CATEGORY_LABELS: Record<TransactionCategory, string> = {
+  consulta_avulsa: "Consulta avulsa",
+  produto: "Produto",
+  outro_entrada: "Outra entrada",
+  renda: "Renda",
+  material: "Material",
+  salario: "Salário",
+  equipamento: "Equipamento",
+  marketing: "Marketing",
+  outro_saida: "Outra saída",
+};
+
+export const ENTRY_CATEGORIES: TransactionCategory[] = ["consulta_avulsa", "produto", "outro_entrada"];
+
+export const EXIT_CATEGORIES: TransactionCategory[] = [
+  "renda",
+  "material",
+  "salario",
+  "equipamento",
+  "marketing",
+  "outro_saida",
+];
+
+export interface LocalTransaction {
   id: string;
-  clinic_id: string | null;
-  patient_id: string;
-  patient_name?: string | null;
-  amount: number;
-  transaction_type: string;
-  description: string | null;
-  monetary_value: number | null;
-  payment_method: string | null;
-  payment_status: string | null;
-  related_session_id: string | null;
+  kind: TransactionKind;
+  category: TransactionCategory;
+  description: string;
+  amount: number; // sempre positivo
+  date: string; // "YYYY-MM-DD"
+  payment_method?: string;
+  recorrente: boolean;
+  recorrente_dia?: number; // dia do mês para recorrentes
   created_at: string;
 }
 
-export interface TransactionFilters {
-  startDate?: Date;
-  endDate?: Date;
-  transactionType?: string;
-  paymentMethod?: string;
-  paymentStatus?: string;
-  patientId?: string;
-  page?: number;
-  pageSize?: number;
+export interface CreateLocalTransactionData {
+  kind: TransactionKind;
+  category: TransactionCategory;
+  description: string;
+  amount: number;
+  date: string;
+  payment_method?: string;
+  recorrente: boolean;
+  recorrente_dia?: number;
 }
 
-export interface RevenueByMethod {
-  payment_method: string;
-  total: number;
-  count: number;
-}
+const STORAGE_KEY = "physione_financial_transactions";
 
-export class FinancialTransactionService {
-  /**
-   * List transactions with filters and pagination
-   */
-  static async getTransactions(
-    filters: TransactionFilters = {}
-  ): Promise<{ data: FinancialTransaction[]; total: number }> {
-    const { page = 1, pageSize = 20 } = filters;
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-
-    let query = supabase
-      .from("credit_transactions")
-      .select("*", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(from, to);
-
-    if (filters.startDate) {
-      query = query.gte("created_at", filters.startDate.toISOString());
-    }
-    if (filters.endDate) {
-      query = query.lte("created_at", filters.endDate.toISOString());
-    }
-    if (filters.transactionType) {
-      query = query.eq("transaction_type", filters.transactionType);
-    }
-    if (filters.paymentMethod) {
-      query = query.eq("payment_method", filters.paymentMethod);
-    }
-    if (filters.paymentStatus) {
-      query = query.eq("payment_status", filters.paymentStatus);
-    }
-    if (filters.patientId) {
-      query = query.eq("patient_id", filters.patientId);
-    }
-
-    const { data, error, count } = await query;
-
-    if (error) {
-      console.error("Error fetching transactions:", error);
-      return { data: [], total: 0 };
-    }
-
-    // Batch fetch patient names
-    const patientIds = [...new Set(data?.map((t) => t.patient_id) || [])];
-    const patientMap = await this.fetchPatientNames(patientIds);
-
-    const transactions: FinancialTransaction[] =
-      data?.map((row) => ({
-        id: row.id,
-        clinic_id: row.clinic_id,
-        patient_id: row.patient_id,
-        patient_name: patientMap.get(row.patient_id) || null,
-        amount: row.amount,
-        transaction_type: row.transaction_type,
-        description: row.description,
-        monetary_value: row.monetary_value,
-        payment_method: row.payment_method,
-        payment_status: row.payment_status,
-        related_session_id: row.related_session_id,
-        created_at: row.created_at,
-      })) || [];
-
-    return { data: transactions, total: count || 0 };
+function loadAll(): LocalTransaction[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as LocalTransaction[];
+  } catch {
+    return [];
   }
+}
 
-  /**
-   * Get a single transaction by ID
-   */
-  static async getTransactionById(
-    id: string
-  ): Promise<FinancialTransaction | null> {
-    const { data, error } = await supabase
-      .from("credit_transactions")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
+function saveAll(transactions: LocalTransaction[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+  } catch {
+    console.error("localStorage indisponível");
+  }
+}
 
-    if (error) {
-      console.error("Error fetching transaction:", error);
-      return null;
+export const FinancialTransactionService = {
+  getAll(): LocalTransaction[] {
+    return loadAll();
+  },
+
+  // Retorna transacções dentro de um intervalo de datas
+  // Inclui recorrentes expandidas para o período
+  getForPeriod(startDate: Date, endDate: Date): LocalTransaction[] {
+    const all = loadAll();
+    const results: LocalTransaction[] = [];
+
+    for (const tx of all) {
+      if (!tx.recorrente) {
+        // Transacção normal — verifica se está no período
+        const d = new Date(tx.date + "T12:00:00");
+        if (d >= startDate && d <= endDate) {
+          results.push(tx);
+        }
+      } else {
+        // Recorrente — gera uma ocorrência por mês no período
+        const txStart = new Date(tx.date + "T12:00:00");
+        const dia = tx.recorrente_dia || new Date(tx.date + "T12:00:00").getDate();
+
+        // Itera mês a mês
+        const cursor = new Date(startDate);
+        cursor.setDate(1);
+
+        while (cursor <= endDate) {
+          const year = cursor.getFullYear();
+          const month = cursor.getMonth();
+          const maxDay = new Date(year, month + 1, 0).getDate();
+          const occDay = Math.min(dia, maxDay);
+          const occ = new Date(year, month, occDay, 12, 0, 0);
+
+          if (occ >= txStart && occ >= startDate && occ <= endDate) {
+            results.push({
+              ...tx,
+              id: `${tx.id}_${year}_${month}`,
+              date: `${year}-${String(month + 1).padStart(2, "0")}-${String(occDay).padStart(2, "0")}`,
+            });
+          }
+
+          cursor.setMonth(cursor.getMonth() + 1);
+        }
+      }
     }
-    if (!data) return null;
 
-    const patientMap = await this.fetchPatientNames([data.patient_id]);
+    return results.sort((a, b) => b.date.localeCompare(a.date));
+  },
 
-    return {
-      id: data.id,
-      clinic_id: data.clinic_id,
-      patient_id: data.patient_id,
-      patient_name: patientMap.get(data.patient_id) || null,
-      amount: data.amount,
-      transaction_type: data.transaction_type,
-      description: data.description,
-      monetary_value: data.monetary_value,
-      payment_method: data.payment_method,
-      payment_status: data.payment_status,
-      related_session_id: data.related_session_id,
-      created_at: data.created_at,
+  create(data: CreateLocalTransactionData): LocalTransaction {
+    const all = loadAll();
+    const tx: LocalTransaction = {
+      id: `ltx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      ...data,
+      created_at: new Date().toISOString(),
     };
-  }
+    all.push(tx);
+    saveAll(all);
+    return tx;
+  },
 
-  /**
-   * Update payment status of a transaction
-   */
-  static async updatePaymentStatus(
-    id: string,
-    status: "paid" | "pending"
-  ): Promise<{ success: boolean; error?: string }> {
-    const { error } = await supabase
-      .from("credit_transactions")
-      .update({ payment_status: status })
-      .eq("id", id);
+  update(id: string, data: Partial<CreateLocalTransactionData>): LocalTransaction | null {
+    const all = loadAll();
+    const idx = all.findIndex((t) => t.id === id);
+    if (idx === -1) return null;
+    const updated = { ...all[idx], ...data };
+    all[idx] = updated;
+    saveAll(all);
+    return updated;
+  },
 
-    if (error) {
-      console.error("Error updating payment status:", error);
-      return { success: false, error: "Erro ao atualizar status de pagamento" };
+  delete(id: string): void {
+    const all = loadAll().filter((t) => t.id !== id);
+    saveAll(all);
+  },
+
+  // Estatísticas para um período
+  getStats(startDate: Date, endDate: Date, packRevenue: number = 0) {
+    const txs = this.getForPeriod(startDate, endDate);
+    const entradas = txs.filter((t) => t.kind === "entrada").reduce((s, t) => s + t.amount, 0);
+    const saidas = txs.filter((t) => t.kind === "saida").reduce((s, t) => s + t.amount, 0);
+    const totalEntradas = entradas + packRevenue;
+    const saldo = totalEntradas - saidas;
+    return { entradas, saidas, totalEntradas, saldo, count: txs.length };
+  },
+
+  // Dados para gráfico dos últimos N meses
+  getMonthlyChartData(months: number = 12, packRevenueByMonth: Record<string, number> = {}) {
+    const result = [];
+    const now = new Date();
+
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const start = new Date(d.getFullYear(), d.getMonth(), 1);
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("pt-PT", { month: "short", year: "2-digit" });
+
+      const txs = this.getForPeriod(start, end);
+      const entradas = txs.filter((t) => t.kind === "entrada").reduce((s, t) => s + t.amount, 0);
+      const saidas = txs.filter((t) => t.kind === "saida").reduce((s, t) => s + t.amount, 0);
+      const packs = packRevenueByMonth[key] || 0;
+
+      result.push({
+        key,
+        label,
+        entradas: entradas + packs,
+        saidas,
+        saldo: entradas + packs - saidas,
+      });
     }
 
-    return { success: true };
-  }
-
-  /**
-   * Get transaction history for a specific patient
-   */
-  static async getTransactionsByPatient(
-    patientId: string
-  ): Promise<FinancialTransaction[]> {
-    const { data, error } = await supabase
-      .from("credit_transactions")
-      .select("*")
-      .eq("patient_id", patientId)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching patient transactions:", error);
-      return [];
-    }
-
-    return (
-      data?.map((row) => ({
-        id: row.id,
-        clinic_id: row.clinic_id,
-        patient_id: row.patient_id,
-        amount: row.amount,
-        transaction_type: row.transaction_type,
-        description: row.description,
-        monetary_value: row.monetary_value,
-        payment_method: row.payment_method,
-        payment_status: row.payment_status,
-        related_session_id: row.related_session_id,
-        created_at: row.created_at,
-      })) || []
-    );
-  }
-
-  /**
-   * Get revenue breakdown by payment method for a date range
-   */
-  static async getRevenueByPaymentMethod(
-    startDate: Date,
-    endDate: Date
-  ): Promise<RevenueByMethod[]> {
-    const { data, error } = await supabase
-      .from("credit_transactions")
-      .select("payment_method, monetary_value")
-      .eq("transaction_type", "purchase")
-      .gte("created_at", startDate.toISOString())
-      .lte("created_at", endDate.toISOString());
-
-    if (error) {
-      console.error("Error fetching revenue by method:", error);
-      return [];
-    }
-
-    const grouped = new Map<string, { total: number; count: number }>();
-
-    data?.forEach((row) => {
-      const method = row.payment_method || "não definido";
-      const current = grouped.get(method) || { total: 0, count: 0 };
-      current.total += row.monetary_value || 0;
-      current.count += 1;
-      grouped.set(method, current);
-    });
-
-    return Array.from(grouped.entries()).map(([method, stats]) => ({
-      payment_method: method,
-      total: stats.total,
-      count: stats.count,
-    }));
-  }
-
-  /**
-   * Helper: batch fetch patient names
-   */
-  private static async fetchPatientNames(
-    patientIds: string[]
-  ): Promise<Map<string, string>> {
-    if (patientIds.length === 0) return new Map();
-
-    const { data } = await supabase
-      .from("pacientes")
-      .select("id, full_name")
-      .in("id", patientIds);
-
-    return new Map(data?.map((p) => [p.id, p.full_name]) || []);
-  }
-}
+    return result;
+  },
+};
