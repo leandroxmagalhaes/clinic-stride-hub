@@ -135,6 +135,11 @@ export function SessionManagementModal({
   const [finalizeMethod, setFinalizeMethod] = useState("numerario");
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Modal Receber Pagamento Pendente ──────────────────────────────────────
+  const [showReceiveDialog, setShowReceiveDialog] = useState(false);
+  const [receiveMethod, setReceiveMethod] = useState("numerario");
+  // ─────────────────────────────────────────────────────────────────────────
+
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [newDate, setNewDate] = useState<Date | undefined>(undefined);
   const [newHour, setNewHour] = useState<number | undefined>(undefined);
@@ -187,6 +192,8 @@ export function SessionManagementModal({
       setShowFinalizeDialog(false);
       setFinalizePayment("pago");
       setFinalizeMethod("numerario");
+      setShowReceiveDialog(false);
+      setReceiveMethod("numerario");
       setEditDate(start);
       setEditStartHour(String(start.getHours()));
       setEditStartMinute(String(start.getMinutes()));
@@ -429,6 +436,25 @@ export function SessionManagementModal({
     }
   };
 
+  // ── Confirma recebimento de pagamento pendente ────────────────────────────
+  const handleReceivePayment = async () => {
+    setIsLoading(true);
+    setShowReceiveDialog(false);
+    try {
+      await onUpdateSession(session.id, {
+        payment_status: "pago",
+        payment_method: receiveMethod,
+      } as any);
+      toast.success(`Pagamento de ${sessionPrice > 0 ? sessionPrice.toFixed(2) + "€" : ""} recebido!`);
+      onClose();
+    } catch {
+      toast.error("Erro ao registar pagamento");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const isTerminalStatus = currentStatus === "realizado" || currentStatus === "cancelado" || currentStatus === "falta";
   const currentPaymentStatus = (session as any).payment_status;
   const isPago = currentPaymentStatus === "pago";
@@ -529,15 +555,27 @@ export function SessionManagementModal({
                 </div>
               )}
 
-              {/* Pendente a receber */}
+              {/* Pendente a receber — com botão inline */}
               {isPendente && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-orange-50 border border-orange-200 text-orange-800 text-sm">
-                  <Hourglass className="h-4 w-4 shrink-0" />
-                  <span>
-                    Pagamento pendente ·{" "}
-                    <strong>{sessionPrice > 0 ? `${sessionPrice.toFixed(2)}€` : "valor a confirmar"}</strong> ·
-                    registado em Contas a Receber
-                  </span>
+                <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-orange-50 border border-orange-200 text-orange-800 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Hourglass className="h-4 w-4 shrink-0" />
+                    <span>
+                      Pagamento pendente ·{" "}
+                      <strong>{sessionPrice > 0 ? `${sessionPrice.toFixed(2)}€` : "valor a confirmar"}</strong>
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="shrink-0 bg-green-600 hover:bg-green-700 gap-1 text-xs h-8"
+                    onClick={() => {
+                      setReceiveMethod("numerario");
+                      setShowReceiveDialog(true);
+                    }}
+                  >
+                    <CircleDollarSign className="h-3.5 w-3.5" />
+                    Receber
+                  </Button>
                 </div>
               )}
             </div>
@@ -1177,6 +1215,75 @@ export function SessionManagementModal({
           }}
         />
       )}
+
+      {/* ══ DIALOG RECEBER PAGAMENTO PENDENTE ════════════════════════════════ */}
+      <Dialog open={showReceiveDialog} onOpenChange={setShowReceiveDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CircleDollarSign className="h-5 w-5 text-green-600" />
+              Receber Pagamento
+            </DialogTitle>
+            <DialogDescription>
+              {patientName} · {serviceName}
+              {sessionPrice > 0 && <span className="font-semibold text-foreground"> · {sessionPrice.toFixed(2)}€</span>}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Resumo */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
+              <CircleDollarSign className="h-8 w-8 text-green-600 shrink-0" />
+              <div>
+                <p className="font-semibold text-green-800">
+                  {sessionPrice > 0 ? sessionPrice.toFixed(2) + "€" : "Valor a confirmar"}
+                </p>
+                <p className="text-xs text-green-600">
+                  Sessão realizada em {format(new Date(session.start_time), "dd/MM/yyyy", { locale: ptBR })}
+                </p>
+              </div>
+            </div>
+
+            {/* Método */}
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Método de pagamento</Label>
+              <Select value={receiveMethod} onValueChange={setReceiveMethod}>
+                <SelectTrigger className="min-h-[44px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    { value: "numerario", label: "💵 Numerário" },
+                    { value: "mbway", label: "📱 MB Way" },
+                    { value: "multibanco", label: "🏧 Multibanco" },
+                    { value: "transferencia", label: "🔁 Transferência" },
+                    { value: "cartao", label: "💳 Cartão" },
+                  ].map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" className="flex-1" onClick={() => setShowReceiveDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+              onClick={handleReceivePayment}
+              disabled={isLoading}
+            >
+              <CircleDollarSign className="h-4 w-4" />
+              {isLoading ? "A registar..." : "Confirmar Recebimento"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* ═══════════════════════════════════════════════════════════════════ */}
     </>
   );
 }
