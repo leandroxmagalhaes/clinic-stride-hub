@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Clock, CalendarIcon, Check, ChevronsUpDown, UserPlus, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Clock, CalendarIcon, Check, ChevronsUpDown, UserPlus, Loader2, EuroIcon, Banknote } from "lucide-react";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { ScheduleWarningAlert } from "@/components/agenda/ScheduleWarningAlert";
@@ -41,6 +43,7 @@ interface Service {
   name: string;
   color: string;
   duration_minutes: number;
+  price?: number;
 }
 
 export interface PackageSubmitData {
@@ -69,6 +72,8 @@ interface NewSessionModalProps {
     minute?: number;
     endHour?: number;
     endMinute?: number;
+    price?: number;
+    avulso?: boolean;
     packageData?: PackageSubmitData;
   }) => void;
   selectedPaciente: string;
@@ -110,9 +115,13 @@ export function NewSessionModal({
   const [manualMinute, setManualMinute] = useState<string>("0");
   const [patientSearchOpen, setPatientSearchOpen] = useState(false);
 
-  // ── Hora de fim editável ─────────────────────────────────────────────────
+  // ── Hora de fim editável ──────────────────────────────────────────────────
   const [manualEndHour, setManualEndHour] = useState<string>("");
   const [manualEndMinute, setManualEndMinute] = useState<string>("0");
+
+  // ── Preço personalizado + modo avulso ─────────────────────────────────────
+  const [customPrice, setCustomPrice] = useState<string>("");
+  const [isAvulso, setIsAvulso] = useState(false);
   // ─────────────────────────────────────────────────────────────────────────
 
   const [modality, setModality] = useState<SchedulingModality>("avulso");
@@ -128,13 +137,20 @@ export function NewSessionModal({
   const [quickPatientEmail, setQuickPatientEmail] = useState("");
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
+  // Preenche preço automaticamente quando muda serviço
+  useEffect(() => {
+    if (!selectedServico) return;
+    const svc = services.find((s) => s.id === selectedServico);
+    if (svc?.price && !customPrice) {
+      setCustomPrice(String(svc.price));
+    }
+  }, [selectedServico]);
+
   useEffect(() => {
     if (isOpen && selectedSlot) {
       setManualDate(selectedSlot.date);
       setManualHour(String(selectedSlot.hour));
       setManualMinute(String(selectedSlot.minute ?? 0));
-
-      // ── Hora fim automática = hora início + duração do serviço seleccionado ──
       const svc = services.find((s) => s.id === selectedServico);
       const dur = svc?.duration_minutes || 60;
       const endH = selectedSlot.hour + Math.floor(((selectedSlot.minute ?? 0) + dur) / 60);
@@ -159,10 +175,11 @@ export function NewSessionModal({
       setQuickPatientName("");
       setQuickPatientPhone("");
       setQuickPatientEmail("");
+      setCustomPrice("");
+      setIsAvulso(false);
     }
   }, [isOpen, selectedSlot]);
 
-  // ── Actualiza hora fim quando muda serviço ────────────────────────────────
   useEffect(() => {
     if (!manualHour) return;
     const svc = services.find((s) => s.id === selectedServico);
@@ -172,8 +189,9 @@ export function NewSessionModal({
     const totalMin = startH * 60 + startM + svc.duration_minutes;
     setManualEndHour(String(Math.floor(totalMin / 60)));
     setManualEndMinute(String(totalMin % 60));
+    // Actualiza preço ao mudar serviço
+    if (svc.price) setCustomPrice(String(svc.price));
   }, [selectedServico]);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const isManualMode = !selectedSlot;
   const finalDate = selectedSlot?.date ?? manualDate;
@@ -181,7 +199,6 @@ export function NewSessionModal({
   const finalMinute = selectedSlot?.minute ?? parseInt(manualMinute, 10);
   const finalEndHour = manualEndHour ? parseInt(manualEndHour, 10) : undefined;
   const finalEndMinute = manualEndMinute ? parseInt(manualEndMinute, 10) : 0;
-
   const isPackageMode = modality !== "avulso";
 
   const generatedDates = useMemo(() => {
@@ -266,6 +283,8 @@ export function NewSessionModal({
       minute: finalMinute,
       endHour: finalEndHour,
       endMinute: finalEndMinute,
+      price: customPrice ? parseFloat(customPrice) : undefined,
+      avulso: isAvulso,
       packageData: isPackageMode
         ? {
             modality,
@@ -308,7 +327,10 @@ export function NewSessionModal({
     return getCreditBalance(selectedPaciente);
   }, [selectedPaciente, getCreditBalance]);
 
-  const hasInsufficientCredits = patientBalance !== null && patientBalance <= 0;
+  const hasInsufficientCredits = !isAvulso && patientBalance !== null && patientBalance <= 0;
+
+  // Preço exibido na pré-visualização
+  const pricePreview = customPrice ? parseFloat(customPrice) : null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -336,7 +358,7 @@ export function NewSessionModal({
             setCustomSessionCount={setCustomSessionCount}
           />
 
-          {/* ── Data e horário ─────────────────────────────────────────────── */}
+          {/* ── Data e horário ────────────────────────────────────────────── */}
           {!isManualMode && finalDate && finalHour !== undefined ? (
             <div className="space-y-3">
               <div className="p-3 rounded-lg bg-muted/50 text-sm">
@@ -346,7 +368,6 @@ export function NewSessionModal({
                 </p>
                 {isPackageMode && <p className="text-xs text-muted-foreground mt-1">Data de início do pacote</p>}
               </div>
-              {/* Hora de fim — sempre editável */}
               {!isPackageMode && (
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Hora de fim</Label>
@@ -407,8 +428,6 @@ export function NewSessionModal({
                   </PopoverContent>
                 </Popover>
               </div>
-
-              {/* ── Início ──────────────────────────────────────────────── */}
               <div className="space-y-1">
                 <Label className="text-xs">Hora de início *</Label>
                 <div className="grid grid-cols-2 gap-3">
@@ -438,8 +457,6 @@ export function NewSessionModal({
                   </Select>
                 </div>
               </div>
-
-              {/* ── Fim ─────────────────────────────────────────────────── */}
               {!isPackageMode && (
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Hora de fim</Label>
@@ -480,7 +497,6 @@ export function NewSessionModal({
               )}
             </div>
           )}
-          {/* ─────────────────────────────────────────────────────────────── */}
 
           {finalDate && finalDate < new Date(new Date().setHours(0, 0, 0, 0)) && (
             <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning-foreground">
@@ -660,12 +676,60 @@ export function NewSessionModal({
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
                       {s.name} ({s.duration_minutes}min)
+                      {s.price ? <span className="text-xs text-muted-foreground ml-1">· {s.price}€</span> : null}
                     </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
+          {/* ── Preço + Modo Avulso ──────────────────────────────────────────── */}
+          <div className="space-y-3 p-3 rounded-xl border bg-muted/30">
+            {/* Toggle avulso */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Banknote className="h-4 w-4 text-primary" />
+                  Sessão Avulsa
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Pagamento directo — não consome créditos</p>
+              </div>
+              <Switch checked={isAvulso} onCheckedChange={setIsAvulso} />
+            </div>
+
+            {/* Campo de preço — sempre visível */}
+            <div className="space-y-1">
+              <Label className="text-xs">
+                Valor da Sessão (€)
+                {isAvulso && (
+                  <Badge variant="secondary" className="ml-2 text-[10px]">
+                    Avulso
+                  </Badge>
+                )}
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">€</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="pl-7 min-h-[44px]"
+                  placeholder="0,00"
+                  value={customPrice}
+                  onChange={(e) => setCustomPrice(e.target.value)}
+                />
+              </div>
+              {pricePreview !== null && pricePreview > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {isAvulso
+                    ? `💶 Sessão avulsa de ${pricePreview.toFixed(2)}€ — finaliza sem créditos`
+                    : `💶 Valor: ${pricePreview.toFixed(2)}€ — requer crédito para finalizar`}
+                </p>
+              )}
+            </div>
+          </div>
+          {/* ─────────────────────────────────────────────────────────────────── */}
 
           <div className="space-y-2">
             <Label>Observações</Label>
@@ -688,9 +752,11 @@ export function NewSessionModal({
           <Button onClick={handleSubmit} className="min-h-[44px] w-full sm:w-auto">
             {isPackageMode
               ? `Agendar ${generatedDates.length} sessões`
-              : hasInsufficientCredits
-                ? "Agendar (Pendente)"
-                : "Agendar Sessão"}
+              : isAvulso
+                ? `Agendar Avulso${pricePreview ? ` · ${pricePreview.toFixed(2)}€` : ""}`
+                : hasInsufficientCredits
+                  ? "Agendar (Pendente)"
+                  : "Agendar Sessão"}
           </Button>
         </DialogFooter>
       </DialogContent>
