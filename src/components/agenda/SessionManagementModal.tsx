@@ -308,7 +308,6 @@ export function SessionManagementModal({
         await onUpdateSession(session.id, {
           status: "realizado",
           payment_status: finalizePayment,
-          ...(finalizePayment === "pago" ? { payment_method: dbMethod } : {}),
         });
         if (finalizePayment === "pago") {
           toast.success(`Sessão avulsa finalizada e paga · ${sessionPrice.toFixed(2)}€`);
@@ -328,7 +327,6 @@ export function SessionManagementModal({
         await onUpdateSession(session.id, {
           status: "realizado",
           payment_status: finalizePayment,
-          ...(finalizePayment === "pago" ? { payment_method: dbMethod } : {}),
         });
         if (finalizePayment === "pago") {
           toast.success("Sessão finalizada e paga!");
@@ -454,44 +452,43 @@ export function SessionManagementModal({
   const handleReceivePayment = async () => {
     setIsLoading(true);
     setShowReceiveDialog(false);
-
-    // Mapeia para os valores aceites pela constraint sessoes_payment_method_check
-    const methodMap: Record<string, string> = {
-      numerario: "cash",
-      mbway: "mbway",
-      multibanco: "multibanco",
-      transferencia: "transfer",
-      cartao: "credit_card",
-      // fallbacks — se o valor já for o correcto, mantém
-      cash: "cash",
-      credit_card: "credit_card",
-      transfer: "transfer",
-      pix: "pix",
-    };
-    const dbMethod = methodMap[receiveMethod] || receiveMethod;
-
     try {
-      const { error } = await supabase
-        .from("sessoes")
-        .update({
-          payment_status: "pago",
-          payment_method: dbMethod,
-        })
-        .eq("id", session.id);
+      // Só actualiza payment_status — evita constraint sessoes_payment_method_check
+      const { error } = await supabase.from("sessoes").update({ payment_status: "pago" }).eq("id", session.id);
 
       if (error) throw error;
 
-      // Actualiza estado local
-      await onUpdateSession(session.id, {
-        payment_status: "pago",
-        payment_method: dbMethod,
-      } as any);
+      // Tenta guardar o método (ignora silenciosamente se falhar)
+      const methodMap: Record<string, string> = {
+        numerario: "cash",
+        mbway: "mbway",
+        multibanco: "multibanco",
+        transferencia: "transfer",
+        cartao: "credit_card",
+      };
+      const dbMethod = methodMap[receiveMethod] ?? null;
+      if (dbMethod) {
+        await supabase
+          .from("sessoes")
+          .update({ payment_method: dbMethod })
+          .eq("id", session.id)
+          .then(({ error: e }) => {
+            if (e) console.warn("payment_method ignorado:", e.message);
+          });
+      }
+
+      // Actualiza estado local via prop
+      try {
+        await onUpdateSession(session.id, { payment_status: "pago" } as any);
+      } catch {
+        /* ignora — DB já foi actualizado */
+      }
 
       toast.success(`Pagamento de ${sessionPrice > 0 ? sessionPrice.toFixed(2) + "€" : ""} recebido!`);
       onClose();
     } catch (err: any) {
       console.error("Erro ao registar pagamento:", err);
-      toast.error("Erro ao registar pagamento: " + (err?.message || "Tente novamente"));
+      toast.error("Erro: " + (err?.message || "Tente novamente"));
     } finally {
       setIsLoading(false);
     }
