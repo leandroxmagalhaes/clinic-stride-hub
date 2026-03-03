@@ -1,7 +1,7 @@
-// SessionManagementModal - Full session lifecycle management with credit logic
+// SessionManagementModal - Full session lifecycle management with credit logic + avulso support
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { format, setHours, setMinutes, addMinutes } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ import {
   Copy,
   Pencil,
   Save,
+  Banknote,
 } from "lucide-react";
 import { Session, SessionService } from "@/services/SessionService";
 import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
@@ -165,7 +166,6 @@ export function SessionManagementModal({
       setCancelReason("");
       setNoShowRefund(false);
       setShowEvolutionPrompt(false);
-      // Preenche campos de edição
       setEditDate(start);
       setEditStartHour(String(start.getHours()));
       setEditStartMinute(String(start.getMinutes()));
@@ -190,7 +190,15 @@ export function SessionManagementModal({
   const sessionDateTime = format(new Date(session.start_time), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR });
   const sessionDateISO = format(new Date(session.start_time), "yyyy-MM-dd");
 
-  // ── Guardar edição completa ───────────────────────────────────────────────
+  // ── Lógica avulso ────────────────────────────────────────────────────────
+  // Sessão é avulsa se tem preço definido E payment_status não é "credito"
+  const sessionPrice = (session as any).price || 0;
+  const isAvulsoSession = sessionPrice > 0 && (session as any).avulso === true;
+
+  // Pode finalizar se: tem crédito usado/disponível OU é sessão avulsa
+  const canFinalize = isAvulsoSession || creditWasUsed || creditBalance > 0;
+  // ─────────────────────────────────────────────────────────────────────────
+
   const handleSaveEdit = async () => {
     if (!editDate) {
       toast.error("Selecione uma data");
@@ -200,21 +208,17 @@ export function SessionManagementModal({
       toast.error("Selecione a hora de início");
       return;
     }
-
     setIsLoading(true);
     try {
       const startTime = new Date(editDate);
       startTime.setHours(parseInt(editStartHour), parseInt(editStartMinute), 0, 0);
-
       const endTime = new Date(editDate);
       if (editEndHour) {
         endTime.setHours(parseInt(editEndHour), parseInt(editEndMinute), 0, 0);
       } else {
-        // fallback: duração do serviço ou +60min
         const svc = services.find((s) => s.id === editServico);
         endTime.setTime(startTime.getTime() + (svc?.duration_minutes || 60) * 60000);
       }
-
       const updates: Partial<Session> = {
         start_time: startTime,
         end_time: endTime,
@@ -224,18 +228,16 @@ export function SessionManagementModal({
         price: parseFloat(editPrice) || 0,
         notes: editNotes,
       };
-
       await onUpdateSession(session.id, updates);
       toast.success("Sessão actualizada com sucesso!");
       setIsEditing(false);
       onClose();
-    } catch (err) {
+    } catch {
       toast.error("Erro ao guardar alterações");
     } finally {
       setIsLoading(false);
     }
   };
-  // ─────────────────────────────────────────────────────────────────────────
 
   const handleConfirm = async () => {
     setIsLoading(true);
@@ -272,8 +274,6 @@ export function SessionManagementModal({
     }
   };
 
-  const canFinalize = creditWasUsed || creditBalance > 0;
-
   const handleComplete = async () => {
     if (!canFinalize) {
       toast.error("Não é possível finalizar: o utente não possui créditos.");
@@ -281,6 +281,15 @@ export function SessionManagementModal({
     }
     setIsLoading(true);
     try {
+      if (isAvulsoSession) {
+        // Sessão avulsa — finaliza directamente, sem créditos
+        await onUpdateSession(session.id, { status: "realizado", payment_status: "pago" });
+        toast.success(`Sessão avulsa finalizada! · ${sessionPrice.toFixed(2)}€`);
+        setShowEvolutionPrompt(true);
+        return;
+      }
+
+      // Lógica normal de créditos
       if (!creditWasUsed) {
         const result = await onUseCredit(session.paciente_id, session.id);
         if (!result.success) {
@@ -403,32 +412,46 @@ export function SessionManagementModal({
             <div className="p-4 rounded-lg bg-muted/50 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-lg font-semibold">{patientName}</span>
-                <Badge className={cn("text-white", STATUS_CONFIG[currentStatus]?.color || "bg-muted")}>
-                  {STATUS_CONFIG[currentStatus]?.icon}
-                  <span className="ml-1">{STATUS_CONFIG[currentStatus]?.label}</span>
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {isAvulsoSession && (
+                    <Badge className="bg-amber-500 text-white text-xs gap-1">
+                      <Banknote className="h-3 w-3" />
+                      Avulso · {sessionPrice.toFixed(2)}€
+                    </Badge>
+                  )}
+                  <Badge className={cn("text-white", STATUS_CONFIG[currentStatus]?.color || "bg-muted")}>
+                    {STATUS_CONFIG[currentStatus]?.icon}
+                    <span className="ml-1">{STATUS_CONFIG[currentStatus]?.label}</span>
+                  </Badge>
+                </div>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CalendarIcon className="h-4 w-4" />
                 <span className="capitalize">{sessionDateTime}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">Saldo de créditos:</span>
-                <Badge variant={creditBalance > 0 ? "default" : "destructive"}>
-                  {creditBalance} crédito{creditBalance !== 1 ? "s" : ""}
-                </Badge>
-                {creditWasUsed && (
-                  <Badge variant="outline" className="text-xs">
-                    ✓ Crédito já descontado
+
+              {/* Créditos — só mostra se NÃO for avulso */}
+              {!isAvulsoSession && (
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">Saldo de créditos:</span>
+                  <Badge variant={creditBalance > 0 ? "default" : "destructive"}>
+                    {creditBalance} crédito{creditBalance !== 1 ? "s" : ""}
                   </Badge>
-                )}
-              </div>
-              {!canFinalize && !(currentStatus === "cancelado" || currentStatus === "falta") && (
+                  {creditWasUsed && (
+                    <Badge variant="outline" className="text-xs">
+                      ✓ Crédito já descontado
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              {/* Aviso de sem créditos — só se não for avulso */}
+              {!isAvulsoSession && !canFinalize && !(currentStatus === "cancelado" || currentStatus === "falta") && (
                 <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Este utente não possui créditos. Adicione créditos antes de finalizar a sessão.</span>
+                    <span>Este utente não possui créditos. Adicione créditos antes de finalizar.</span>
                   </div>
                   {onAddCredits && (
                     <Button
@@ -443,11 +466,21 @@ export function SessionManagementModal({
                   )}
                 </div>
               )}
+
+              {/* Info avulso */}
+              {isAvulsoSession &&
+                !(currentStatus === "cancelado" || currentStatus === "falta" || currentStatus === "realizado") && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                    <Banknote className="h-4 w-4 shrink-0" />
+                    <span>
+                      Sessão avulsa — pagamento de <strong>{sessionPrice.toFixed(2)}€</strong> · não consome créditos
+                    </span>
+                  </div>
+                )}
             </div>
 
             <Separator />
 
-            {/* Pre-Session Briefing */}
             {(isUpcoming || briefing) && (
               <PreSessionBriefingCard briefing={briefing!} isLoading={briefingLoading} onRefresh={refreshBriefing} />
             )}
@@ -459,8 +492,6 @@ export function SessionManagementModal({
                   <Pencil className="h-4 w-4" />
                   Editar Sessão — Flexibilidade Total
                 </div>
-
-                {/* Data */}
                 <div className="space-y-1">
                   <Label className="text-xs">Data</Label>
                   <Popover>
@@ -481,8 +512,6 @@ export function SessionManagementModal({
                     </PopoverContent>
                   </Popover>
                 </div>
-
-                {/* Hora início + fim */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Hora início</Label>
@@ -543,8 +572,6 @@ export function SessionManagementModal({
                     </div>
                   </div>
                 </div>
-
-                {/* Profissional */}
                 <div className="space-y-1">
                   <Label className="text-xs">Profissional</Label>
                   <Select value={editProfissional} onValueChange={setEditProfissional}>
@@ -560,8 +587,6 @@ export function SessionManagementModal({
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Serviço / Especialidade */}
                 <div className="space-y-1">
                   <Label className="text-xs">Serviço / Especialidade</Label>
                   <Select value={editServico} onValueChange={setEditServico}>
@@ -572,7 +597,10 @@ export function SessionManagementModal({
                       {services.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color || "#10B981" }} />
+                            <div
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: (s as any).color || "#10B981" }}
+                            />
                             {s.name}
                           </div>
                         </SelectItem>
@@ -580,8 +608,6 @@ export function SessionManagementModal({
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Status + Valor */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Status</Label>
@@ -611,8 +637,6 @@ export function SessionManagementModal({
                     />
                   </div>
                 </div>
-
-                {/* Notas */}
                 <div className="space-y-1">
                   <Label className="text-xs">Notas / Observações</Label>
                   <Textarea
@@ -623,8 +647,6 @@ export function SessionManagementModal({
                     className="resize-none"
                   />
                 </div>
-
-                {/* Botões */}
                 <div className="flex gap-2 pt-1">
                   <Button
                     variant="outline"
@@ -643,7 +665,6 @@ export function SessionManagementModal({
               </div>
             ) : (
               <>
-                {/* Terminal status warning */}
                 {isTerminalStatus && !isRescheduling && !isDuplicating && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20 text-warning text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -651,7 +672,6 @@ export function SessionManagementModal({
                   </div>
                 )}
 
-                {/* Botão Edição Completa — sempre visível */}
                 {!isRescheduling && !isDuplicating && (
                   <Button
                     variant="outline"
@@ -663,7 +683,6 @@ export function SessionManagementModal({
                   </Button>
                 )}
 
-                {/* Botão Evolução */}
                 {!isRescheduling && !isDuplicating && (
                   <Button
                     variant="outline"
@@ -678,7 +697,6 @@ export function SessionManagementModal({
                   </Button>
                 )}
 
-                {/* Remarcar / Duplicar */}
                 {!isRescheduling && !isDuplicating ? (
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1" onClick={() => setIsRescheduling(true)}>
@@ -746,7 +764,6 @@ export function SessionManagementModal({
                   </div>
                 ) : null}
 
-                {/* Duplicate */}
                 {isDuplicating && (
                   <div className="space-y-3 p-4 border rounded-lg">
                     <div className="flex items-center gap-2 text-sm font-medium">
@@ -816,7 +833,6 @@ export function SessionManagementModal({
                   </div>
                 )}
 
-                {/* Status Actions */}
                 {!isRescheduling && !isDuplicating && (
                   <div className="grid grid-cols-2 gap-2">
                     {currentStatus === "agendado" && (
@@ -835,10 +851,11 @@ export function SessionManagementModal({
                         variant="default"
                         onClick={handleComplete}
                         disabled={isLoading || !canFinalize}
+                        className={isAvulsoSession ? "bg-amber-500 hover:bg-amber-600" : ""}
                         title={!canFinalize ? "Utente sem créditos disponíveis" : undefined}
                       >
                         <CheckCircle2 className="h-4 w-4 mr-2" />
-                        Finalizar
+                        {isAvulsoSession ? `Finalizar · ${sessionPrice.toFixed(2)}€` : "Finalizar"}
                       </Button>
                     )}
                     <Button
@@ -981,7 +998,6 @@ export function SessionManagementModal({
         warnings={creditWasUsed ? ["O crédito já foi descontado desta sessão"] : []}
       />
 
-      {/* Add Credits Modal */}
       {onAddCredits && (
         <AddCreditsModal
           isOpen={showAddCreditsModal}
