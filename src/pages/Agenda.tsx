@@ -79,6 +79,8 @@ interface PendingSessionData {
   minute: number;
   endHour?: number;
   endMinute?: number;
+  price?: number;
+  avulso?: boolean;
   packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -338,6 +340,9 @@ export default function Agenda() {
 
     newSession.payment_status = paymentStatus;
     if (new Date(newSession.start_time) < new Date()) newSession.status = "realizado";
+    // Aplica preço personalizado e flag avulso
+    if (data.price !== undefined && data.price > 0) (newSession as any).price = data.price;
+    if (data.avulso) (newSession as any).avulso = true;
     await addSession(newSession);
 
     setIsModalOpen(false);
@@ -372,6 +377,8 @@ export default function Agenda() {
     minute?: number;
     endHour?: number;
     endMinute?: number;
+    price?: number;
+    avulso?: boolean;
     packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
   }) => {
     const finalDate = data.date || selectedSlot?.date;
@@ -393,6 +400,8 @@ export default function Agenda() {
       minute: finalMinute,
       endHour: data.endHour,
       endMinute: data.endMinute,
+      price: data.price,
+      avulso: data.avulso,
       packageData: data.packageData,
     };
 
