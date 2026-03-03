@@ -1,52 +1,36 @@
 
 
-# Adicionar Relatorio de Cadastros na pagina Pacientes
+# Substituir Financeiro.tsx com nova versao completa
 
 ## Resumo
 
-Adicionar um botao "Relatorio" na barra de acoes da pagina de Pacientes que abre um modal com uma tabela filtravel e exportavel (CSV e PDF). A tabela mostra: data/hora de cadastro, nome completo, origem (sistema vs link), telefone, email e estado -- com ordenacao clicavel e filtro por origem.
+Substituir o ficheiro `src/pages/Financeiro.tsx` com a versao melhorada que adiciona:
 
-## Alteracoes no ficheiro `src/pages/Pacientes.tsx`
+1. **Nova tab "Contas a Receber"** -- lista sessoes realizadas com pagamento pendente, com botao "Receber" para registar pagamento
+2. **KPI de Pendencias** -- card com total de contas a receber em destaque (borda laranja quando > 0)
+3. **Receitas de sessoes** -- sessoes pagas sao incluidas nas entradas e na tab de transaccoes
+4. **Modal "Registar Recebimento"** -- permite escolher metodo de pagamento e marcar sessao como paga
+5. **Import do supabase client** -- para queries directas a tabela `sessoes`
 
-### 1. Imports novos (topo do ficheiro)
+## Alteracoes
 
-Adicionar imports para:
-- `useRef` ao import existente do React
-- `Table, TableBody, TableCell, TableHead, TableHeader, TableRow` de `@/components/ui/table`
-- `FileBarChart2, ArrowUpDown, ArrowUp, ArrowDown, Download` de `lucide-react`
-- `format` de `date-fns`
-- `ptBR` de `date-fns/locale`
+**Ficheiro**: `src/pages/Financeiro.tsx` (substituicao completa)
 
-### 2. Estado e logica do relatorio (apos `selectedPatient`)
+Principais diferencas face ao actual:
+- Novos imports: `supabase` client, icones `Hourglass`, `CircleDollarSign`, `CheckCircle2`, `AlertCircle`
+- Remove import `Textarea` e `Area` (recharts) que nao sao usados na nova versao
+- Nova funcao `loadSessionRevenues()` que busca sessoes com `status = "realizado"` e `price > 0`
+- Nova funcao `markSessionAsPaid()` que actualiza `payment_status` e `payment_method` na tabela `sessoes`
+- Estado adicional: `sessionRevenues`, `showReceiveModal`, `receiveSession`, `receiveMethod`
+- `useMemo` para `sessionPaidRevenue`, `pendingRevenue`, `pendingSessions`
+- Stats combinados incluem receita de sessoes pagas
+- `allTransactions` inclui sessoes pagas como entradas
+- Nova tab "Contas a Receber" com tabela de pendencias e badge com contador
+- Novo modal de recebimento de pagamento
 
-Adicionar:
-- Estado: `isReportModalOpen`, `reportSearch`, `reportOrigin`, `reportSortField`, `reportSortDir`, `reportTableRef`
-- Funcao `detectOrigin(patient)` que verifica se o paciente veio via link publico ou sistema
-- `reportData` (useMemo) com filtragem por origem, pesquisa e ordenacao
-- `toggleSort(field)` para alternar ordenacao
-- `handleExportCSV()` -- gera CSV com BOM UTF-8 e faz download
-- `handleExportPDF()` -- abre janela de impressao do browser com HTML formatado
+## Validacao tecnica
 
-### 3. Botao "Relatorio" na barra de acoes
-
-Inserir um novo `Button` com icone `FileBarChart2` antes do botao "Link Generico", que abre o modal do relatorio.
-
-### 4. Modal do Relatorio (novo Dialog)
-
-Modal grande (`max-w-[900px]`) com:
-- Barra de pesquisa e filtro por origem (Select)
-- Botoes de exportacao CSV e PDF
-- Contador de resultados
-- Tabela com colunas ordenadaveis (Data, Hora, Nome, Origem, Telefone, Email, Estado)
-- Badges coloridos para origem e estado
-- Scroll horizontal em ecras pequenos
-- Botao "Fechar" no rodape
-
-## Detalhes tecnicos
-
-- Todas as alteracoes sao no ficheiro `src/pages/Pacientes.tsx` (4 blocos de insercao, sem remover codigo existente)
-- A detecao de origem usa campos `source`, `onboarding_token`, e `onboarding_completed_at` do paciente
-- O export CSV inclui BOM (`\uFEFF`) para compatibilidade com Excel
-- O export PDF usa `window.open` + `window.print` (sem dependencia de jsPDF para esta funcionalidade)
-- Componentes UI ja existentes no projeto: `Table`, `Dialog`, `Select`, `Badge`, `Button`, `Input`
+- A tabela `sessoes` tem os campos necessarios: `price`, `payment_status`, `payment_method`, `status`, `paciente_id`, `servico_id`
+- A query usa relacoes existentes: `paciente:paciente_id(full_name)` e `servico:servico_id(name)`
+- Remove `PeriodType = "custom"` (nao era usado) e simplifica para `"mes" | "trimestre" | "ano"`
 
