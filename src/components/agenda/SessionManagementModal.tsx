@@ -52,6 +52,7 @@ import { AddCreditsModal, CreditPurchaseData } from "@/components/patients/AddCr
 import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { useData } from "@/contexts/DataContext";
+import { supabase } from "@/integrations/supabase/client";
 
 export type SessionStatus = "agendado" | "confirmado" | "realizado" | "cancelado" | "falta";
 export type PaymentStatus = "pago" | "pendente";
@@ -441,14 +442,28 @@ export function SessionManagementModal({
     setIsLoading(true);
     setShowReceiveDialog(false);
     try {
+      // Update directo — contorna possíveis type issues do onUpdateSession
+      const { error } = await supabase
+        .from("sessoes")
+        .update({
+          payment_status: "pago",
+          payment_method: receiveMethod,
+        })
+        .eq("id", session.id);
+
+      if (error) throw error;
+
+      // Actualiza estado local via onUpdateSession (sem ir à DB novamente)
       await onUpdateSession(session.id, {
         payment_status: "pago",
         payment_method: receiveMethod,
       } as any);
+
       toast.success(`Pagamento de ${sessionPrice > 0 ? sessionPrice.toFixed(2) + "€" : ""} recebido!`);
       onClose();
-    } catch {
-      toast.error("Erro ao registar pagamento");
+    } catch (err: any) {
+      console.error("Erro ao registar pagamento:", err);
+      toast.error("Erro ao registar pagamento: " + (err?.message || "Tente novamente"));
     } finally {
       setIsLoading(false);
     }
