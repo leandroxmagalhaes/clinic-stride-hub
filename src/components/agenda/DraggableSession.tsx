@@ -58,6 +58,12 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const hasCreditAvailable = hasCredits === true;
   const isFalta = session.status === "falta" || session.status === "Falta" || session.status === "no-show";
 
+  // ── Indicadores de pagamento (só para sessões realizadas) ─────────────────
+  const isRealizado = session.status === "realizado" || session.status === "Realizado";
+  const isPago = isRealizado && session.payment_status === "pago";
+  const isPendentePagamento = isRealizado && session.payment_status === "pendente";
+  // ─────────────────────────────────────────────────────────────────────────
+
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
 
   const servicoFormatado = formatServico(session.servico?.name ?? "");
@@ -67,7 +73,14 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const internalStyle: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     backgroundColor: isFalta ? "#f974161a" : `${session.servico?.color}15`,
-    borderLeft: isFalta ? "3px solid #f97316" : `3px solid ${session.servico?.color}`,
+    // Borda esquerda: pagamento tem prioridade sobre cor do serviço (só para realizados)
+    borderLeft: isFalta
+      ? "3px solid #f97316"
+      : isPago
+        ? "4px solid #16a34a" // verde — pago
+        : isPendentePagamento
+          ? "4px solid #ea580c" // laranja — a receber
+          : `3px solid ${session.servico?.color}`, // cor do serviço — normal
     ...positionStyle,
     minHeight: isCompact ? undefined : "60px",
     height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "60px"})` : undefined,
@@ -192,6 +205,14 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             >
               {servicoLinha}
             </p>
+          )}
+
+          {/* Ícone de pagamento — canto inferior direito (só realizados) */}
+          {isPago && (
+            <div className="absolute bottom-1 right-1.5 text-[10px] font-bold text-green-600 leading-none">€</div>
+          )}
+          {isPendentePagamento && (
+            <div className="absolute bottom-1 right-1.5 text-[9px] leading-none text-orange-500">⏳</div>
           )}
         </div>
       )}
