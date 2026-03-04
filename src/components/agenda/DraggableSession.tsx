@@ -1,6 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, AlertTriangle } from "lucide-react";
+import { GripVertical, AlertTriangle } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import React from "react";
@@ -14,6 +14,7 @@ interface Session {
   paciente?: {
     full_name: string;
     id?: string;
+    birth_date?: string | null;
   };
   profissional?: { full_name: string };
   servico?: { name: string; color: string };
@@ -57,11 +58,41 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const isPendingPayment = session.payment_status === "pending" || hasCredits === false;
   const hasCreditAvailable = hasCredits === true;
   const isFalta = session.status === "falta" || session.status === "Falta" || session.status === "no-show";
-
-  // ── Indicadores de pagamento (só para sessões realizadas) ─────────────────
   const isRealizado = session.status === "realizado" || session.status === "Realizado";
   const isPago = isRealizado && session.payment_status === "pago";
   const isPendentePagamento = isRealizado && session.payment_status === "pendente";
+
+  // ── Idade do paciente ─────────────────────────────────────────────────────
+  const isChild = (() => {
+    const bd = session.paciente?.birth_date;
+    if (!bd) return false;
+    const birth = new Date(bd);
+    const today = new Date();
+    const age =
+      today.getFullYear() -
+      birth.getFullYear() -
+      (today < new Date(today.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
+    return age < 13;
+  })();
+
+  // ── Especialidade: Respiratório vs Motora/Outras ──────────────────────────
+  const serviceName = (session.servico?.name || "").toLowerCase();
+  const isRespiratorio = serviceName.includes("respir");
+
+  // ── Cores do card por especialidade + idade ───────────────────────────────
+  // Respiratório < 13: azul bebé · ≥ 13: azul médio
+  // Motora/Outras < 13: lilás claro · ≥ 13: lilás médio
+  const cardColors = (() => {
+    if (isRespiratorio) {
+      return isChild
+        ? { bg: "#dbeafe", border: "#93c5fd" } // azul bebé
+        : { bg: "#93c5fd", border: "#3b82f6" }; // azul médio
+    } else {
+      return isChild
+        ? { bg: "#ede9fe", border: "#c4b5fd" } // lilás claro
+        : { bg: "#c4b5fd", border: "#7c3aed" }; // lilás médio
+    }
+  })();
   // ─────────────────────────────────────────────────────────────────────────
 
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
@@ -72,15 +103,14 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
 
   const internalStyle: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
-    backgroundColor: isFalta ? "#f974161a" : `${session.servico?.color}15`,
-    // Borda esquerda: pagamento tem prioridade sobre cor do serviço (só para realizados)
-    borderLeft: isFalta
-      ? "3px solid #f97316"
-      : isPago
-        ? "4px solid #16a34a" // verde — pago
-        : isPendentePagamento
-          ? "4px solid #ea580c" // laranja — a receber
-          : `3px solid ${session.servico?.color}`, // cor do serviço — normal
+    // Fundo por especialidade + idade
+    backgroundColor: cardColors.bg,
+    borderColor: cardColors.border,
+    border: `1px solid ${cardColors.border}`,
+    // Falta: sobrepõe com traço diagonal vermelho via backgroundImage
+    backgroundImage: isFalta
+      ? `repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(220,38,38,0.20) 5px, rgba(220,38,38,0.20) 7px)`
+      : undefined,
     ...positionStyle,
     minHeight: isCompact ? undefined : "60px",
     height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "60px"})` : undefined,
@@ -97,32 +127,19 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       className={cn(
         "rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative",
         isDragging && "opacity-50 shadow-lg z-50 ring-2 ring-primary",
-        isFalta && "ring-2 ring-orange-400",
-        isPendingPayment && !isFalta && "ring-2 ring-warning/50",
-        hasCreditAvailable && !isFalta && "ring-1 ring-success/30",
+        isFalta && "ring-1 ring-red-400",
       )}
       onClick={(e) => {
         e.stopPropagation();
         onClick(session);
       }}
     >
-      {/* Ícone canto superior direito */}
-      {!isCompact && (
-        <div className="absolute -top-1 -right-1 z-10">
-          {isFalta ? (
-            <div className="bg-orange-500 text-white rounded-full p-0.5">
-              <AlertTriangle className="h-3 w-3" />
-            </div>
-          ) : hasCreditAvailable ? (
-            <div className="bg-success text-success-foreground rounded-full p-0.5">
-              <CheckCircle2 className="h-3 w-3" />
-            </div>
-          ) : hasCredits !== undefined ? (
-            <div className="bg-warning text-warning-foreground rounded-full p-0.5">
-              <AlertTriangle className="h-3 w-3" />
-            </div>
-          ) : null}
-        </div>
+      {/* Círculo farol de pagamento — canto inferior direito */}
+      {!isCompact && isPago && (
+        <div className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-green-600 border border-white/70 shadow-sm z-10" />
+      )}
+      {!isCompact && isPendentePagamento && (
+        <div className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-orange-500 border border-white/70 shadow-sm z-10" />
       )}
 
       {isCompact ? (
@@ -184,11 +201,11 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             <StatusBadge status={session.status as any} className="scale-90 flex-shrink-0" />
           </div>
 
-          {/* Linha 2: Nome — UMA linha, truncado com "..." se for longo */}
+          {/* Linha 2: Nome */}
           <p
             className={cn(
               "font-semibold text-[11px] leading-tight truncate w-full",
-              isFalta ? "text-orange-700" : "text-foreground",
+              isFalta ? "text-red-700 line-through opacity-80" : "text-foreground",
             )}
             title={session.paciente?.full_name ?? ""}
           >
@@ -200,19 +217,11 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             <p
               className={cn(
                 "text-[10px] leading-tight truncate w-full",
-                isFalta ? "text-orange-500" : "text-muted-foreground",
+                isFalta ? "text-red-600 line-through opacity-70" : "text-muted-foreground",
               )}
             >
               {servicoLinha}
             </p>
-          )}
-
-          {/* Ícone de pagamento — canto inferior direito (só realizados) */}
-          {isPago && (
-            <div className="absolute bottom-1 right-1.5 text-[10px] font-bold text-green-600 leading-none">€</div>
-          )}
-          {isPendentePagamento && (
-            <div className="absolute bottom-1 right-1.5 text-[9px] leading-none text-orange-500">⏳</div>
           )}
         </div>
       )}
