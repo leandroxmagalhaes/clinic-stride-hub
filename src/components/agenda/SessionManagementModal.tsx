@@ -1,4 +1,4 @@
-// SessionManagementModal - Lifecycle completo + escolha Pago/Pendente ao finalizar
+// SessionManagementModal - Finalizar sempre abre dialog de pagamento
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -70,12 +70,25 @@ const CANCELLATION_REASONS = ["Utente desmarcou", "Clínica desmarcou", "Doença
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 const MINUTES = [0, 15, 30, 45];
 
+// Mapeia valores do UI para os aceites pela constraint do Supabase
+const METHOD_MAP: Record<string, string> = {
+  numerario: "cash",
+  mbway: "mbway",
+  multibanco: "multibanco",
+  transferencia: "transfer",
+  cartao: "credit_card",
+  cash: "cash",
+  credit_card: "credit_card",
+  transfer: "transfer",
+  pix: "pix",
+};
+
 const PAYMENT_METHOD_OPTIONS = [
-  { value: "numerario", label: "Numerário" },
-  { value: "mbway", label: "MB Way" },
-  { value: "multibanco", label: "Multibanco" },
-  { value: "transferencia", label: "Transferência" },
-  { value: "cartao", label: "Cartão" },
+  { value: "numerario", label: "💵 Numerário" },
+  { value: "mbway", label: "📱 MB Way" },
+  { value: "multibanco", label: "🏧 Multibanco" },
+  { value: "transferencia", label: "🔁 Transferência" },
+  { value: "cartao", label: "💳 Cartão" },
 ];
 
 interface SessionManagementModalProps {
@@ -126,43 +139,40 @@ export function SessionManagementModal({
   const [showNoShowDialog, setShowNoShowDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAddCreditsModal, setShowAddCreditsModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState<string>("");
-  const [noShowRefund, setNoShowRefund] = useState(false);
   const [showEvolutionPrompt, setShowEvolutionPrompt] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [noShowRefund, setNoShowRefund] = useState(false);
 
-  // ── Dialog Finalizar (Pago / Pendente) ─────────────────────────────────────
+  // Dialog Finalizar
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [finalizePayment, setFinalizePayment] = useState<PaymentStatus>("pago");
   const [finalizeMethod, setFinalizeMethod] = useState("numerario");
-  // ─────────────────────────────────────────────────────────────────────────
 
-  // ── Modal Receber Pagamento Pendente ──────────────────────────────────────
+  // Dialog Receber pagamento pendente
   const [showReceiveDialog, setShowReceiveDialog] = useState(false);
   const [receiveMethod, setReceiveMethod] = useState("numerario");
-  // ─────────────────────────────────────────────────────────────────────────
 
+  // Remarcar / Duplicar
   const [isRescheduling, setIsRescheduling] = useState(false);
-  const [newDate, setNewDate] = useState<Date | undefined>(undefined);
-  const [newHour, setNewHour] = useState<number | undefined>(undefined);
-
+  const [newDate, setNewDate] = useState<Date | undefined>();
+  const [newHour, setNewHour] = useState<number | undefined>();
   const [isDuplicating, setIsDuplicating] = useState(false);
-  const [dupDate, setDupDate] = useState<Date | undefined>(undefined);
-  const [dupHour, setDupHour] = useState<number | undefined>(undefined);
-  const [dupMinute, setDupMinute] = useState<number>(0);
+  const [dupDate, setDupDate] = useState<Date | undefined>();
+  const [dupHour, setDupHour] = useState<number | undefined>();
+  const [dupMinute, setDupMinute] = useState(0);
 
-  // ── Edição completa ────────────────────────────────────────────────────────
+  // Edição completa
   const [isEditing, setIsEditing] = useState(false);
-  const [editDate, setEditDate] = useState<Date | undefined>(undefined);
-  const [editStartHour, setEditStartHour] = useState<string>("");
-  const [editStartMinute, setEditStartMinute] = useState<string>("0");
-  const [editEndHour, setEditEndHour] = useState<string>("");
-  const [editEndMinute, setEditEndMinute] = useState<string>("0");
-  const [editProfissional, setEditProfissional] = useState<string>("");
-  const [editServico, setEditServico] = useState<string>("");
+  const [editDate, setEditDate] = useState<Date | undefined>();
+  const [editStartHour, setEditStartHour] = useState("");
+  const [editStartMinute, setEditStartMinute] = useState("0");
+  const [editEndHour, setEditEndHour] = useState("");
+  const [editEndMinute, setEditEndMinute] = useState("0");
+  const [editProfissional, setEditProfissional] = useState("");
+  const [editServico, setEditServico] = useState("");
   const [editStatus, setEditStatus] = useState<SessionStatus>("agendado");
-  const [editPrice, setEditPrice] = useState<string>("");
-  const [editNotes, setEditNotes] = useState<string>("");
-  // ─────────────────────────────────────────────────────────────────────────
+  const [editPrice, setEditPrice] = useState("");
+  const [editNotes, setEditNotes] = useState("");
 
   const {
     briefing,
@@ -176,40 +186,40 @@ export function SessionManagementModal({
     : false;
 
   useEffect(() => {
-    if (session) {
-      const start = new Date(session.start_time);
-      const end = new Date(session.end_time);
-      setNewDate(start);
-      setNewHour(start.getHours());
-      setIsRescheduling(false);
-      setIsDuplicating(false);
-      setIsEditing(false);
-      setDupDate(undefined);
-      setDupHour(undefined);
-      setDupMinute(0);
-      setCancelReason("");
-      setNoShowRefund(false);
-      setShowEvolutionPrompt(false);
-      setShowFinalizeDialog(false);
-      setFinalizePayment("pago");
-      setFinalizeMethod("numerario");
-      setShowReceiveDialog(false);
-      setReceiveMethod("numerario");
-      setEditDate(start);
-      setEditStartHour(String(start.getHours()));
-      setEditStartMinute(String(start.getMinutes()));
-      setEditEndHour(String(end.getHours()));
-      setEditEndMinute(String(end.getMinutes()));
-      setEditProfissional(session.profissional_id || "");
-      setEditServico(session.servico_id || "");
-      setEditStatus((session.status as SessionStatus) || "agendado");
-      setEditPrice(String(session.price || ""));
-      setEditNotes(session.notes || "");
-    }
+    if (!session) return;
+    const start = new Date(session.start_time);
+    const end = new Date(session.end_time);
+    setIsRescheduling(false);
+    setIsDuplicating(false);
+    setIsEditing(false);
+    setNewDate(start);
+    setNewHour(start.getHours());
+    setDupDate(undefined);
+    setDupHour(undefined);
+    setDupMinute(0);
+    setCancelReason("");
+    setNoShowRefund(false);
+    setShowEvolutionPrompt(false);
+    setShowFinalizeDialog(false);
+    setShowReceiveDialog(false);
+    setFinalizePayment("pago");
+    setFinalizeMethod("numerario");
+    setReceiveMethod("numerario");
+    setEditDate(start);
+    setEditStartHour(String(start.getHours()));
+    setEditStartMinute(String(start.getMinutes()));
+    setEditEndHour(String(end.getHours()));
+    setEditEndMinute(String(end.getMinutes()));
+    setEditProfissional(session.profissional_id || "");
+    setEditServico(session.servico_id || "");
+    setEditStatus((session.status as SessionStatus) || "agendado");
+    setEditPrice(String((session as any).price || ""));
+    setEditNotes(session.notes || "");
   }, [session?.id]);
 
   if (!session) return null;
 
+  // Dados derivados
   const currentStatus = session.status as SessionStatus;
   const creditBalance = getCreditBalance(session.paciente_id);
   const creditWasUsed = wasCreditUsedForSession(session.id);
@@ -218,20 +228,29 @@ export function SessionManagementModal({
   const professionalName = session.profissional?.full_name || "Profissional";
   const sessionDateTime = format(new Date(session.start_time), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR });
   const sessionDateISO = format(new Date(session.start_time), "yyyy-MM-dd");
+  const sessionPrice: number = (session as any).price || (session.servico as any)?.price || 0;
+  const currentPaymentStatus = (session as any).payment_status;
+  const isPago = currentStatus === "realizado" && currentPaymentStatus === "pago";
+  const isPendente = currentStatus === "realizado" && currentPaymentStatus === "pendente";
+  const isTerminalStatus = ["realizado", "cancelado", "falta"].includes(currentStatus);
 
-  // ── Lógica avulso ─────────────────────────────────────────────────────────
-  const sessionPrice = (session as any).price || 0;
-  const isAvulsoSession = sessionPrice > 0 && (session as any).avulso === true;
-  const canFinalize = isAvulsoSession || creditWasUsed || creditBalance > 0;
-  // ─────────────────────────────────────────────────────────────────────────
+  // Gravar método silenciosamente (ignora constraint se falhar)
+  const trySetPaymentMethod = async (sessionId: string, method: string) => {
+    const dbMethod = METHOD_MAP[method] ?? null;
+    if (!dbMethod) return;
+    await supabase
+      .from("sessoes")
+      .update({ payment_method: dbMethod })
+      .eq("id", sessionId)
+      .then(({ error: e }) => {
+        if (e) console.warn("payment_method ignorado:", e.message);
+      });
+  };
 
+  // Handlers
   const handleSaveEdit = async () => {
-    if (!editDate) {
-      toast.error("Selecione uma data");
-      return;
-    }
-    if (!editStartHour) {
-      toast.error("Selecione a hora de início");
+    if (!editDate || !editStartHour) {
+      toast.error("Selecione data e hora");
       return;
     }
     setIsLoading(true);
@@ -239,9 +258,8 @@ export function SessionManagementModal({
       const startTime = new Date(editDate);
       startTime.setHours(parseInt(editStartHour), parseInt(editStartMinute), 0, 0);
       const endTime = new Date(editDate);
-      if (editEndHour) {
-        endTime.setHours(parseInt(editEndHour), parseInt(editEndMinute), 0, 0);
-      } else {
+      if (editEndHour) endTime.setHours(parseInt(editEndHour), parseInt(editEndMinute), 0, 0);
+      else {
         const svc = services.find((s) => s.id === editServico);
         endTime.setTime(startTime.getTime() + (svc?.duration_minutes || 60) * 60000);
       }
@@ -258,7 +276,7 @@ export function SessionManagementModal({
       setIsEditing(false);
       onClose();
     } catch {
-      toast.error("Erro ao guardar alterações");
+      toast.error("Erro ao guardar");
     } finally {
       setIsLoading(false);
     }
@@ -269,72 +287,58 @@ export function SessionManagementModal({
     try {
       await onUpdateSession(session.id, { status: "confirmado" });
       toast.success("Sessão confirmada!");
-      onClose();
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ── Abre o dialog de escolha de pagamento ─────────────────────────────────
+  // FINALIZAR — abre sempre o dialog
   const handleClickFinalize = () => {
-    if (!canFinalize && !isAvulsoSession) {
-      toast.error("Não é possível finalizar: o utente não possui créditos.");
-      return;
-    }
+    setFinalizePayment("pago");
+    setFinalizeMethod("numerario");
     setShowFinalizeDialog(true);
   };
 
-  // ── Confirma a finalização com a escolha do utilizador ───────────────────
   const handleConfirmFinalize = async () => {
     setIsLoading(true);
     setShowFinalizeDialog(false);
-
-    // Mapeia para valores aceites pela constraint sessoes_payment_method_check
-    const methodMap: Record<string, string> = {
-      numerario: "cash",
-      mbway: "mbway",
-      multibanco: "multibanco",
-      transferencia: "transfer",
-      cartao: "credit_card",
-      cash: "cash",
-      credit_card: "credit_card",
-      transfer: "transfer",
-      pix: "pix",
-    };
-    const dbMethod = methodMap[finalizeMethod] || finalizeMethod;
-
     try {
-      if (isAvulsoSession) {
-        await onUpdateSession(session.id, {
-          status: "realizado",
-          payment_status: finalizePayment,
-        });
-        if (finalizePayment === "pago") {
-          toast.success(`Sessão avulsa finalizada e paga · ${sessionPrice.toFixed(2)}€`);
-        } else {
-          toast.warning(`Sessão finalizada · Pagamento de ${sessionPrice.toFixed(2)}€ pendente`);
-        }
+      // Desconta crédito se disponível e serviço exige
+      const servicoConsumesCredit = session.servico?.consumes_credit ?? true;
+      if (servicoConsumesCredit && !creditWasUsed && creditBalance > 0) {
+        const result = await onUseCredit(session.paciente_id, session.id);
+        if (result.success && !result.alreadyDeducted) toast.success("Crédito descontado!");
+      }
+      // Grava status e payment_status
+      await onUpdateSession(session.id, { status: "realizado", payment_status: finalizePayment });
+      // Tenta gravar método
+      await trySetPaymentMethod(session.id, finalizeMethod);
+
+      if (finalizePayment === "pago") {
+        toast.success(sessionPrice > 0 ? `Pago · ${sessionPrice.toFixed(2)}€` : "Sessão finalizada e paga!");
       } else {
-        if (!creditWasUsed) {
-          const result = await onUseCredit(session.paciente_id, session.id);
-          if (!result.success) {
-            toast.error(result.error || "Erro ao descontar crédito");
-            return;
-          }
-          if (result.alreadyDeducted) toast.info("Crédito já havia sido descontado");
-          else toast.success("Crédito descontado!");
-        }
-        await onUpdateSession(session.id, {
-          status: "realizado",
-          payment_status: finalizePayment,
-        });
-        if (finalizePayment === "pago") {
-          toast.success("Sessão finalizada e paga!");
-        } else {
-          toast.warning("Sessão finalizada · Pagamento pendente — aparecerá em Contas a Receber");
-        }
+        toast.warning("Sessão finalizada · Pagamento pendente → Contas a Receber");
       }
       setShowEvolutionPrompt(true);
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || "Tente novamente"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReceivePayment = async () => {
+    setIsLoading(true);
+    setShowReceiveDialog(false);
+    try {
+      const { error } = await supabase.from("sessoes").update({ payment_status: "pago" }).eq("id", session.id);
+      if (error) throw error;
+      await trySetPaymentMethod(session.id, receiveMethod);
+      await onUpdateSession(session.id, { payment_status: "pago" } as any);
+      toast.success(`Pagamento recebido${sessionPrice > 0 ? " · " + sessionPrice.toFixed(2) + "€" : ""}!`);
+      onClose();
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || "Tente novamente"));
     } finally {
       setIsLoading(false);
     }
@@ -342,15 +346,14 @@ export function SessionManagementModal({
 
   const handleCancel = async () => {
     if (!cancelReason) {
-      toast.error("Selecione um motivo para o cancelamento");
+      toast.error("Selecione um motivo");
       return;
     }
     setIsLoading(true);
     try {
       if (creditWasUsed) {
         const r = await onRefundCredit(session.paciente_id, session.id);
-        if (r.success) toast.info("Crédito estornado ao utente");
-        else toast.error(r.error || "Erro ao estornar crédito");
+        if (r.success) toast.info("Crédito estornado");
       }
       await onUpdateSession(session.id, {
         status: "cancelado",
@@ -367,12 +370,7 @@ export function SessionManagementModal({
   const handleNoShow = async () => {
     setIsLoading(true);
     try {
-      if (noShowRefund && creditWasUsed) {
-        const r = await onRefundCredit(session.paciente_id, session.id);
-        if (r.success) toast.info("Crédito estornado (política da clínica)");
-      } else if (creditWasUsed) {
-        toast.info("Crédito mantido (política da clínica)");
-      }
+      if (noShowRefund && creditWasUsed) await onRefundCredit(session.paciente_id, session.id);
       await onUpdateSession(session.id, {
         status: "falta",
         notes: `${session.notes || ""}\n[FALTA] Utente não compareceu`.trim(),
@@ -402,31 +400,18 @@ export function SessionManagementModal({
         setIsRescheduling(false);
         onClose();
       } else {
-        toast.error(result.error || "Erro ao remarcar sessão");
+        toast.error(result.error || "Erro ao remarcar");
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoToEvolution = () => {
-    onClose();
-    navigate(`/prontuarios?paciente=${session.paciente_id}&sessao_data=${sessionDateISO}&auto_evolucao=1`);
-  };
-
-  const handleDeleteSession = async () => {
-    if (!onDeleteSession) return;
-    await onDeleteSession(session.id, "Sessão apagada pelo utilizador");
-    toast.success("Sessão apagada");
-    onClose();
-  };
-
   const handleDuplicate = async () => {
-    if (!dupDate || dupHour === undefined) {
-      toast.error("Selecione data e hora para a nova sessão");
+    if (!dupDate || dupHour === undefined || !onDuplicateSession) {
+      toast.error("Selecione data e hora");
       return;
     }
-    if (!onDuplicateSession) return;
     setIsLoading(true);
     try {
       await onDuplicateSession({
@@ -442,66 +427,27 @@ export function SessionManagementModal({
       setIsDuplicating(false);
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao duplicar sessão");
+      toast.error(e instanceof Error ? e.message : "Erro ao duplicar");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ── Confirma recebimento de pagamento pendente ────────────────────────────
-  const handleReceivePayment = async () => {
-    setIsLoading(true);
-    setShowReceiveDialog(false);
-    try {
-      // Só actualiza payment_status — evita constraint sessoes_payment_method_check
-      const { error } = await supabase.from("sessoes").update({ payment_status: "pago" }).eq("id", session.id);
-
-      if (error) throw error;
-
-      // Tenta guardar o método (ignora silenciosamente se falhar)
-      const methodMap: Record<string, string> = {
-        numerario: "cash",
-        mbway: "mbway",
-        multibanco: "multibanco",
-        transferencia: "transfer",
-        cartao: "credit_card",
-      };
-      const dbMethod = methodMap[receiveMethod] ?? null;
-      if (dbMethod) {
-        await supabase
-          .from("sessoes")
-          .update({ payment_method: dbMethod })
-          .eq("id", session.id)
-          .then(({ error: e }) => {
-            if (e) console.warn("payment_method ignorado:", e.message);
-          });
-      }
-
-      // Actualiza estado local via prop
-      try {
-        await onUpdateSession(session.id, { payment_status: "pago" } as any);
-      } catch {
-        /* ignora — DB já foi actualizado */
-      }
-
-      toast.success(`Pagamento de ${sessionPrice > 0 ? sessionPrice.toFixed(2) + "€" : ""} recebido!`);
-      onClose();
-    } catch (err: any) {
-      console.error("Erro ao registar pagamento:", err);
-      toast.error("Erro: " + (err?.message || "Tente novamente"));
-    } finally {
-      setIsLoading(false);
-    }
+  const handleDeleteSession = async () => {
+    if (!onDeleteSession) return;
+    await onDeleteSession(session.id);
+    toast.success("Sessão apagada");
+    onClose();
   };
-  // ─────────────────────────────────────────────────────────────────────────
 
-  const isTerminalStatus = currentStatus === "realizado" || currentStatus === "cancelado" || currentStatus === "falta";
-  const currentPaymentStatus = (session as any).payment_status;
-  const isPago = currentPaymentStatus === "pago";
-  const isPendente = currentStatus === "realizado" && currentPaymentStatus === "pendente";
+  const handleGoToEvolution = () => {
+    onClose();
+    navigate(`/prontuarios?paciente=${session.paciente_id}&sessao_data=${sessionDateISO}&auto_evolucao=1`);
+  };
 
   return (
     <>
+      {/* ══ MODAL PRINCIPAL ══════════════════════════════════════════════════ */}
       <Dialog open={isOpen && !showEvolutionPrompt} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -515,18 +461,12 @@ export function SessionManagementModal({
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* ── Resumo da sessão ────────────────────────────────────────── */}
+            {/* Resumo */}
             <div className="p-4 rounded-lg bg-muted/50 space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-lg font-semibold">{patientName}</span>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {isAvulsoSession && (
-                    <Badge className="bg-amber-500 text-white text-xs gap-1">
-                      <Banknote className="h-3 w-3" />
-                      Avulso · {sessionPrice.toFixed(2)}€
-                    </Badge>
-                  )}
-                  {isPago && currentStatus === "realizado" && (
+                  {isPago && (
                     <Badge className="bg-green-600 text-white text-xs gap-1">
                       <CircleDollarSign className="h-3 w-3" />
                       Pago
@@ -537,7 +477,7 @@ export function SessionManagementModal({
                       <Hourglass className="h-3 w-3" />A Receber
                     </Badge>
                   )}
-                  <Badge className={cn("text-white", STATUS_CONFIG[currentStatus]?.color || "bg-muted")}>
+                  <Badge className={cn("text-white", STATUS_CONFIG[currentStatus]?.color)}>
                     {STATUS_CONFIG[currentStatus]?.icon}
                     <span className="ml-1">{STATUS_CONFIG[currentStatus]?.label}</span>
                   </Badge>
@@ -547,35 +487,31 @@ export function SessionManagementModal({
                 <CalendarIcon className="h-4 w-4" />
                 <span className="capitalize">{sessionDateTime}</span>
               </div>
-
-              {/* Créditos — só mostra se NÃO for avulso */}
-              {!isAvulsoSession && (
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">Saldo de créditos:</span>
-                  <Badge variant={creditBalance > 0 ? "default" : "destructive"}>
-                    {creditBalance} crédito{creditBalance !== 1 ? "s" : ""}
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Saldo de créditos:</span>
+                <Badge variant={creditBalance > 0 ? "default" : "destructive"}>
+                  {creditBalance} crédito{creditBalance !== 1 ? "s" : ""}
+                </Badge>
+                {creditWasUsed && (
+                  <Badge variant="outline" className="text-xs">
+                    ✓ Descontado
                   </Badge>
-                  {creditWasUsed && (
-                    <Badge variant="outline" className="text-xs">
-                      ✓ Descontado
-                    </Badge>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* Sem créditos (não avulso) */}
-              {!isAvulsoSession && !canFinalize && !isTerminalStatus && (
-                <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              {/* Aviso sem créditos — informativo, não bloqueia */}
+              {creditBalance <= 0 && !creditWasUsed && !isTerminalStatus && (
+                <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Utente sem créditos. Adicione antes de finalizar.</span>
+                    <span>Sem créditos — pode finalizar com pagamento directo.</span>
                   </div>
                   {onAddCredits && (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="shrink-0 border-primary text-primary hover:bg-primary/10"
+                      className="shrink-0 border-amber-500 text-amber-700 hover:bg-amber-100"
                       onClick={() => setShowAddCreditsModal(true)}
                     >
                       <Coins className="h-4 w-4 mr-1" />
@@ -585,17 +521,7 @@ export function SessionManagementModal({
                 </div>
               )}
 
-              {/* Avulso info */}
-              {isAvulsoSession && !isTerminalStatus && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-                  <Banknote className="h-4 w-4 shrink-0" />
-                  <span>
-                    Sessão avulsa · <strong>{sessionPrice.toFixed(2)}€</strong> · sem créditos
-                  </span>
-                </div>
-              )}
-
-              {/* Pendente a receber — com botão inline */}
+              {/* Pendente a receber com botão inline */}
               {isPendente && (
                 <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-orange-50 border border-orange-200 text-orange-800 text-sm">
                   <div className="flex items-center gap-2">
@@ -626,7 +552,7 @@ export function SessionManagementModal({
               <PreSessionBriefingCard briefing={briefing!} isLoading={briefingLoading} onRefresh={refreshBriefing} />
             )}
 
-            {/* ── Painel edição completa ───────────────────────────────────── */}
+            {/* Edição completa */}
             {isEditing ? (
               <div className="space-y-4 p-4 border-2 border-primary/20 rounded-xl bg-primary/5">
                 <div className="flex items-center gap-2 text-sm font-semibold text-primary">
@@ -729,7 +655,7 @@ export function SessionManagementModal({
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Serviço / Especialidade</Label>
+                  <Label className="text-xs">Serviço</Label>
                   <Select value={editServico} onValueChange={setEditServico}>
                     <SelectTrigger className="min-h-[40px]">
                       <SelectValue placeholder="Selecione..." />
@@ -813,28 +739,27 @@ export function SessionManagementModal({
                 )}
 
                 {!isRescheduling && !isDuplicating && (
-                  <Button
-                    variant="outline"
-                    className="w-full border-primary/40 text-primary gap-2 hover:bg-primary/5"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Editar Sessão Completa
-                  </Button>
-                )}
-
-                {!isRescheduling && !isDuplicating && (
-                  <Button
-                    variant="outline"
-                    className="w-full border-primary text-primary hover:bg-primary/10 gap-2"
-                    onClick={handleGoToEvolution}
-                  >
-                    <FileText className="h-4 w-4" />
-                    Evolução
-                    <span className="text-xs text-muted-foreground ml-auto">
-                      {format(new Date(session.start_time), "dd/MM/yyyy")}
-                    </span>
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      className="w-full border-primary/40 text-primary gap-2 hover:bg-primary/5"
+                      onClick={() => setIsEditing(true)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Editar Sessão Completa
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full border-primary text-primary hover:bg-primary/10 gap-2"
+                      onClick={handleGoToEvolution}
+                    >
+                      <FileText className="h-4 w-4" />
+                      Evolução
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        {format(new Date(session.start_time), "dd/MM/yyyy")}
+                      </span>
+                    </Button>
+                  </>
                 )}
 
                 {!isRescheduling && !isDuplicating ? (
@@ -902,9 +827,7 @@ export function SessionManagementModal({
                       </Button>
                     </div>
                   </div>
-                ) : null}
-
-                {isDuplicating && (
+                ) : isDuplicating ? (
                   <div className="space-y-3 p-4 border rounded-lg">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <Copy className="h-4 w-4" />
@@ -971,8 +894,9 @@ export function SessionManagementModal({
                       </Button>
                     </div>
                   </div>
-                )}
+                ) : null}
 
+                {/* Botões de acção principais */}
                 {!isRescheduling && !isDuplicating && (
                   <div className="grid grid-cols-2 gap-2">
                     {currentStatus === "agendado" && (
@@ -986,17 +910,15 @@ export function SessionManagementModal({
                         Confirmar
                       </Button>
                     )}
+
+                    {/* FINALIZAR — sempre disponível, abre dialog de pagamento */}
                     {!isTerminalStatus && (
-                      <Button
-                        variant="default"
-                        onClick={handleClickFinalize}
-                        disabled={isLoading || (!canFinalize && !isAvulsoSession)}
-                        className={isAvulsoSession ? "bg-amber-500 hover:bg-amber-600" : ""}
-                      >
+                      <Button variant="default" onClick={handleClickFinalize} disabled={isLoading}>
                         <CheckCircle2 className="h-4 w-4 mr-2" />
-                        {isAvulsoSession ? `Finalizar · ${sessionPrice.toFixed(2)}€` : "Finalizar"}
+                        Finalizar
                       </Button>
                     )}
+
                     <Button
                       variant="outline"
                       className="border-destructive text-destructive hover:bg-destructive/10"
@@ -1034,7 +956,7 @@ export function SessionManagementModal({
         </DialogContent>
       </Dialog>
 
-      {/* ══ DIALOG FINALIZAR — PAGO / PENDENTE ═══════════════════════════════ */}
+      {/* ══ DIALOG FINALIZAR ═════════════════════════════════════════════════ */}
       <Dialog open={showFinalizeDialog} onOpenChange={setShowFinalizeDialog}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -1047,7 +969,6 @@ export function SessionManagementModal({
               {sessionPrice > 0 && <span className="font-semibold text-foreground"> · {sessionPrice.toFixed(2)}€</span>}
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Estado do pagamento</Label>
@@ -1063,12 +984,12 @@ export function SessionManagementModal({
                   )}
                   onClick={() => setFinalizePayment("pago")}
                 >
-                  <RadioGroupItem value="pago" id="pago" />
-                  <div className="flex items-center gap-2 flex-1">
+                  <RadioGroupItem value="pago" id="fin-pago" />
+                  <div className="flex items-center gap-2">
                     <CircleDollarSign className="h-4 w-4 text-green-600" />
                     <div>
                       <p className="text-sm font-medium text-green-700">Pago agora</p>
-                      <p className="text-xs text-muted-foreground">Entra imediatamente nas receitas do financeiro</p>
+                      <p className="text-xs text-muted-foreground">Entra imediatamente nas receitas</p>
                     </div>
                   </div>
                 </div>
@@ -1081,18 +1002,17 @@ export function SessionManagementModal({
                   )}
                   onClick={() => setFinalizePayment("pendente")}
                 >
-                  <RadioGroupItem value="pendente" id="pendente" />
-                  <div className="flex items-center gap-2 flex-1">
+                  <RadioGroupItem value="pendente" id="fin-pendente" />
+                  <div className="flex items-center gap-2">
                     <Hourglass className="h-4 w-4 text-orange-500" />
                     <div>
                       <p className="text-sm font-medium text-orange-700">Pagamento pendente</p>
-                      <p className="text-xs text-muted-foreground">Vai para Contas a Receber no financeiro</p>
+                      <p className="text-xs text-muted-foreground">Vai para Contas a Receber</p>
                     </div>
                   </div>
                 </div>
               </RadioGroup>
             </div>
-
             {finalizePayment === "pago" && (
               <div className="space-y-1">
                 <Label className="text-xs">Método de pagamento</Label>
@@ -1111,7 +1031,6 @@ export function SessionManagementModal({
               </div>
             )}
           </div>
-
           <div className="flex gap-2 pt-1">
             <Button variant="outline" className="flex-1" onClick={() => setShowFinalizeDialog(false)}>
               Cancelar
@@ -1140,7 +1059,64 @@ export function SessionManagementModal({
         </DialogContent>
       </Dialog>
 
-      {/* Cancel Dialog */}
+      {/* ══ DIALOG RECEBER PAGAMENTO ═════════════════════════════════════════ */}
+      <Dialog open={showReceiveDialog} onOpenChange={setShowReceiveDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CircleDollarSign className="h-5 w-5 text-green-600" />
+              Receber Pagamento
+            </DialogTitle>
+            <DialogDescription>
+              {patientName} · {serviceName}
+              {sessionPrice > 0 && <span className="font-semibold text-foreground"> · {sessionPrice.toFixed(2)}€</span>}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
+              <CircleDollarSign className="h-8 w-8 text-green-600 shrink-0" />
+              <div>
+                <p className="font-semibold text-green-800">
+                  {sessionPrice > 0 ? `${sessionPrice.toFixed(2)}€` : "Valor a confirmar"}
+                </p>
+                <p className="text-xs text-green-600">
+                  Sessão de {format(new Date(session.start_time), "dd/MM/yyyy", { locale: ptBR })}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Método de pagamento</Label>
+              <Select value={receiveMethod} onValueChange={setReceiveMethod}>
+                <SelectTrigger className="min-h-[44px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHOD_OPTIONS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" className="flex-1" onClick={() => setShowReceiveDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+              onClick={handleReceivePayment}
+              disabled={isLoading}
+            >
+              <CircleDollarSign className="h-4 w-4" />
+              {isLoading ? "A registar..." : "Confirmar Recebimento"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══ DIALOGS SECUNDÁRIOS ══════════════════════════════════════════════ */}
       <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1149,7 +1125,7 @@ export function SessionManagementModal({
               {creditWasUsed && (
                 <span className="block mb-2 text-green-600">✓ O crédito será automaticamente estornado.</span>
               )}
-              Selecione o motivo do cancelamento:
+              Selecione o motivo:
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Select value={cancelReason} onValueChange={setCancelReason}>
@@ -1176,14 +1152,13 @@ export function SessionManagementModal({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* No-Show Dialog */}
       <AlertDialog open={showNoShowDialog} onOpenChange={setShowNoShowDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Registar Falta (No-Show)</AlertDialogTitle>
+            <AlertDialogTitle>Registar Falta</AlertDialogTitle>
             <AlertDialogDescription>
               O utente não compareceu.
-              {creditWasUsed && <span className="block mt-2">Crédito já descontado. Deseja estornar?</span>}
+              {creditWasUsed && <span className="block mt-2">Crédito descontado. Deseja estornar?</span>}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {creditWasUsed && (
@@ -1196,7 +1171,7 @@ export function SessionManagementModal({
                 className="h-4 w-4"
               />
               <label htmlFor="refund-cb" className="text-sm">
-                Estornar crédito (política da clínica)
+                Estornar crédito
               </label>
             </div>
           )}
@@ -1212,7 +1187,6 @@ export function SessionManagementModal({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Evolution Prompt */}
       <AlertDialog open={showEvolutionPrompt} onOpenChange={setShowEvolutionPrompt}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1232,7 +1206,6 @@ export function SessionManagementModal({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Dialog */}
       <DeleteConfirmationDialog
         isOpen={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
@@ -1255,75 +1228,6 @@ export function SessionManagementModal({
           }}
         />
       )}
-
-      {/* ══ DIALOG RECEBER PAGAMENTO PENDENTE ════════════════════════════════ */}
-      <Dialog open={showReceiveDialog} onOpenChange={setShowReceiveDialog}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CircleDollarSign className="h-5 w-5 text-green-600" />
-              Receber Pagamento
-            </DialogTitle>
-            <DialogDescription>
-              {patientName} · {serviceName}
-              {sessionPrice > 0 && <span className="font-semibold text-foreground"> · {sessionPrice.toFixed(2)}€</span>}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {/* Resumo */}
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
-              <CircleDollarSign className="h-8 w-8 text-green-600 shrink-0" />
-              <div>
-                <p className="font-semibold text-green-800">
-                  {sessionPrice > 0 ? sessionPrice.toFixed(2) + "€" : "Valor a confirmar"}
-                </p>
-                <p className="text-xs text-green-600">
-                  Sessão realizada em {format(new Date(session.start_time), "dd/MM/yyyy", { locale: ptBR })}
-                </p>
-              </div>
-            </div>
-
-            {/* Método */}
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Método de pagamento</Label>
-              <Select value={receiveMethod} onValueChange={setReceiveMethod}>
-                <SelectTrigger className="min-h-[44px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[
-                    { value: "numerario", label: "💵 Numerário" },
-                    { value: "mbway", label: "📱 MB Way" },
-                    { value: "multibanco", label: "🏧 Multibanco" },
-                    { value: "transferencia", label: "🔁 Transferência" },
-                    { value: "cartao", label: "💳 Cartão" },
-                  ].map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <Button variant="outline" className="flex-1" onClick={() => setShowReceiveDialog(false)}>
-              Cancelar
-            </Button>
-            <Button
-              className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
-              onClick={handleReceivePayment}
-              disabled={isLoading}
-            >
-              <CircleDollarSign className="h-4 w-4" />
-              {isLoading ? "A registar..." : "Confirmar Recebimento"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* ═══════════════════════════════════════════════════════════════════ */}
     </>
   );
 }
