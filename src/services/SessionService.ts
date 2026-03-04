@@ -14,7 +14,7 @@ export interface Session {
   payment_status: string;
   payment_method: string | null;
   notes: string | null;
-  paciente?: { id: string; full_name: string };
+  paciente?: { id: string; full_name: string; birth_date?: string | null };
   profissional?: { id: string; full_name: string };
   servico?: {
     id: string;
