@@ -1,11 +1,12 @@
 // DataContext - Centralized state management with 100% Supabase integration
-// v2 — Sistema de Packs (créditos removidos)
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+// v2 — Sistema de Packs + Credit compatibility layer
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
 import { Evolution } from "@/services/EvolutionService";
 import { AuditService } from "@/services/AuditService";
+import { CreditService } from "@/services/CreditService";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
@@ -103,6 +104,14 @@ interface DataContextType {
   associateSessionToPack: (sessionId: string, packId: string | null) => Promise<void>;
   incrementPackUsage: (packId: string) => Promise<void>;
   decrementPackUsage: (packId: string) => Promise<void>;
+
+  // Credit compatibility layer (delegates to CreditService)
+  getCreditBalance: (patientId: string) => number;
+  addCredits: (patientId: string, amount: number) => Promise<void>;
+  refundCredit: (sessionId: string) => Promise<void>;
+  useCredit: (patientId: string, sessionId: string) => Promise<void>;
+  wasCreditUsedForSession: (sessionId: string) => boolean;
+  refreshCreditBalances: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -120,6 +129,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [servicesLoading, setServicesLoading] = useState(true);
   const [packs, setPacks] = useState<Pack[]>([]);
   const [packsLoading, setPacksLoading] = useState(true);
+  const [creditBalances, setCreditBalances] = useState<Map<string, number>>(new Map());
 
   const cachedUserId = useRef<string | null>(null);
   const hasInitiallyLoaded = useRef(false);
@@ -188,7 +198,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         payment_status: s.payment_status || "pendente",
         payment_method: s.payment_method,
         notes: s.notes,
-        pack_id: s.pack_id ?? null,
+        package_id: s.package_id ?? null,
         paciente: s.paciente,
         profissional: s.profissional,
         servico: s.servico,
@@ -412,11 +422,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       payment_status: session.payment_status,
     };
     if (session.payment_method) insertPayload.payment_method = session.payment_method;
-    if ((session as any).pack_id) insertPayload.pack_id = (session as any).pack_id;
+    if ((session as any).package_id) insertPayload.package_id = (session as any).package_id;
 
     const { data, error } = await supabase
       .from("sessoes")
-      .insert(insertPayload)
+      .insert(insertPayload as any)
       .select(
         `
         *,
@@ -441,7 +451,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       payment_status: data.payment_status || "pendente",
       payment_method: data.payment_method,
       notes: data.notes,
-      pack_id: data.pack_id ?? null,
+      package_id: (data as any).package_id ?? null,
       paciente: data.paciente,
       profissional: data.profissional,
       servico: data.servico,
@@ -462,8 +472,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (data.price !== undefined) updateData.price = data.price;
     if (data.profissional_id !== undefined) updateData.profissional_id = data.profissional_id;
     if (data.servico_id !== undefined) updateData.servico_id = data.servico_id;
-    if ((data as any).pack_id !== undefined) updateData.pack_id = (data as any).pack_id;
-    const { error } = await supabase.from("sessoes").update(updateData).eq("id", id);
+    if ((data as any).package_id !== undefined) updateData.package_id = (data as any).package_id;
+    const { error } = await supabase.from("sessoes").update(updateData as any).eq("id", id);
     if (error) throw error;
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)));
   };
@@ -607,7 +617,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deletePack = async (id: string): Promise<void> => {
     // Desassociar sessões primeiro
-    await supabase.from("sessoes").update({ pack_id: null }).eq("pack_id", id);
+    await supabase.from("sessoes").update({ package_id: null } as any).eq("package_id", id);
     const { error } = await supabase.from("packs").delete().eq("id", id);
     if (error) throw error;
     setPacks((prev) => prev.filter((p) => p.id !== id));
@@ -623,14 +633,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .select("id, start_time")
         .eq("paciente_id", pack.paciente_id)
         .gte("start_time", pack.data_inicio)
-        .is("pack_id", null)
+        .is("package_id", null)
         .order("start_time", { ascending: true })
         .limit(pack.quantidade_sessoes);
       if (error || !data) return;
 
       if (data.length > 0) {
         const ids = data.map((s: any) => s.id);
-        await supabase.from("sessoes").update({ pack_id: pack.id }).in("id", ids);
+        await supabase.from("sessoes").update({ package_id: pack.id } as any).in("id", ids);
         // Contar realizadas para atualizar sessoes_usadas
         const realizadas = sessions.filter((s) => ids.includes(s.id) && s.status === "realizado").length;
         if (realizadas > 0) {
@@ -645,9 +655,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const associateSessionToPack = async (sessionId: string, packId: string | null): Promise<void> => {
-    const { error } = await supabase.from("sessoes").update({ pack_id: packId }).eq("id", sessionId);
+    const { error } = await supabase.from("sessoes").update({ package_id: packId } as any).eq("id", sessionId);
     if (error) throw error;
-    setSessions((prev) => prev.map((s) => (s.id === sessionId ? ({ ...s, pack_id: packId } as any) : s)));
+    setSessions((prev) => prev.map((s) => (s.id === sessionId ? ({ ...s, package_id: packId } as any) : s)));
   };
 
   const incrementPackUsage = async (packId: string): Promise<void> => {
@@ -669,6 +679,65 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const getActivePack = (pacienteId: string): Pack | null => {
     return packs.find((p) => p.paciente_id === pacienteId && p.is_active) ?? null;
   };
+
+  // ── Credit compatibility layer ─────────────────────────────────────────────
+  const fetchCreditBalances = async () => {
+    try {
+      const patientIds = patients.map((p) => p.id);
+      if (patientIds.length === 0) return;
+      const balances = await CreditService.getBalancesBatch(patientIds);
+      setCreditBalances(balances);
+    } catch (err) {
+      console.error("Error fetching credit balances:", err);
+    }
+  };
+
+  // Fetch balances when patients change
+  useEffect(() => {
+    if (patients.length > 0) {
+      fetchCreditBalances();
+    }
+  }, [patients]);
+
+  const getCreditBalance = useCallback(
+    (patientId: string): number => {
+      return creditBalances.get(patientId) ?? 0;
+    },
+    [creditBalances],
+  );
+
+  const addCreditsHandler = async (patientId: string, amount: number): Promise<void> => {
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
+    const result = await CreditService.purchaseCredits(clinicId, patientId, amount);
+    if (!result.success) throw new Error(result.error);
+    await fetchCreditBalances();
+  };
+
+  const refundCreditHandler = async (sessionId: string): Promise<void> => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
+    await CreditService.refundCredit(clinicId, session.paciente_id, sessionId);
+    await fetchCreditBalances();
+  };
+
+  const useCreditHandler = async (patientId: string, sessionId: string): Promise<void> => {
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
+    await CreditService.useCredit(clinicId, patientId, sessionId);
+    await fetchCreditBalances();
+  };
+
+  const wasCreditUsedForSession = useCallback(
+    (sessionId: string): boolean => {
+      // Check if the session has payment_status 'reservado' (credit reserved)
+      const session = sessions.find((s) => s.id === sessionId);
+      return session?.payment_status === "reservado" || session?.payment_status === "pago";
+    },
+    [sessions],
+  );
 
   const isLoading = patientsLoading || sessionsLoading || professionalsLoading || servicesLoading;
 
@@ -712,6 +781,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     associateSessionToPack,
     incrementPackUsage,
     decrementPackUsage,
+    // Credit compatibility
+    getCreditBalance,
+    addCredits: addCreditsHandler,
+    refundCredit: refundCreditHandler,
+    useCredit: useCreditHandler,
+    wasCreditUsedForSession,
+    refreshCreditBalances: fetchCreditBalances,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
