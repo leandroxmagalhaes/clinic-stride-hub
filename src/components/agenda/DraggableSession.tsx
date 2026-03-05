@@ -1,9 +1,10 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, AlertTriangle } from "lucide-react";
+import { GripVertical, AlertTriangle, Package } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import React from "react";
+import { useData } from "@/contexts/DataContext";
 
 interface Session {
   id: string;
@@ -18,6 +19,7 @@ interface Session {
   };
   profissional?: { full_name: string };
   servico?: { name: string; color: string };
+  pack_id?: string | null;
 }
 
 interface DraggableSessionProps {
@@ -61,6 +63,13 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const isRealizado = session.status === "realizado" || session.status === "Realizado";
   const isPago = isRealizado && session.payment_status === "pago";
   const isPendentePagamento = isRealizado && session.payment_status === "pendente";
+
+  // ── Pack alert ────────────────────────────────────────────────────────────
+  const { packs } = useData();
+  const sessionPack = session.pack_id ? packs.find((p) => p.id === session.pack_id) : null;
+  const packAlert = sessionPack?.alert_status;
+  const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
+  // ─────────────────────────────────────────────────────────────────────────
 
   // ── Idade do paciente ─────────────────────────────────────────────────────
   const isChild = (() => {
@@ -140,6 +149,18 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       )}
       {!isCompact && isPendentePagamento && (
         <div className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-orange-500 border border-white/70 shadow-sm z-10" />
+      )}
+
+      {/* Pack a acabar — icone canto superior direito */}
+      {showPackWarning && (
+        <div
+          className={cn(
+            "absolute top-1 right-1 z-10 rounded-full p-0.5",
+            packAlert === "ultima_sessao" ? "bg-red-500 text-white" : "bg-orange-400 text-white",
+          )}
+        >
+          <Package className="h-2.5 w-2.5" />
+        </div>
       )}
 
       {isCompact ? (
