@@ -19,7 +19,8 @@ interface Session {
   };
   profissional?: { full_name: string };
   servico?: { name: string; color: string };
-  pack_id?: string | null;
+  pack_id?: string | null; // coluna real: package_id
+  package_id?: string | null;
 }
 
 interface DraggableSessionProps {
@@ -64,11 +65,12 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const isPago = isRealizado && session.payment_status === "pago";
   const isPendentePagamento = isRealizado && session.payment_status === "pendente";
 
-  // ── Pack alert ────────────────────────────────────────────────────────────
+  // ── Pack alert — calculado depois de isCompact ───────────────────────────
   const { packs } = useData();
-  const sessionPack = session.pack_id ? packs.find((p) => p.id === session.pack_id) : null;
+  const _packId = (session as any).package_id ?? session.pack_id;
+  const sessionPack = _packId ? packs.find((p) => p.id === _packId) : null;
   const packAlert = sessionPack?.alert_status;
-  const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
+  // showPackWarning declarado após isCompact abaixo
   // ─────────────────────────────────────────────────────────────────────────
 
   // ── Idade do paciente ─────────────────────────────────────────────────────
@@ -105,6 +107,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   // ─────────────────────────────────────────────────────────────────────────
 
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
+  const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
   const servicoFormatado = formatServico(session.servico?.name ?? "");
   const profissionalNome = session.profissional?.full_name?.split(" ")?.[0] ?? "";
