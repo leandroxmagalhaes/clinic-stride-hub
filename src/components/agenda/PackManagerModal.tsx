@@ -332,6 +332,7 @@ export function PackManagerModal({
         onConfirm={handleDeletePack}
         title="Eliminar Pack"
         description="Tem certeza que deseja eliminar este pack? As sessões associadas serão desvinculadas."
+        entityName="pack"
       />
     </>
   );
