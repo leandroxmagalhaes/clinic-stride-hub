@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Plus, Lock, FileSpreadsheet } from "lucide-react";
-import { startOfWeek, addDays, addWeeks, subWeeks, setHours, setMinutes, addMinutes } from "date-fns";
+import { startOfWeek, addDays, addWeeks, subWeeks } from "date-fns";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -17,10 +17,7 @@ import {
 
 import { useData } from "@/contexts/DataContext";
 import { SessionService, Session } from "@/services/SessionService";
-import { Patient } from "@/services/PatientService";
 import { checkAppointmentCreatedTrigger, AutomationTriggerResult } from "@/services/AutomationEngine";
-import { CreditPurchaseData } from "@/components/patients/AddCreditsModal";
-import { CreditService } from "@/services/CreditService";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useReservedSlots } from "@/hooks/useReservedSlots";
@@ -68,7 +65,6 @@ function savePrefs(userId: string, prefs: AgendaPrefs) {
   } catch {}
 }
 
-// ── Dados pendentes quando há conflito ───────────────────────────────────────
 interface PendingSessionData {
   pacienteId: string;
   profissionalId: string;
@@ -80,39 +76,21 @@ interface PendingSessionData {
   endHour?: number;
   endMinute?: number;
   price?: number;
-  avulso?: boolean;
+  packId?: string | null;
   packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Agenda() {
-  const {
-    sessions,
-    addSession,
-    updateSession,
-    deleteSession,
-    patients,
-    professionals,
-    services,
-    getCreditBalance,
-    refundCredit,
-    useCredit,
-    wasCreditUsedForSession,
-    addCredits,
-    refreshCreditBalances,
-    refreshSessions,
-  } = useData();
+  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, refreshSessions } =
+    useData();
   const { user } = useAuth();
   const {
-    reservedSlots,
     createReservedSlot,
     updateReservedSlot,
     cancelReservedSlot,
     getOccurrencesForWeek,
     getOccurrencesForDate,
-    isSlotReserved,
     fetchReservedSlots,
-    isLoading: reservedSlotsLoading,
   } = useReservedSlots();
 
   const [clinicId, setClinicId] = useState<string | null>(null);
@@ -169,11 +147,9 @@ export default function Agenda() {
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
   const [automationTrigger, setAutomationTrigger] = useState<AutomationTriggerResult | null>(null);
 
-  // ── Estado do popup de conflito ───────────────────────────────────────────
   const [conflictDialog, setConflictDialog] = useState(false);
   const [conflictMessage, setConflictMessage] = useState("");
   const [pendingSession, setPendingSession] = useState<PendingSessionData | null>(null);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const [selectedPaciente, setSelectedPaciente] = useState("");
   const [selectedProfissional, setSelectedProfissional] = useState("");
@@ -237,7 +213,6 @@ export default function Agenda() {
     [sessions, updateSession],
   );
 
-  // ── Função que efectivamente cria a sessão (após conflito resolvido) ──────
   const doCreateSession = async (data: PendingSessionData, skipConflict: boolean) => {
     const { date: finalDate, hour: finalHour, minute: finalMinute } = data;
 
@@ -245,11 +220,7 @@ export default function Agenda() {
     const selectedProfessional = professionals.find((p) => p.id === data.profissionalId);
     const selectedService = services.find((s) => s.id === data.servicoId);
 
-    const balance = getCreditBalance(data.pacienteId);
-    const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
-    const paymentStatus = serviceConsumesCredit && balance > 0 ? "reservado" : "pendente";
-
-    // Pacote
+    // Pacote de agendamento (PackageSchedulingService)
     if (data.packageData && data.packageData.generatedDates.length > 0) {
       const { packageData } = data;
       const { getAuthContext } = await import("@/lib/auth-helpers");
@@ -293,7 +264,7 @@ export default function Agenda() {
           status: startTime < new Date() ? "realizado" : "agendado",
           notes: data.notes,
           price: selectedService ? Number(selectedService.price) : 0,
-          payment_status: paymentStatus,
+          payment_status: "pendente",
           package_id: pkg.id,
         };
       });
@@ -308,7 +279,7 @@ export default function Agenda() {
       return;
     }
 
-    // Sessão avulsa
+    // Sessão avulsa / pack
     const newSession = SessionService.create(
       {
         pacienteId: data.pacienteId,
@@ -335,22 +306,21 @@ export default function Agenda() {
         patients: localPatients.map((p) => ({ id: p.id, full_name: p.full_name })),
         professionals: professionals.map((p) => ({ id: p.id, full_name: p.full_name })),
       },
-      skipConflict, // ← passa flag
+      skipConflict,
     );
 
-    newSession.payment_status = paymentStatus;
+    newSession.payment_status = "pendente";
     if (new Date(newSession.start_time) < new Date()) newSession.status = "realizado";
-    // Aplica preço personalizado e flag avulso
     if (data.price !== undefined && data.price > 0) (newSession as any).price = data.price;
-    if (data.avulso) (newSession as any).avulso = true;
-    await addSession(newSession);
+    if (data.packId) (newSession as any).pack_id = data.packId;
 
+    await addSession(newSession);
     setIsModalOpen(false);
     resetForm();
 
     const triggerResult = await checkAppointmentCreatedTrigger({
       patientName: selectedPatient?.full_name || "",
-      patientPhone: selectedPatient?.phone || undefined,
+      patientPhone: (selectedPatient as any)?.phone || undefined,
       professionalName: selectedProfessional?.full_name || "",
       serviceName: selectedService?.name,
       date: finalDate,
@@ -360,12 +330,9 @@ export default function Agenda() {
     if (triggerResult.shouldTrigger) {
       setAutomationTrigger(triggerResult);
     } else {
-      toast.success(
-        paymentStatus === "pendente" ? "Sessão agendada com pagamento pendente" : "Sessão agendada com sucesso!",
-      );
+      toast.success("Sessão agendada com sucesso!");
     }
   };
-  // ─────────────────────────────────────────────────────────────────────────
 
   const handleCreateSession = async (data: {
     pacienteId: string;
@@ -378,7 +345,7 @@ export default function Agenda() {
     endHour?: number;
     endMinute?: number;
     price?: number;
-    avulso?: boolean;
+    packId?: string | null;
     packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
   }) => {
     const finalDate = data.date || selectedSlot?.date;
@@ -401,15 +368,13 @@ export default function Agenda() {
       endHour: data.endHour,
       endMinute: data.endMinute,
       price: data.price,
-      avulso: data.avulso,
+      packId: data.packId,
       packageData: data.packageData,
     };
 
-    // ── Verificar conflito ANTES de criar ─────────────────────────────────
     if (!data.packageData) {
       const selectedService = services.find((s) => s.id === data.servicoId);
       const durationMinutes = selectedService?.duration_minutes || 60;
-
       const conflict = SessionService.checkConflict(
         sessions,
         data.profissionalId,
@@ -420,16 +385,13 @@ export default function Agenda() {
         data.endHour,
         data.endMinute,
       );
-
       if (conflict.hasConflict) {
-        // Guarda dados pendentes e mostra popup
         setPendingSession(pending);
         setConflictMessage(conflict.message || "Conflito de horário detectado.");
         setConflictDialog(true);
-        return; // não prossegue — aguarda decisão do utilizador
+        return;
       }
     }
-    // ─────────────────────────────────────────────────────────────────────
 
     try {
       await doCreateSession(pending, false);
@@ -438,12 +400,11 @@ export default function Agenda() {
     }
   };
 
-  // ── Utilizador decide ignorar conflito e agendar na mesma ────────────────
   const handleIgnoreConflict = async () => {
     setConflictDialog(false);
     if (!pendingSession) return;
     try {
-      await doCreateSession(pendingSession, true); // skipConflict = true
+      await doCreateSession(pendingSession, true);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
     } finally {
@@ -454,9 +415,7 @@ export default function Agenda() {
   const handleCancelConflict = () => {
     setConflictDialog(false);
     setPendingSession(null);
-    // Modal de agendamento fica aberto para o utilizador ajustar
   };
-  // ─────────────────────────────────────────────────────────────────────────
 
   const resetForm = () => {
     setSelectedPaciente("");
@@ -469,33 +428,6 @@ export default function Agenda() {
   const handleModalClose = () => {
     setIsModalOpen(false);
     resetForm();
-  };
-
-  const handleAddCredits = async (patientId: string, data: CreditPurchaseData) => {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(patientId)) {
-      const msg = `patient_id inválido: ${patientId}`;
-      toast.error(msg);
-      throw new Error(msg);
-    }
-    if (!clinicId) {
-      const msg = "Clínica não identificada. Faça login novamente.";
-      toast.error(msg);
-      throw new Error(msg);
-    }
-    const result = await CreditService.purchaseCredits(clinicId, patientId, data.amount, {
-      description: data.description,
-      monetaryValue: data.monetaryValue,
-      paymentMethod: data.paymentMethod,
-      paymentStatus: data.paymentStatus,
-    });
-    if (!result.success) {
-      const msg = result.error || "Erro ao adicionar créditos";
-      toast.error(msg);
-      throw new Error(msg);
-    }
-    await addCredits(patientId, data.amount);
-    await refreshCreditBalances();
   };
 
   const handleDuplicateSession = async (data: {
@@ -573,7 +505,6 @@ export default function Agenda() {
           onSessionClick={handleSessionClick}
           onSessionReschedule={handleSessionReschedule}
           onReservedSlotClick={handleReservedSlotClick}
-          getCreditBalance={getCreditBalance}
         />
         <AgendaMobileTimeline
           currentDate={currentDate}
@@ -583,7 +514,6 @@ export default function Agenda() {
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
           onReservedSlotClick={handleReservedSlotClick}
-          getCreditBalance={getCreditBalance}
         />
       </div>
 
@@ -603,7 +533,6 @@ export default function Agenda() {
         setSelectedServico={setSelectedServico}
         notes={notes}
         setNotes={setNotes}
-        getCreditBalance={getCreditBalance}
         onPatientCreated={(newPatient) => {
           setLocalPatients((prev) =>
             [...prev, newPatient as any].sort((a, b) => a.full_name.localeCompare(b.full_name)),
@@ -628,19 +557,8 @@ export default function Agenda() {
         onClose={handleSessionModalClose}
         session={selectedSession}
         sessions={sessions}
-        getCreditBalance={getCreditBalance}
         onUpdateSession={updateSession}
         onDeleteSession={deleteSession}
-        onRefundCredit={async (patientId, sessionId) => {
-          await refundCredit(sessionId);
-          return { success: true };
-        }}
-        onUseCredit={async (patientId, sessionId) => {
-          await useCredit(patientId, sessionId);
-          return { success: true };
-        }}
-        wasCreditUsedForSession={wasCreditUsedForSession}
-        onAddCredits={handleAddCredits}
         onDuplicateSession={handleDuplicateSession}
       />
 
@@ -675,7 +593,6 @@ export default function Agenda() {
         />
       )}
 
-      {/* ── Popup de conflito de horário ─────────────────────────────────── */}
       <AlertDialog open={conflictDialog} onOpenChange={setConflictDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -700,7 +617,6 @@ export default function Agenda() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* ─────────────────────────────────────────────────────────────────── */}
     </AppLayout>
   );
 }
