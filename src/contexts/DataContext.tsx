@@ -1,5 +1,5 @@
 // DataContext - Centralized state management with 100% Supabase integration
-// All data is fetched from the database - no localStorage or mock data
+// v2 — Sistema de Packs (créditos removidos)
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
@@ -9,7 +9,7 @@ import { AuditService } from "@/services/AuditService";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
-// Service type from Supabase
+// ── Service type ──────────────────────────────────────────────────────────────
 export interface Service {
   id: string;
   name: string;
@@ -24,8 +24,29 @@ export interface Service {
   updated_at: string;
 }
 
+// ── Pack type ─────────────────────────────────────────────────────────────────
+export interface Pack {
+  id: string;
+  clinic_id: string;
+  paciente_id: string;
+  numero_pack: number;
+  data_inicio: string; // ISO date string YYYY-MM-DD
+  quantidade_sessoes: number;
+  sessoes_usadas: number;
+  valor_total: number;
+  payment_status: "pago" | "pendente" | "parcial";
+  payment_method: string | null;
+  paid_at: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  // computed client-side
+  sessoes_restantes?: number;
+  alert_status?: "activo" | "penultima_sessao" | "ultima_sessao" | "esgotado";
+}
+
+// ── Context type ──────────────────────────────────────────────────────────────
 interface DataContextType {
-  // Global loading state
   isLoading: boolean;
 
   // Patients
@@ -58,60 +79,67 @@ interface DataContextType {
   addEvolution: (evolution: Evolution) => void;
   refreshEvolutions: () => Promise<void>;
 
-  // Credit Balances (from database view)
-  creditBalances: Record<string, number>;
-  getCreditBalance: (patientId: string) => number;
-  addCredits: (patientId: string, amount: number) => Promise<void>;
-  useCredit: (
-    patientId: string,
-    sessionId: string,
-  ) => Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }>;
-  refundCredit: (patientId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
-  wasCreditUsedForSession: (sessionId: string) => boolean;
-  refreshCreditBalances: () => Promise<void>;
-
-  // Services (from Supabase)
+  // Services
   services: Service[];
   servicesLoading: boolean;
   addService: (data: Partial<Service>) => Promise<void>;
   updateService: (id: string, data: Partial<Service>) => Promise<void>;
   deleteService: (id: string) => Promise<void>;
   refreshServices: () => Promise<void>;
+
+  // Packs
+  packs: Pack[];
+  packsLoading: boolean;
+  addPack: (
+    data: Omit<
+      Pack,
+      "id" | "clinic_id" | "numero_pack" | "sessoes_usadas" | "created_at" | "sessoes_restantes" | "alert_status"
+    >,
+  ) => Promise<Pack>;
+  updatePack: (id: string, data: Partial<Pack>) => Promise<void>;
+  deletePack: (id: string) => Promise<void>;
+  refreshPacks: () => Promise<void>;
+  getActivePack: (pacienteId: string) => Pack | null;
+  associateSessionToPack: (sessionId: string, packId: string | null) => Promise<void>;
+  incrementPackUsage: (packId: string) => Promise<void>;
+  decrementPackUsage: (packId: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-interface DataProviderProps {
-  children: ReactNode;
-}
-
-export function DataProvider({ children }: DataProviderProps) {
-  // Core state
+export function DataProvider({ children }: { children: ReactNode }) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
-
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [professionalsLoading, setProfessionalsLoading] = useState(true);
-
   const [evolutions, setEvolutions] = useState<Evolution[]>([]);
   const [evolutionsLoading, setEvolutionsLoading] = useState(true);
-
-  const [creditBalances, setCreditBalances] = useState<Record<string, number>>({});
-
   const [services, setServices] = useState<Service[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
+  const [packs, setPacks] = useState<Pack[]>([]);
+  const [packsLoading, setPacksLoading] = useState(true);
 
-  // Track credit usage per session for idempotency (session_id -> boolean)
-  const [creditUsageMap, setCreditUsageMap] = useState<Record<string, boolean>>({});
-
-  // Refs for tab-switch stability
   const cachedUserId = useRef<string | null>(null);
   const hasInitiallyLoaded = useRef(false);
 
-  // ── Fetch patients ───────────────────────────────────────────────────────
+  // ── Helper: calcular alert_status ────────────────────────────────────────
+  const computeAlertStatus = (p: Pack): Pack["alert_status"] => {
+    const restantes = p.quantidade_sessoes - p.sessoes_usadas;
+    if (restantes <= 0) return "esgotado";
+    if (restantes === 1) return "ultima_sessao";
+    if (restantes === 2) return "penultima_sessao";
+    return "activo";
+  };
+
+  const enrichPack = (p: any): Pack => ({
+    ...p,
+    sessoes_restantes: p.quantidade_sessoes - p.sessoes_usadas,
+    alert_status: computeAlertStatus(p),
+  });
+
+  // ── Fetch patients ────────────────────────────────────────────────────────
   const fetchPatients = async (silent = false) => {
     if (!silent) setPatientsLoading(true);
     try {
@@ -128,7 +156,7 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
-  // ── Fetch sessions ───────────────────────────────────────────────────────
+  // ── Fetch sessions ────────────────────────────────────────────────────────
   const fetchSessions = async (silent = false) => {
     if (!silent) setSessionsLoading(true);
     try {
@@ -147,8 +175,7 @@ export function DataProvider({ children }: DataProviderProps) {
         console.error("Error fetching sessions:", error);
         return;
       }
-
-      const transformedSessions: Session[] = (data || []).map((s: any) => ({
+      const transformed: Session[] = (data || []).map((s: any) => ({
         id: s.id,
         clinic_id: s.clinic_id,
         paciente_id: s.paciente_id,
@@ -161,15 +188,12 @@ export function DataProvider({ children }: DataProviderProps) {
         payment_status: s.payment_status || "pendente",
         payment_method: s.payment_method,
         notes: s.notes,
-        // ── Campo avulso — lido do Supabase se existir ────────────────────
-        avulso: s.avulso ?? false,
-        // ─────────────────────────────────────────────────────────────────
+        pack_id: s.pack_id ?? null,
         paciente: s.paciente,
         profissional: s.profissional,
         servico: s.servico,
       }));
-
-      setSessions(transformedSessions);
+      setSessions(transformed);
     } catch (err) {
       console.error("Exception fetching sessions:", err);
     } finally {
@@ -177,7 +201,7 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
-  // ── Fetch professionals ──────────────────────────────────────────────────
+  // ── Fetch professionals ───────────────────────────────────────────────────
   const fetchProfessionals = async (silent = false) => {
     if (!silent) setProfessionalsLoading(true);
     try {
@@ -191,19 +215,20 @@ export function DataProvider({ children }: DataProviderProps) {
         console.error("Error fetching professionals:", error);
         return;
       }
-      const transformed: Professional[] = (data || []).map((p: any) => ({
-        id: p.id,
-        clinic_id: p.clinic_id,
-        full_name: p.full_name,
-        email: p.email,
-        phone: p.phone,
-        role: p.role,
-        specialty: p.specialty,
-        crefito: p.crefito,
-        avatar_url: p.avatar_url,
-        is_active: p.is_active,
-      }));
-      setProfessionals(transformed);
+      setProfessionals(
+        (data || []).map((p: any) => ({
+          id: p.id,
+          clinic_id: p.clinic_id,
+          full_name: p.full_name,
+          email: p.email,
+          phone: p.phone,
+          role: p.role,
+          specialty: p.specialty,
+          crefito: p.crefito,
+          avatar_url: p.avatar_url,
+          is_active: p.is_active,
+        })),
+      );
     } catch (err) {
       console.error("Exception fetching professionals:", err);
     } finally {
@@ -211,7 +236,7 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
-  // ── Fetch evolutions ─────────────────────────────────────────────────────
+  // ── Fetch evolutions ──────────────────────────────────────────────────────
   const fetchEvolutions = async (silent = false) => {
     if (!silent) setEvolutionsLoading(true);
     try {
@@ -223,21 +248,22 @@ export function DataProvider({ children }: DataProviderProps) {
         console.error("Error fetching evolutions:", error);
         return;
       }
-      const transformed: Evolution[] = (data || []).map((e: any) => ({
-        id: e.id,
-        clinic_id: e.clinic_id,
-        prontuario_id: e.prontuario_id,
-        sessao_id: e.sessao_id,
-        profissional_id: e.profissional_id,
-        descricao: e.descricao,
-        escala_dor: e.escala_dor,
-        anexos_urls: e.anexos_urls,
-        created_at: e.created_at,
-        specialty_id: e.specialty_id,
-        structured_data: e.structured_data,
-        profissional: e.profissional,
-      }));
-      setEvolutions(transformed);
+      setEvolutions(
+        (data || []).map((e: any) => ({
+          id: e.id,
+          clinic_id: e.clinic_id,
+          prontuario_id: e.prontuario_id,
+          sessao_id: e.sessao_id,
+          profissional_id: e.profissional_id,
+          descricao: e.descricao,
+          escala_dor: e.escala_dor,
+          anexos_urls: e.anexos_urls,
+          created_at: e.created_at,
+          specialty_id: e.specialty_id,
+          structured_data: e.structured_data,
+          profissional: e.profissional,
+        })),
+      );
     } catch (err) {
       console.error("Exception fetching evolutions:", err);
     } finally {
@@ -245,25 +271,7 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
-  // ── Fetch credit balances ────────────────────────────────────────────────
-  const fetchCreditBalances = async () => {
-    try {
-      const { data, error } = await supabase.from("saldo_creditos").select("patient_id, saldo");
-      if (error) {
-        console.error("Error fetching credit balances:", error);
-        return;
-      }
-      const balances: Record<string, number> = {};
-      (data || []).forEach((row: any) => {
-        if (row.patient_id) balances[row.patient_id] = row.saldo || 0;
-      });
-      setCreditBalances(balances);
-    } catch (err) {
-      console.error("Exception fetching credit balances:", err);
-    }
-  };
-
-  // ── Fetch services ───────────────────────────────────────────────────────
+  // ── Fetch services ────────────────────────────────────────────────────────
   const fetchServices = async (silent = false) => {
     if (!silent) setServicesLoading(true);
     try {
@@ -280,29 +288,24 @@ export function DataProvider({ children }: DataProviderProps) {
     }
   };
 
-  // ── Fetch credit usage map ───────────────────────────────────────────────
-  const fetchCreditUsageMap = async () => {
+  // ── Fetch packs ───────────────────────────────────────────────────────────
+  const fetchPacks = async (silent = false) => {
+    if (!silent) setPacksLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("transacoes_credito")
-        .select("session_id")
-        .eq("tipo", "uso")
-        .not("session_id", "is", null);
+      const { data, error } = await supabase.from("packs").select("*").order("created_at", { ascending: false });
       if (error) {
-        console.error("Error fetching credit usage map:", error);
+        console.error("Error fetching packs:", error);
         return;
       }
-      const map: Record<string, boolean> = {};
-      (data || []).forEach((row: { session_id: string | null }) => {
-        if (row.session_id) map[row.session_id] = true;
-      });
-      setCreditUsageMap(map);
+      setPacks((data || []).map(enrichPack));
     } catch (err) {
-      console.error("Exception fetching credit usage map:", err);
+      console.error("Exception fetching packs:", err);
+    } finally {
+      setPacksLoading(false);
     }
   };
 
-  // ── Load all on mount ────────────────────────────────────────────────────
+  // ── Load all on mount ─────────────────────────────────────────────────────
   useEffect(() => {
     const initLoad = async () => {
       try {
@@ -316,8 +319,7 @@ export function DataProvider({ children }: DataProviderProps) {
           fetchSessions(),
           fetchProfessionals(),
           fetchEvolutions(),
-          fetchCreditBalances(),
-          fetchCreditUsageMap(),
+          fetchPacks(),
         ]);
         hasInitiallyLoaded.current = true;
       } catch (err) {
@@ -327,12 +329,13 @@ export function DataProvider({ children }: DataProviderProps) {
         setProfessionalsLoading(false);
         setServicesLoading(false);
         setEvolutionsLoading(false);
+        setPacksLoading(false);
       }
     };
     initLoad();
   }, []);
 
-  // ── Auth state changes ───────────────────────────────────────────────────
+  // ── Auth state changes ────────────────────────────────────────────────────
   useEffect(() => {
     const {
       data: { subscription },
@@ -345,8 +348,7 @@ export function DataProvider({ children }: DataProviderProps) {
         setSessions([]);
         setProfessionals([]);
         setEvolutions([]);
-        setCreditBalances({});
-        setCreditUsageMap({});
+        setPacks([]);
       } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const userId = session?.user?.id ?? null;
         setTimeout(() => {
@@ -356,8 +358,7 @@ export function DataProvider({ children }: DataProviderProps) {
             fetchSessions(true);
             fetchProfessionals(true);
             fetchEvolutions(true);
-            fetchCreditBalances();
-            fetchCreditUsageMap();
+            fetchPacks(true);
           } else {
             cachedUserId.current = userId;
             hasInitiallyLoaded.current = true;
@@ -366,8 +367,7 @@ export function DataProvider({ children }: DataProviderProps) {
             fetchSessions();
             fetchProfessionals();
             fetchEvolutions();
-            fetchCreditBalances();
-            fetchCreditUsageMap();
+            fetchPacks();
           }
         }, 0);
       }
@@ -375,22 +375,30 @@ export function DataProvider({ children }: DataProviderProps) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── CRUD helpers ─────────────────────────────────────────────────────────
-
-  const addPatient = (patient: Patient) => {
-    setPatients((prev) => [...prev, patient]);
-    setCreditBalances((prev) => ({ ...prev, [patient.id]: 0 }));
-  };
-  const updatePatient = (id: string, data: Partial<Patient>) => {
+  // ── Patient CRUD ──────────────────────────────────────────────────────────
+  const addPatient = (patient: Patient) => setPatients((prev) => [...prev, patient]);
+  const updatePatient = (id: string, data: Partial<Patient>) =>
     setPatients((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
+
+  const deletePatient = async (patientId: string, reason?: string): Promise<void> => {
+    const patient = patients.find((p) => p.id === patientId);
+    if (!patient) throw new Error("Paciente não encontrado");
+    const { error } = await supabase.from("pacientes").update({ is_active: false }).eq("id", patientId);
+    if (error) throw error;
+    await AuditService.log({
+      action: "delete",
+      entityType: "patient",
+      entityId: patientId,
+      entityName: patient.full_name,
+      details: { reason, previousData: { email: patient.email, phone: patient.phone } },
+    });
+    await fetchPatients();
   };
 
-  // ── addSession — persiste no Supabase, incluindo avulso e price ──────────
+  // ── Session CRUD ──────────────────────────────────────────────────────────
   const addSession = async (session: Session): Promise<void> => {
     const { getAuthContext } = await import("@/lib/auth-helpers");
     const { clinicId } = await getAuthContext();
-
-    // Constrói o payload — inclui avulso se existir na sessão
     const insertPayload: Record<string, unknown> = {
       clinic_id: clinicId,
       paciente_id: session.paciente_id,
@@ -403,18 +411,12 @@ export function DataProvider({ children }: DataProviderProps) {
       price: session.price,
       payment_status: session.payment_status,
     };
-
-    // Passa payment_method se definido
     if (session.payment_method) insertPayload.payment_method = session.payment_method;
-
-    // ── Flag avulso — só passa se a coluna existir no schema ────────────
-    // Se o Supabase não tiver a coluna, este campo é ignorado silenciosamente
-    if ((session as any).avulso === true) insertPayload.avulso = true;
-    // ─────────────────────────────────────────────────────────────────────
+    if ((session as any).pack_id) insertPayload.pack_id = (session as any).pack_id;
 
     const { data, error } = await supabase
       .from("sessoes")
-      .insert(insertPayload as any)
+      .insert(insertPayload)
       .select(
         `
         *,
@@ -424,10 +426,9 @@ export function DataProvider({ children }: DataProviderProps) {
       `,
       )
       .single();
-
     if (error) throw error;
 
-    const newSession: Session = {
+    const newSession: any = {
       id: data.id,
       clinic_id: data.clinic_id,
       paciente_id: data.paciente_id,
@@ -440,16 +441,14 @@ export function DataProvider({ children }: DataProviderProps) {
       payment_status: data.payment_status || "pendente",
       payment_method: data.payment_method,
       notes: data.notes,
-      avulso: (data as any).avulso ?? false,
+      pack_id: data.pack_id ?? null,
       paciente: data.paciente,
       profissional: data.profissional,
       servico: data.servico,
-    } as any;
-
+    };
     setSessions((prev) => [newSession, ...prev]);
   };
 
-  // ── updateSession — persiste no Supabase, incluindo avulso ──────────────
   const updateSession = async (id: string, data: Partial<Session>): Promise<void> => {
     const updateData: Record<string, unknown> = {};
     if (data.start_time !== undefined)
@@ -463,16 +462,51 @@ export function DataProvider({ children }: DataProviderProps) {
     if (data.price !== undefined) updateData.price = data.price;
     if (data.profissional_id !== undefined) updateData.profissional_id = data.profissional_id;
     if (data.servico_id !== undefined) updateData.servico_id = data.servico_id;
-    // Avulso — passa apenas se explicitamente definido
-    if ((data as any).avulso !== undefined) updateData.avulso = (data as any).avulso;
-
+    if ((data as any).pack_id !== undefined) updateData.pack_id = (data as any).pack_id;
     const { error } = await supabase.from("sessoes").update(updateData).eq("id", id);
     if (error) throw error;
-
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)));
   };
 
-  // ── Services CRUD ────────────────────────────────────────────────────────
+  const deleteSession = async (sessionId: string, reason?: string): Promise<void> => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) throw new Error("Sessão não encontrada");
+    if (session.status === "realizado") throw new Error("Sessões finalizadas não podem ser apagadas");
+    const { error } = await supabase.from("sessoes").delete().eq("id", sessionId);
+    if (error) throw error;
+    await AuditService.log({
+      action: "delete",
+      entityType: "session",
+      entityId: sessionId,
+      entityName: `${session.paciente?.full_name || "Paciente"} - ${format(new Date(session.start_time), "dd/MM HH:mm")}`,
+      details: { reason, patient: session.paciente?.full_name, service: session.servico?.name, status: session.status },
+    });
+    await fetchSessions();
+  };
+
+  // ── Professional CRUD ─────────────────────────────────────────────────────
+  const addProfessional = (p: Professional) => setProfessionals((prev) => [...prev, p]);
+  const updateProfessional = (id: string, data: Partial<Professional>) =>
+    setProfessionals((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
+  const deleteProfessional = async (professionalId: string, reason?: string): Promise<void> => {
+    const professional = professionals.find((p) => p.id === professionalId);
+    if (!professional) throw new Error("Profissional não encontrado");
+    const { error } = await supabase.from("profissionais").update({ is_active: false }).eq("id", professionalId);
+    if (error) throw error;
+    await AuditService.log({
+      action: "delete",
+      entityType: "professional",
+      entityId: professionalId,
+      entityName: professional.full_name,
+      details: { reason },
+    });
+    await fetchProfessionals();
+  };
+
+  // ── Evolution CRUD ────────────────────────────────────────────────────────
+  const addEvolution = (evolution: Evolution) => setEvolutions((prev) => [evolution, ...prev]);
+
+  // ── Service CRUD ──────────────────────────────────────────────────────────
   const addService = async (data: Partial<Service>): Promise<void> => {
     const { getAuthContext } = await import("@/lib/auth-helpers");
     const { clinicId } = await getAuthContext();
@@ -481,7 +515,7 @@ export function DataProvider({ children }: DataProviderProps) {
       description: data.description || null,
       duration_minutes: data.duration_minutes || 60,
       price: data.price || 0,
-      consumes_credit: data.consumes_credit ?? true,
+      consumes_credit: data.consumes_credit ?? false,
       color: data.color || "#10B981",
       clinic_id: clinicId,
     });
@@ -505,174 +539,136 @@ export function DataProvider({ children }: DataProviderProps) {
     await fetchServices();
   };
 
-  const deleteService = async (id: string, reason?: string): Promise<void> => {
+  const deleteService = async (id: string): Promise<void> => {
     const service = services.find((s) => s.id === id);
     const { error } = await supabase.from("servicos").update({ is_active: false }).eq("id", id);
     if (error) throw error;
-    if (service) {
+    if (service)
       await AuditService.log({
         action: "delete",
         entityType: "service",
         entityId: id,
         entityName: service.name,
-        details: {
-          reason,
-          previousData: { name: service.name, price: service.price, duration_minutes: service.duration_minutes },
-        },
+        details: {},
       });
-    }
     await fetchServices();
   };
 
-  // ── Patients / Professionals / Sessions delete ───────────────────────────
-  const deletePatient = async (patientId: string, reason?: string): Promise<void> => {
-    const patient = patients.find((p) => p.id === patientId);
-    if (!patient) throw new Error("Paciente não encontrado");
-    const { error } = await supabase.from("pacientes").update({ is_active: false }).eq("id", patientId);
+  // ── Pack CRUD ─────────────────────────────────────────────────────────────
+  const addPack = async (
+    data: Omit<
+      Pack,
+      "id" | "clinic_id" | "numero_pack" | "sessoes_usadas" | "created_at" | "sessoes_restantes" | "alert_status"
+    >,
+  ): Promise<Pack> => {
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
+    const { data: created, error } = await supabase
+      .from("packs")
+      .insert({
+        clinic_id: clinicId,
+        paciente_id: data.paciente_id,
+        data_inicio: data.data_inicio,
+        quantidade_sessoes: data.quantidade_sessoes,
+        sessoes_usadas: 0,
+        valor_total: data.valor_total,
+        payment_status: data.payment_status,
+        payment_method: data.payment_method ?? null,
+        paid_at: data.paid_at ?? null,
+        notes: data.notes ?? null,
+        is_active: true,
+      })
+      .select("*")
+      .single();
     if (error) throw error;
-    await AuditService.log({
-      action: "delete",
-      entityType: "patient",
-      entityId: patientId,
-      entityName: patient.full_name,
-      details: { reason, previousData: { email: patient.email, phone: patient.phone, cpf: patient.cpf } },
-    });
-    await fetchPatients();
+    const enriched = enrichPack(created);
+    setPacks((prev) => [enriched, ...prev]);
+
+    // Auto-associar sessões realizadas a partir da data de início
+    await autoAssociateSessionsToPack(enriched);
+    return enriched;
   };
 
-  const deleteSession = async (sessionId: string, reason?: string): Promise<void> => {
-    const session = sessions.find((s) => s.id === sessionId);
-    if (!session) throw new Error("Sessão não encontrada");
-    if (session.status === "realizado") throw new Error("Sessões finalizadas não podem ser apagadas");
-    const { error } = await supabase.from("sessoes").delete().eq("id", sessionId);
+  const updatePack = async (id: string, data: Partial<Pack>): Promise<void> => {
+    const updateData: Record<string, unknown> = {};
+    if (data.data_inicio !== undefined) updateData.data_inicio = data.data_inicio;
+    if (data.quantidade_sessoes !== undefined) updateData.quantidade_sessoes = data.quantidade_sessoes;
+    if (data.sessoes_usadas !== undefined) updateData.sessoes_usadas = data.sessoes_usadas;
+    if (data.valor_total !== undefined) updateData.valor_total = data.valor_total;
+    if (data.payment_status !== undefined) updateData.payment_status = data.payment_status;
+    if (data.payment_method !== undefined) updateData.payment_method = data.payment_method;
+    if (data.paid_at !== undefined) updateData.paid_at = data.paid_at;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.is_active !== undefined) updateData.is_active = data.is_active;
+    const { error } = await supabase.from("packs").update(updateData).eq("id", id);
     if (error) throw error;
-    await AuditService.log({
-      action: "delete",
-      entityType: "session",
-      entityId: sessionId,
-      entityName: `${session.paciente?.full_name || "Paciente"} - ${format(new Date(session.start_time), "dd/MM HH:mm")}`,
-      details: {
-        reason,
-        patient: session.paciente?.full_name,
-        professional: session.profissional?.full_name,
-        service: session.servico?.name,
-        date: session.start_time.toString(),
-        status: session.status,
-      },
-    });
+    setPacks((prev) => prev.map((p) => (p.id === id ? enrichPack({ ...p, ...data }) : p)));
+  };
+
+  const deletePack = async (id: string): Promise<void> => {
+    // Desassociar sessões primeiro
+    await supabase.from("sessoes").update({ pack_id: null }).eq("pack_id", id);
+    const { error } = await supabase.from("packs").delete().eq("id", id);
+    if (error) throw error;
+    setPacks((prev) => prev.filter((p) => p.id !== id));
     await fetchSessions();
   };
 
-  const deleteProfessional = async (professionalId: string, reason?: string): Promise<void> => {
-    const professional = professionals.find((p) => p.id === professionalId);
-    if (!professional) throw new Error("Profissional não encontrado");
-    const { error } = await supabase.from("profissionais").update({ is_active: false }).eq("id", professionalId);
-    if (error) throw error;
-    await AuditService.log({
-      action: "delete",
-      entityType: "professional",
-      entityId: professionalId,
-      entityName: professional.full_name,
-      details: {
-        reason,
-        previousData: { email: professional.email, phone: professional.phone, specialty: professional.specialty },
-      },
-    });
-    await fetchProfessionals();
-  };
-
-  const addProfessional = (professional: Professional) => {
-    setProfessionals((prev) => [...prev, professional]);
-  };
-  const updateProfessional = (id: string, data: Partial<Professional>) => {
-    setProfessionals((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
-  };
-  const addEvolution = (evolution: Evolution) => {
-    setEvolutions((prev) => [evolution, ...prev]);
-  };
-
-  // ── Credit functions ─────────────────────────────────────────────────────
-  const getCreditBalance = (patientId: string): number => creditBalances[patientId] ?? 0;
-
-  const addCredits = async (patientId: string, amount: number): Promise<void> => {
-    if (amount <= 0) return;
-    const { getAuthContext } = await import("@/lib/auth-helpers");
-    const { clinicId } = await getAuthContext();
-    const { error } = await supabase.from("transacoes_credito").insert({
-      patient_id: patientId,
-      clinic_id: clinicId,
-      tipo: "compra",
-      quantidade: amount,
-    });
-    if (error) throw error;
-    await fetchCreditBalances();
-  };
-
-  const useCredit = async (
-    patientId: string,
-    sessionId: string,
-  ): Promise<{ success: boolean; error?: string; alreadyDeducted?: boolean }> => {
+  // Auto-associar sessões do paciente a partir da data de início do pack
+  const autoAssociateSessionsToPack = async (pack: Pack): Promise<void> => {
     try {
-      const { data: existing } = await supabase
-        .from("transacoes_credito")
-        .select("id")
-        .eq("session_id", sessionId)
-        .eq("tipo", "uso")
-        .maybeSingle();
-      if (existing) return { success: true, alreadyDeducted: true };
+      // Busca sessões do paciente a partir da data de início que não têm pack
+      const { data, error } = await supabase
+        .from("sessoes")
+        .select("id, start_time")
+        .eq("paciente_id", pack.paciente_id)
+        .gte("start_time", pack.data_inicio)
+        .is("pack_id", null)
+        .order("start_time", { ascending: true })
+        .limit(pack.quantidade_sessoes);
+      if (error || !data) return;
 
-      const currentBalance = creditBalances[patientId] ?? 0;
-      if (currentBalance <= 0) return { success: false, error: "Saldo de créditos insuficiente" };
-
-      const { getAuthContext } = await import("@/lib/auth-helpers");
-      const { clinicId } = await getAuthContext();
-      const { error } = await supabase.from("transacoes_credito").insert({
-        patient_id: patientId,
-        clinic_id: clinicId,
-        tipo: "uso",
-        quantidade: -1,
-        session_id: sessionId,
-        motivo: "Uso de crédito para sessão",
-      });
-      if (error) {
-        if (error.message.includes("idempotência") || error.code === "23505")
-          return { success: true, alreadyDeducted: true };
-        return { success: false, error: "Erro ao descontar crédito" };
+      if (data.length > 0) {
+        const ids = data.map((s: any) => s.id);
+        await supabase.from("sessoes").update({ pack_id: pack.id }).in("id", ids);
+        // Contar realizadas para atualizar sessoes_usadas
+        const realizadas = sessions.filter((s) => ids.includes(s.id) && s.status === "realizado").length;
+        if (realizadas > 0) {
+          await supabase.from("packs").update({ sessoes_usadas: realizadas }).eq("id", pack.id);
+        }
+        await fetchSessions();
+        await fetchPacks(true);
       }
-      setCreditUsageMap((prev) => ({ ...prev, [sessionId]: true }));
-      await fetchCreditBalances();
-      return { success: true };
-    } catch {
-      return { success: false, error: "Erro inesperado ao descontar crédito" };
+    } catch (err) {
+      console.error("Error auto-associating sessions:", err);
     }
   };
 
-  const refundCredit = async (patientId: string, sessionId: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const { getAuthContext } = await import("@/lib/auth-helpers");
-      const { clinicId } = await getAuthContext();
-      const { error } = await supabase.from("transacoes_credito").insert({
-        patient_id: patientId,
-        clinic_id: clinicId,
-        tipo: "estorno",
-        quantidade: 1,
-        session_id: sessionId,
-        motivo: "Estorno de crédito por cancelamento",
-      });
-      if (error) return { success: false, error: "Erro ao estornar crédito" };
-      setCreditUsageMap((prev) => {
-        const u = { ...prev };
-        delete u[sessionId];
-        return u;
-      });
-      await fetchCreditBalances();
-      return { success: true };
-    } catch {
-      return { success: false, error: "Erro inesperado ao estornar crédito" };
-    }
+  const associateSessionToPack = async (sessionId: string, packId: string | null): Promise<void> => {
+    const { error } = await supabase.from("sessoes").update({ pack_id: packId }).eq("id", sessionId);
+    if (error) throw error;
+    setSessions((prev) => prev.map((s) => (s.id === sessionId ? ({ ...s, pack_id: packId } as any) : s)));
   };
 
-  const wasCreditUsedForSession = (sessionId: string): boolean => creditUsageMap[sessionId] ?? false;
+  const incrementPackUsage = async (packId: string): Promise<void> => {
+    const pack = packs.find((p) => p.id === packId);
+    if (!pack) return;
+    const newUsage = Math.min(pack.sessoes_usadas + 1, pack.quantidade_sessoes);
+    // Auto-desactiva pack se esgotado
+    const isNowInactive = newUsage >= pack.quantidade_sessoes;
+    await updatePack(packId, { sessoes_usadas: newUsage, is_active: !isNowInactive });
+  };
+
+  const decrementPackUsage = async (packId: string): Promise<void> => {
+    const pack = packs.find((p) => p.id === packId);
+    if (!pack) return;
+    const newUsage = Math.max(pack.sessoes_usadas - 1, 0);
+    await updatePack(packId, { sessoes_usadas: newUsage, is_active: true });
+  };
+
+  const getActivePack = (pacienteId: string): Pack | null => {
+    return packs.find((p) => p.paciente_id === pacienteId && p.is_active) ?? null;
+  };
 
   const isLoading = patientsLoading || sessionsLoading || professionalsLoading || servicesLoading;
 
@@ -700,19 +696,22 @@ export function DataProvider({ children }: DataProviderProps) {
     evolutionsLoading,
     addEvolution,
     refreshEvolutions: fetchEvolutions,
-    creditBalances,
-    getCreditBalance,
-    addCredits,
-    useCredit,
-    refundCredit,
-    wasCreditUsedForSession,
-    refreshCreditBalances: fetchCreditBalances,
     services,
     servicesLoading,
     addService,
     updateService,
     deleteService,
     refreshServices: fetchServices,
+    packs,
+    packsLoading,
+    addPack,
+    updatePack,
+    deletePack,
+    refreshPacks: fetchPacks,
+    getActivePack,
+    associateSessionToPack,
+    incrementPackUsage,
+    decrementPackUsage,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
