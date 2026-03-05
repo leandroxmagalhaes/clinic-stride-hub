@@ -213,7 +213,7 @@ export function SessionManagementModal({
 
   // Pack activo do paciente
   const activePack = getActivePack(session.paciente_id);
-  const sessionPackId = (session as any).pack_id;
+  const sessionPackId = (session as any).package_id ?? (session as any).pack_id;
   const sessionPack = sessionPackId ? packs.find((p) => p.id === sessionPackId) : null;
 
   const trySetPaymentMethod = async (sessionId: string, method: string) => {
@@ -289,7 +289,10 @@ export function SessionManagementModal({
       if (sessionPackId) await incrementPackUsage(sessionPackId);
       else if (activePack) {
         // Associar ao pack activo automaticamente
-        await supabase.from("sessoes").update({ pack_id: activePack.id }).eq("id", session.id);
+        await supabase
+          .from("sessoes")
+          .update({ package_id: activePack.id } as any)
+          .eq("id", session.id);
         await incrementPackUsage(activePack.id);
       }
       if (finalizePayment === "pago") {
