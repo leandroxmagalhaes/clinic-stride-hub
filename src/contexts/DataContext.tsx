@@ -129,6 +129,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [servicesLoading, setServicesLoading] = useState(true);
   const [packs, setPacks] = useState<Pack[]>([]);
   const [packsLoading, setPacksLoading] = useState(true);
+  const [creditBalances, setCreditBalances] = useState<Map<string, number>>(new Map());
 
   const cachedUserId = useRef<string | null>(null);
   const hasInitiallyLoaded = useRef(false);
@@ -679,6 +680,65 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return packs.find((p) => p.paciente_id === pacienteId && p.is_active) ?? null;
   };
 
+  // ── Credit compatibility layer ─────────────────────────────────────────────
+  const fetchCreditBalances = async () => {
+    try {
+      const patientIds = patients.map((p) => p.id);
+      if (patientIds.length === 0) return;
+      const balances = await CreditService.getBalancesBatch(patientIds);
+      setCreditBalances(balances);
+    } catch (err) {
+      console.error("Error fetching credit balances:", err);
+    }
+  };
+
+  // Fetch balances when patients change
+  useEffect(() => {
+    if (patients.length > 0) {
+      fetchCreditBalances();
+    }
+  }, [patients]);
+
+  const getCreditBalance = useCallback(
+    (patientId: string): number => {
+      return creditBalances.get(patientId) ?? 0;
+    },
+    [creditBalances],
+  );
+
+  const addCreditsHandler = async (patientId: string, amount: number): Promise<void> => {
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
+    const result = await CreditService.purchaseCredits(clinicId, patientId, amount);
+    if (!result.success) throw new Error(result.error);
+    await fetchCreditBalances();
+  };
+
+  const refundCreditHandler = async (sessionId: string): Promise<void> => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
+    await CreditService.refundCredit(clinicId, session.paciente_id, sessionId);
+    await fetchCreditBalances();
+  };
+
+  const useCreditHandler = async (patientId: string, sessionId: string): Promise<void> => {
+    const { getAuthContext } = await import("@/lib/auth-helpers");
+    const { clinicId } = await getAuthContext();
+    await CreditService.useCredit(clinicId, patientId, sessionId);
+    await fetchCreditBalances();
+  };
+
+  const wasCreditUsedForSession = useCallback(
+    (sessionId: string): boolean => {
+      // Check if the session has payment_status 'reservado' (credit reserved)
+      const session = sessions.find((s) => s.id === sessionId);
+      return session?.payment_status === "reservado" || session?.payment_status === "pago";
+    },
+    [sessions],
+  );
+
   const isLoading = patientsLoading || sessionsLoading || professionalsLoading || servicesLoading;
 
   const value: DataContextType = {
@@ -721,6 +781,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     associateSessionToPack,
     incrementPackUsage,
     decrementPackUsage,
+    // Credit compatibility
+    getCreditBalance,
+    addCredits: addCreditsHandler,
+    refundCredit: refundCreditHandler,
+    useCredit: useCreditHandler,
+    wasCreditUsedForSession,
+    refreshCreditBalances: fetchCreditBalances,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
