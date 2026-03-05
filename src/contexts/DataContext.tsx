@@ -197,7 +197,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         payment_status: s.payment_status || "pendente",
         payment_method: s.payment_method,
         notes: s.notes,
-        pack_id: s.pack_id ?? null,
+        package_id: s.package_id ?? null,
         paciente: s.paciente,
         profissional: s.profissional,
         servico: s.servico,
@@ -421,11 +421,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       payment_status: session.payment_status,
     };
     if (session.payment_method) insertPayload.payment_method = session.payment_method;
-    if ((session as any).pack_id) insertPayload.pack_id = (session as any).pack_id;
+    if ((session as any).package_id) insertPayload.package_id = (session as any).package_id;
 
     const { data, error } = await supabase
       .from("sessoes")
-      .insert(insertPayload)
+      .insert(insertPayload as any)
       .select(
         `
         *,
@@ -450,7 +450,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       payment_status: data.payment_status || "pendente",
       payment_method: data.payment_method,
       notes: data.notes,
-      pack_id: data.pack_id ?? null,
+      package_id: (data as any).package_id ?? null,
       paciente: data.paciente,
       profissional: data.profissional,
       servico: data.servico,
@@ -471,8 +471,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (data.price !== undefined) updateData.price = data.price;
     if (data.profissional_id !== undefined) updateData.profissional_id = data.profissional_id;
     if (data.servico_id !== undefined) updateData.servico_id = data.servico_id;
-    if ((data as any).pack_id !== undefined) updateData.pack_id = (data as any).pack_id;
-    const { error } = await supabase.from("sessoes").update(updateData).eq("id", id);
+    if ((data as any).package_id !== undefined) updateData.package_id = (data as any).package_id;
+    const { error } = await supabase.from("sessoes").update(updateData as any).eq("id", id);
     if (error) throw error;
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)));
   };
@@ -616,7 +616,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deletePack = async (id: string): Promise<void> => {
     // Desassociar sessões primeiro
-    await supabase.from("sessoes").update({ pack_id: null }).eq("pack_id", id);
+    await supabase.from("sessoes").update({ package_id: null } as any).eq("package_id", id);
     const { error } = await supabase.from("packs").delete().eq("id", id);
     if (error) throw error;
     setPacks((prev) => prev.filter((p) => p.id !== id));
@@ -632,14 +632,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .select("id, start_time")
         .eq("paciente_id", pack.paciente_id)
         .gte("start_time", pack.data_inicio)
-        .is("pack_id", null)
+        .is("package_id", null)
         .order("start_time", { ascending: true })
         .limit(pack.quantidade_sessoes);
       if (error || !data) return;
 
       if (data.length > 0) {
         const ids = data.map((s: any) => s.id);
-        await supabase.from("sessoes").update({ pack_id: pack.id }).in("id", ids);
+        await supabase.from("sessoes").update({ package_id: pack.id } as any).in("id", ids);
         // Contar realizadas para atualizar sessoes_usadas
         const realizadas = sessions.filter((s) => ids.includes(s.id) && s.status === "realizado").length;
         if (realizadas > 0) {
@@ -654,9 +654,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const associateSessionToPack = async (sessionId: string, packId: string | null): Promise<void> => {
-    const { error } = await supabase.from("sessoes").update({ pack_id: packId }).eq("id", sessionId);
+    const { error } = await supabase.from("sessoes").update({ package_id: packId } as any).eq("id", sessionId);
     if (error) throw error;
-    setSessions((prev) => prev.map((s) => (s.id === sessionId ? ({ ...s, pack_id: packId } as any) : s)));
+    setSessions((prev) => prev.map((s) => (s.id === sessionId ? ({ ...s, package_id: packId } as any) : s)));
   };
 
   const incrementPackUsage = async (packId: string): Promise<void> => {
