@@ -1,3 +1,13 @@
+// Exportação de compatibilidade — mantida para não quebrar imports existentes
+export interface PackageSubmitData {
+  modality: string;
+  frequency?: string;
+  fixedDays: number[];
+  flexible: boolean;
+  totalSessions: number;
+  generatedDates: { date: Date; hour: number; minute: number }[];
+}
+
 // NewSessionModal v3 — sem créditos, com suporte a pack
 import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
