@@ -1,11 +1,12 @@
 // DataContext - Centralized state management with 100% Supabase integration
-// v2 — Sistema de Packs (créditos removidos)
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+// v2 — Sistema de Packs + Credit compatibility layer
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
 import { Evolution } from "@/services/EvolutionService";
 import { AuditService } from "@/services/AuditService";
+import { CreditService } from "@/services/CreditService";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
@@ -103,6 +104,14 @@ interface DataContextType {
   associateSessionToPack: (sessionId: string, packId: string | null) => Promise<void>;
   incrementPackUsage: (packId: string) => Promise<void>;
   decrementPackUsage: (packId: string) => Promise<void>;
+
+  // Credit compatibility layer (delegates to CreditService)
+  getCreditBalance: (patientId: string) => number;
+  addCredits: (patientId: string, amount: number) => Promise<void>;
+  refundCredit: (sessionId: string) => Promise<void>;
+  useCredit: (patientId: string, sessionId: string) => Promise<void>;
+  wasCreditUsedForSession: (sessionId: string) => boolean;
+  refreshCreditBalances: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
