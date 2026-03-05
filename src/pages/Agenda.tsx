@@ -631,8 +631,14 @@ export default function Agenda() {
         getCreditBalance={getCreditBalance}
         onUpdateSession={updateSession}
         onDeleteSession={deleteSession}
-        onRefundCredit={refundCredit}
-        onUseCredit={useCredit}
+        onRefundCredit={async (patientId, sessionId) => {
+          await refundCredit(sessionId);
+          return { success: true };
+        }}
+        onUseCredit={async (patientId, sessionId) => {
+          await useCredit(patientId, sessionId);
+          return { success: true };
+        }}
         wasCreditUsedForSession={wasCreditUsedForSession}
         onAddCredits={handleAddCredits}
         onDuplicateSession={handleDuplicateSession}
