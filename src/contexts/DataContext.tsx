@@ -414,7 +414,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
     const { data, error } = await supabase
       .from("sessoes")
-      .insert(insertPayload)
+      .insert(insertPayload as any)
       .select(
         `
         *,
@@ -440,7 +440,7 @@ export function DataProvider({ children }: DataProviderProps) {
       payment_status: data.payment_status || "pendente",
       payment_method: data.payment_method,
       notes: data.notes,
-      avulso: data.avulso ?? false,
+      avulso: (data as any).avulso ?? false,
       paciente: data.paciente,
       profissional: data.profissional,
       servico: data.servico,

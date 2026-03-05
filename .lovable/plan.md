@@ -1,41 +1,52 @@
 
 
-# Corrigir erros de build + Executar migration de Packs
+# Adicionar Relatorio de Cadastros na pagina Pacientes
 
-## Parte 1: Corrigir erros de build em DataContext.tsx
+## Resumo
 
-Dois erros de TypeScript causados pela ultima edicao do Financeiro.tsx que adicionou referencia a `avulso`:
+Adicionar um botao "Relatorio" na barra de acoes da pagina de Pacientes que abre um modal com uma tabela filtravel e exportavel (CSV e PDF). A tabela mostra: data/hora de cadastro, nome completo, origem (sistema vs link), telefone, email e estado -- com ordenacao clicavel e filtro por origem.
 
-**Erro 1** (linha 417): `Record<string, unknown>` nao e aceite pelo `.insert()` do Supabase.
-- **Fix**: Cast `insertPayload as any` na chamada `.insert()`.
+## Alteracoes no ficheiro `src/pages/Pacientes.tsx`
 
-**Erro 2** (linha 443): `data.avulso` nao existe no tipo da tabela `sessoes`.
-- **Fix**: Ja esta dentro de `as any` no bloco seguinte, mas precisa de acesso seguro: `(data as any).avulso ?? false`.
+### 1. Imports novos (topo do ficheiro)
 
-## Parte 2: Migration de Packs corrigida
+Adicionar imports para:
+- `useRef` ao import existente do React
+- `Table, TableBody, TableCell, TableHead, TableHeader, TableRow` de `@/components/ui/table`
+- `FileBarChart2, ArrowUpDown, ArrowUp, ArrowDown, Download` de `lucide-react`
+- `format` de `date-fns`
+- `ptBR` de `date-fns/locale`
 
-O SQL do Claude tem varios problemas face ao schema real. Correcoes necessarias:
+### 2. Estado e logica do relatorio (apos `selectedPatient`)
 
-| Original (errado) | Corrigido |
-|---|---|
-| `REFERENCES clinicas(id)` | `REFERENCES clinics(id)` |
-| `REFERENCES pacientes(id)` | `REFERENCES pacientes(id)` (ok) |
-| RLS: `profiles.id = auth.uid()` | `profiles.user_id = auth.uid()` |
-| `CHECK (payment_status IN (...))` | Validation trigger (best practice) |
+Adicionar:
+- Estado: `isReportModalOpen`, `reportSearch`, `reportOrigin`, `reportSortField`, `reportSortDir`, `reportTableRef`
+- Funcao `detectOrigin(patient)` que verifica se o paciente veio via link publico ou sistema
+- `reportData` (useMemo) com filtragem por origem, pesquisa e ordenacao
+- `toggleSort(field)` para alternar ordenacao
+- `handleExportCSV()` -- gera CSV com BOM UTF-8 e faz download
+- `handleExportPDF()` -- abre janela de impressao do browser com HTML formatado
 
-A migration corrigida vai:
-1. Criar tabela `packs` com FK para `clinics` e `pacientes`
-2. Indices para `paciente_id`, `clinic_id`, `is_active`
-3. Adicionar coluna `pack_id` na tabela `sessoes` (referencia opcional)
-4. RLS usando `get_user_clinic_id(auth.uid())` (funcao ja existente no projecto)
-5. Trigger auto-incremento `numero_pack` por paciente
-6. Trigger `updated_at`
-7. View `packs_com_contagem` com contagem de sessoes em tempo real
+### 3. Botao "Relatorio" na barra de acoes
 
-**Nota**: Nao usar CHECK constraints para `payment_status` -- usar validation trigger conforme boas praticas.
+Inserir um novo `Button` com icone `FileBarChart2` antes do botao "Link Generico", que abre o modal do relatorio.
 
-## Ordem de execucao
+### 4. Modal do Relatorio (novo Dialog)
 
-1. Corrigir os 2 erros de build em `DataContext.tsx`
-2. Executar a migration SQL corrigida via ferramenta de migracao do Lovable
+Modal grande (`max-w-[900px]`) com:
+- Barra de pesquisa e filtro por origem (Select)
+- Botoes de exportacao CSV e PDF
+- Contador de resultados
+- Tabela com colunas ordenadaveis (Data, Hora, Nome, Origem, Telefone, Email, Estado)
+- Badges coloridos para origem e estado
+- Scroll horizontal em ecras pequenos
+- Botao "Fechar" no rodape
+
+## Detalhes tecnicos
+
+- Todas as alteracoes sao no ficheiro `src/pages/Pacientes.tsx` (4 blocos de insercao, sem remover codigo existente)
+- A detecao de origem usa campos `source`, `onboarding_token`, e `onboarding_completed_at` do paciente
+- O export CSV inclui BOM (`\uFEFF`) para compatibilidade com Excel
+- O export PDF usa `window.open` + `window.print` (sem dependencia de jsPDF para esta funcionalidade)
+- Componentes UI ja existentes no projeto: `Table`, `Dialog`, `Select`, `Badge`, `Button`, `Input`
 
