@@ -18,7 +18,7 @@ import { EngagementService } from "@/services/EngagementService";
 import { LeadService } from "@/services/LeadService";
 
 export default function Dashboard() {
-  const { sessions, patients, professionals, services, addSession, getCreditBalance, refreshPatients } = useData();
+  const { sessions, patients, professionals, services, addSession, refreshPatients } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [selectedPaciente, setSelectedPaciente] = useState("");
