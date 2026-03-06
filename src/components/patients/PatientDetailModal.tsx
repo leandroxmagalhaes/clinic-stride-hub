@@ -1,25 +1,17 @@
 import { useState, useEffect } from "react";
 import { getPublicBaseUrl } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Phone, Coins, History, User, Tag, Mail, Loader2, Trash2, Pencil } from "lucide-react";
+import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package } from "lucide-react";
 import { PatientStatementButton } from "./PatientStatementButton";
 import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
-import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
-import { AddCreditsModal, CreditPurchaseData } from "./AddCreditsModal";
-import { TransactionHistory, Transaction } from "./TransactionHistory";
 import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
 import { EditPatientModal } from "./EditPatientModal";
+import { PackManagerModal } from "@/components/agenda/PackManagerModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useClinicInfo } from "@/hooks/useClinicInfo";
@@ -28,9 +20,9 @@ interface PatientDetailModalProps {
   patient: Patient | null;
   isOpen: boolean;
   onClose: () => void;
-  creditBalance: number;
-  transactions: Transaction[];
-  onAddCredits: (patientId: string, data: CreditPurchaseData) => void | Promise<void>;
+  creditBalance?: number;
+  transactions?: any[];
+  onAddCredits?: (patientId: string, data: any) => void | Promise<void>;
   onDeletePatient?: (patientId: string) => Promise<void>;
   onUpdatePatient?: (patientId: string, data: Partial<Patient>) => Promise<void>;
   onNavigateToProntuario?: (patientId: string) => void;
@@ -40,25 +32,18 @@ export function PatientDetailModal({
   patient,
   isOpen,
   onClose,
-  creditBalance,
-  transactions,
-  onAddCredits,
   onDeletePatient,
   onUpdatePatient,
   onNavigateToProntuario,
 }: PatientDetailModalProps) {
-  const [isAddCreditsOpen, setIsAddCreditsOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [isSendingPortalLink, setIsSendingPortalLink] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const { data: clinicInfo } = useClinicInfo();
 
-  // Reset tab when modal opens
   useEffect(() => {
-    if (isOpen) {
-      setActiveTab("info");
-    }
+    if (isOpen) setActiveTab("info");
   }, [isOpen]);
 
   if (!patient) return null;
@@ -70,40 +55,31 @@ export function PatientDetailModal({
     .join("")
     .slice(0, 2);
 
-  const handleAddCredits = async (data: CreditPurchaseData) => {
-    await onAddCredits(patient.id, data);
-  };
-
   const handleSendPortalLink = async () => {
     if (!patient.email) {
       toast.error("Este paciente não possui email cadastrado.");
       return;
     }
-
     setIsSendingPortalLink(true);
     try {
       const portalUrl = `${getPublicBaseUrl()}/patient-portal`;
-
       const { data, error } = await supabase.functions.invoke("send-patient-portal-link", {
         body: {
           patientEmail: patient.email,
           patientName: patient.full_name,
-          portalUrl: portalUrl,
+          portalUrl,
           clinicName: clinicInfo?.name || "Clínica",
           clinicPhone: clinicInfo?.phone,
           clinicEmail: clinicInfo?.email,
         },
       });
-
       if (error) throw error;
-
       if (data?.success) {
         toast.success(`Link do portal enviado para ${patient.email}`);
       } else {
         throw new Error(data?.error || "Erro ao enviar email");
       }
     } catch (error) {
-      console.error("Error sending portal link:", error);
       toast.error(error instanceof Error ? error.message : "Erro ao enviar link do portal");
     } finally {
       setIsSendingPortalLink(false);
@@ -116,22 +92,18 @@ export function PatientDetailModal({
     toast.success("Paciente desativado com sucesso");
     onClose();
   };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[580px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-3">
               <Avatar className="h-10 w-10">
-                <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                  {initials}
-                </AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary font-medium">{initials}</AvatarFallback>
               </Avatar>
               <div className="flex-1">
                 <span>{patient.full_name}</span>
-                <div className="flex items-center gap-2 mt-1">
-                  <CreditBalanceBadge balance={creditBalance} size="sm" />
-                </div>
               </div>
             </DialogTitle>
           </DialogHeader>
@@ -146,22 +118,17 @@ export function PatientDetailModal({
                 <Tag className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Etiquetas</span>
               </TabsTrigger>
-              <TabsTrigger value="credits" className="gap-1.5">
-                <History className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Créditos</span>
+              <TabsTrigger value="packs" className="gap-1.5">
+                <Package className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Packs</span>
               </TabsTrigger>
             </TabsList>
 
-            {/* Info Tab */}
+            {/* ── Tab Dados ──────────────────────────────────────────── */}
             <TabsContent value="info" className="space-y-4 py-4">
               {onUpdatePatient && (
                 <div className="flex justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="gap-2"
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setIsEditModalOpen(true)} className="gap-2">
                     <Pencil className="h-4 w-4" />
                     Editar Dados
                   </Button>
@@ -188,14 +155,12 @@ export function PatientDetailModal({
                   <p className="font-medium truncate">{patient.email || "-"}</p>
                 </div>
               </div>
-
               <div className="border-t pt-4">
                 <div className="flex items-start gap-2 text-sm mb-3">
                   <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <p>{patient.address || "Endereço não informado"}</p>
                 </div>
               </div>
-
               <div className="border-t pt-4">
                 <p className="text-xs text-muted-foreground mb-2">Contato de Emergência</p>
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -207,7 +172,6 @@ export function PatientDetailModal({
                   </div>
                 </div>
               </div>
-
               {patient.notes && (
                 <div className="border-t pt-4">
                   <p className="text-xs text-muted-foreground mb-2">Observações</p>
@@ -216,55 +180,26 @@ export function PatientDetailModal({
               )}
             </TabsContent>
 
-            {/* Health Tags Tab */}
+            {/* ── Tab Etiquetas ──────────────────────────────────────── */}
             <TabsContent value="tags" className="py-4">
               <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Etiquetas de saúde ajudam a personalizar o atendimento e gerar alertas
-                    durante o agendamento.
-                  </p>
-                  {healthTags.length > 0 ? (
-                    <HealthTagList tags={healthTags} maxVisible={10} size="md" />
-                  ) : (
-                    <div className="text-center py-6 bg-muted/30 rounded-lg">
-                      <Tag className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        Nenhuma etiqueta atribuída
-                      </p>
-                    </div>
-                  )}
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Etiquetas de saúde ajudam a personalizar o atendimento e gerar alertas durante o agendamento.
+                </p>
+                {healthTags.length > 0 ? (
+                  <HealthTagList tags={healthTags} maxVisible={10} size="md" />
+                ) : (
+                  <div className="text-center py-6 bg-muted/30 rounded-lg">
+                    <Tag className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Nenhuma etiqueta atribuída</p>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
-            {/* Credits Tab */}
-            <TabsContent value="credits" className="py-4">
-              <div className="space-y-4">
-                {/* Credit Summary */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Saldo atual</p>
-                    <p className="text-2xl font-bold">{creditBalance}</p>
-                  </div>
-                  <Button
-                    onClick={() => setIsAddCreditsOpen(true)}
-                    className="gap-2"
-                  >
-                    <Coins className="h-4 w-4" />
-                    Adicionar Créditos
-                  </Button>
-                </div>
-
-                {/* Transaction History */}
-                <div>
-                  <p className="text-sm font-medium mb-3 flex items-center gap-2">
-                    <History className="h-4 w-4" />
-                    Extrato de Transações
-                  </p>
-                  <TransactionHistory transactions={transactions} />
-                </div>
-              </div>
+            {/* ── Tab Packs ──────────────────────────────────────────── */}
+            <TabsContent value="packs" className="py-2">
+              <PackManagerModal pacienteId={patient.id} pacienteNome={patient.full_name} />
             </TabsContent>
           </Tabs>
 
@@ -286,17 +221,10 @@ export function PatientDetailModal({
                 disabled={!patient.email || isSendingPortalLink}
                 className="gap-2"
               >
-                {isSendingPortalLink ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Mail className="h-4 w-4" />
-                )}
+                {isSendingPortalLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                 Enviar Link do Portal
               </Button>
-              <PatientStatementButton
-                patientId={patient.id}
-                patientName={patient.full_name}
-              />
+              <PatientStatementButton patientId={patient.id} patientName={patient.full_name} />
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose}>
@@ -318,16 +246,6 @@ export function PatientDetailModal({
         </DialogContent>
       </Dialog>
 
-      {/* Add Credits Sub-Modal */}
-      <AddCreditsModal
-        isOpen={isAddCreditsOpen}
-        onClose={() => setIsAddCreditsOpen(false)}
-        patientName={patient.full_name}
-        patientId={patient.id}
-        onAddCredits={handleAddCredits}
-      />
-
-      {/* Delete Confirmation Dialog */}
       <DeleteConfirmationDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
@@ -335,10 +253,9 @@ export function PatientDetailModal({
         title="Apagar Paciente"
         description="O paciente não aparecerá mais nas listagens, mas os dados serão mantidos para histórico."
         entityName={patient.full_name}
-        warnings={creditBalance > 0 ? [`Este paciente tem ${creditBalance} crédito(s) disponível(is)`] : []}
+        warnings={[]}
       />
 
-      {/* Edit Patient Modal */}
       {onUpdatePatient && (
         <EditPatientModal
           patient={patient}

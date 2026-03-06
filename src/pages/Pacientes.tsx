@@ -6,24 +6,28 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Phone, Mail, AlertCircle, ExternalLink, FileUp, Send, Link2, Check, FileBarChart2, ArrowUpDown, ArrowUp, ArrowDown, Download } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Phone,
+  Mail,
+  AlertCircle,
+  ExternalLink,
+  FileUp,
+  Send,
+  Link2,
+  Check,
+  FileBarChart2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Download,
+} from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -32,55 +36,35 @@ import { SendOnboardingLinkModal } from "@/components/patients/SendOnboardingLin
 import { toast } from "sonner";
 import { Link, useNavigate } from "react-router-dom";
 
-// Services and Context (SRP Architecture)
 import { useData } from "@/contexts/DataContext";
 import { PatientService, Patient } from "@/services/PatientService";
-import { CreditService } from "@/services/CreditService";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
-import { CreditBalanceBadge } from "@/components/ui/credit-balance-badge";
 import { PatientDetailModal } from "@/components/patients/PatientDetailModal";
-import { CreditPurchaseData } from "@/components/patients/AddCreditsModal";
 import { HealthTag } from "@/services/HealthTagService";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { TableSkeleton } from "@/components/skeletons/PageSkeletons";
 
 export default function Pacientes() {
-  const { patients, refreshPatients, getCreditBalance, addCredits, deletePatient, updatePatient, isLoading } = useData();
+  const { patients, refreshPatients, deletePatient, updatePatient, isLoading } = useData();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [clinicId, setClinicId] = useState<string | null>(null);
-  
-  // Fetch clinic_id for the current user
+
   useEffect(() => {
     async function fetchClinicId() {
       if (!user) return;
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("clinic_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
+      const { data, error } = await supabase.from("profiles").select("clinic_id").eq("user_id", user.id).maybeSingle();
       if (error) {
-        console.error("ERRO SUPABASE (fetch clinic_id):", error);
-        toast.error(`Erro ao identificar clínica: ${error.message}`);
-        setClinicId(null);
+        console.error("ERRO SUPABASE:", error);
         return;
       }
-
-      if (!data?.clinic_id) {
-        toast.error("Clínica não identificada para este usuário.");
-        setClinicId(null);
-        return;
-      }
-
-      setClinicId(data.clinic_id);
+      if (data?.clinic_id) setClinicId(data.clinic_id);
     }
-
     fetchClinicId();
   }, [user]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isOnboardingLinkModalOpen, setIsOnboardingLinkModalOpen] = useState(false);
@@ -109,13 +93,26 @@ export default function Pacientes() {
     if (reportOrigin !== "all") data = data.filter((p) => detectOrigin(p) === reportOrigin);
     if (reportSearch.trim()) {
       const term = reportSearch.toLowerCase();
-      data = data.filter((p) => p.full_name?.toLowerCase().includes(term) || p.email?.toLowerCase().includes(term) || p.phone?.toLowerCase().includes(term));
+      data = data.filter(
+        (p) =>
+          p.full_name?.toLowerCase().includes(term) ||
+          p.email?.toLowerCase().includes(term) ||
+          p.phone?.toLowerCase().includes(term),
+      );
     }
     data.sort((a, b) => {
-      let valA = "", valB = "";
-      if (reportSortField === "created_at") { valA = (a as any).created_at || ""; valB = (b as any).created_at || ""; }
-      else if (reportSortField === "full_name") { valA = a.full_name || ""; valB = b.full_name || ""; }
-      else if (reportSortField === "origin") { valA = detectOrigin(a); valB = detectOrigin(b); }
+      let valA = "",
+        valB = "";
+      if (reportSortField === "created_at") {
+        valA = (a as any).created_at || "";
+        valB = (b as any).created_at || "";
+      } else if (reportSortField === "full_name") {
+        valA = a.full_name || "";
+        valB = b.full_name || "";
+      } else if (reportSortField === "origin") {
+        valA = detectOrigin(a);
+        valB = detectOrigin(b);
+      }
       const cmp = valA.localeCompare(valB, "pt-PT");
       return reportSortDir === "asc" ? cmp : -cmp;
     });
@@ -124,32 +121,60 @@ export default function Pacientes() {
 
   const toggleSort = (field: ReportSortField) => {
     if (reportSortField === field) setReportSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setReportSortField(field); setReportSortDir("asc"); }
+    else {
+      setReportSortField(field);
+      setReportSortDir("asc");
+    }
   };
 
   const handleExportCSV = () => {
-    const headers = ["Data Cadastro","Hora","Nome Completo","Origem","Telefone","Email","Estado"];
+    const headers = ["Data Cadastro", "Hora", "Nome Completo", "Origem", "Telefone", "Email", "Estado"];
     const rows = reportData.map((p) => {
       const dt = (p as any).created_at ? new Date((p as any).created_at) : null;
-      return [dt ? format(dt,"dd/MM/yyyy",{locale:ptBR}) : "-", dt ? format(dt,"HH:mm",{locale:ptBR}) : "-", p.full_name||"-", detectOrigin(p)==="link"?"Link (cliente)":"Sistema", p.phone||"-", p.email||"-", p.is_active?"Ativo":"Inativo"];
+      return [
+        dt ? format(dt, "dd/MM/yyyy", { locale: ptBR }) : "-",
+        dt ? format(dt, "HH:mm", { locale: ptBR }) : "-",
+        p.full_name || "-",
+        detectOrigin(p) === "link" ? "Link (cliente)" : "Sistema",
+        p.phone || "-",
+        p.email || "-",
+        p.is_active ? "Ativo" : "Inativo",
+      ];
     });
-    const csv = [headers,...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
-    const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href=url; a.download=`pacientes_${format(new Date(),"yyyy-MM-dd")}.csv`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pacientes_${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
     toast.success("CSV exportado!");
   };
 
   const handleExportPDF = () => {
-    const dateStr = format(new Date(),"dd/MM/yyyy HH:mm",{locale:ptBR});
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório Pacientes</title><style>body{font-family:system-ui,sans-serif;padding:20px;font-size:12px}h1{font-size:18px;margin-bottom:4px}p.sub{color:#666;margin-bottom:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-weight:600}.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px}.link{background:#dbeafe;color:#1d4ed8}.sistema{background:#f0fdf4;color:#15803d}.ativo{background:#f0fdf4;color:#15803d}.inativo{background:#fef2f2;color:#dc2626}@media print{body{padding:0}}</style></head><body><h1>Relatório de Pacientes</h1><p class="sub">Gerado em ${dateStr} · ${reportData.length} paciente(s)</p><table><thead><tr><th>Data</th><th>Hora</th><th>Nome</th><th>Origem</th><th>Telefone</th><th>Email</th><th>Estado</th></tr></thead><tbody>${reportData.map((p)=>{const dt=(p as any).created_at?new Date((p as any).created_at):null;const o=detectOrigin(p);return`<tr><td>${dt?format(dt,"dd/MM/yyyy",{locale:ptBR}):"-"}</td><td>${dt?format(dt,"HH:mm",{locale:ptBR}):"-"}</td><td>${p.full_name||"-"}</td><td><span class="badge ${o}">${o==="link"?"Link":"Sistema"}</span></td><td>${p.phone||"-"}</td><td>${p.email||"-"}</td><td><span class="badge ${p.is_active?"ativo":"inativo"}">${p.is_active?"Ativo":"Inativo"}</span></td></tr>`;}).join("")}</tbody></table></body></html>`;
-    const win = window.open("","_blank");
-    if(!win){toast.error("Permita popups para exportar PDF");return;}
-    win.document.write(html); win.document.close(); win.focus();
-    setTimeout(()=>{win.print();win.close();},400);
+    const dateStr = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório Pacientes</title><style>body{font-family:system-ui,sans-serif;padding:20px;font-size:12px}h1{font-size:18px;margin-bottom:4px}p.sub{color:#666;margin-bottom:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-weight:600}.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px}.link{background:#dbeafe;color:#1d4ed8}.sistema{background:#f0fdf4;color:#15803d}.ativo{background:#f0fdf4;color:#15803d}.inativo{background:#fef2f2;color:#dc2626}@media print{body{padding:0}}</style></head><body><h1>Relatório de Pacientes</h1><p class="sub">Gerado em ${dateStr} · ${reportData.length} paciente(s)</p><table><thead><tr><th>Data</th><th>Hora</th><th>Nome</th><th>Origem</th><th>Telefone</th><th>Email</th><th>Estado</th></tr></thead><tbody>${reportData
+      .map((p) => {
+        const dt = (p as any).created_at ? new Date((p as any).created_at) : null;
+        const o = detectOrigin(p);
+        return `<tr><td>${dt ? format(dt, "dd/MM/yyyy", { locale: ptBR }) : "-"}</td><td>${dt ? format(dt, "HH:mm", { locale: ptBR }) : "-"}</td><td>${p.full_name || "-"}</td><td><span class="badge ${o}">${o === "link" ? "Link" : "Sistema"}</span></td><td>${p.phone || "-"}</td><td>${p.email || "-"}</td><td><span class="badge ${p.is_active ? "ativo" : "inativo"}">${p.is_active ? "Ativo" : "Inativo"}</span></td></tr>`;
+      })
+      .join("")}</tbody></table></body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) {
+      toast.error("Permita popups para exportar PDF");
+      return;
+    }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 400);
   };
 
-  // Form state
   const [formData, setFormData] = useState({
     full_name: "",
     cpf: "",
@@ -165,73 +190,18 @@ export default function Pacientes() {
     privacy_consent: false,
   });
 
-  // Use service for filtering
   const filteredPatients = PatientService.filterBySearch(patients, searchTerm);
 
-  // Mock transactions for demo (in production, fetch from Supabase)
-  const patientTransactions = useMemo(() => {
-    if (!selectedPatient) return [];
-    // Demo transactions - in production, call CreditService.getTransactionHistory
-    return [];
-  }, [selectedPatient]);
-
-  const handleOpenPatient = (patient: Patient) => {
-    setSelectedPatient(patient);
-  };
-
-  const handleAddCredits = async (patientId: string, data: CreditPurchaseData) => {
-    // Basic UUID sanity check (helps catch undefined / wrong IDs)
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-    if (!uuidRegex.test(patientId)) {
-      const msg = `patient_id inválido (UUID esperado): ${patientId}`;
-      console.error(msg);
-      toast.error(msg);
-      throw new Error(msg);
-    }
-
-    if (!clinicId) {
-      const msg = "Clínica não identificada. Faça login novamente.";
-      toast.error(msg);
-      throw new Error(msg);
-    }
-
-    const result = await CreditService.purchaseCredits(clinicId, patientId, data.amount, {
-      description: data.description,
-      monetaryValue: data.monetaryValue,
-      paymentMethod: data.paymentMethod,
-      paymentStatus: data.paymentStatus,
-    });
-
-    if (!result.success) {
-      const msg = result.error || "Erro ao adicionar créditos";
-      toast.error(msg);
-      throw new Error(msg);
-    }
-
-    // Also update local state for immediate UI feedback
-    addCredits(patientId, data.amount);
-  };
+  const handleOpenPatient = (patient: Patient) => setSelectedPatient(patient);
 
   const handleUpdatePatient = async (patientId: string, data: Partial<Patient>) => {
-    const { error } = await supabase
-      .from("pacientes")
-      .update(data)
-      .eq("id", patientId);
-
+    const { error } = await supabase.from("pacientes").update(data).eq("id", patientId);
     if (error) {
       toast.error(`Erro ao atualizar paciente: ${error.message}`);
       throw error;
     }
-
     updatePatient(patientId, data);
-    
-    // Also update selectedPatient if it's the one being edited
-    if (selectedPatient?.id === patientId) {
-      setSelectedPatient({ ...selectedPatient, ...data } as Patient);
-    }
-    
+    if (selectedPatient?.id === patientId) setSelectedPatient({ ...selectedPatient, ...data } as Patient);
     toast.success("Dados do paciente atualizados!");
   };
 
@@ -246,19 +216,15 @@ export default function Pacientes() {
       toast.error(validation.error);
       return;
     }
-
-    // Check privacy consent
     if (!formData.privacy_consent) {
       toast.error("Você deve aceitar a Política de Privacidade para cadastrar o paciente.");
       return;
     }
-
     try {
       if (!clinicId) {
         toast.error("Clínica não identificada. Faça login novamente.");
         return;
       }
-
       const payload = {
         clinic_id: clinicId,
         full_name: formData.full_name.trim(),
@@ -276,17 +242,11 @@ export default function Pacientes() {
         is_active: true,
         privacy_consent_at: new Date().toISOString(),
       };
-
-      const { error } = await supabase
-        .from("pacientes")
-        .insert(payload);
-
+      const { error } = await supabase.from("pacientes").insert(payload);
       if (error) {
-        console.error("ERRO SUPABASE (pacientes INSERT):", error);
         toast.error(`Erro ao cadastrar paciente: ${error.message}`);
         return;
       }
-
       await refreshPatients();
       toast.success("Paciente cadastrado com sucesso!");
       setIsModalOpen(false);
@@ -313,7 +273,6 @@ export default function Pacientes() {
     });
   };
 
-  // Show skeleton while loading
   if (isLoading) {
     return (
       <AppLayout
@@ -355,17 +314,14 @@ export default function Pacientes() {
                 return;
               }
               try {
-                // Fetch slug for the clinic
                 const { data: clinicData } = await supabase
                   .from("clinics")
                   .select("slug")
                   .eq("id", clinicId)
                   .maybeSingle();
-                
                 const genericUrl = clinicData?.slug
                   ? `${getPublicBaseUrl()}/r/${clinicData.slug}`
                   : `${getPublicBaseUrl()}/pre-registo/novo?c=${clinicId}`;
-                
                 await navigator.clipboard.writeText(genericUrl);
                 setGenericLinkCopied(true);
                 toast.success("Link genérico copiado!");
@@ -399,7 +355,6 @@ export default function Pacientes() {
       }
     >
       <div className="space-y-4 animate-fade-in">
-        {/* Search */}
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="relative">
@@ -414,12 +369,9 @@ export default function Pacientes() {
           </CardContent>
         </Card>
 
-        {/* Patients Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredPatients.map((patient) => {
             const healthTags = (patient.health_tags as HealthTag[]) || [];
-            const balance = getCreditBalance(patient.id);
-            
             return (
               <Card
                 key={patient.id}
@@ -430,7 +382,12 @@ export default function Pacientes() {
                   <div className="flex items-start gap-4">
                     <Avatar className="h-12 w-12">
                       <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                        {(patient.full_name ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || '?'}
+                        {(patient.full_name ?? "")
+                          .split(" ")
+                          .filter(Boolean)
+                          .map((n) => n[0])
+                          .join("")
+                          .slice(0, 2) || "?"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
@@ -458,13 +415,11 @@ export default function Pacientes() {
                           </div>
                         )}
                       </div>
-                      {/* Health Tags & Credits */}
-                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                        <CreditBalanceBadge balance={balance} size="sm" showTooltip={false} />
-                        {healthTags.length > 0 && (
+                      {healthTags.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
                           <HealthTagList tags={healthTags} maxVisible={2} size="sm" showTooltip={false} />
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -478,34 +433,33 @@ export default function Pacientes() {
             <CardContent className="p-12 text-center">
               <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
               <h3 className="font-semibold mb-1">Nenhum paciente encontrado</h3>
-              <p className="text-sm text-muted-foreground">
-                Tente ajustar sua busca ou cadastre um novo paciente
-              </p>
+              <p className="text-sm text-muted-foreground">Tente ajustar sua busca ou cadastre um novo paciente</p>
             </CardContent>
           </Card>
         )}
       </div>
 
-      {/* Patient Details Modal with Tabs */}
       <PatientDetailModal
         patient={selectedPatient}
         isOpen={!!selectedPatient}
         onClose={() => setSelectedPatient(null)}
-        creditBalance={selectedPatient ? getCreditBalance(selectedPatient.id) : 0}
-        transactions={patientTransactions}
-        onAddCredits={handleAddCredits}
         onDeletePatient={deletePatient}
         onUpdatePatient={handleUpdatePatient}
         onNavigateToProntuario={handleNavigateToProntuario}
       />
 
       {/* New Patient Modal */}
-      <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if (!open) resetForm(); }}>
+      <Dialog
+        open={isModalOpen}
+        onOpenChange={(open) => {
+          setIsModalOpen(open);
+          if (!open) resetForm();
+        }}
+      >
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display">Novo Paciente</DialogTitle>
           </DialogHeader>
-
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-2">
@@ -516,7 +470,6 @@ export default function Pacientes() {
                   placeholder="Nome completo do paciente"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label>NIF / CPF</Label>
                 <Input
@@ -525,7 +478,6 @@ export default function Pacientes() {
                   placeholder="Número fiscal (9-14 dígitos)"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label>Data de Nascimento</Label>
                 <Input
@@ -534,13 +486,9 @@ export default function Pacientes() {
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
                 />
               </div>
-
               <div className="space-y-2">
                 <Label>Gênero</Label>
-                <Select
-                  value={formData.gender}
-                  onValueChange={(value) => setFormData({ ...formData, gender: value })}
-                >
+                <Select value={formData.gender} onValueChange={(value) => setFormData({ ...formData, gender: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
@@ -551,7 +499,6 @@ export default function Pacientes() {
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-2">
                 <Label>Telefone *</Label>
                 <Input
@@ -560,7 +507,6 @@ export default function Pacientes() {
                   placeholder="+351 912 345 678"
                 />
               </div>
-
               <div className="col-span-2 space-y-2">
                 <Label>Email</Label>
                 <Input
@@ -570,7 +516,6 @@ export default function Pacientes() {
                   placeholder="email@exemplo.com"
                 />
               </div>
-
               <div className="col-span-2 space-y-2">
                 <Label>Morada</Label>
                 <Input
@@ -579,7 +524,6 @@ export default function Pacientes() {
                   placeholder="Morada, número, localidade, código postal"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label>Contato de Emergência</Label>
                 <Input
@@ -588,7 +532,6 @@ export default function Pacientes() {
                   placeholder="Nome do contato"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label>Telefone de Emergência</Label>
                 <Input
@@ -597,7 +540,6 @@ export default function Pacientes() {
                   placeholder="+351 912 345 678"
                 />
               </div>
-
               <div className="col-span-2 space-y-2">
                 <Label>Seguradora / Entidade</Label>
                 <Input
@@ -606,7 +548,6 @@ export default function Pacientes() {
                   placeholder="Nome da seguradora (se aplicável)"
                 />
               </div>
-
               <div className="col-span-2 space-y-2">
                 <Label>Observações</Label>
                 <Textarea
@@ -616,16 +557,12 @@ export default function Pacientes() {
                   rows={3}
                 />
               </div>
-
-              {/* Privacy Consent Checkbox */}
               <div className="col-span-2 space-y-3 pt-4 border-t">
                 <div className="flex items-start gap-3">
                   <Checkbox
                     id="privacy_consent"
                     checked={formData.privacy_consent}
-                    onCheckedChange={(checked) => 
-                      setFormData({ ...formData, privacy_consent: checked === true })
-                    }
+                    onCheckedChange={(checked) => setFormData({ ...formData, privacy_consent: checked === true })}
                     className="mt-0.5"
                   />
                   <div className="grid gap-1.5 leading-none">
@@ -636,11 +573,10 @@ export default function Pacientes() {
                       Aceito a Política de Privacidade *
                     </label>
                     <p className="text-xs text-muted-foreground">
-                      O paciente foi informado e concorda com o tratamento dos seus dados pessoais 
-                      conforme descrito na{" "}
-                      <Link 
-                        to="/privacy" 
-                        target="_blank" 
+                      O paciente foi informado e concorda com o tratamento dos seus dados pessoais conforme descrito na{" "}
+                      <Link
+                        to="/privacy"
+                        target="_blank"
                         className="text-primary hover:underline inline-flex items-center gap-0.5"
                       >
                         Política de Privacidade
@@ -653,37 +589,42 @@ export default function Pacientes() {
               </div>
             </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setIsModalOpen(false); resetForm(); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsModalOpen(false);
+                resetForm();
+              }}
+            >
               Cancelar
             </Button>
-            <Button onClick={handleCreatePatient}>
-              Cadastrar Paciente
-            </Button>
+            <Button onClick={handleCreatePatient}>Cadastrar Paciente</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Onboarding Link Modal */}
       <SendOnboardingLinkModal
         isOpen={isOnboardingLinkModalOpen}
         onClose={() => setIsOnboardingLinkModalOpen(false)}
         patients={patients}
       />
 
-      {/* Report Modal */}
       <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
         <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display">Relatório de Cadastros</DialogTitle>
           </DialogHeader>
-
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Pesquisar nome, email ou telefone..." value={reportSearch} onChange={(e) => setReportSearch(e.target.value)} className="pl-9" />
+                <Input
+                  placeholder="Pesquisar nome, email ou telefone..."
+                  value={reportSearch}
+                  onChange={(e) => setReportSearch(e.target.value)}
+                  className="pl-9"
+                />
               </div>
               <Select value={reportOrigin} onValueChange={(v) => setReportOrigin(v as OriginFilter)}>
                 <SelectTrigger className="w-full sm:w-[180px]">
@@ -704,22 +645,47 @@ export default function Pacientes() {
                 </Button>
               </div>
             </div>
-
             <p className="text-sm text-muted-foreground">{reportData.length} paciente(s) encontrado(s)</p>
-
             <div className="overflow-x-auto rounded-md border" ref={reportTableRef}>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
-                      Data {reportSortField === "created_at" ? (reportSortDir === "asc" ? <ArrowUp className="inline h-3 w-3" /> : <ArrowDown className="inline h-3 w-3" />) : <ArrowUpDown className="inline h-3 w-3 opacity-40" />}
+                      Data{" "}
+                      {reportSortField === "created_at" ? (
+                        reportSortDir === "asc" ? (
+                          <ArrowUp className="inline h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="inline h-3 w-3" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="inline h-3 w-3 opacity-40" />
+                      )}
                     </TableHead>
                     <TableHead>Hora</TableHead>
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("full_name")}>
-                      Nome {reportSortField === "full_name" ? (reportSortDir === "asc" ? <ArrowUp className="inline h-3 w-3" /> : <ArrowDown className="inline h-3 w-3" />) : <ArrowUpDown className="inline h-3 w-3 opacity-40" />}
+                      Nome{" "}
+                      {reportSortField === "full_name" ? (
+                        reportSortDir === "asc" ? (
+                          <ArrowUp className="inline h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="inline h-3 w-3" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="inline h-3 w-3 opacity-40" />
+                      )}
                     </TableHead>
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("origin")}>
-                      Origem {reportSortField === "origin" ? (reportSortDir === "asc" ? <ArrowUp className="inline h-3 w-3" /> : <ArrowDown className="inline h-3 w-3" />) : <ArrowUpDown className="inline h-3 w-3 opacity-40" />}
+                      Origem{" "}
+                      {reportSortField === "origin" ? (
+                        reportSortDir === "asc" ? (
+                          <ArrowUp className="inline h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="inline h-3 w-3" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="inline h-3 w-3 opacity-40" />
+                      )}
                     </TableHead>
                     <TableHead>Telefone</TableHead>
                     <TableHead>Email</TableHead>
@@ -728,42 +694,58 @@ export default function Pacientes() {
                 </TableHeader>
                 <TableBody>
                   {reportData.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum paciente encontrado</TableCell></TableRow>
-                  ) : reportData.map((patient) => {
-                    const dt = (patient as any).created_at ? new Date((patient as any).created_at) : null;
-                    const origin = detectOrigin(patient);
-                    return (
-                      <TableRow key={patient.id}>
-                        <TableCell>{dt ? format(dt, "dd/MM/yyyy", { locale: ptBR }) : "—"}</TableCell>
-                        <TableCell>{dt ? format(dt, "HH:mm", { locale: ptBR }) : "—"}</TableCell>
-                        <TableCell className="font-medium">{patient.full_name}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className={origin === "link" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"}>
-                            {origin === "link" ? "🔗 Link (cliente)" : "💻 Sistema"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{patient.phone || "—"}</TableCell>
-                        <TableCell>{patient.email || "—"}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className={patient.is_active ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}>
-                            {patient.is_active ? "Ativo" : "Inativo"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        Nenhum paciente encontrado
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    reportData.map((patient) => {
+                      const dt = (patient as any).created_at ? new Date((patient as any).created_at) : null;
+                      const origin = detectOrigin(patient);
+                      return (
+                        <TableRow key={patient.id}>
+                          <TableCell>{dt ? format(dt, "dd/MM/yyyy", { locale: ptBR }) : "—"}</TableCell>
+                          <TableCell>{dt ? format(dt, "HH:mm", { locale: ptBR }) : "—"}</TableCell>
+                          <TableCell className="font-medium">{patient.full_name}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={
+                                origin === "link" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                              }
+                            >
+                              {origin === "link" ? "🔗 Link (cliente)" : "💻 Sistema"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{patient.phone || "—"}</TableCell>
+                          <TableCell>{patient.email || "—"}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={
+                                patient.is_active ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+                              }
+                            >
+                              {patient.is_active ? "Ativo" : "Inativo"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsReportModalOpen(false)}>Fechar</Button>
+            <Button variant="outline" onClick={() => setIsReportModalOpen(false)}>
+              Fechar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Import Patients Modal */}
       {clinicId && (
         <ImportPatientsModal
           isOpen={isImportModalOpen}
