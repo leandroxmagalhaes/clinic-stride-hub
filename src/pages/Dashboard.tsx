@@ -18,7 +18,7 @@ import { EngagementService } from "@/services/EngagementService";
 import { LeadService } from "@/services/LeadService";
 
 export default function Dashboard() {
-  const { sessions, patients, professionals, services, addSession, getCreditBalance, refreshPatients } = useData();
+  const { sessions, patients, professionals, services, addSession, refreshPatients } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [selectedPaciente, setSelectedPaciente] = useState("");
@@ -88,9 +88,7 @@ export default function Dashboard() {
       const now = new Date();
       const selectedService = services.find((s) => s.id === data.servicoId);
 
-      const balance = getCreditBalance(data.pacienteId);
-      const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
-      const paymentStatus = serviceConsumesCredit && balance > 0 ? "reservado" : "pendente";
+      const paymentStatus = "pendente";
 
       const newSession = SessionService.create(
         {
@@ -315,7 +313,7 @@ export default function Dashboard() {
         notes={notes}
         setNotes={setNotes}
         onSubmit={handleSubmitSession}
-        getCreditBalance={getCreditBalance}
+        
         onPatientCreated={(newPatient) => {
           setLocalPatients((prev) =>
             [...prev, newPatient as any].sort((a, b) => a.full_name.localeCompare(b.full_name)),
