@@ -313,7 +313,7 @@ export default function Dashboard() {
         notes={notes}
         setNotes={setNotes}
         onSubmit={handleSubmitSession}
-        getCreditBalance={getCreditBalance}
+        
         onPatientCreated={(newPatient) => {
           setLocalPatients((prev) =>
             [...prev, newPatient as any].sort((a, b) => a.full_name.localeCompare(b.full_name)),
