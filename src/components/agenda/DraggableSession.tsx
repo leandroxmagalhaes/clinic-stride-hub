@@ -96,12 +96,12 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const cardColors = (() => {
     if (isRespiratorio) {
       return isChild
-        ? { bg: "#dbeafe", border: "#93c5fd" } // azul bebé
-        : { bg: "#93c5fd", border: "#3b82f6" }; // azul médio
+        ? { bg: "#dbeafe", border: "#93c5fd" } // azul claro (infantil)
+        : { bg: "#bfdbfe", border: "#2563eb" }; // azul médio (adulto)
     } else {
       return isChild
-        ? { bg: "#ede9fe", border: "#c4b5fd" } // lilás claro
-        : { bg: "#c4b5fd", border: "#7c3aed" }; // lilás médio
+        ? { bg: "#fce7f3", border: "#f9a8d4" } // rosa claro (infantil)
+        : { bg: "#fbcfe8", border: "#db2777" }; // rosa médio (adulto)
     }
   })();
   // ─────────────────────────────────────────────────────────────────────────
