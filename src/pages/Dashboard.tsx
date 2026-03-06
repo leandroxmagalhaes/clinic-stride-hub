@@ -88,9 +88,7 @@ export default function Dashboard() {
       const now = new Date();
       const selectedService = services.find((s) => s.id === data.servicoId);
 
-      const balance = getCreditBalance(data.pacienteId);
-      const serviceConsumesCredit = selectedService?.consumes_credit ?? true;
-      const paymentStatus = serviceConsumesCredit && balance > 0 ? "reservado" : "pendente";
+      const paymentStatus = "pendente";
 
       const newSession = SessionService.create(
         {

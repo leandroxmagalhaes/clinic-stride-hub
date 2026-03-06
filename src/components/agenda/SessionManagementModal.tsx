@@ -21,9 +21,17 @@ interface SessionManagementModalProps {
   onClose: () => void;
   session: Session | null;
   sessions: Session[];
-  onUpdateSession: (session: Session) => Promise<void>;
+  onUpdateSession: (id: string, data: Partial<Session>) => Promise<void>;
   onDeleteSession: (id: string) => Promise<void>;
-  onDuplicateSession?: (session: Session) => void;
+  onDuplicateSession?: (data: {
+    pacienteId: string;
+    profissionalId: string;
+    servicoId: string;
+    date: Date;
+    hour: number;
+    minute: number;
+    notes: string;
+  }) => void;
 }
 
 export function SessionManagementModal({
@@ -55,7 +63,7 @@ export function SessionManagementModal({
   const handleStatusChange = async (newStatus: string) => {
     setIsUpdating(true);
     try {
-      await onUpdateSession({ ...session, status: newStatus });
+      await onUpdateSession(session.id, { status: newStatus });
       toast.success(`Status atualizado para "${statusOptions.find(s => s.value === newStatus)?.label}"`);
     } catch (error) {
       toast.error("Erro ao atualizar status");
@@ -71,7 +79,16 @@ export function SessionManagementModal({
   };
 
   const handleDuplicate = () => {
-    onDuplicateSession?.(session);
+    if (!onDuplicateSession) return;
+    onDuplicateSession({
+      pacienteId: session.paciente_id,
+      profissionalId: session.profissional_id,
+      servicoId: session.servico_id || "",
+      date: startTime,
+      hour: startTime.getHours(),
+      minute: startTime.getMinutes(),
+      notes: session.notes || "",
+    });
     onClose();
   };
 
@@ -90,7 +107,6 @@ export function SessionManagementModal({
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Session Info */}
             <div className="space-y-2 p-3 rounded-lg bg-muted/30">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">{session.paciente?.full_name ?? "Paciente"}</span>
@@ -103,13 +119,10 @@ export function SessionManagementModal({
                 {format(startTime, "HH:mm")} – {format(endTime, "HH:mm")}
               </p>
               {session.notes && (
-                <p className="text-xs text-muted-foreground mt-1 italic">
-                  {session.notes}
-                </p>
+                <p className="text-xs text-muted-foreground mt-1 italic">{session.notes}</p>
               )}
             </div>
 
-            {/* Status Actions */}
             <div className="space-y-2">
               <p className="text-sm font-medium">Alterar Status</p>
               <div className="flex flex-wrap gap-2">
@@ -128,7 +141,6 @@ export function SessionManagementModal({
               </div>
             </div>
 
-            {/* Payment Info */}
             {session.payment_status && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">Pagamento:</span>
@@ -138,7 +150,6 @@ export function SessionManagementModal({
               </div>
             )}
 
-            {/* Actions */}
             <div className="flex gap-2 pt-2 border-t">
               {onDuplicateSession && (
                 <Button variant="outline" size="sm" onClick={handleDuplicate} className="flex-1">
