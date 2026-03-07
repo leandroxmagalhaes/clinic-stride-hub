@@ -10,18 +10,6 @@ import {
   Briefcase,
   TrendingUp,
   DollarSign,
-  Heart,import React, { memo, useMemo } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Calendar,
-  Users,
-  FileText,
-  UserCog,
-  Settings,
-  Briefcase,
-  TrendingUp,
-  DollarSign,
   Heart,
   LogOut,
   ChevronDown,
