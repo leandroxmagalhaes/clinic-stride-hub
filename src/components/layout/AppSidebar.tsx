@@ -303,10 +303,7 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-  LogOut,
-  ChevronDown,
-  Globe,
-} from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
