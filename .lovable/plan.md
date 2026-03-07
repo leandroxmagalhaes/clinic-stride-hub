@@ -1,12 +1,8 @@
 
 
-# Recreate PackManagerModal.tsx as empty stub
+# Create empty RelatorioRespiratório page
 
-Replace the current content of `src/components/agenda/PackManagerModal.tsx` with:
+Create `src/pages/RelatorioRespiratório.tsx` with a stub default export. No other files modified.
 
-```tsx
-export function PackManagerModal() { return null; }
-```
-
-No other files will be modified.
+**Note:** There are pre-existing build errors (SessionManagementModal export mismatch, PackManagerModal props) that will persist but are out of scope for this change.
 
