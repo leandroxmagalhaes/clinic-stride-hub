@@ -207,7 +207,7 @@ function StepUpload({ onFileReady }) {
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState(null);
   const [fileData, setFileData] = useState(null);
-  const inputRef = useRef();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback((f) => {
     if (!f || f.type !== "application/pdf") return;
@@ -244,7 +244,9 @@ function StepUpload({ onFileReady }) {
           setDragging(false);
           processFile(e.dataTransfer.files[0]);
         }}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          if (inputRef.current) inputRef.current.click();
+        }}
         style={{
           border: `2px dashed ${dragging ? G.gold : file ? G.goldLight : G.border}`,
           borderRadius: 16,
@@ -321,7 +323,7 @@ function StepUpload({ onFileReady }) {
           padding: "14px 0",
           fontSize: 15,
           opacity: file ? 1 : 0.45,
-          cursor: (file ? "pointer" : "not-allowed") as const,
+          cursor: (file ? "pointer" : "not-allowed") as CSSProperties["cursor"],
         })}
       >
         Analisar com IA →
@@ -817,7 +819,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
    STEP 4 — RELATÓRIO FINAL (PREVIEW + PRINT)
 ═══════════════════════════════════════════════════════════════════════════ */
 function StepRelatorio({ data, secoes, onEdit }) {
-  const printRef = useRef();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
     if (!printRef.current) return;
