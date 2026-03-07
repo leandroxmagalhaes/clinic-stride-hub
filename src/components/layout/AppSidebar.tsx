@@ -291,8 +291,6 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-
-import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
