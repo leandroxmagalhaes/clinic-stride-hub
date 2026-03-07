@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, CSSProperties } from "react";
 
 /* ─── Paleta ────────────────────────────────────────────────────────────── */
 const G = {
@@ -18,7 +18,7 @@ const G = {
 };
 
 /* ─── Utilitários de estilo ─────────────────────────────────────────────── */
-const card = (extra = {}) => ({
+const card = (extra: CSSProperties = {}): CSSProperties => ({
   background: G.white,
   borderRadius: 16,
   border: `1px solid ${G.border}`,
@@ -26,15 +26,15 @@ const card = (extra = {}) => ({
   ...extra,
 });
 
-const btn = (variant = "primary", extra = {}) => ({
+const btn = (variant = "primary", extra: CSSProperties = {}): CSSProperties => ({
   padding: "11px 22px",
   borderRadius: 10,
   border: "none",
   fontFamily: "inherit",
   fontWeight: 700,
   fontSize: 14,
-  cursor: "pointer",
-  transition: "all 0.2s",
+  cursor: "pointer" as const,
+  transition: "all 0.2s" as const,
   ...(variant === "primary"
     ? {
         background: `linear-gradient(135deg, ${G.gold}, ${G.goldLight})`,
@@ -55,18 +55,18 @@ const btn = (variant = "primary", extra = {}) => ({
   ...extra,
 });
 
-const label = (extra = {}) => ({
-  display: "block",
+const label = (extra: CSSProperties = {}): CSSProperties => ({
+  display: "block" as const,
   fontSize: 11,
   fontWeight: 700,
   color: G.muted,
-  textTransform: "uppercase",
-  letterSpacing: "0.8px",
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.8px" as const,
   marginBottom: 5,
   ...extra,
 });
 
-const input = (extra = {}) => ({
+const input = (extra: CSSProperties = {}): CSSProperties => ({
   width: "100%",
   padding: "9px 13px",
   borderRadius: 8,
@@ -75,8 +75,8 @@ const input = (extra = {}) => ({
   fontFamily: "Georgia, serif",
   color: G.ink,
   background: G.white,
-  boxSizing: "border-box",
-  outline: "none",
+  boxSizing: "border-box" as const,
+  outline: "none" as const,
   ...extra,
 });
 
@@ -145,10 +145,10 @@ const EMPTY_DATA = {
 ═══════════════════════════════════════════════════════════════════════════ */
 function Stepper({ current }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 36 }}>
+    <div style={{ display: "flex" as const, alignItems: "center", justifyContent: "center", marginBottom: 36 }}>
       {STEPS.map((s, i) => (
-        <div key={s.id} style={{ display: "flex", alignItems: "center" }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <div key={s.id} style={{ display: "flex" as const, alignItems: "center" }}>
+          <div style={{ display: "flex" as const, flexDirection: "column" as const, alignItems: "center", gap: 6 }}>
             <div
               style={{
                 width: 46,
@@ -161,7 +161,7 @@ function Stepper({ current }) {
                       ? G.goldPale
                       : "#F0EDE0",
                 border: `2px solid ${current >= s.id ? G.gold : G.border}`,
-                display: "flex",
+                display: "flex" as const,
                 alignItems: "center",
                 justifyContent: "center",
                 fontSize: 18,
@@ -176,7 +176,7 @@ function Stepper({ current }) {
                 fontSize: 11,
                 fontWeight: current === s.id ? 800 : 500,
                 color: current >= s.id ? G.gold : G.muted,
-                letterSpacing: "0.5px",
+                letterSpacing: "0.5px" as const,
               }}
             >
               {s.label}
@@ -213,7 +213,10 @@ function StepUpload({ onFileReady }) {
     if (!f || f.type !== "application/pdf") return;
     setFile(f);
     const reader = new FileReader();
-    reader.onload = (e) => setFileData(e.target.result.split(",")[1]);
+    reader.onload = (e) => {
+      const result = e.target?.result;
+      if (typeof result === "string") setFileData(result.split(",")[1]);
+    };
     reader.readAsDataURL(f);
   }, []);
 
@@ -246,10 +249,10 @@ function StepUpload({ onFileReady }) {
           border: `2px dashed ${dragging ? G.gold : file ? G.goldLight : G.border}`,
           borderRadius: 16,
           padding: "44px 32px",
-          textAlign: "center",
+          textAlign: "center" as const,
           background: dragging ? G.goldPale : file ? "#FEFCF5" : G.goldBg,
-          cursor: "pointer",
-          transition: "all 0.2s",
+          cursor: "pointer" as const,
+          transition: "all 0.2s" as const,
           boxShadow: dragging ? `0 0 24px ${G.gold}33` : "none",
         }}
       >
@@ -257,7 +260,7 @@ function StepUpload({ onFileReady }) {
           ref={inputRef}
           type="file"
           accept=".pdf"
-          style={{ display: "none" }}
+          style={{ display: "none" as const }}
           onChange={(e) => processFile(e.target.files[0])}
         />
         {file ? (
@@ -275,7 +278,7 @@ function StepUpload({ onFileReady }) {
             <p style={{ fontSize: 13, color: G.muted, margin: "0 0 10px" }}>ou clique para seleccionar</p>
             <span
               style={{
-                display: "inline-block",
+                display: "inline-block" as const,
                 padding: "4px 12px",
                 borderRadius: 99,
                 background: G.goldPale,
@@ -298,7 +301,7 @@ function StepUpload({ onFileReady }) {
           background: "#EFF6FF",
           borderRadius: 12,
           border: "1px solid #BFDBFE",
-          display: "flex",
+          display: "flex" as const,
           gap: 12,
         }}
       >
@@ -318,7 +321,7 @@ function StepUpload({ onFileReady }) {
           padding: "14px 0",
           fontSize: 15,
           opacity: file ? 1 : 0.45,
-          cursor: file ? "pointer" : "not-allowed",
+          cursor: (file ? "pointer" : "not-allowed") as const,
         })}
       >
         Analisar com IA →
@@ -477,13 +480,13 @@ Mantém linguagem clínica profissional em português europeu.`;
 
       {/* Progress */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex" as const, justifyContent: "space-between", marginBottom: 8 }}>
           <span style={{ fontSize: 13, color: G.muted }}>
             {EXTRACTION_STEPS[Math.min(currentStep, EXTRACTION_STEPS.length - 1)]}
           </span>
           <span style={{ fontSize: 13, fontWeight: 800, color: G.gold }}>{progress}%</span>
         </div>
-        <div style={{ height: 8, background: G.goldPale, borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ height: 8, background: G.goldPale, borderRadius: 99, overflow: "hidden" as const }}>
           <div
             style={{
               height: "100%",
@@ -498,12 +501,12 @@ Mantém linguagem clínica profissional em português europeu.`;
 
       {/* Extracted items */}
       {items.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+        <div style={{ display: "flex" as const, flexDirection: "column" as const, gap: 8, marginBottom: 20 }}>
           {items.map((item, i) => (
             <div
               key={i}
               style={{
-                display: "flex",
+                display: "flex" as const,
                 alignItems: "center",
                 gap: 12,
                 padding: "10px 14px",
@@ -542,7 +545,7 @@ Mantém linguagem clínica profissional em português europeu.`;
       )}
 
       {status === "loading" && items.length === 0 && (
-        <div style={{ textAlign: "center", padding: "32px 0", color: G.muted, fontSize: 14 }}>
+        <div style={{ textAlign: "center" as const, padding: "32px 0", color: G.muted, fontSize: 14 }}>
           <div style={{ fontSize: 32, marginBottom: 12, animation: "spin 2s linear infinite" }}>⚙️</div>A processar o
           PDF...
         </div>
@@ -574,7 +577,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
           value={data[fieldKey] || ""}
           rows={rows}
           onChange={(e) => setData({ ...data, [fieldKey]: e.target.value })}
-          style={{ ...input(), resize: "vertical" }}
+          style={{ ...input(), resize: "vertical" as const }}
         />
       ) : (
         <input
@@ -603,7 +606,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+      <div style={{ display: "flex" as const, gap: 6, marginBottom: 20, flexWrap: "wrap" as const }}>
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -617,7 +620,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
 
       <div style={{ ...card(), padding: 24 }}>
         {tab === "paciente" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <div style={{ display: "grid" as const, gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
             <div style={{ gridColumn: "1/-1" }}>
               <Field label="Nome do Utente" fieldKey="nome" />
             </div>
@@ -632,7 +635,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
         )}
 
         {tab === "parametros" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <div style={{ display: "grid" as const, gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
             <Field label="SIndex Máximo (cmH2O)" fieldKey="sindex_best" />
             <Field label="SIndex Média (cmH2O)" fieldKey="sindex_avg" />
             <Field label="PNV (cmH2O)" fieldKey="pnv" />
@@ -655,7 +658,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
         {tab === "intervencao" && (
           <div>
             <Field label="Equipamento" fieldKey="equipamento" />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+            <div style={{ display: "grid" as const, gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
               <Field label="Frequência" fieldKey="frequencia" />
               <Field label="Repetições" fieldKey="repeticoes" />
               <Field label="Carga Inicial" fieldKey="carga_inicial" />
@@ -684,7 +687,12 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
                 }}
               >
                 <div
-                  style={{ display: "grid", gridTemplateColumns: "80px 120px 1fr 32px", gap: 10, alignItems: "start" }}
+                  style={{
+                    display: "grid" as const,
+                    gridTemplateColumns: "80px 120px 1fr 32px",
+                    gap: 10,
+                    alignItems: "start",
+                  }}
                 >
                   <div>
                     <label style={label()}>Semana</label>
@@ -716,7 +724,13 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
                         const p = data.progressao.filter((_, idx) => idx !== i);
                         setData({ ...data, progressao: p });
                       }}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: G.error }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer" as const,
+                        fontSize: 16,
+                        color: G.error,
+                      }}
                     >
                       ✕
                     </button>
@@ -751,7 +765,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
                 key={s.id}
                 onClick={() => setSocoes({ ...secoes, [s.id]: !secoes[s.id] })}
                 style={{
-                  display: "flex",
+                  display: "flex" as const,
                   alignItems: "center",
                   gap: 14,
                   padding: "14px 16px",
@@ -759,8 +773,8 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
                   borderRadius: 12,
                   border: `1px solid ${secoes[s.id] ? G.border : "#EEE"}`,
                   marginBottom: 8,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
+                  cursor: "pointer" as const,
+                  transition: "all 0.2s" as const,
                 }}
               >
                 <div
@@ -770,10 +784,10 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
                     borderRadius: 6,
                     border: `2px solid ${secoes[s.id] ? G.gold : "#CCC"}`,
                     background: secoes[s.id] ? G.gold : G.white,
-                    display: "flex",
+                    display: "flex" as const,
                     alignItems: "center",
                     justifyContent: "center",
-                    transition: "all 0.2s",
+                    transition: "all 0.2s" as const,
                     flexShrink: 0,
                   }}
                 >
@@ -806,6 +820,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
   const printRef = useRef();
 
   const handlePrint = () => {
+    if (!printRef.current) return;
     const content = printRef.current.innerHTML;
     const win = window.open("", "_blank");
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -861,12 +876,14 @@ function StepRelatorio({ data, secoes, onEdit }) {
   return (
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
       {/* Action bar */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+      <div
+        style={{ display: "flex" as const, justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}
+      >
         <div>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: G.dark, margin: "0 0 4px" }}>Relatório Gerado</h2>
           <p style={{ color: G.muted, fontSize: 13, margin: 0 }}>Preview fiel ao layout final</p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex" as const, gap: 10 }}>
           <button onClick={onEdit} style={btn("outline", { fontSize: 13 })}>
             ✏️ Editar
           </button>
@@ -884,7 +901,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
           fontFamily: "Georgia, 'Times New Roman', serif",
           border: `3px solid ${G.gold}`,
           borderRadius: 12,
-          overflow: "hidden",
+          overflow: "hidden" as const,
           boxShadow: "0 12px 48px rgba(0,0,0,0.15)",
         }}
       >
@@ -893,7 +910,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
           style={{
             background: `linear-gradient(135deg, ${G.dark} 0%, ${G.darkMid} 100%)`,
             padding: "28px 40px",
-            textAlign: "center",
+            textAlign: "center" as const,
             borderBottom: `4px solid ${G.gold}`,
           }}
         >
@@ -915,7 +932,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
           {/* Meta */}
           <div
             style={{
-              display: "flex",
+              display: "flex" as const,
               justifyContent: "space-between",
               marginBottom: 20,
               borderBottom: `1px solid ${G.borderLight}`,
@@ -934,7 +951,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
 
           <h2
             style={{
-              textAlign: "center",
+              textAlign: "center" as const,
               fontSize: 17,
               fontWeight: 700,
               color: G.dark,
@@ -994,9 +1011,11 @@ function StepRelatorio({ data, secoes, onEdit }) {
               >
                 2. Diagnóstico Funcional Respiratório (DFR)
               </h3>
-              <p style={{ fontSize: 13, lineHeight: 1.9, textAlign: "justify", color: G.ink }}>{data.diagnostico}</p>
+              <p style={{ fontSize: 13, lineHeight: 1.9, textAlign: "justify" as const, color: G.ink }}>
+                {data.diagnostico}
+              </p>
               {data.observacao_clinica && (
-                <p style={{ fontSize: 13, lineHeight: 1.9, textAlign: "justify", color: G.ink, marginTop: 8 }}>
+                <p style={{ fontSize: 13, lineHeight: 1.9, textAlign: "justify" as const, color: G.ink, marginTop: 8 }}>
                   {data.observacao_clinica}
                 </p>
               )}
@@ -1080,7 +1099,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
                       style={{
                         padding: "10px 14px",
                         border: `1px solid ${G.border}`,
-                        textAlign: "center",
+                        textAlign: "center" as const,
                         fontWeight: 700,
                         fontSize: 13,
                       }}
@@ -1091,7 +1110,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
                       style={{
                         padding: "10px 14px",
                         border: `1px solid ${G.border}`,
-                        textAlign: "center",
+                        textAlign: "center" as const,
                         fontWeight: 700,
                         fontSize: 13,
                       }}
@@ -1112,7 +1131,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
                         style={{
                           padding: "9px 14px",
                           border: `1px solid ${G.border}`,
-                          textAlign: "center",
+                          textAlign: "center" as const,
                           fontWeight: 700,
                           fontSize: 13,
                         }}
@@ -1123,7 +1142,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
                         style={{
                           padding: "9px 14px",
                           border: `1px solid ${G.border}`,
-                          textAlign: "center",
+                          textAlign: "center" as const,
                           fontSize: 13,
                         }}
                       >
@@ -1165,7 +1184,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
             style={{
               borderTop: `2px solid ${G.borderLight}`,
               paddingTop: 24,
-              textAlign: "center",
+              textAlign: "center" as const,
               marginTop: 16,
             }}
           >
@@ -1183,7 +1202,7 @@ function StepRelatorio({ data, secoes, onEdit }) {
           style={{
             background: G.dark,
             padding: "12px 40px",
-            textAlign: "center",
+            textAlign: "center" as const,
             borderTop: `2px solid ${G.gold}`,
           }}
         >
@@ -1227,10 +1246,10 @@ export default function RelatorioRespiratório() {
       }}
     >
       {/* Header */}
-      <div style={{ textAlign: "center", marginBottom: 44 }}>
+      <div style={{ textAlign: "center" as const, marginBottom: 44 }}>
         <div
           style={{
-            display: "inline-flex",
+            display: "inline-flex" as const,
             alignItems: "center",
             gap: 10,
             background: `linear-gradient(135deg, ${G.dark}, ${G.darkMid})`,
@@ -1242,7 +1261,13 @@ export default function RelatorioRespiratório() {
         >
           <span style={{ fontSize: 18 }}>🫁</span>
           <span
-            style={{ fontSize: 12, fontWeight: 700, color: G.goldLight, letterSpacing: 3, textTransform: "uppercase" }}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: G.goldLight,
+              letterSpacing: 3,
+              textTransform: "uppercase" as const,
+            }}
           >
             Módulo de Relatórios · Fisioterapia Respiratória
           </span>
@@ -1273,7 +1298,7 @@ export default function RelatorioRespiratório() {
         {step === 4 && <StepRelatorio data={data} secoes={secoes} onEdit={() => setStep(3)} />}
       </div>
 
-      <p style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "#B8A878" }}>
+      <p style={{ textAlign: "center" as const, marginTop: 20, fontSize: 12, color: "#B8A878" }}>
         Passo {step} de {STEPS.length} · {STEPS[step - 1]?.label}
       </p>
     </div>
