@@ -408,41 +408,27 @@ Calcula as cargas progressivas baseado na carga inicial: aumenta 2 cmH2O por sem
 Mantém linguagem clínica profissional em português europeu.`;
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "document",
-                  source: { type: "base64", media_type: "application/pdf", data: fileData },
-                },
-                {
-                  type: "text",
-                  text: "Analisa este relatório BreatheLink e devolve o JSON com todos os dados extraídos e o plano terapêutico gerado.",
-                },
-              ],
-            },
-          ],
-        }),
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-respiratory-report`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ pdfBase64: fileData }),
+        }
+      );
 
       clearInterval(stepInterval);
       setCurrentStep(EXTRACTION_STEPS.length - 1);
 
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-      const apiData = await response.json();
-      const text = apiData.content?.map((b) => b.text || "").join("") || "";
-
-      // Parse JSON — remove possíveis backticks
-      const clean = text.replace(/```json|```/gi, "").trim();
-      const parsed = JSON.parse(clean);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `API error: ${response.status}`);
+      }
+      const result = await response.json();
+      const parsed = result.data;
 
       // Build display items
       setItems([
