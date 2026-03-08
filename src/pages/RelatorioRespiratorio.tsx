@@ -410,38 +410,34 @@ Calcula as cargas progressivas baseado na carga inicial: aumenta 2 cmH2O por sem
 Mantém linguagem clínica profissional em português europeu.`;
 
     try {
-      const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!GEMINI_KEY) throw new Error("VITE_GEMINI_API_KEY não configurada");
-
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  { inlineData: { mimeType: "application/pdf", data: fileData } },
-                  {
-                    text: "Analisa este relatório BreatheLink e devolve o JSON com todos os dados extraídos e o plano terapêutico gerado.",
-                  },
-                ],
-              },
-            ],
-            generationConfig: { maxOutputTokens: 2000, temperature: 0.2 },
-          }),
-        },
-      );
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 2000,
+          system: systemPrompt,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "document", source: { type: "base64", media_type: "application/pdf", data: fileData } },
+                {
+                  type: "text",
+                  text: "Analisa este relatório BreatheLink e devolve o JSON com todos os dados extraídos e o plano terapêutico gerado.",
+                },
+              ],
+            },
+          ],
+        }),
+      });
 
       clearInterval(stepInterval);
       setCurrentStep(EXTRACTION_STEPS.length - 1);
 
       if (!response.ok) throw new Error(`API error: ${response.status}`);
       const apiData = await response.json();
-      const text = apiData.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
+      const text = apiData.content?.map((b) => b.text || "").join("") || "";
 
       // Parse JSON — remove possíveis backticks
       const clean = text.replace(/```json|```/gi, "").trim();
