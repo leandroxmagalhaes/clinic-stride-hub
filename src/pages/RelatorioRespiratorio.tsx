@@ -1234,7 +1234,7 @@ function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNe
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("respiratory_reports")
       .select("id, patient_name, report_date, data")
       .order("report_date", { ascending: false });
@@ -1249,7 +1249,7 @@ function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNe
   const handleDelete = async (id: string) => {
     if (!confirm("Apagar este relatório? Esta acção não pode ser desfeita.")) return;
     setDeleting(id);
-    await supabase.from("respiratory_reports").delete().eq("id", id);
+    await (supabase as any).from("respiratory_reports").delete().eq("id", id);
     setReports((r) => r.filter((x) => x.id !== id));
     setDeleting(null);
   };
@@ -1429,9 +1429,9 @@ export default function RelatorioRespiratório() {
       created_by: user?.id,
     };
     if (editingId) {
-      await supabase.from("respiratory_reports").update(reportData).eq("id", editingId);
+      await (supabase as any).from("respiratory_reports").update(reportData).eq("id", editingId);
     } else {
-      const { data: saved } = await supabase.from("respiratory_reports").insert(reportData).select().single();
+      const { data: saved } = await (supabase as any).from("respiratory_reports").insert(reportData).select().single();
       if (saved) setEditingId(saved.id);
     }
     setView("history");
