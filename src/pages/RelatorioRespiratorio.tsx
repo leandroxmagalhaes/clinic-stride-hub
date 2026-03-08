@@ -1,4 +1,6 @@
-import { useState, useCallback, useRef, CSSProperties } from "react";
+import { useState, useCallback, useRef, useEffect, CSSProperties } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 /* ─── Paleta ────────────────────────────────────────────────────────────── */
 const G = {
@@ -367,30 +369,83 @@ function StepIA({ file, fileData, onDone }) {
       if (stepIdx >= EXTRACTION_STEPS.length - 1) clearInterval(stepInterval);
     }, 600);
 
-
+    const systemPrompt = `És um fisioterapeuta respiratório especialista a analisar relatórios do BreatheLink IMT Suite (POWERbreathe).
+Analisa o PDF e devolve EXCLUSIVAMENTE um JSON válido sem markdown, sem texto extra, sem \`\`\`json.
+Campos obrigatórios (usa string vazia "" se não encontrado):
+{
+  "nome": "nome completo do paciente",
+  "data": "data da sessão no formato dd/MM/yyyy",
+  "idade": "idade em anos",
+  "peso": "peso em kg",
+  "altura": "altura em cm",
+  "bmi": "IMC calculado ou extraído",
+  "pnv": "PNV em cmH2O",
+  "sindex_best": "SIndex máximo em cmH2O",
+  "sindex_avg": "SIndex médio em cmH2O",
+  "percentagem_pnv": "percentagem do SIndex best em relação ao PNV, ex: 58.7",
+  "pif": "PIF em L/s",
+  "volume": "Volume em litros",
+  "grau_fraqueza": "Leve | Moderado | Severo baseado na percentagem do PNV (>70% normal, 50-70% leve, 30-50% moderado, <30% severo)",
+  "diagnostico": "texto clínico completo do diagnóstico funcional respiratório, 3-4 frases profissionais",
+  "observacao_clinica": "observação adicional sobre o esforço e comportamento durante o teste",
+  "equipamento": "nome do equipamento usado",
+  "frequencia": "frequência recomendada de sessões",
+  "repeticoes": "número de repetições por sessão",
+  "carga_inicial": "carga inicial recomendada baseada no SIndex (35-40% do SIndex best)",
+  "tecnica": "descrição técnica do exercício",
+  "meta_curto": "meta a 4 semanas baseada no SIndex atual e PNV",
+  "meta_medio": "meta a médio prazo",
+  "mobilidade": "descrição dos exercícios de mobilidade torácica e expansão costal recomendados",
+  "fisioterapeuta": "nome da fisioterapeuta se presente",
+  "cedula": "número de cédula profissional se presente",
+  "progressao": [
+    {"semana":"1","carga":"X-Y","criterio":"texto"},
+    {"semana":"2","carga":"X-Y","criterio":"texto"},
+    {"semana":"3","carga":"X-Y","criterio":"texto"},
+    {"semana":"4","carga":"X-Y","criterio":"texto"},
+    {"semana":"5","carga":"Ajuste pós-reavaliação","criterio":"texto sobre reavaliação"}
+  ]
+}
+Calcula as cargas progressivas baseado na carga inicial: aumenta 2 cmH2O por semana.
+Mantém linguagem clínica profissional em português europeu.`;
 
     try {
+      const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!GEMINI_KEY) throw new Error("VITE_GEMINI_API_KEY não configurada");
+
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-respiratory-report`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ pdfBase64: fileData }),
-        }
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { inlineData: { mimeType: "application/pdf", data: fileData } },
+                  {
+                    text: "Analisa este relatório BreatheLink e devolve o JSON com todos os dados extraídos e o plano terapêutico gerado.",
+                  },
+                ],
+              },
+            ],
+            generationConfig: { maxOutputTokens: 2000, temperature: 0.2 },
+          }),
+        },
       );
 
       clearInterval(stepInterval);
       setCurrentStep(EXTRACTION_STEPS.length - 1);
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `API error: ${response.status}`);
-      }
-      const result = await response.json();
-      const parsed = result.data;
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const apiData = await response.json();
+      const text = apiData.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
+
+      // Parse JSON — remove possíveis backticks
+      const clean = text.replace(/```json|```/gi, "").trim();
+      const parsed = JSON.parse(clean);
 
       // Build display items
       setItems([
@@ -507,7 +562,7 @@ function StepIA({ file, fileData, onDone }) {
 /* ═══════════════════════════════════════════════════════════════════════════
    STEP 3 — EDITOR
 ═══════════════════════════════════════════════════════════════════════════ */
-function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
+function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = null }) {
   const [tab, setTab] = useState("paciente");
 
   const tabs = [
@@ -753,12 +808,12 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
         )}
       </div>
 
-      <button
-        onClick={onNext}
-        style={btn("primary", { width: "100%", marginTop: 24, padding: "14px 0", fontSize: 15 })}
-      >
-        Gerar Relatório Final →
-      </button>
+      <div style={{ display: "flex" as const, gap: 10, marginTop: 24 }}>
+        {extraActions}
+        <button onClick={onNext} style={btn("primary", { flex: 1, padding: "14px 0", fontSize: 15 })}>
+          Gerar Relatório Final →
+        </button>
+      </div>
     </div>
   );
 }
@@ -766,7 +821,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext }) {
 /* ═══════════════════════════════════════════════════════════════════════════
    STEP 4 — RELATÓRIO FINAL (PREVIEW + PRINT)
 ═══════════════════════════════════════════════════════════════════════════ */
-function StepRelatorio({ data, secoes, onEdit }) {
+function StepRelatorio({ data, secoes, onEdit, onSave = null }) {
   const printRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
@@ -837,6 +892,11 @@ function StepRelatorio({ data, secoes, onEdit }) {
           <button onClick={onEdit} style={btn("outline", { fontSize: 13 })}>
             ✏️ Editar
           </button>
+          {onSave && (
+            <button onClick={onSave} style={btn("outline", { fontSize: 13, color: G.success, borderColor: G.success })}>
+              💾 Guardar
+            </button>
+          )}
           <button onClick={handlePrint} style={btn("primary", { fontSize: 13 })}>
             🖨️ Exportar / Imprimir
           </button>
@@ -1168,12 +1228,174 @@ function StepRelatorio({ data, secoes, onEdit }) {
 /* ═══════════════════════════════════════════════════════════════════════════
    APP ROOT
 ═══════════════════════════════════════════════════════════════════════════ */
+/* ─── Histórico ──────────────────────────────────────────────────────────── */
+function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNew: () => void }) {
+  const { user } = useAuth();
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const fetchReports = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("respiratory_reports")
+      .select("id, patient_name, report_date, data")
+      .order("report_date", { ascending: false });
+    if (!error && data) setReports(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Apagar este relatório? Esta acção não pode ser desfeita.")) return;
+    setDeleting(id);
+    await supabase.from("respiratory_reports").delete().eq("id", id);
+    setReports((r) => r.filter((x) => x.id !== id));
+    setDeleting(null);
+  };
+
+  const filtered = reports.filter((r) => r.patient_name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div>
+      {/* Topo */}
+      <div
+        style={{
+          display: "flex" as const,
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 24,
+          flexWrap: "wrap" as const,
+          gap: 12,
+        }}
+      >
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: G.dark, margin: "0 0 4px" }}>
+            📋 Histórico de Relatórios
+          </h2>
+          <p style={{ color: G.muted, fontSize: 13, margin: 0 }}>
+            {reports.length} relatório{reports.length !== 1 ? "s" : ""} guardado{reports.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <button onClick={onNew} style={btn("primary", { fontSize: 14 })}>
+          ➕ Novo Relatório
+        </button>
+      </div>
+
+      {/* Pesquisa */}
+      <input
+        type="text"
+        placeholder="🔍  Pesquisar por paciente..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={input({ marginBottom: 20, fontSize: 14 })}
+      />
+
+      {/* Lista */}
+      {loading ? (
+        <p style={{ textAlign: "center" as const, color: G.muted, padding: 40 }}>A carregar...</p>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center" as const, padding: "48px 20px", color: G.muted }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🫁</div>
+          <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+            {search ? "Nenhum resultado encontrado" : "Ainda não há relatórios"}
+          </p>
+          <p style={{ fontSize: 13 }}>{search ? "Tente outro nome" : "Clique em 'Novo Relatório' para começar"}</p>
+        </div>
+      ) : (
+        <div style={{ display: "flex" as const, flexDirection: "column" as const, gap: 10 }}>
+          {filtered.map((r) => (
+            <div
+              key={r.id}
+              style={{
+                ...card({ padding: "16px 20px" }),
+                display: "flex" as const,
+                alignItems: "center",
+                gap: 16,
+                transition: "box-shadow 0.15s" as const,
+              }}
+            >
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 10,
+                  background: `linear-gradient(135deg, ${G.gold}, ${G.goldLight})`,
+                  display: "flex" as const,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 20,
+                  flexShrink: 0,
+                }}
+              >
+                🫁
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 15,
+                    color: G.dark,
+                    margin: "0 0 3px",
+                    whiteSpace: "nowrap" as const,
+                    overflow: "hidden" as const,
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {r.patient_name}
+                </p>
+                <p style={{ fontSize: 12, color: G.muted, margin: 0 }}>
+                  📅{" "}
+                  {new Date(r.report_date).toLocaleDateString("pt-PT", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                  {r.data?.grau_fraqueza && (
+                    <span style={{ marginLeft: 10, color: G.gold }}>· {r.data.grau_fraqueza}</span>
+                  )}
+                </p>
+              </div>
+
+              <div style={{ display: "flex" as const, gap: 8, flexShrink: 0 }}>
+                <button onClick={() => onOpen(r)} style={btn("outline", { padding: "7px 14px", fontSize: 12 })}>
+                  ✏️ Editar
+                </button>
+                <button
+                  onClick={() => handleDelete(r.id)}
+                  disabled={deleting === r.id}
+                  style={btn("ghost", {
+                    padding: "7px 14px",
+                    fontSize: 12,
+                    color: "#C0392B",
+                    border: "1px solid #FFCCCC",
+                  })}
+                >
+                  🗑️ Apagar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Componente Principal ───────────────────────────────────────────────── */
 export default function RelatorioRespiratório() {
+  const [view, setView] = useState<"history" | "new">("history");
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
   const [fileData, setFileData] = useState(null);
   const [data, setData] = useState({ ...EMPTY_DATA });
   const [secoes, setSocoes] = useState(Object.fromEntries(SECOES_CONFIG.map((s) => [s.id, true])));
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const handleFileReady = (f, fd) => {
     setFile(f);
@@ -1186,16 +1408,94 @@ export default function RelatorioRespiratório() {
     setStep(3);
   };
 
+  const handleOpenReport = (r: any) => {
+    setData({ ...EMPTY_DATA, ...r.data });
+    setEditingId(r.id);
+    setStep(3);
+    setView("new");
+  };
+
+  const handleNew = () => {
+    setData({ ...EMPTY_DATA });
+    setEditingId(null);
+    setStep(1);
+    setView("new");
+  };
+
+  const handleSaveAndReturn = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const reportData = {
+      patient_name: data.nome || "Sem nome",
+      report_date: data.data || new Date().toISOString().slice(0, 10),
+      data: data,
+      created_by: user?.id,
+    };
+    if (editingId) {
+      await supabase.from("respiratory_reports").update(reportData).eq("id", editingId);
+    } else {
+      const { data: saved } = await supabase.from("respiratory_reports").insert(reportData).select().single();
+      if (saved) setEditingId(saved.id);
+    }
+    setView("history");
+  };
+
+  const bgStyle: CSSProperties = {
+    minHeight: "100vh",
+    background: `radial-gradient(ellipse at 20% 20%, #FFF8E8 0%, #F5EDD0 40%, #EDE0B8 100%)`,
+    fontFamily: "'Georgia', 'Times New Roman', serif",
+    padding: "40px 20px 60px",
+  };
+
+  /* ── Vista: Histórico ── */
+  if (view === "history") {
+    return (
+      <div style={bgStyle}>
+        <div style={{ textAlign: "center" as const, marginBottom: 36 }}>
+          <div
+            style={{
+              display: "inline-flex" as const,
+              alignItems: "center",
+              gap: 10,
+              background: `linear-gradient(135deg, ${G.dark}, ${G.darkMid})`,
+              borderRadius: 14,
+              padding: "10px 24px",
+              marginBottom: 16,
+              border: `1px solid ${G.gold}`,
+            }}
+          >
+            <span style={{ fontSize: 18 }}>🫁</span>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: G.goldLight,
+                letterSpacing: 3,
+                textTransform: "uppercase" as const,
+              }}
+            >
+              Módulo de Relatórios · Fisioterapia Respiratória
+            </span>
+          </div>
+        </div>
+        <div
+          style={{
+            ...card({ maxWidth: 760, margin: "0 auto", padding: "36px 40px" }),
+            background: "rgba(255,255,255,0.92)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <HistoricoRelatorios onOpen={handleOpenReport} onNew={handleNew} />
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Vista: Novo / Editar ── */
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: `radial-gradient(ellipse at 20% 20%, #FFF8E8 0%, #F5EDD0 40%, #EDE0B8 100%)`,
-        fontFamily: "'Georgia', 'Times New Roman', serif",
-        padding: "40px 20px 60px",
-      }}
-    >
-      {/* Header */}
+    <div style={bgStyle}>
+      {/* Header com botão voltar */}
       <div style={{ textAlign: "center" as const, marginBottom: 44 }}>
         <div
           style={{
@@ -1223,16 +1523,20 @@ export default function RelatorioRespiratório() {
           </span>
         </div>
         <h1 style={{ fontSize: 30, fontWeight: 700, color: G.dark, margin: "0 0 8px", fontFamily: "Georgia, serif" }}>
-          Gerador de Relatório com IA
+          {editingId ? "Editar Relatório" : "Gerador de Relatório com IA"}
         </h1>
-        <p style={{ color: G.muted, fontSize: 14, margin: 0 }}>
-          Upload BreatheLink PDF → Extracção automática → Edição → Exportação
+        <p style={{ color: G.muted, fontSize: 14, margin: "0 0 16px" }}>
+          {editingId
+            ? "Edite e guarde as alterações"
+            : "Upload BreatheLink PDF → Extracção automática → Edição → Exportação"}
         </p>
+        <button onClick={() => setView("history")} style={btn("ghost", { fontSize: 13 })}>
+          ← Voltar ao Histórico
+        </button>
       </div>
 
-      <Stepper current={step} />
+      {!editingId && <Stepper current={step} />}
 
-      {/* Card principal */}
       <div
         style={{
           ...card({ maxWidth: 760, margin: "0 auto", padding: "36px 40px" }),
@@ -1240,17 +1544,35 @@ export default function RelatorioRespiratório() {
           backdropFilter: "blur(12px)",
         }}
       >
-        {step === 1 && <StepUpload onFileReady={handleFileReady} />}
-        {step === 2 && <StepIA file={file} fileData={fileData} onDone={handleIADone} />}
-        {step === 3 && (
-          <StepEditor data={data} setData={setData} secoes={secoes} setSocoes={setSocoes} onNext={() => setStep(4)} />
+        {!editingId && step === 1 && <StepUpload onFileReady={handleFileReady} />}
+        {!editingId && step === 2 && <StepIA file={file} fileData={fileData} onDone={handleIADone} />}
+        {(editingId || step === 3) && step !== 4 && (
+          <StepEditor
+            data={data}
+            setData={setData}
+            secoes={secoes}
+            setSocoes={setSocoes}
+            onNext={() => setStep(4)}
+            extraActions={
+              <button onClick={handleSaveAndReturn} style={btn("outline", { fontSize: 13 })}>
+                💾 Guardar e Fechar
+              </button>
+            }
+          />
         )}
-        {step === 4 && <StepRelatorio data={data} secoes={secoes} onEdit={() => setStep(3)} />}
+        {!editingId && step === 4 && (
+          <StepRelatorio data={data} secoes={secoes} onEdit={() => setStep(3)} onSave={handleSaveAndReturn} />
+        )}
+        {editingId && step === 4 && (
+          <StepRelatorio data={data} secoes={secoes} onEdit={() => setStep(3)} onSave={handleSaveAndReturn} />
+        )}
       </div>
 
-      <p style={{ textAlign: "center" as const, marginTop: 20, fontSize: 12, color: "#B8A878" }}>
-        Passo {step} de {STEPS.length} · {STEPS[step - 1]?.label}
-      </p>
+      {!editingId && (
+        <p style={{ textAlign: "center" as const, marginTop: 20, fontSize: 12, color: "#B8A878" }}>
+          Passo {step} de {STEPS.length} · {STEPS[step - 1]?.label}
+        </p>
+      )}
     </div>
   );
 }
