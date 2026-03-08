@@ -367,82 +367,30 @@ function StepIA({ file, fileData, onDone }) {
       if (stepIdx >= EXTRACTION_STEPS.length - 1) clearInterval(stepInterval);
     }, 600);
 
-    const systemPrompt = `És um fisioterapeuta respiratório especialista a analisar relatórios do BreatheLink IMT Suite (POWERbreathe).
-Analisa o PDF e devolve EXCLUSIVAMENTE um JSON válido sem markdown, sem texto extra, sem \`\`\`json.
-Campos obrigatórios (usa string vazia "" se não encontrado):
-{
-  "nome": "nome completo do paciente",
-  "data": "data da sessão no formato dd/MM/yyyy",
-  "idade": "idade em anos",
-  "peso": "peso em kg",
-  "altura": "altura em cm",
-  "bmi": "IMC calculado ou extraído",
-  "pnv": "PNV em cmH2O",
-  "sindex_best": "SIndex máximo em cmH2O",
-  "sindex_avg": "SIndex médio em cmH2O",
-  "percentagem_pnv": "percentagem do SIndex best em relação ao PNV, ex: 58.7",
-  "pif": "PIF em L/s",
-  "volume": "Volume em litros",
-  "grau_fraqueza": "Leve | Moderado | Severo baseado na percentagem do PNV (>70% normal, 50-70% leve, 30-50% moderado, <30% severo)",
-  "diagnostico": "texto clínico completo do diagnóstico funcional respiratório, 3-4 frases profissionais",
-  "observacao_clinica": "observação adicional sobre o esforço e comportamento durante o teste",
-  "equipamento": "nome do equipamento usado",
-  "frequencia": "frequência recomendada de sessões",
-  "repeticoes": "número de repetições por sessão",
-  "carga_inicial": "carga inicial recomendada baseada no SIndex (35-40% do SIndex best)",
-  "tecnica": "descrição técnica do exercício",
-  "meta_curto": "meta a 4 semanas baseada no SIndex atual e PNV",
-  "meta_medio": "meta a médio prazo",
-  "mobilidade": "descrição dos exercícios de mobilidade torácica e expansão costal recomendados",
-  "fisioterapeuta": "nome da fisioterapeuta se presente",
-  "cedula": "número de cédula profissional se presente",
-  "progressao": [
-    {"semana":"1","carga":"X-Y","criterio":"texto"},
-    {"semana":"2","carga":"X-Y","criterio":"texto"},
-    {"semana":"3","carga":"X-Y","criterio":"texto"},
-    {"semana":"4","carga":"X-Y","criterio":"texto"},
-    {"semana":"5","carga":"Ajuste pós-reavaliação","criterio":"texto sobre reavaliação"}
-  ]
-}
-Calcula as cargas progressivas baseado na carga inicial: aumenta 2 cmH2O por semana.
-Mantém linguagem clínica profissional em português europeu.`;
+
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "document",
-                  source: { type: "base64", media_type: "application/pdf", data: fileData },
-                },
-                {
-                  type: "text",
-                  text: "Analisa este relatório BreatheLink e devolve o JSON com todos os dados extraídos e o plano terapêutico gerado.",
-                },
-              ],
-            },
-          ],
-        }),
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-respiratory-report`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ pdfBase64: fileData }),
+        }
+      );
 
       clearInterval(stepInterval);
       setCurrentStep(EXTRACTION_STEPS.length - 1);
 
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-      const apiData = await response.json();
-      const text = apiData.content?.map((b) => b.text || "").join("") || "";
-
-      // Parse JSON — remove possíveis backticks
-      const clean = text.replace(/```json|```/gi, "").trim();
-      const parsed = JSON.parse(clean);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `API error: ${response.status}`);
+      }
+      const result = await response.json();
+      const parsed = result.data;
 
       // Build display items
       setItems([
