@@ -49,7 +49,7 @@ const Engajamento = lazyWithRetry(() => import("./pages/Engajamento"));
 const Configuracoes = lazyWithRetry(() => import("./pages/Configuracoes"));
 const PatientPortal = lazyWithRetry(() => import("./pages/PatientPortal"));
 const PreRegisto = lazyWithRetry(() => import("./pages/PreRegisto"));
-const RelatorioResp = lazyWithRetry(() => import("./pages/RelatorioRespiratório"));
+const RelatorioResp = lazyWithRetry(() => import("./pages/RelatorioRespiratorio"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
