@@ -371,7 +371,7 @@ function StepIA({ file, fileData, onDone }) {
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/relat%C3%B3rio-respirat%C3%B3rio-ai`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/relatorio-respiratorio-ai`,
         {
           method: "POST",
           headers: {
