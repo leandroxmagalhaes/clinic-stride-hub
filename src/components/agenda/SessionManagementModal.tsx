@@ -252,16 +252,3 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     </div>
   );
 }
-
-// Stub export to satisfy Agenda.tsx import until full modal is rebuilt
-export function SessionManagementModal(_props: {
-  isOpen: boolean;
-  onClose: () => void;
-  session: any;
-  sessions: any[];
-  onUpdateSession: (id: string, data: any) => Promise<void>;
-  onDeleteSession: (id: string) => Promise<void>;
-  onDuplicateSession?: (session: any) => void;
-}) {
-  return null;
-}
