@@ -207,7 +207,7 @@ export function NewSessionModal({
       const { data: profileData } = await supabase
         .from("profiles")
         .select("clinic_id")
-        .eq("id", userData.user.id)
+        .eq("user_id", userData.user.id)
         .single();
       if (!profileData?.clinic_id) {
         toast.error("Clínica não identificada");
