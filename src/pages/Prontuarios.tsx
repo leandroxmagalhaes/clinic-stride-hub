@@ -22,6 +22,7 @@ import {
   Sparkles,
   ArrowDown,
   ArrowUp,
+  Paperclip,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -34,6 +35,7 @@ import { NewEvolutionModal } from "@/components/prontuarios/NewEvolutionModal";
 import { EditEvolutionModal, type EvolutionToEdit } from "@/components/prontuarios/EditEvolutionModal";
 import { StructuredDataViewer } from "@/components/prontuarios/StructuredDataViewer";
 import { ClinicalReportsList } from "@/components/prontuarios/ClinicalReportsList";
+import { PatientDocuments } from "@/components/prontuarios/PatientDocuments";
 import { SpecialtyService, type SpecialtyTemplate, type StructuredData } from "@/services/SpecialtyService";
 import { supabase } from "@/integrations/supabase/client";
 import { useClinicInfo } from "@/hooks/useClinicInfo";
@@ -73,12 +75,8 @@ export default function Prontuarios() {
   const [isEditClinicalOpen, setIsEditClinicalOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
-
-  // ── Estado para edição de evolução ───────────────────────────────────────
   const [editingEvolution, setEditingEvolution] = useState<EvolutionToEdit | null>(null);
   const [isEditEvolutionOpen, setIsEditEvolutionOpen] = useState(false);
-  // ─────────────────────────────────────────────────────────────────────────
-
   const [prontuariosData, setProntuariosData] = useState<Record<string, ProntuarioData>>({});
   const [prontuariosLoading, setProntuariosLoading] = useState(true);
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
@@ -280,7 +278,6 @@ export default function Prontuarios() {
     }
   };
 
-  // ── Guardar edição de evolução ────────────────────────────────────────────
   const handleEditEvolucao = async (
     evolutionId: string,
     data: {
@@ -300,26 +297,18 @@ export default function Prontuarios() {
           structured_data: data.structured_data,
         })
         .eq("id", evolutionId);
-
       if (error) {
-        console.error("Error updating evolution:", error);
         toast.error("Erro ao guardar evolução");
         return;
       }
-
-      // Atualiza local state via reload da página de evoluções
       toast.success("Evolução atualizada com sucesso!");
       setIsEditEvolutionOpen(false);
       setEditingEvolution(null);
-
-      // Força re-fetch das evoluções actualizando o contexto
       window.location.reload();
     } catch (err) {
-      console.error("Exception updating evolution:", err);
       toast.error("Erro ao guardar evolução");
     }
   };
-  // ─────────────────────────────────────────────────────────────────────────
 
   const getTemplateForEvolution = (specialtyId: string | null | undefined): SpecialtyTemplate | null => {
     if (!specialtyId) return null;
@@ -349,7 +338,6 @@ export default function Prontuarios() {
         })
         .eq("id", selectedProntuario.id);
       if (error) {
-        console.error("Error updating prontuario:", error);
         toast.error("Erro ao guardar dados clínicos");
         return;
       }
@@ -364,7 +352,6 @@ export default function Prontuarios() {
       setSelectedProntuario(updated);
       toast.success("Dados clínicos guardados!");
     } catch (err) {
-      console.error("Exception updating prontuario:", err);
       toast.error("Erro ao guardar dados clínicos");
     }
   };
@@ -424,7 +411,7 @@ export default function Prontuarios() {
   return (
     <AppLayout title="Prontuários" subtitle="Histórico clínico dos pacientes">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
-        {/* Patient List */}
+        {/* Lista de pacientes */}
         <div className={cn("lg:col-span-4 space-y-4", selectedProntuario && "hidden lg:block")}>
           <Card className="shadow-card">
             <CardContent className="p-4">
@@ -490,7 +477,7 @@ export default function Prontuarios() {
           </Card>
         </div>
 
-        {/* Prontuario Detail */}
+        {/* Detalhe */}
         <div className="lg:col-span-8">
           {selectedProntuario ? (
             <div className="space-y-4">
@@ -504,6 +491,7 @@ export default function Prontuarios() {
                 Voltar à lista
               </Button>
 
+              {/* Header do paciente */}
               <Card className="shadow-card">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -545,6 +533,7 @@ export default function Prontuarios() {
                 </CardContent>
               </Card>
 
+              {/* Tabs */}
               <Tabs defaultValue="evolucoes" className="space-y-4">
                 <TabsList className="bg-muted/50">
                   <TabsTrigger value="evolucoes" className="gap-2">
@@ -555,12 +544,17 @@ export default function Prontuarios() {
                     <ClipboardList className="h-4 w-4" />
                     Relatórios
                   </TabsTrigger>
+                  <TabsTrigger value="documentos" className="gap-2">
+                    <Paperclip className="h-4 w-4" />
+                    Documentos
+                  </TabsTrigger>
                   <TabsTrigger value="prontuario" className="gap-2">
                     <FileText className="h-4 w-4" />
                     Prontuário
                   </TabsTrigger>
                 </TabsList>
 
+                {/* Evoluções */}
                 <TabsContent value="evolucoes">
                   <Card className="shadow-card">
                     <CardHeader className="pb-3">
@@ -606,7 +600,6 @@ export default function Prontuarios() {
                           />
                         </div>
                       )}
-
                       {aiSummary && (
                         <div className="mb-6 p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3 animate-fade-in">
                           <div className="flex items-center gap-2 text-sm font-medium text-primary">
@@ -645,7 +638,6 @@ export default function Prontuarios() {
                           </p>
                         </div>
                       )}
-
                       {prontuarioEvolutions.length > 0 ? (
                         <div className="space-y-4">
                           {prontuarioEvolutions.map((evolucao) => {
@@ -676,7 +668,6 @@ export default function Prontuarios() {
                                         Dor: {evolucao.escala_dor}/10
                                       </Badge>
                                     )}
-                                    {/* ── Botão Editar ──────────────────────── */}
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -695,10 +686,8 @@ export default function Prontuarios() {
                                     >
                                       <Pencil className="h-3.5 w-3.5" />
                                     </Button>
-                                    {/* ───────────────────────────────────────── */}
                                   </div>
                                 </div>
-
                                 {hasStructuredData && template && (
                                   <div className="mb-3 p-3 bg-muted/20 rounded-md">
                                     <StructuredDataViewer
@@ -736,6 +725,7 @@ export default function Prontuarios() {
                   </Card>
                 </TabsContent>
 
+                {/* Relatórios */}
                 <TabsContent value="relatorios">
                   <ClinicalReportsList
                     patientId={selectedProntuario.paciente_id}
@@ -754,6 +744,26 @@ export default function Prontuarios() {
                   />
                 </TabsContent>
 
+                {/* ── DOCUMENTOS (nova tab) ── */}
+                <TabsContent value="documentos">
+                  <Card className="shadow-card">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="font-display text-lg">Documentos Clínicos</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Exames, relatórios médicos e documentos de outros profissionais
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <PatientDocuments
+                        pacienteId={selectedProntuario.paciente_id}
+                        prontuarioId={selectedProntuario.id}
+                        clinicId={selectedProntuario.clinic_id}
+                      />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Prontuário */}
                 <TabsContent value="prontuario">
                   <Card className="shadow-card">
                     <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -838,7 +848,6 @@ export default function Prontuarios() {
         prefilledDate={prefilledDate}
       />
 
-      {/* ── Modal de edição de evolução ─────────────────────────────────────── */}
       <EditEvolutionModal
         isOpen={isEditEvolutionOpen}
         onClose={() => {
@@ -850,7 +859,6 @@ export default function Prontuarios() {
         evolution={editingEvolution}
         patientSpecialtyId={selectedProntuario?.primary_specialty_id}
       />
-      {/* ──────────────────────────────────────────────────────────────────────── */}
 
       {selectedProntuario && (
         <EditClinicalDataModal
