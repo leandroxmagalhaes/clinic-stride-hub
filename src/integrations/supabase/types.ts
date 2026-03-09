@@ -1404,6 +1404,36 @@ export type Database = {
           },
         ]
       }
+      respiratory_reports: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          data: Json
+          id: string
+          patient_name: string
+          report_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          data: Json
+          id?: string
+          patient_name: string
+          report_date?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          data?: Json
+          id?: string
+          patient_name?: string
+          report_date?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       sales_leads: {
         Row: {
           clinic_id: string
