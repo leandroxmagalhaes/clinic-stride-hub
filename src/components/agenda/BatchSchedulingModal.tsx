@@ -366,8 +366,10 @@ export function BatchSchedulingModal({
       setPage(0);
       setSaveProgress(null);
       toast.success(`${parsed.length} linhas importadas e guardadas`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao processar ficheiro");
+    } catch (error: any) {
+      const msg = error?.message || error?.error_description || JSON.stringify(error);
+      toast.error("Erro ao gravar sessões: " + msg);
+      console.error("Batch error:", error);
     } finally {
       setIsParsing(false);
       setSaveProgress(null);
