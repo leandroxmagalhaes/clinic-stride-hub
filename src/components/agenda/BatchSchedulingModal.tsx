@@ -271,8 +271,10 @@ export function BatchSchedulingModal({
       toast.success(`${inserts.length} sessão(ões) agendada(s) com sucesso!`);
       clearManualRows();
       onClose();
-    } catch (err) {
-      toast.error("Erro ao gravar sessões: " + (err instanceof Error ? err.message : String(err)));
+    } catch (error: any) {
+      const msg = error?.message || error?.error_description || JSON.stringify(error);
+      toast.error("Erro ao gravar sessões: " + msg);
+      console.error("Batch error:", error);
     } finally {
       setIsSavingManual(false);
     }
@@ -364,8 +366,10 @@ export function BatchSchedulingModal({
       setPage(0);
       setSaveProgress(null);
       toast.success(`${parsed.length} linhas importadas e guardadas`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao processar ficheiro");
+    } catch (error: any) {
+      const msg = error?.message || error?.error_description || JSON.stringify(error);
+      toast.error("Erro ao gravar sessões: " + msg);
+      console.error("Batch error:", error);
     } finally {
       setIsParsing(false);
       setSaveProgress(null);
@@ -498,8 +502,10 @@ export function BatchSchedulingModal({
       setStep("upload");
       setSaveProgress(null);
       onClose();
-    } catch (err) {
-      toast.error("Erro ao gravar sessões: " + (err instanceof Error ? err.message : String(err)));
+    } catch (error: any) {
+      const msg = error?.message || error?.error_description || JSON.stringify(error);
+      toast.error("Erro ao gravar sessões: " + msg);
+      console.error("Batch error:", error);
     } finally {
       setIsSaving(false);
       setSaveProgress(null);
