@@ -502,8 +502,10 @@ export function BatchSchedulingModal({
       setStep("upload");
       setSaveProgress(null);
       onClose();
-    } catch (err) {
-      toast.error("Erro ao gravar sessões: " + (err instanceof Error ? err.message : String(err)));
+    } catch (error: any) {
+      const msg = error?.message || error?.error_description || JSON.stringify(error);
+      toast.error("Erro ao gravar sessões: " + msg);
+      console.error("Batch error:", error);
     } finally {
       setIsSaving(false);
       setSaveProgress(null);
