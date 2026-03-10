@@ -1,10 +1,12 @@
 
 
-# Fix File constructor TypeScript errors
+# Recreate PackManagerModal.tsx as empty stub
 
-## Change
-In `src/components/prontuarios/PatientDocuments.tsx`, cast `File` to `any` on lines 189 and 207:
+Replace the current content of `src/components/agenda/PackManagerModal.tsx` with:
 
-- **Line 189**: `new File([blob], ...)` → `new (File as any)([blob], ...)`
-- **Line 207**: `new File([blob], ...)` → `new (File as any)([blob], ...)`
+```tsx
+export function PackManagerModal() { return null; }
+```
+
+No other files will be modified.
 
