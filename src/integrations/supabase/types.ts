@@ -2239,6 +2239,7 @@ export type Database = {
       }
     }
     Functions: {
+      batch_insert_sessions: { Args: { p_sessions: Json }; Returns: number }
       check_horario_reservado: {
         Args: { p_date: string; p_professional_id?: string; p_time: string }
         Returns: {
