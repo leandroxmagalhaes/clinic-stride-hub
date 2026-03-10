@@ -83,9 +83,8 @@ const MEDIA_CATEGORIES = [
   { value: "outro", label: "Outro", color: "bg-gray-100 text-gray-700" },
 ];
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB docs
-const MAX_VIDEO_SIZE = 200 * 1024 * 1024; // 200 MB vídeos
-
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 200 * 1024 * 1024;
 const ACCEPTED_DOCS = ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx";
 const ACCEPTED_MEDIA = "image/*,video/*";
 
@@ -96,6 +95,12 @@ function formatBytes(b: number) {
   if (b < 1024) return `${b} B`;
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
   return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function makeTimestamp() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
 function isImage(type: string) {
@@ -120,7 +125,7 @@ function getCategoryInfo(value: string, isMedia: boolean) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SUB-COMPONENTE — CÂMARA
+   CÂMARA
 ═══════════════════════════════════════════════════════════════════════════ */
 interface CameraModalProps {
   open: boolean;
@@ -143,14 +148,11 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Iniciar câmara
   const startCamera = useCallback(async () => {
     try {
       setError(null);
       setReady(false);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: mode === "video",
@@ -161,7 +163,7 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
         videoRef.current.play();
         setReady(true);
       }
-    } catch (err: any) {
+    } catch {
       setError("Não foi possível aceder à câmara. Verifique as permissões do browser.");
     }
   }, [facingMode, mode]);
@@ -174,7 +176,6 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
     };
   }, [open, startCamera]);
 
-  // Capturar foto
   const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const v = videoRef.current;
@@ -185,8 +186,7 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
     c.toBlob(
       (blob) => {
         if (!blob) return;
-        const now = format(new Date(), "yyyyMMdd_HHmmss");
-        const file = new File([blob], `foto_${now}.jpg`, { type: "image/jpeg" });
+        const file = new File([blob], `foto_${makeTimestamp()}.jpg`, { type: "image/jpeg" });
         onCapture(file);
         handleClose();
       },
@@ -195,7 +195,6 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
     );
   };
 
-  // Gravar vídeo
   const startRecording = () => {
     if (!streamRef.current) return;
     chunksRef.current = [];
@@ -205,8 +204,7 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
     };
     mr.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      const now = format(new Date(), "yyyyMMdd_HHmmss");
-      const file = new File([blob], `video_${now}.webm`, { type: "video/webm" });
+      const file = new File([blob], `video_${makeTimestamp()}.webm`, { type: "video/webm" });
       onCapture(file);
       handleClose();
     };
@@ -233,10 +231,6 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
     onClose();
   };
 
-  const flipCamera = () => {
-    setFacingMode((f) => (f === "user" ? "environment" : "user"));
-  };
-
   const fmtTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   return (
@@ -246,12 +240,10 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
           <DialogTitle>Câmara</DialogTitle>
         </DialogHeader>
 
-        {/* Viewfinder */}
         <div className="relative aspect-[4/3] bg-black w-full">
           <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
           <canvas ref={canvasRef} className="hidden" />
 
-          {/* Erro */}
           {error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-center p-6 gap-3">
               <Camera className="h-10 w-10 opacity-50" />
@@ -263,7 +255,6 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
             </div>
           )}
 
-          {/* Timer de gravação */}
           {recording && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 rounded-full px-3 py-1">
               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
@@ -271,18 +262,15 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
             </div>
           )}
 
-          {/* Botão virar câmara */}
           <button
-            onClick={flipCamera}
+            onClick={() => setFacingMode((f) => (f === "user" ? "environment" : "user"))}
             className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center"
           >
             <SwitchCamera className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Controlos */}
         <div className="bg-black p-4 space-y-3">
-          {/* Modo foto / vídeo */}
           {!recording && (
             <div className="flex justify-center gap-2">
               <button
@@ -312,20 +300,18 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
             </div>
           )}
 
-          {/* Botão acção + fechar */}
           <div className="flex items-center justify-center gap-6">
             <button onClick={handleClose} className="text-white/60 hover:text-white transition-colors">
               <X className="h-6 w-6" />
             </button>
 
-            {/* Shutter */}
             {mode === "photo" ? (
               <button
                 onClick={capturePhoto}
                 disabled={!ready}
                 className="w-16 h-16 rounded-full bg-white disabled:opacity-40 flex items-center justify-center shadow-lg active:scale-95 transition-transform"
               >
-                <div className="w-13 h-13 rounded-full border-2 border-black/20 w-12 h-12" />
+                <div className="w-12 h-12 rounded-full border-2 border-black/20" />
               </button>
             ) : (
               <button
@@ -344,7 +330,6 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
               </button>
             )}
 
-            {/* Placeholder para simetria */}
             <div className="w-6 h-6" />
           </div>
         </div>
@@ -354,7 +339,7 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SUB-COMPONENTE — PREVIEW MEDIA
+   PREVIEW MEDIA
 ═══════════════════════════════════════════════════════════════════════════ */
 interface MediaPreviewProps {
   url: string;
@@ -403,12 +388,8 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
-
-  // Preview
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<PatientDocument | null>(null);
-
-  // Form
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [category, setCategory] = useState("outro");
   const [description, setDescription] = useState("");
@@ -418,7 +399,7 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
   const docInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
 
-  /* ── Fetch ──────────────────────────────────────────────────────────────── */
+  /* ── Fetch ── */
   const fetchDocuments = useCallback(async () => {
     setLoading(true);
     const { data, error } = await (supabase as any)
@@ -434,13 +415,13 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
     fetchDocuments();
   }, [fetchDocuments]);
 
-  /* ── Filtros por tab ────────────────────────────────────────────────────── */
+  /* ── Filtros ── */
   const docList = documents.filter((d) => !isMediaFile(d.file_type));
   const mediaList = documents.filter((d) => isMediaFile(d.file_type));
   const photoList = mediaList.filter((d) => isImage(d.file_type));
   const videoList = mediaList.filter((d) => isVideo(d.file_type));
 
-  /* ── Seleccionar ficheiro ───────────────────────────────────────────────── */
+  /* ── Seleccionar ficheiro ── */
   const handleFileSelect = (file: File) => {
     const maxSize = isVideo(file.type) ? MAX_VIDEO_SIZE : MAX_FILE_SIZE;
     if (file.size > maxSize) {
@@ -448,15 +429,12 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
       return;
     }
     setPendingFile(file);
-    // Default category por tipo
-    if (isImage(file.type)) setCategory("evolucao_clinica");
-    else if (isVideo(file.type)) setCategory("evolucao_clinica");
-    else setCategory("outro");
+    setCategory(isMediaFile(file.type) ? "evolucao_clinica" : "outro");
     setDescription("");
     setShowForm(true);
   };
 
-  /* ── Upload ─────────────────────────────────────────────────────────────── */
+  /* ── Upload ── */
   const handleUpload = async () => {
     if (!pendingFile) return;
     setUploading(true);
@@ -469,14 +447,12 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
       const storagePath = `${clinicId}/${pacienteId}/${Date.now()}_${safeName}`;
 
       setProgress(30);
-
       const { error: storageError } = await supabase.storage
         .from("patient-documents")
         .upload(storagePath, pendingFile, { contentType: pendingFile.type, upsert: false });
       if (storageError) throw storageError;
 
       setProgress(70);
-
       const { error: dbError } = await (supabase as any).from("patient_documents").insert({
         clinic_id: clinicId,
         paciente_id: pacienteId,
@@ -508,7 +484,7 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
     }
   };
 
-  /* ── Preview ────────────────────────────────────────────────────────────── */
+  /* ── Preview ── */
   const handlePreview = async (doc: PatientDocument) => {
     try {
       const { data, error } = await supabase.storage.from("patient-documents").createSignedUrl(doc.storage_path, 120);
@@ -520,7 +496,7 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
     }
   };
 
-  /* ── Download ───────────────────────────────────────────────────────────── */
+  /* ── Download ── */
   const handleDownload = async (doc: PatientDocument) => {
     try {
       const { data, error } = await supabase.storage.from("patient-documents").createSignedUrl(doc.storage_path, 60);
@@ -531,7 +507,7 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
     }
   };
 
-  /* ── Apagar ─────────────────────────────────────────────────────────────── */
+  /* ── Apagar ── */
   const handleDelete = async () => {
     if (!deleteId) return;
     const doc = documents.find((d) => d.id === deleteId);
@@ -550,13 +526,12 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
     }
   };
 
-  /* ── Form upload ────────────────────────────────────────────────────────── */
+  /* ── Form ── */
   const isMediaPending = pendingFile ? isMediaFile(pendingFile.type) : false;
   const categoryOptions = isMediaPending ? MEDIA_CATEGORIES : DOC_CATEGORIES;
 
   const UploadForm = () => (
     <div className="border rounded-xl p-5 bg-muted/20 space-y-4 animate-fade-in mb-4">
-      {/* Ficheiro seleccionado */}
       <div className="flex items-center gap-3 p-3 rounded-lg bg-background border">
         {pendingFile && isImage(pendingFile.type) ? (
           <img src={URL.createObjectURL(pendingFile)} alt="" className="h-10 w-10 object-cover rounded" />
@@ -584,7 +559,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
         </Button>
       </div>
 
-      {/* Categoria */}
       <div className="space-y-1.5">
         <Label className="text-xs font-semibold">Categoria *</Label>
         <Select value={category} onValueChange={setCategory}>
@@ -601,7 +575,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
         </Select>
       </div>
 
-      {/* Descrição */}
       <div className="space-y-1.5">
         <Label className="text-xs font-semibold">
           Descrição <span className="font-normal text-muted-foreground">(opcional)</span>
@@ -615,7 +588,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
         />
       </div>
 
-      {/* Progresso */}
       {uploading && (
         <div className="space-y-1">
           <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -656,10 +628,9 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
     </div>
   );
 
-  /* ── Card de documento (lista) ──────────────────────────────────────────── */
+  /* ── DocCard ── */
   const DocCard = ({ doc }: { doc: PatientDocument }) => {
     const catInfo = getCategoryInfo(doc.category, isMediaFile(doc.file_type));
-    const canPreview = isMediaFile(doc.file_type);
     return (
       <div className="flex items-center gap-3 p-3 rounded-lg border bg-background hover:bg-muted/30 transition-colors group">
         {getDocIcon(doc.file_type)}
@@ -675,7 +646,7 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
           {doc.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{doc.description}</p>}
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-          {canPreview && (
+          {isMediaFile(doc.file_type) && (
             <Button
               variant="ghost"
               size="sm"
@@ -710,7 +681,7 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
     );
   };
 
-  /* ── Grid de fotos ──────────────────────────────────────────────────────── */
+  /* ── PhotoGrid ── */
   const PhotoGrid = ({ photos }: { photos: PatientDocument[] }) => {
     const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
@@ -751,7 +722,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               )}
-              {/* Overlay */}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex flex-col justify-between p-2">
                 <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
@@ -766,7 +736,9 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
                 </div>
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                   <Badge className={cn("text-[9px] px-1.5 py-0 h-4 border-0", catInfo.color)}>{catInfo.label}</Badge>
-                  <p className="text-white text-[10px] mt-0.5">{format(new Date(p.created_at), "dd/MM/yy HH:mm")}</p>
+                  <p className="text-white text-[10px] mt-0.5">
+                    {format(new Date(p.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                  </p>
                 </div>
               </div>
             </div>
@@ -776,7 +748,7 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
     );
   };
 
-  /* ── Lista de vídeos ────────────────────────────────────────────────────── */
+  /* ── VideoList ── */
   const VideoList = ({ videos }: { videos: PatientDocument[] }) => {
     if (videos.length === 0)
       return (
@@ -839,7 +811,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
   ═══════════════════════════════════════════════════════════════════════ */
   return (
     <div className="space-y-4">
-      {/* inputs ocultos */}
       <input
         ref={docInputRef}
         type="file"
@@ -863,10 +834,8 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
         }}
       />
 
-      {/* Form pendente */}
       {showForm && <UploadForm />}
 
-      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <TabsList className="bg-muted/50">
@@ -899,7 +868,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
             </TabsTrigger>
           </TabsList>
 
-          {/* Botões de adicionar */}
           {!showForm && (
             <div className="flex items-center gap-2">
               {(activeTab === "fotos" || activeTab === "videos") && (
@@ -928,7 +896,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
           )}
         </div>
 
-        {/* ── Documentos ── */}
         <TabsContent value="documentos" className="mt-4">
           {loading ? (
             <div className="flex items-center justify-center py-10">
@@ -968,7 +935,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
           )}
         </TabsContent>
 
-        {/* ── Fotos ── */}
         <TabsContent value="fotos" className="mt-4">
           {loading ? (
             <div className="flex items-center justify-center py-10">
@@ -979,7 +945,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
           )}
         </TabsContent>
 
-        {/* ── Vídeos ── */}
         <TabsContent value="videos" className="mt-4">
           {loading ? (
             <div className="flex items-center justify-center py-10">
@@ -991,7 +956,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
         </TabsContent>
       </Tabs>
 
-      {/* Câmara */}
       <CameraModal
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
@@ -1001,7 +965,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
         }}
       />
 
-      {/* Preview */}
       {previewUrl && previewFile && (
         <MediaPreview
           url={previewUrl}
@@ -1014,7 +977,6 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
         />
       )}
 
-      {/* Confirmar eliminação */}
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
