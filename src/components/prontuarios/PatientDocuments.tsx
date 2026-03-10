@@ -204,7 +204,7 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
     };
     mr.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      const file = new File([blob], `video_${makeTimestamp()}.webm`, { type: "video/webm" });
+      const file = new (File as any)([blob], `video_${makeTimestamp()}.webm`, { type: "video/webm" });
       onCapture(file);
       handleClose();
     };
