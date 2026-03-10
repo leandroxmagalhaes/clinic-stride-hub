@@ -186,7 +186,7 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
     c.toBlob(
       (blob) => {
         if (!blob) return;
-        const file = new File([blob], `foto_${makeTimestamp()}.jpg`, { type: "image/jpeg" });
+        const file = new (File as any)([blob], `foto_${makeTimestamp()}.jpg`, { type: "image/jpeg" });
         onCapture(file);
         handleClose();
       },
