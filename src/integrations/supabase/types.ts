@@ -1814,7 +1814,11 @@ export type Database = {
           id: string
           notes: string | null
           paciente_id: string
+          pack_grupo_id: string | null
           package_id: string | null
+          pagamento_data: string | null
+          pagamento_estado: string | null
+          pagamento_metodo: string | null
           payment_method: string | null
           payment_status: string | null
           price: number | null
@@ -1822,7 +1826,10 @@ export type Database = {
           servico_id: string | null
           start_time: string
           status: string
+          tipo_agendamento: string
           updated_at: string
+          valor_pack_total: number | null
+          valor_sessao: number | null
         }
         Insert: {
           clinic_id: string
@@ -1833,7 +1840,11 @@ export type Database = {
           id?: string
           notes?: string | null
           paciente_id: string
+          pack_grupo_id?: string | null
           package_id?: string | null
+          pagamento_data?: string | null
+          pagamento_estado?: string | null
+          pagamento_metodo?: string | null
           payment_method?: string | null
           payment_status?: string | null
           price?: number | null
@@ -1841,7 +1852,10 @@ export type Database = {
           servico_id?: string | null
           start_time: string
           status?: string
+          tipo_agendamento?: string
           updated_at?: string
+          valor_pack_total?: number | null
+          valor_sessao?: number | null
         }
         Update: {
           clinic_id?: string
@@ -1852,7 +1866,11 @@ export type Database = {
           id?: string
           notes?: string | null
           paciente_id?: string
+          pack_grupo_id?: string | null
           package_id?: string | null
+          pagamento_data?: string | null
+          pagamento_estado?: string | null
+          pagamento_metodo?: string | null
           payment_method?: string | null
           payment_status?: string | null
           price?: number | null
@@ -1860,7 +1878,10 @@ export type Database = {
           servico_id?: string | null
           start_time?: string
           status?: string
+          tipo_agendamento?: string
           updated_at?: string
+          valor_pack_total?: number | null
+          valor_sessao?: number | null
         }
         Relationships: [
           {
