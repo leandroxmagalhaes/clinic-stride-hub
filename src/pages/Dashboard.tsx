@@ -246,22 +246,13 @@ export default function Dashboard() {
         patients={localPatients}
         professionals={professionals}
         services={services}
-        selectedPaciente={selectedPaciente}
-        setSelectedPaciente={setSelectedPaciente}
-        selectedProfissional={selectedProfissional}
-        setSelectedProfissional={setSelectedProfissional}
-        selectedServico={selectedServico}
-        setSelectedServico={setSelectedServico}
-        notes={notes}
-        setNotes={setNotes}
-        onSubmit={handleSubmitSession}
-        
         onPatientCreated={(newPatient) => {
           setLocalPatients((prev) =>
             [...prev, newPatient as any].sort((a, b) => a.full_name.localeCompare(b.full_name)),
           );
           if (refreshPatients) refreshPatients();
         }}
+        onSessionsCreated={refreshSessions}
       />
     </AppLayout>
   );
