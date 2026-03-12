@@ -67,59 +67,6 @@ export default function Dashboard() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedPaciente("");
-    setSelectedProfissional("");
-    setSelectedServico("");
-    setNotes("");
-  };
-
-  const handleSubmitSession = async (data: {
-    pacienteId: string;
-    profissionalId: string;
-    servicoId: string;
-    notes: string;
-  }) => {
-    try {
-      const now = new Date();
-      const selectedService = services.find((s) => s.id === data.servicoId);
-
-      const paymentStatus = "pendente";
-
-      const newSession = SessionService.create(
-        {
-          pacienteId: data.pacienteId,
-          profissionalId: data.profissionalId,
-          servicoId: data.servicoId,
-          date: now,
-          hour: now.getHours(),
-          notes: data.notes,
-        },
-        sessions,
-        "clinic-id",
-        {
-          services: services.map((s) => ({
-            id: s.id,
-            name: s.name,
-            color: s.color || "#10B981",
-            duration_minutes: s.duration_minutes,
-            price: Number(s.price),
-            consumes_credit: s.consumes_credit,
-          })),
-          patients: localPatients.map((p) => ({ id: p.id, full_name: p.full_name })),
-          professionals: professionals.map((p) => ({ id: p.id, full_name: p.full_name })),
-        },
-      );
-
-      newSession.payment_status = paymentStatus;
-
-      await addSession(newSession);
-      toast.success(
-        paymentStatus === "pendente" ? "Sessão agendada com pagamento pendente" : "Sessão agendada com sucesso!",
-      );
-      handleCloseModal();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
-    }
   };
 
   return (
