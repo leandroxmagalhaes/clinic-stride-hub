@@ -18,13 +18,8 @@ import { EngagementService } from "@/services/EngagementService";
 import { LeadService } from "@/services/LeadService";
 
 export default function Dashboard() {
-  const { sessions, patients, professionals, services, addSession, refreshPatients } = useData();
+  const { sessions, patients, professionals, services, refreshSessions, refreshPatients } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const [selectedPaciente, setSelectedPaciente] = useState("");
-  const [selectedProfissional, setSelectedProfissional] = useState("");
-  const [selectedServico, setSelectedServico] = useState("");
-  const [notes, setNotes] = useState("");
 
   const [localPatients, setLocalPatients] = useState(patients);
 
