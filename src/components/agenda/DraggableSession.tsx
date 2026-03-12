@@ -19,8 +19,10 @@ interface Session {
   };
   profissional?: { full_name: string };
   servico?: { name: string; color: string };
-  pack_id?: string | null; // coluna real: package_id
+  pack_id?: string | null;
   package_id?: string | null;
+  tipo_agendamento?: string;
+  pagamento_estado?: string;
 }
 
 interface DraggableSessionProps {
