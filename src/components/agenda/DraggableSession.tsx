@@ -174,6 +174,13 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
         </div>
       )}
 
+      {/* Pack payment pending alert */}
+      {isPackPendingPayment && !showPackWarning && (
+        <div className="absolute top-1 right-1 z-10 rounded-full p-0.5 bg-orange-400 text-white" title="Pagamento pendente">
+          <Bell className="h-2.5 w-2.5" />
+        </div>
+      )}
+
       {isCompact ? (
         /* ── Ultra-compacto: tudo numa linha ── */
         <div className="flex items-center gap-1 p-1 min-w-0">
