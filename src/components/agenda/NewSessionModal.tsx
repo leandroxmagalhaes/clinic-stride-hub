@@ -474,7 +474,7 @@ export function NewSessionModal({
                     </SelectContent>
                   </Select>
                 </div>
-              ))
+              ))}
             </div>
 
             <div className="flex justify-between">
