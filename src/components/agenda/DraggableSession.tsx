@@ -1,6 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, AlertTriangle, Package } from "lucide-react";
+import { GripVertical, AlertTriangle, Package, Bell } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import React from "react";
@@ -19,8 +19,10 @@ interface Session {
   };
   profissional?: { full_name: string };
   servico?: { name: string; color: string };
-  pack_id?: string | null; // coluna real: package_id
+  pack_id?: string | null;
   package_id?: string | null;
+  tipo_agendamento?: string;
+  pagamento_estado?: string;
 }
 
 interface DraggableSessionProps {
@@ -109,6 +111,12 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
   const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
+  // Pack payment pending alert: pack session in the past with pagamento_estado = 'pendente'
+  const isPackPendingPayment = !isCompact
+    && (session as any).tipo_agendamento === "pack"
+    && (session as any).pagamento_estado === "pendente"
+    && new Date(session.start_time) < new Date();
+
   const servicoFormatado = formatServico(session.servico?.name ?? "");
   const profissionalNome = session.profissional?.full_name?.split(" ")?.[0] ?? "";
   const servicoLinha = profissionalNome ? `${servicoFormatado} (${profissionalNome})` : servicoFormatado;
@@ -163,6 +171,13 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
           )}
         >
           <Package className="h-2.5 w-2.5" />
+        </div>
+      )}
+
+      {/* Pack payment pending alert */}
+      {isPackPendingPayment && !showPackWarning && (
+        <div className="absolute top-1 right-1 z-10 rounded-full p-0.5 bg-orange-400 text-white" title="Pagamento pendente">
+          <Bell className="h-2.5 w-2.5" />
         </div>
       )}
 

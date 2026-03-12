@@ -4,20 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Plus, Lock, FileSpreadsheet } from "lucide-react";
 import { startOfWeek, addDays, addWeeks, subWeeks } from "date-fns";
 import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 import { useData } from "@/contexts/DataContext";
 import { SessionService, Session } from "@/services/SessionService";
-import { checkAppointmentCreatedTrigger, AutomationTriggerResult } from "@/services/AutomationEngine";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useReservedSlots } from "@/hooks/useReservedSlots";
@@ -30,7 +19,6 @@ import { NewSessionModal } from "@/components/agenda/NewSessionModal";
 import { NewReservedSlotModal } from "@/components/agenda/NewReservedSlotModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotManagementModal";
-import { AutomationTriggerToast } from "@/components/agenda/AutomationTriggerToast";
 import { BatchSchedulingModal } from "@/components/agenda/BatchSchedulingModal";
 
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
@@ -65,24 +53,8 @@ function savePrefs(userId: string, prefs: AgendaPrefs) {
   } catch {}
 }
 
-interface PendingSessionData {
-  pacienteId: string;
-  profissionalId: string;
-  servicoId: string;
-  notes: string;
-  date: Date;
-  hour: number;
-  minute: number;
-  endHour?: number;
-  endMinute?: number;
-  price?: number;
-  packId?: string | null;
-  packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
-}
-
 export default function Agenda() {
-  const { sessions, addSession, updateSession, deleteSession, patients, professionals, services, refreshSessions } =
-    useData();
+  const { sessions, updateSession, deleteSession, patients, professionals, services, refreshSessions } = useData();
   const { user } = useAuth();
   const {
     createReservedSlot,
@@ -145,16 +117,6 @@ export default function Agenda() {
   const [selectedSlot, setSelectedSlot] = useState<{ date: Date; hour: number } | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
-  const [automationTrigger, setAutomationTrigger] = useState<AutomationTriggerResult | null>(null);
-
-  const [conflictDialog, setConflictDialog] = useState(false);
-  const [conflictMessage, setConflictMessage] = useState("");
-  const [pendingSession, setPendingSession] = useState<PendingSessionData | null>(null);
-
-  const [selectedPaciente, setSelectedPaciente] = useState("");
-  const [selectedProfissional, setSelectedProfissional] = useState("");
-  const [selectedServico, setSelectedServico] = useState("");
-  const [notes, setNotes] = useState("");
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: viewMode === "week" ? 7 : 1 }, (_, i) =>
@@ -213,223 +175,6 @@ export default function Agenda() {
     [sessions, updateSession],
   );
 
-  const doCreateSession = async (data: PendingSessionData, skipConflict: boolean) => {
-    const { date: finalDate, hour: finalHour, minute: finalMinute } = data;
-
-    const selectedPatient = localPatients.find((p) => p.id === data.pacienteId);
-    const selectedProfessional = professionals.find((p) => p.id === data.profissionalId);
-    const selectedService = services.find((s) => s.id === data.servicoId);
-
-    // Pacote de agendamento (PackageSchedulingService)
-    if (data.packageData && data.packageData.generatedDates.length > 0) {
-      const { packageData } = data;
-      const { getAuthContext } = await import("@/lib/auth-helpers");
-      const { userId: currentUserId, clinicId: userClinicId } = await getAuthContext();
-
-      const { data: pkg, error: pkgError } = await supabase
-        .from("scheduling_packages")
-        .insert({
-          clinic_id: userClinicId,
-          paciente_id: data.pacienteId,
-          profissional_id: data.profissionalId,
-          servico_id: data.servicoId,
-          modality: packageData.modality,
-          frequency: packageData.frequency || null,
-          fixed_days: packageData.fixedDays,
-          flexible: packageData.flexible,
-          total_sessions: packageData.totalSessions,
-          sessions_created: packageData.generatedDates.length,
-          status: "ativo",
-          start_date: finalDate.toISOString().split("T")[0],
-          notes: data.notes || null,
-          created_by: currentUserId,
-        })
-        .select("id")
-        .single();
-
-      if (pkgError) throw pkgError;
-
-      const sessionInserts = packageData.generatedDates.map((gd) => {
-        const startTime = new Date(gd.date);
-        startTime.setHours(gd.hour, gd.minute, 0, 0);
-        const endTime = new Date(startTime);
-        endTime.setMinutes(endTime.getMinutes() + (selectedService?.duration_minutes || 60));
-        return {
-          clinic_id: userClinicId,
-          paciente_id: data.pacienteId,
-          profissional_id: data.profissionalId,
-          servico_id: data.servicoId,
-          start_time: startTime.toISOString(),
-          end_time: endTime.toISOString(),
-          status: startTime < new Date() ? "realizado" : "agendado",
-          notes: data.notes,
-          price: selectedService ? Number(selectedService.price) : 0,
-          payment_status: "pendente",
-          package_id: pkg.id,
-        };
-      });
-
-      const { error: batchError } = await supabase.from("sessoes").insert(sessionInserts);
-      if (batchError) throw batchError;
-
-      setIsModalOpen(false);
-      resetForm();
-      await refreshSessions();
-      toast.success(`${packageData.generatedDates.length} sessões agendadas com sucesso!`);
-      return;
-    }
-
-    // Sessão avulsa / pack
-    const newSession = SessionService.create(
-      {
-        pacienteId: data.pacienteId,
-        profissionalId: data.profissionalId,
-        servicoId: data.servicoId,
-        date: finalDate,
-        hour: finalHour,
-        minute: finalMinute,
-        endHour: data.endHour,
-        endMinute: data.endMinute,
-        notes: data.notes,
-      },
-      sessions,
-      "clinic-id",
-      {
-        services: services.map((s) => ({
-          id: s.id,
-          name: s.name,
-          color: s.color || "#10B981",
-          duration_minutes: s.duration_minutes,
-          price: Number(s.price),
-          consumes_credit: s.consumes_credit,
-        })),
-        patients: localPatients.map((p) => ({ id: p.id, full_name: p.full_name })),
-        professionals: professionals.map((p) => ({ id: p.id, full_name: p.full_name })),
-      },
-      skipConflict,
-    );
-
-    newSession.payment_status = "pendente";
-    if (new Date(newSession.start_time) < new Date()) newSession.status = "realizado";
-    if (data.price !== undefined && data.price > 0) (newSession as any).price = data.price;
-    if (data.packId) (newSession as any).pack_id = data.packId;
-
-    await addSession(newSession);
-    setIsModalOpen(false);
-    resetForm();
-
-    const triggerResult = await checkAppointmentCreatedTrigger({
-      patientName: selectedPatient?.full_name || "",
-      patientPhone: (selectedPatient as any)?.phone || undefined,
-      professionalName: selectedProfessional?.full_name || "",
-      serviceName: selectedService?.name,
-      date: finalDate,
-      hour: finalHour,
-    });
-
-    if (triggerResult.shouldTrigger) {
-      setAutomationTrigger(triggerResult);
-    } else {
-      toast.success("Sessão agendada com sucesso!");
-    }
-  };
-
-  const handleCreateSession = async (data: {
-    pacienteId: string;
-    profissionalId: string;
-    servicoId: string;
-    notes: string;
-    date?: Date;
-    hour?: number;
-    minute?: number;
-    endHour?: number;
-    endMinute?: number;
-    price?: number;
-    packId?: string | null;
-    packageData?: import("@/components/agenda/NewSessionModal").PackageSubmitData;
-  }) => {
-    const finalDate = data.date || selectedSlot?.date;
-    const finalHour = data.hour ?? selectedSlot?.hour;
-    const finalMinute = data.minute ?? 0;
-
-    if (!finalDate || finalHour === undefined) {
-      toast.error("Selecione um horário");
-      return;
-    }
-
-    const pending: PendingSessionData = {
-      pacienteId: data.pacienteId,
-      profissionalId: data.profissionalId,
-      servicoId: data.servicoId,
-      notes: data.notes,
-      date: finalDate,
-      hour: finalHour,
-      minute: finalMinute,
-      endHour: data.endHour,
-      endMinute: data.endMinute,
-      price: data.price,
-      packId: data.packId,
-      packageData: data.packageData,
-    };
-
-    if (!data.packageData) {
-      const selectedService = services.find((s) => s.id === data.servicoId);
-      const durationMinutes = selectedService?.duration_minutes || 60;
-      const conflict = SessionService.checkConflict(
-        sessions,
-        data.profissionalId,
-        finalDate,
-        finalHour,
-        finalMinute,
-        durationMinutes,
-        data.endHour,
-        data.endMinute,
-      );
-      if (conflict.hasConflict) {
-        setPendingSession(pending);
-        setConflictMessage(conflict.message || "Conflito de horário detectado.");
-        setConflictDialog(true);
-        return;
-      }
-    }
-
-    try {
-      await doCreateSession(pending, false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
-    }
-  };
-
-  const handleIgnoreConflict = async () => {
-    setConflictDialog(false);
-    if (!pendingSession) return;
-    try {
-      await doCreateSession(pendingSession, true);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao agendar sessão");
-    } finally {
-      setPendingSession(null);
-    }
-  };
-
-  const handleCancelConflict = () => {
-    setConflictDialog(false);
-    setPendingSession(null);
-  };
-
-  const resetForm = () => {
-    setSelectedPaciente("");
-    setSelectedProfissional("");
-    setSelectedServico("");
-    setNotes("");
-    setSelectedSlot(null);
-  };
-
-  const handleModalClose = () => {
-    setIsModalOpen(false);
-    resetForm();
-  };
-
   const handleDuplicateSession = async (data: {
     pacienteId: string;
     profissionalId: string;
@@ -439,7 +184,14 @@ export default function Agenda() {
     minute: number;
     notes: string;
   }) => {
-    await handleCreateSession({ ...data });
+    // Open the wizard with pre-selected slot for duplicate
+    setSelectedSlot({ date: data.date, hour: data.hour });
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setSelectedSlot(null);
   };
 
   const handleCreateReservedSlot = async (data: CreateReservedSlotData) => {
@@ -462,7 +214,7 @@ export default function Agenda() {
             <Lock className="h-4 w-4" />
             <span className="hidden sm:inline">Reservar</span>
           </Button>
-          <Button onClick={() => setIsModalOpen(true)} className="gap-2 min-h-[44px]">
+          <Button onClick={() => { setSelectedSlot(null); setIsModalOpen(true); }} className="gap-2 min-h-[44px]">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Nova Sessão</span>
             <span className="sm:hidden">Novo</span>
@@ -524,20 +276,12 @@ export default function Agenda() {
         patients={localPatients}
         professionals={professionals}
         services={services}
-        onSubmit={handleCreateSession}
-        selectedPaciente={selectedPaciente}
-        setSelectedPaciente={setSelectedPaciente}
-        selectedProfissional={selectedProfissional}
-        setSelectedProfissional={setSelectedProfissional}
-        selectedServico={selectedServico}
-        setSelectedServico={setSelectedServico}
-        notes={notes}
-        setNotes={setNotes}
         onPatientCreated={(newPatient) => {
           setLocalPatients((prev) =>
             [...prev, newPatient as any].sort((a, b) => a.full_name.localeCompare(b.full_name)),
           );
         }}
+        onSessionsCreated={refreshSessions}
       />
 
       {clinicId && (
@@ -579,8 +323,6 @@ export default function Agenda() {
         }}
       />
 
-      <AutomationTriggerToast triggerResult={automationTrigger} onDismiss={() => setAutomationTrigger(null)} />
-
       {clinicId && (
         <BatchSchedulingModal
           isOpen={isBatchModalOpen}
@@ -592,31 +334,6 @@ export default function Agenda() {
           onSessionsCreated={refreshSessions}
         />
       )}
-
-      <AlertDialog open={conflictDialog} onOpenChange={setConflictDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-warning">⚠️ Conflito de Horário</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <span className="block">{conflictMessage}</span>
-              <span className="block text-sm text-muted-foreground">
-                Pode ignorar e agendar na mesma, ou voltar para ajustar o horário.
-              </span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel onClick={handleCancelConflict} className="w-full sm:w-auto">
-              Verificar horário
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleIgnoreConflict}
-              className="w-full sm:w-auto bg-warning text-warning-foreground hover:bg-warning/90"
-            >
-              Ignorar e Agendar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </AppLayout>
   );
 }

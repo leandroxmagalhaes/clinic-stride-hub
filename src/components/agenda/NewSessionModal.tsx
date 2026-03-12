@@ -1,18 +1,8 @@
-// Exportação de compatibilidade — mantida para não quebrar imports existentes
-export interface PackageSubmitData {
-  modality: string;
-  frequency?: string;
-  fixedDays: number[];
-  flexible: boolean;
-  totalSessions: number;
-  generatedDates: { date: Date; hour: number; minute: number }[];
-}
-
-// NewSessionModal v3 — sem créditos, com suporte a pack
-import { useState, useMemo, useEffect } from "react";
+// NewSessionModal v4 — 4-step scheduling wizard
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -22,15 +12,25 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Clock, CalendarIcon, Check, ChevronsUpDown, UserPlus, Loader2, Package } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Clock, CalendarIcon, Check, ChevronsUpDown, UserPlus, Loader2, Package, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
-import { ScheduleWarningAlert } from "@/components/agenda/ScheduleWarningAlert";
 import { HealthTagService, HealthTag } from "@/services/HealthTagService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useData } from "@/contexts/DataContext";
+import { getAuthContext } from "@/lib/auth-helpers";
+
+// Keep export for backward compatibility
+export interface PackageSubmitData {
+  modality: string;
+  frequency?: string;
+  fixedDays: number[];
+  flexible: boolean;
+  totalSessions: number;
+  generatedDates: { date: Date; hour: number; minute: number }[];
+}
 
 interface Patient {
   id: string;
@@ -56,32 +56,39 @@ interface NewSessionModalProps {
   patients: Patient[];
   professionals: Professional[];
   services: Service[];
-  onSubmit: (data: {
-    pacienteId: string;
-    profissionalId: string;
-    servicoId: string;
-    notes: string;
-    date?: Date;
-    hour?: number;
-    minute?: number;
-    endHour?: number;
-    endMinute?: number;
-    price?: number;
-    packId?: string | null;
-  }) => void;
-  selectedPaciente: string;
-  setSelectedPaciente: (value: string) => void;
-  selectedProfissional: string;
-  setSelectedProfissional: (value: string) => void;
-  selectedServico: string;
-  setSelectedServico: (value: string) => void;
-  notes: string;
-  setNotes: (value: string) => void;
   onPatientCreated?: (patient: Patient) => void;
+  onSessionsCreated?: () => void;
 }
 
-const AVAILABLE_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
-const AVAILABLE_MINUTES = [0, 15, 30, 45];
+interface SessionSlot {
+  date: Date | undefined;
+  hour: string;
+  minute: string;
+}
+
+const TIME_OPTIONS = (() => {
+  const opts: { label: string; hour: number; minute: number }[] = [];
+  for (let h = 7; h <= 22; h++) {
+    for (const m of [0, 15, 30, 45]) {
+      if (h === 22 && m > 0) break;
+      opts.push({
+        label: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+        hour: h,
+        minute: m,
+      });
+    }
+  }
+  return opts;
+})();
+
+const PAYMENT_METHODS = [
+  { value: "cash", label: "Dinheiro" },
+  { value: "cartao_credito", label: "Cartão de Crédito" },
+  { value: "cartao_debito", label: "Cartão de Débito" },
+  { value: "mbway", label: "MB Way" },
+  { value: "transferencia", label: "Transferência Bancária" },
+  { value: "outro", label: "Outro" },
+];
 
 export function NewSessionModal({
   isOpen,
@@ -90,132 +97,149 @@ export function NewSessionModal({
   patients,
   professionals,
   services,
-  onSubmit,
-  selectedPaciente,
-  setSelectedPaciente,
-  selectedProfissional,
-  setSelectedProfissional,
-  selectedServico,
-  setSelectedServico,
-  notes,
-  setNotes,
   onPatientCreated,
+  onSessionsCreated,
 }: NewSessionModalProps) {
-  const { getActivePack, packs } = useData();
+  // ── Wizard step ──
+  const [step, setStep] = useState(1);
 
-  const [manualDate, setManualDate] = useState<Date | undefined>();
-  const [manualHour, setManualHour] = useState("");
-  const [manualMinute, setManualMinute] = useState("0");
-  const [manualEndHour, setManualEndHour] = useState("");
-  const [manualEndMinute, setManualEndMinute] = useState("0");
-  const [customPrice, setCustomPrice] = useState("");
+  // ── Step 1: Type & Quantity ──
+  const [tipoAgendamento, setTipoAgendamento] = useState<"avulso" | "pack">("avulso");
+  const [quantidade, setQuantidade] = useState(1);
+
+  // ── Step 2: Dates & Times ──
+  const [sessionSlots, setSessionSlots] = useState<SessionSlot[]>([{ date: undefined, hour: "", minute: "0" }]);
+
+  // ── Step 3: Patient / Service / Professional ──
+  const [selectedPaciente, setSelectedPaciente] = useState("");
+  const [selectedProfissional, setSelectedProfissional] = useState("");
+  const [selectedServico, setSelectedServico] = useState("");
+  const [notes, setNotes] = useState("");
   const [patientSearchOpen, setPatientSearchOpen] = useState(false);
 
-  // Pack
-  const [usePack, setUsePack] = useState<"avulso" | "pack">("avulso");
-  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
-
-  // Quick patient
+  // Quick patient creation
   const [showQuickPatient, setShowQuickPatient] = useState(false);
   const [quickPatientName, setQuickPatientName] = useState("");
   const [quickPatientPhone, setQuickPatientPhone] = useState("");
   const [quickPatientEmail, setQuickPatientEmail] = useState("");
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
-  // Pack do paciente seleccionado
-  const activePack = useMemo(() => {
-    if (!selectedPaciente) return null;
-    return getActivePack(selectedPaciente);
-  }, [selectedPaciente, packs]);
+  // ── Step 4: Value & Payment ──
+  const [valorSessao, setValorSessao] = useState("");
+  const [valorPackTotal, setValorPackTotal] = useState("");
+  const [pagamentoEstado, setPagamentoEstado] = useState<"pago" | "pendente" | "parcial">("pendente");
+  const [pagamentoMetodo, setPagamentoMetodo] = useState("");
+  const [pagamentoData, setPagamentoData] = useState<Date | undefined>(new Date());
+  const [valorPago, setValorPago] = useState("");
 
-  const patientPacks = useMemo(
-    () => packs.filter((p) => p.paciente_id === selectedPaciente && p.is_active),
-    [selectedPaciente, packs],
-  );
+  // ── Saving ──
+  const [isSaving, setIsSaving] = useState(false);
 
+  // Reset on open
   useEffect(() => {
-    if (isOpen && selectedSlot) {
-      setManualDate(selectedSlot.date);
-      setManualHour(String(selectedSlot.hour));
-      setManualMinute(String(selectedSlot.minute ?? 0));
-      const svc = services.find((s) => s.id === selectedServico);
-      const dur = svc?.duration_minutes || 60;
-      const endH = selectedSlot.hour + Math.floor(((selectedSlot.minute ?? 0) + dur) / 60);
-      const endM = ((selectedSlot.minute ?? 0) + dur) % 60;
-      setManualEndHour(String(Math.min(endH, 23)));
-      setManualEndMinute(String(endM));
-    } else if (isOpen && !selectedSlot) {
-      setManualDate(undefined);
-      setManualHour("");
-      setManualMinute("0");
-      setManualEndHour("");
-      setManualEndMinute("0");
-    }
     if (isOpen) {
-      setCustomPrice("");
+      setStep(1);
+      setTipoAgendamento("avulso");
+      setQuantidade(1);
+      setSelectedPaciente("");
+      setSelectedProfissional("");
+      setSelectedServico("");
+      setNotes("");
+      setValorSessao("");
+      setValorPackTotal("");
+      setPagamentoEstado("pendente");
+      setPagamentoMetodo("");
+      setPagamentoData(new Date());
+      setValorPago("");
       setShowQuickPatient(false);
       setQuickPatientName("");
       setQuickPatientPhone("");
       setQuickPatientEmail("");
-      setUsePack("avulso");
-      setSelectedPackId(null);
+
+      if (selectedSlot) {
+        setSessionSlots([{
+          date: selectedSlot.date,
+          hour: String(selectedSlot.hour),
+          minute: String(selectedSlot.minute ?? 0),
+        }]);
+      } else {
+        setSessionSlots([{ date: undefined, hour: "", minute: "0" }]);
+      }
     }
   }, [isOpen, selectedSlot]);
 
+  // Update session slots count when quantity changes
   useEffect(() => {
-    if (!manualHour || !selectedServico) return;
-    const svc = services.find((s) => s.id === selectedServico);
-    if (!svc) return;
-    const startH = parseInt(manualHour, 10);
-    const startM = parseInt(manualMinute, 10);
-    const totalMin = startH * 60 + startM + svc.duration_minutes;
-    setManualEndHour(String(Math.floor(totalMin / 60)));
-    setManualEndMinute(String(totalMin % 60));
-    if (svc.price && !customPrice) setCustomPrice(String(svc.price));
-  }, [selectedServico]);
+    setSessionSlots((prev) => {
+      const newSlots: SessionSlot[] = [];
+      for (let i = 0; i < quantidade; i++) {
+        if (prev[i]) {
+          newSlots.push(prev[i]);
+        } else {
+          newSlots.push({ date: undefined, hour: "", minute: "0" });
+        }
+      }
+      return newSlots;
+    });
+  }, [quantidade]);
 
-  // Auto-seleccionar pack activo quando muda paciente
+  // Auto-fill price from service
   useEffect(() => {
-    if (activePack) {
-      setUsePack("pack");
-      setSelectedPackId(activePack.id);
-    } else {
-      setUsePack("avulso");
-      setSelectedPackId(null);
+    if (selectedServico) {
+      const svc = services.find((s) => s.id === selectedServico);
+      if (svc?.price) {
+        if (tipoAgendamento === "avulso") {
+          setValorSessao(String(svc.price));
+        } else {
+          setValorPackTotal(String(Number(svc.price) * quantidade));
+        }
+      }
     }
-  }, [selectedPaciente, activePack]);
+  }, [selectedServico, tipoAgendamento, quantidade]);
 
-  const isManualMode = !selectedSlot;
-  const finalDate = selectedSlot?.date ?? manualDate;
-  const finalHour = selectedSlot?.hour ?? (manualHour ? parseInt(manualHour, 10) : undefined);
-  const finalMinute = selectedSlot?.minute ?? parseInt(manualMinute, 10);
-  const finalEndHour = manualEndHour ? parseInt(manualEndHour, 10) : undefined;
-  const finalEndMinute = manualEndMinute ? parseInt(manualEndMinute, 10) : 0;
+  const updateSlot = useCallback((index: number, field: keyof SessionSlot, value: any) => {
+    setSessionSlots((prev) => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+  }, []);
 
+  // ── Patient data ──
+  const selectedPatientData = useMemo(() => patients.find((p) => p.id === selectedPaciente), [patients, selectedPaciente]);
+  const patientHealthTags = useMemo(
+    () => HealthTagService.parseTags(selectedPatientData?.health_tags as string[] | undefined),
+    [selectedPatientData],
+  );
+
+  // ── Dynamic legend ──
+  const legend = useMemo(() => {
+    if (tipoAgendamento === "pack") return "Pack pré-pago — pagamento antecipado ou na 1ª sessão";
+    if (quantidade === 1) return "O pagamento é feito no dia da consulta";
+    return "Agendamento em série — pagamento a cada sessão";
+  }, [tipoAgendamento, quantidade]);
+
+  // ── Computed values ──
+  const totalAvulso = useMemo(() => {
+    const v = parseFloat(valorSessao);
+    return isNaN(v) ? 0 : v * quantidade;
+  }, [valorSessao, quantidade]);
+
+  const valorSessaoPack = useMemo(() => {
+    const v = parseFloat(valorPackTotal);
+    return isNaN(v) || quantidade === 0 ? 0 : v / quantidade;
+  }, [valorPackTotal, quantidade]);
+
+  // ── Validation per step ──
+  const canAdvanceStep1 = quantidade >= 1;
+  const canAdvanceStep2 = sessionSlots.every((s) => s.date && s.hour !== "");
+  const canAdvanceStep3 = selectedPaciente && selectedServico && selectedProfissional;
+
+  // ── Quick patient create ──
   const handleQuickPatientCreate = async () => {
-    if (!quickPatientName.trim()) {
-      toast.error("Nome é obrigatório");
-      return;
-    }
+    if (!quickPatientName.trim()) { toast.error("Nome é obrigatório"); return; }
     setIsCreatingPatient(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        toast.error("Não autenticado");
-        return;
-      }
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("clinic_id")
-        .eq("user_id", userData.user.id)
-        .single();
-      if (!profileData?.clinic_id) {
-        toast.error("Clínica não identificada");
-        return;
-      }
+      const { clinicId } = await getAuthContext();
       const insertData: any = {
         full_name: quickPatientName.trim(),
-        clinic_id: profileData.clinic_id,
+        clinic_id: clinicId,
         is_active: true,
         health_tags: [],
         privacy_consent_at: new Date().toISOString(),
@@ -225,7 +249,7 @@ export function NewSessionModal({
       const { data, error } = await supabase.from("pacientes").insert(insertData).select().single();
       if (error) throw error;
       const created: Patient = { id: (data as any).id, full_name: (data as any).full_name };
-      if (onPatientCreated) onPatientCreated(created);
+      onPatientCreated?.(created);
       setSelectedPaciente(created.id);
       setShowQuickPatient(false);
       setQuickPatientName("");
@@ -239,45 +263,75 @@ export function NewSessionModal({
     }
   };
 
-  const handleSubmit = () => {
-    if (!finalDate || finalHour === undefined) {
-      toast.error("Selecione data e horário");
-      return;
+  // ── Save ──
+  const handleConfirm = async () => {
+    setIsSaving(true);
+    try {
+      const { clinicId, userId } = await getAuthContext();
+      const selectedService = services.find((s) => s.id === selectedServico);
+      const durationMin = selectedService?.duration_minutes || 60;
+
+      const isMultiple = quantidade >= 2;
+      const packGrupoId = (tipoAgendamento === "pack" || isMultiple) ? crypto.randomUUID() : null;
+
+      const vSessao = tipoAgendamento === "avulso"
+        ? (parseFloat(valorSessao) || null)
+        : (valorSessaoPack || null);
+      const vPackTotal = tipoAgendamento === "pack" ? (parseFloat(valorPackTotal) || null) : null;
+
+      for (let i = 0; i < sessionSlots.length; i++) {
+        const slot = sessionSlots[i];
+        if (!slot.date) continue;
+
+        const startTime = new Date(slot.date);
+        startTime.setHours(parseInt(slot.hour, 10), parseInt(slot.minute, 10), 0, 0);
+        const endTime = new Date(startTime);
+        endTime.setMinutes(endTime.getMinutes() + durationMin);
+
+        const isPast = startTime < new Date();
+
+        const { error } = await supabase.from("sessoes").insert({
+          clinic_id: clinicId,
+          paciente_id: selectedPaciente,
+          profissional_id: selectedProfissional,
+          servico_id: selectedServico,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          status: isPast ? "realizado" : "agendado",
+          notes: notes || null,
+          price: vSessao ?? (selectedService ? Number(selectedService.price) : 0),
+          payment_status: pagamentoEstado === "pago" ? "pago" : "pendente",
+          tipo_agendamento: tipoAgendamento,
+          pack_grupo_id: packGrupoId,
+          valor_sessao: vSessao,
+          valor_pack_total: vPackTotal,
+          pagamento_estado: pagamentoEstado,
+          pagamento_metodo: (pagamentoEstado === "pago" || pagamentoEstado === "parcial") ? (pagamentoMetodo || null) : null,
+          pagamento_data: (pagamentoEstado === "pago" || pagamentoEstado === "parcial") && pagamentoData
+            ? format(pagamentoData, "yyyy-MM-dd")
+            : null,
+          created_by: userId,
+        });
+
+        if (error) throw error;
+      }
+
+      toast.success(`${quantidade} sessão${quantidade > 1 ? "ões" : ""} agendada${quantidade > 1 ? "s" : ""} com sucesso!`);
+      onSessionsCreated?.();
+      onClose();
+    } catch (error: any) {
+      console.error("Error creating sessions:", error);
+      toast.error(error.message || "Erro ao agendar sessões");
+    } finally {
+      setIsSaving(false);
     }
-    onSubmit({
-      pacienteId: selectedPaciente,
-      profissionalId: selectedProfissional,
-      servicoId: selectedServico,
-      notes,
-      date: finalDate,
-      hour: finalHour,
-      minute: finalMinute,
-      endHour: finalEndHour,
-      endMinute: finalEndMinute,
-      price: customPrice ? parseFloat(customPrice) : undefined,
-      packId: usePack === "pack" ? selectedPackId : null,
-    });
   };
 
-  const selectedPatientData = useMemo(
-    () => patients.find((p) => p.id === selectedPaciente),
-    [patients, selectedPaciente],
-  );
-  const patientHealthTags = useMemo(
-    () => HealthTagService.parseTags(selectedPatientData?.health_tags as string[] | undefined),
-    [selectedPatientData],
-  );
-  const scheduleWarnings = useMemo(() => {
-    if (finalHour === undefined || patientHealthTags.length === 0) return [];
-    return HealthTagService.validateScheduling(patientHealthTags, finalHour);
-  }, [patientHealthTags, finalHour]);
-
-  const pricePreview = customPrice ? parseFloat(customPrice) : null;
-  const selectedPack = selectedPackId ? packs.find((p) => p.id === selectedPackId) : null;
+  const progressValue = (step / 4) * 100;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
@@ -285,246 +339,188 @@ export function NewSessionModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* ── Data e horário ──────────────────────────────────────────── */}
-          {!isManualMode && finalDate && finalHour !== undefined ? (
-            <div className="space-y-3">
-              <div className="p-3 rounded-lg bg-muted/50 text-sm">
-                <p className="font-medium">{format(finalDate, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
-                <p className="text-muted-foreground">
-                  {String(finalHour).padStart(2, "0")}:{String(finalMinute).padStart(2, "0")}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Hora de fim</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Select value={manualEndHour} onValueChange={setManualEndHour}>
-                    <SelectTrigger className="min-h-[40px]">
-                      <SelectValue placeholder="Hora" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_HOURS.map((h) => (
-                        <SelectItem key={h} value={String(h)}>
-                          {String(h).padStart(2, "0")}h
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={manualEndMinute} onValueChange={setManualEndMinute}>
-                    <SelectTrigger className="min-h-[40px]">
-                      <SelectValue placeholder="Min" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_MINUTES.map((m) => (
-                        <SelectItem key={m} value={String(m)}>
-                          {String(m).padStart(2, "0")}min
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label>Data *</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start font-normal min-h-[44px]",
-                        !manualDate && "text-muted-foreground",
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {manualDate ? format(manualDate, "dd/MM/yyyy") : "Selecione (pode ser retroativa)"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={manualDate}
-                      onSelect={setManualDate}
-                      initialFocus
-                      className="p-3 pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Hora de início *</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <Select value={manualHour} onValueChange={setManualHour}>
-                    <SelectTrigger className="min-h-[44px]">
-                      <SelectValue placeholder="Hora" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_HOURS.map((h) => (
-                        <SelectItem key={h} value={String(h)} className="min-h-[44px]">
-                          {String(h).padStart(2, "0")}h
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={manualMinute} onValueChange={setManualMinute}>
-                    <SelectTrigger className="min-h-[44px]">
-                      <SelectValue placeholder="Min" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_MINUTES.map((m) => (
-                        <SelectItem key={m} value={String(m)} className="min-h-[44px]">
-                          {String(m).padStart(2, "0")}min
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Hora de fim</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <Select value={manualEndHour} onValueChange={setManualEndHour}>
-                    <SelectTrigger className="min-h-[44px]">
-                      <SelectValue placeholder="Hora" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_HOURS.map((h) => (
-                        <SelectItem key={h} value={String(h)} className="min-h-[44px]">
-                          {String(h).padStart(2, "0")}h
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={manualEndMinute} onValueChange={setManualEndMinute}>
-                    <SelectTrigger className="min-h-[44px]">
-                      <SelectValue placeholder="Min" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_MINUTES.map((m) => (
-                        <SelectItem key={m} value={String(m)} className="min-h-[44px]">
-                          {String(m).padStart(2, "0")}min
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          )}
+        {/* Progress bar */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Passo {step} de 4</span>
+            <span>{step === 1 ? "Tipo" : step === 2 ? "Datas" : step === 3 ? "Detalhes" : "Pagamento"}</span>
+          </div>
+          <Progress value={progressValue} className="h-2" />
+        </div>
 
-          {finalDate && finalDate < new Date(new Date().setHours(0, 0, 0, 0)) && (
-            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
-              <p className="font-medium">📅 Data retroativa</p>
-              <p className="text-xs mt-1">O agendamento será registado como retroativo.</p>
-            </div>
-          )}
-
-          {/* ── Paciente ────────────────────────────────────────────────── */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Paciente *</Label>
-              <Button
+        {/* ═══════════════════ STEP 1: Type & Quantity ═══════════════════ */}
+        {step === 1 && (
+          <div className="space-y-5 py-2">
+            {/* Toggle cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-primary gap-1 px-2"
-                onClick={() => setShowQuickPatient(!showQuickPatient)}
+                onClick={() => setTipoAgendamento("avulso")}
+                className={cn(
+                  "p-4 rounded-xl border-2 text-left transition-all",
+                  tipoAgendamento === "avulso"
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border hover:border-muted-foreground/30",
+                )}
               >
-                <UserPlus className="h-3.5 w-3.5" />
-                {showQuickPatient ? "Cancelar" : "Novo Paciente"}
+                <div className="font-semibold text-sm">Avulso</div>
+                <p className="text-xs text-muted-foreground mt-1">Sessão individual ou em série</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTipoAgendamento("pack")}
+                className={cn(
+                  "p-4 rounded-xl border-2 text-left transition-all",
+                  tipoAgendamento === "pack"
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border hover:border-muted-foreground/30",
+                )}
+              >
+                <div className="font-semibold text-sm flex items-center gap-1.5">
+                  <Package className="h-4 w-4" /> Pack
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Pagamento antecipado</p>
+              </button>
+            </div>
+
+            {/* Legend */}
+            <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md">{legend}</p>
+
+            {/* Quantity */}
+            <div className="space-y-2">
+              <Label>Quantidade de sessões</Label>
+              <div className="flex items-center gap-2">
+                {[1, 5, 10, 20].map((n) => (
+                  <Button
+                    key={n}
+                    type="button"
+                    variant={quantidade === n ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setQuantidade(n)}
+                    className="min-w-[40px]"
+                  >
+                    {n}
+                  </Button>
+                ))}
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={quantidade}
+                  onChange={(e) => {
+                    const v = Math.max(1, Math.min(50, parseInt(e.target.value, 10) || 1));
+                    setQuantidade(v);
+                  }}
+                  className="w-20 text-center"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={() => setStep(2)} disabled={!canAdvanceStep1} className="gap-1">
+                Próximo <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+          </div>
+        )}
 
-            {showQuickPatient && (
-              <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-3">
-                <p className="text-xs font-medium text-primary">Cadastro rápido</p>
-                <Input
-                  placeholder="Nome completo *"
-                  value={quickPatientName}
-                  onChange={(e) => setQuickPatientName(e.target.value)}
-                  className="min-h-[40px] text-sm"
-                  autoFocus
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    placeholder="Telefone"
-                    value={quickPatientPhone}
-                    onChange={(e) => setQuickPatientPhone(e.target.value)}
-                    className="min-h-[40px] text-sm"
-                    type="tel"
-                  />
-                  <Input
-                    placeholder="Email"
-                    value={quickPatientEmail}
-                    onChange={(e) => setQuickPatientEmail(e.target.value)}
-                    className="min-h-[40px] text-sm"
-                    type="email"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setShowQuickPatient(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="flex-1 gap-1"
-                    onClick={handleQuickPatientCreate}
-                    disabled={isCreatingPatient || !quickPatientName.trim()}
-                  >
-                    {isCreatingPatient ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Criando...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        Criar e Seleccionar
-                      </>
+        {/* ═══════════════════ STEP 2: Dates & Times ═══════════════════ */}
+        {step === 2 && (
+          <div className="space-y-4 py-2">
+            <div className={cn(quantidade > 5 && "max-h-[400px] overflow-y-auto pr-1", "space-y-3")}>
+              {sessionSlots.map((slot, i) => (
+                <div key={i} className="flex items-center gap-2 p-3 rounded-lg border bg-card">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                      Sessão {i + 1}
+                    </span>
+                    {tipoAgendamento === "pack" && (
+                      <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary">Pack</Badge>
                     )}
-                  </Button>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn("w-[130px] justify-start text-left font-normal", !slot.date && "text-muted-foreground")}
+                      >
+                        <CalendarIcon className="mr-1 h-3 w-3" />
+                        {slot.date ? format(slot.date, "dd/MM/yyyy") : "Data"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={slot.date}
+                        onSelect={(d) => updateSlot(i, "date", d)}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <Select value={slot.hour ? `${slot.hour}:${slot.minute}` : ""} onValueChange={(v) => {
+                    const [h, m] = v.split(":");
+                    updateSlot(i, "hour", h);
+                    updateSlot(i, "minute", m);
+                  }}>
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue placeholder="Hora" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIME_OPTIONS.map((t) => (
+                        <SelectItem key={t.label} value={`${t.hour}:${t.minute}`}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
 
-            {!showQuickPatient && (
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep(1)} className="gap-1">
+                <ChevronLeft className="h-4 w-4" /> Voltar
+              </Button>
+              <Button onClick={() => setStep(3)} disabled={!canAdvanceStep2} className="gap-1">
+                Próximo <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════ STEP 3: Patient / Service / Professional ═══════════════════ */}
+        {step === 3 && (
+          <div className="space-y-4 py-2">
+            {/* Patient combobox */}
+            <div className="space-y-2">
+              <Label>Paciente *</Label>
               <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" className="w-full justify-between min-h-[44px] font-normal">
-                    {selectedPaciente
-                      ? patients.find((p) => p.id === selectedPaciente)?.full_name
-                      : "Selecione o paciente"}
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn("w-full justify-between min-h-[44px]", !selectedPaciente && "text-muted-foreground")}
+                  >
+                    {selectedPaciente ? patients.find((p) => p.id === selectedPaciente)?.full_name : "Pesquisar paciente..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
                   <Command>
-                    <CommandInput placeholder="Pesquisar..." className="h-10" />
+                    <CommandInput placeholder="Nome do paciente..." />
                     <CommandList>
-                      <CommandEmpty>Nenhum paciente encontrado.</CommandEmpty>
+                      <CommandEmpty>
+                        <div className="text-center py-2">
+                          <p className="text-sm">Nenhum paciente encontrado</p>
+                          <Button variant="ghost" size="sm" className="mt-1 gap-1" onClick={() => { setShowQuickPatient(true); setPatientSearchOpen(false); }}>
+                            <UserPlus className="h-3 w-3" /> Criar novo
+                          </Button>
+                        </div>
+                      </CommandEmpty>
                       <CommandGroup>
                         {patients.map((p) => (
-                          <CommandItem
-                            key={p.id}
-                            value={p.full_name}
-                            onSelect={() => {
-                              setSelectedPaciente(p.id);
-                              setPatientSearchOpen(false);
-                            }}
-                            className="min-h-[44px]"
-                          >
-                            <Check
-                              className={cn("mr-2 h-4 w-4", selectedPaciente === p.id ? "opacity-100" : "opacity-0")}
-                            />
+                          <CommandItem key={p.id} value={p.full_name} onSelect={() => { setSelectedPaciente(p.id); setPatientSearchOpen(false); }}>
+                            <Check className={cn("mr-2 h-4 w-4", selectedPaciente === p.id ? "opacity-100" : "opacity-0")} />
                             {p.full_name}
                           </CommandItem>
                         ))}
@@ -533,171 +529,208 @@ export function NewSessionModal({
                   </Command>
                 </PopoverContent>
               </Popover>
+
+              {!showQuickPatient && (
+                <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setShowQuickPatient(true)}>
+                  <UserPlus className="h-3 w-3" /> Criar paciente rápido
+                </Button>
+              )}
+            </div>
+
+            {/* Quick patient form */}
+            {showQuickPatient && (
+              <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
+                <Label className="text-xs font-medium">Novo Paciente</Label>
+                <Input placeholder="Nome completo *" value={quickPatientName} onChange={(e) => setQuickPatientName(e.target.value)} />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input placeholder="Telefone" value={quickPatientPhone} onChange={(e) => setQuickPatientPhone(e.target.value)} />
+                  <Input placeholder="Email" value={quickPatientEmail} onChange={(e) => setQuickPatientEmail(e.target.value)} />
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleQuickPatientCreate} disabled={isCreatingPatient} className="gap-1">
+                    {isCreatingPatient ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
+                    Criar
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setShowQuickPatient(false)}>Cancelar</Button>
+                </div>
+              </div>
             )}
 
-            {selectedPatientData && patientHealthTags.length > 0 && (
-              <HealthTagList tags={patientHealthTags} maxVisible={3} size="sm" />
+            {/* Health tags warning */}
+            {patientHealthTags.length > 0 && (
+              <div className="p-2 rounded-md bg-muted/30">
+                <HealthTagList tags={patientHealthTags} />
+              </div>
             )}
+
+            {/* Service */}
+            <div className="space-y-2">
+              <Label>Serviço *</Label>
+              <Select value={selectedServico} onValueChange={setSelectedServico}>
+                <SelectTrigger className="min-h-[44px]">
+                  <SelectValue placeholder="Selecione o serviço" />
+                </SelectTrigger>
+                <SelectContent>
+                  {services.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                        <span>{s.name}</span>
+                        <span className="text-muted-foreground text-xs">({s.duration_minutes}min • €{s.price ?? 0})</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Professional */}
+            <div className="space-y-2">
+              <Label>Profissional *</Label>
+              <Select value={selectedProfissional} onValueChange={setSelectedProfissional}>
+                <SelectTrigger className="min-h-[44px]">
+                  <SelectValue placeholder="Selecione o profissional" />
+                </SelectTrigger>
+                <SelectContent>
+                  {professionals.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label>Observações</Label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas ou observações..." rows={2} />
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep(2)} className="gap-1">
+                <ChevronLeft className="h-4 w-4" /> Voltar
+              </Button>
+              <Button onClick={() => setStep(4)} disabled={!canAdvanceStep3} className="gap-1">
+                Próximo <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
+        )}
 
-          {scheduleWarnings.length > 0 && <ScheduleWarningAlert warnings={scheduleWarnings} />}
+        {/* ═══════════════════ STEP 4: Value & Payment ═══════════════════ */}
+        {step === 4 && (
+          <div className="space-y-4 py-2">
+            {/* Value */}
+            {tipoAgendamento === "avulso" ? (
+              <div className="space-y-2">
+                <Label>Valor por sessão (€)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={valorSessao}
+                  onChange={(e) => setValorSessao(e.target.value)}
+                  placeholder="0.00"
+                />
+                {quantidade > 1 && (
+                  <p className="text-xs text-muted-foreground">
+                    Total: <span className="font-medium">€{totalAvulso.toFixed(2)}</span> ({quantidade} sessões)
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Valor total do Pack (€)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={valorPackTotal}
+                  onChange={(e) => setValorPackTotal(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Valor por sessão: <span className="font-medium">€{valorSessaoPack.toFixed(2)}</span> ({quantidade} sessões)
+                </p>
+                <Alert className="border-warning/50 bg-warning/10">
+                  <AlertTriangle className="h-4 w-4 text-warning" />
+                  <AlertDescription className="text-xs">
+                    Pack deve ser pago antecipadamente ou na 1ª sessão
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
 
-          {/* ── Profissional ────────────────────────────────────────────── */}
-          <div className="space-y-2">
-            <Label>Profissional *</Label>
-            <Select value={selectedProfissional} onValueChange={setSelectedProfissional}>
-              <SelectTrigger className="min-h-[44px]">
-                <SelectValue placeholder="Selecione o profissional" />
-              </SelectTrigger>
-              <SelectContent>
-                {professionals.map((p) => (
-                  <SelectItem key={p.id} value={p.id} className="min-h-[44px]">
-                    {p.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* ── Serviço ─────────────────────────────────────────────────── */}
-          <div className="space-y-2">
-            <Label>Tipo de Serviço</Label>
-            <Select value={selectedServico} onValueChange={setSelectedServico}>
-              <SelectTrigger className="min-h-[44px]">
-                <SelectValue placeholder="Selecione o serviço" />
-              </SelectTrigger>
-              <SelectContent>
-                {services.map((s) => (
-                  <SelectItem key={s.id} value={s.id} className="min-h-[44px]">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-                      {s.name} ({s.duration_minutes}min)
-                      {s.price ? <span className="text-xs text-muted-foreground">· {s.price}€</span> : null}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* ── Pack ou Avulso ──────────────────────────────────────────── */}
-          {selectedPaciente && (
-            <div className="space-y-3 p-3 rounded-xl border bg-muted/30">
-              <p className="text-sm font-medium">Tipo de sessão</p>
-              <RadioGroup value={usePack} onValueChange={(v) => setUsePack(v as any)} className="space-y-2">
-                <div
-                  className={cn(
-                    "flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors",
-                    usePack === "avulso" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
-                  )}
-                  onClick={() => {
-                    setUsePack("avulso");
-                    setSelectedPackId(null);
-                  }}
-                >
-                  <RadioGroupItem value="avulso" id="ns-avulso" />
-                  <div>
-                    <p className="text-sm font-medium">Avulso</p>
-                    <p className="text-xs text-muted-foreground">Pagamento directo por sessão</p>
-                  </div>
-                </div>
-                <div
-                  className={cn(
-                    "flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors",
-                    usePack === "pack" ? "border-blue-500 bg-blue-50" : "border-border hover:bg-muted/50",
-                    !activePack && patientPacks.length === 0 && "opacity-50 cursor-not-allowed",
-                  )}
-                  onClick={() => {
-                    if (!activePack && patientPacks.length === 0) return;
-                    setUsePack("pack");
-                    setSelectedPackId(activePack?.id ?? patientPacks[0]?.id ?? null);
-                  }}
-                >
-                  <RadioGroupItem value="pack" id="ns-pack" disabled={!activePack && patientPacks.length === 0} />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Package className="h-4 w-4 text-blue-600" />
-                      <p className="text-sm font-medium text-blue-700">Pack</p>
-                      {activePack && (
-                        <Badge variant="outline" className="text-xs border-blue-300 text-blue-700">
-                          Pack {activePack.numero_pack} · {activePack.sessoes_restantes} restantes
-                        </Badge>
-                      )}
-                    </div>
-                    {!activePack && patientPacks.length === 0 && (
-                      <p className="text-xs text-muted-foreground mt-0.5">Sem pack activo — crie um primeiro</p>
-                    )}
-                  </div>
-                </div>
-              </RadioGroup>
-
-              {/* Alerta pack a acabar */}
-              {usePack === "pack" &&
-                selectedPack &&
-                (selectedPack.alert_status === "ultima_sessao" || selectedPack.alert_status === "penultima_sessao") && (
-                  <div
-                    className={cn(
-                      "p-2.5 rounded-lg text-xs flex items-center gap-2",
-                      selectedPack.alert_status === "ultima_sessao"
-                        ? "bg-red-50 border border-red-200 text-red-700"
-                        : "bg-orange-50 border border-orange-200 text-orange-700",
-                    )}
+            {/* Payment state */}
+            <div className="space-y-2">
+              <Label>Estado do pagamento</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["pago", "pendente", "parcial"] as const).map((estado) => (
+                  <Button
+                    key={estado}
+                    type="button"
+                    variant={pagamentoEstado === estado ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setPagamentoEstado(estado)}
+                    className="capitalize"
                   >
-                    <Package className="h-3.5 w-3.5 shrink-0" />
-                    {selectedPack.alert_status === "ultima_sessao"
-                      ? "⚠️ Esta é a última sessão do pack!"
-                      : "⚠️ Penúltima sessão do pack — considere renovar!"}
+                    {estado}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment method + date if paid/partial */}
+            {(pagamentoEstado === "pago" || pagamentoEstado === "parcial") && (
+              <div className="space-y-3 p-3 rounded-lg border bg-muted/20">
+                <div className="space-y-2">
+                  <Label className="text-xs">Método de pagamento</Label>
+                  <Select value={pagamentoMetodo} onValueChange={setPagamentoMetodo}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o método" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_METHODS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Data do pagamento</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className={cn("w-full justify-start", !pagamentoData && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-3 w-3" />
+                        {pagamentoData ? format(pagamentoData, "dd/MM/yyyy") : "Selecionar data"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={pagamentoData} onSelect={setPagamentoData} initialFocus className={cn("p-3 pointer-events-auto")} />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                {pagamentoEstado === "parcial" && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Valor pago (€)</Label>
+                    <Input type="number" step="0.01" min="0" value={valorPago} onChange={(e) => setValorPago(e.target.value)} placeholder="0.00" />
                   </div>
                 )}
-            </div>
-          )}
-
-          {/* ── Valor ───────────────────────────────────────────────────── */}
-          <div className="space-y-1">
-            <Label className="text-xs">Valor da Sessão (€)</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">€</span>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                className="pl-7 min-h-[44px]"
-                placeholder="0,00"
-                value={customPrice}
-                onChange={(e) => setCustomPrice(e.target.value)}
-              />
-            </div>
-            {pricePreview !== null && pricePreview > 0 && (
-              <p className="text-xs text-muted-foreground">💶 {pricePreview.toFixed(2)}€</p>
+              </div>
             )}
-          </div>
 
-          {/* ── Observações ─────────────────────────────────────────────── */}
-          <div className="space-y-2">
-            <Label>Observações</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Observações sobre a sessão..."
-              rows={3}
-              className="min-h-[88px]"
-            />
+            <div className="flex justify-between pt-2">
+              <Button variant="outline" onClick={() => setStep(3)} className="gap-1">
+                <ChevronLeft className="h-4 w-4" /> Voltar
+              </Button>
+              <Button onClick={handleConfirm} disabled={isSaving} className="gap-1">
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Confirmar Agendamento
+              </Button>
+            </div>
           </div>
-        </div>
-
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={onClose} className="min-h-[44px] w-full sm:w-auto">
-            Cancelar
-          </Button>
-          <Button onClick={handleSubmit} className="min-h-[44px] w-full sm:w-auto">
-            {usePack === "pack" && selectedPack
-              ? `Agendar · Pack ${selectedPack.numero_pack}`
-              : pricePreview
-                ? `Agendar Avulso · ${pricePreview.toFixed(2)}€`
-                : "Agendar Sessão"}
-          </Button>
-        </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
+
