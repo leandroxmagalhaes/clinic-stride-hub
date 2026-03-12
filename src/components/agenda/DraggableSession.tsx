@@ -111,6 +111,12 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
   const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
+  // Pack payment pending alert: pack session in the past with pagamento_estado = 'pendente'
+  const isPackPendingPayment = !isCompact
+    && (session as any).tipo_agendamento === "pack"
+    && (session as any).pagamento_estado === "pendente"
+    && new Date(session.start_time) < new Date();
+
   const servicoFormatado = formatServico(session.servico?.name ?? "");
   const profissionalNome = session.profissional?.full_name?.split(" ")?.[0] ?? "";
   const servicoLinha = profissionalNome ? `${servicoFormatado} (${profissionalNome})` : servicoFormatado;
