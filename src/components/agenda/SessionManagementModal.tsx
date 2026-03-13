@@ -1,4 +1,4 @@
-// SessionManagementModal v3 — sem créditos, com sistema de packs
+// SessionManagementModal v4 — edição completa de todos os campos
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import {
   AlertDialog,
   AlertDialogAction,
