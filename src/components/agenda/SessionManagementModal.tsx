@@ -289,12 +289,21 @@ export function SessionManagementModal({
       await onUpdateSession(session.id, {
         start_time: startTime,
         end_time: endTime,
+        paciente_id: editPaciente,
         profissional_id: editProfissional,
         servico_id: editServico,
         status: editStatus,
         price: parseFloat(editPrice) || 0,
         notes: editNotes,
-      });
+      } as any);
+      // Update extended fields directly via supabase
+      await (supabase as any).from("sessoes").update({
+        tipo_agendamento: editTipoAgendamento,
+        pack_grupo_id: editTipoAgendamento === "pack" && editPackGrupoId ? editPackGrupoId : null,
+        pagamento_estado: editPaymentStatus,
+        pagamento_metodo: editPaymentStatus !== "pendente" && editPaymentMethod ? editPaymentMethod : null,
+        pagamento_data: editPaymentStatus !== "pendente" && editPaymentDate ? editPaymentDate : null,
+      }).eq("id", session.id);
       toast.success("Sessão actualizada!");
       setIsEditing(false);
       onClose();
