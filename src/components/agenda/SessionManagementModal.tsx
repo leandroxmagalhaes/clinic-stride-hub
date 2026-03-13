@@ -593,6 +593,61 @@ export function SessionManagementModal({
                   <Pencil className="h-4 w-4" />
                   Editar Sessão Completa
                 </div>
+
+                {/* Patient — searchable combobox */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Utente</Label>
+                  <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start font-normal min-h-[40px]">
+                        <User className="mr-2 h-4 w-4" />
+                        {editPaciente
+                          ? patients.find((p) => p.id === editPaciente)?.full_name || "Selecionar utente"
+                          : "Selecionar utente"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="start">
+                      <Command>
+                        <CommandInput
+                          placeholder="Pesquisar utente..."
+                          value={patientSearchQuery}
+                          onValueChange={setPatientSearchQuery}
+                        />
+                        <CommandList>
+                          <CommandEmpty>Nenhum utente encontrado</CommandEmpty>
+                          <CommandGroup>
+                            {patients
+                              .filter((p) =>
+                                p.full_name.toLowerCase().includes(patientSearchQuery.toLowerCase()),
+                              )
+                              .slice(0, 50)
+                              .map((p) => (
+                                <CommandItem
+                                  key={p.id}
+                                  value={p.full_name}
+                                  onSelect={() => {
+                                    setEditPaciente(p.id);
+                                    setPatientSearchOpen(false);
+                                    setPatientSearchQuery("");
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      editPaciente === p.id ? "opacity-100" : "opacity-0",
+                                    )}
+                                  />
+                                  {p.full_name}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Date */}
                 <div className="space-y-1">
                   <Label className="text-xs">Data</Label>
                   <Popover>
@@ -613,6 +668,8 @@ export function SessionManagementModal({
                     </PopoverContent>
                   </Popover>
                 </div>
+
+                {/* Start/End time */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Hora início</Label>
@@ -673,6 +730,8 @@ export function SessionManagementModal({
                     </div>
                   </div>
                 </div>
+
+                {/* Professional */}
                 <div className="space-y-1">
                   <Label className="text-xs">Profissional</Label>
                   <Select value={editProfissional} onValueChange={setEditProfissional}>
@@ -688,6 +747,8 @@ export function SessionManagementModal({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Service */}
                 <div className="space-y-1">
                   <Label className="text-xs">Serviço</Label>
                   <Select value={editServico} onValueChange={setEditServico}>
@@ -709,6 +770,68 @@ export function SessionManagementModal({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Session type toggle */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Tipo de Agendamento</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={editTipoAgendamento === "avulso" ? "default" : "outline"}
+                      className="flex-1"
+                      onClick={() => {
+                        setEditTipoAgendamento("avulso");
+                        setEditPackGrupoId("");
+                      }}
+                    >
+                      Avulso
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={editTipoAgendamento === "pack" ? "default" : "outline"}
+                      className="flex-1 gap-1"
+                      onClick={() => setEditTipoAgendamento("pack")}
+                    >
+                      <Package className="h-3.5 w-3.5" />
+                      Pack
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Pack group — only when type=pack */}
+                {editTipoAgendamento === "pack" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Grupo de Pack</Label>
+                    <Select
+                      value={editPackGrupoId}
+                      onValueChange={(v) => {
+                        if (v === "__new__") {
+                          setEditPackGrupoId(crypto.randomUUID());
+                        } else {
+                          setEditPackGrupoId(v);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="min-h-[40px]">
+                        <SelectValue placeholder="Selecione grupo..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {packGroups.map((g) => (
+                          <SelectItem key={g.pack_grupo_id} value={g.pack_grupo_id}>
+                            {g.pack_grupo_id.slice(0, 8)}… ({g.count} sessões)
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__new__">
+                          ➕ Criar novo grupo
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Status & Price */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Status</Label>
@@ -738,6 +861,53 @@ export function SessionManagementModal({
                     />
                   </div>
                 </div>
+
+                {/* Payment status */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Estado de Pagamento</Label>
+                  <Select value={editPaymentStatus} onValueChange={setEditPaymentStatus}>
+                    <SelectTrigger className="min-h-[40px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pendente">Pendente</SelectItem>
+                      <SelectItem value="pago">Pago</SelectItem>
+                      <SelectItem value="parcial">Parcial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Payment method & date — visible when pago/parcial */}
+                {(editPaymentStatus === "pago" || editPaymentStatus === "parcial") && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Método</Label>
+                      <Select value={editPaymentMethod} onValueChange={setEditPaymentMethod}>
+                        <SelectTrigger className="min-h-[40px]">
+                          <SelectValue placeholder="Método..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PAYMENT_METHOD_OPTIONS.map((m) => (
+                            <SelectItem key={m.value} value={m.value}>
+                              {m.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Data pagamento</Label>
+                      <Input
+                        type="date"
+                        value={editPaymentDate}
+                        onChange={(e) => setEditPaymentDate(e.target.value)}
+                        className="min-h-[40px]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes */}
                 <div className="space-y-1">
                   <Label className="text-xs">Notas</Label>
                   <Textarea
