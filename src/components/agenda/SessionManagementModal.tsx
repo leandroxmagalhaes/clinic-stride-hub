@@ -1,4 +1,4 @@
-// SessionManagementModal v3 — sem créditos, com sistema de packs
+// SessionManagementModal v4 — edição completa de todos os campos
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -114,7 +115,7 @@ export function SessionManagementModal({
   onDuplicateSession,
 }: SessionManagementModalProps) {
   const navigate = useNavigate();
-  const { professionals, services, packs, getActivePack, incrementPackUsage, decrementPackUsage } = useData();
+  const { patients, professionals, services, packs, getActivePack, incrementPackUsage, decrementPackUsage } = useData();
 
   const [isLoading, setIsLoading] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -153,6 +154,15 @@ export function SessionManagementModal({
   const [editStatus, setEditStatus] = useState<SessionStatus>("agendado");
   const [editPrice, setEditPrice] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editPaciente, setEditPaciente] = useState("");
+  const [editTipoAgendamento, setEditTipoAgendamento] = useState<"avulso" | "pack">("avulso");
+  const [editPackGrupoId, setEditPackGrupoId] = useState("");
+  const [editPaymentStatus, setEditPaymentStatus] = useState("pendente");
+  const [editPaymentMethod, setEditPaymentMethod] = useState("");
+  const [editPaymentDate, setEditPaymentDate] = useState("");
+  const [packGroups, setPackGroups] = useState<{ pack_grupo_id: string; count: number }[]>([]);
+  const [patientSearchOpen, setPatientSearchOpen] = useState(false);
+  const [patientSearchQuery, setPatientSearchQuery] = useState("");
 
   const {
     briefing,
@@ -194,7 +204,39 @@ export function SessionManagementModal({
     setEditStatus((session.status as SessionStatus) || "agendado");
     setEditPrice(String((session as any).price || ""));
     setEditNotes(session.notes || "");
+    setEditPaciente(session.paciente_id || "");
+    setEditTipoAgendamento((session as any).tipo_agendamento || "avulso");
+    setEditPackGrupoId((session as any).pack_grupo_id || "");
+    setEditPaymentStatus((session as any).pagamento_estado || "pendente");
+    setEditPaymentMethod((session as any).pagamento_metodo || "");
+    setEditPaymentDate((session as any).pagamento_data || "");
   }, [session?.id]);
+
+  // Fetch pack groups for selected patient when type is pack
+  useEffect(() => {
+    if (editTipoAgendamento !== "pack" || !editPaciente) {
+      setPackGroups([]);
+      return;
+    }
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("sessoes")
+        .select("pack_grupo_id")
+        .eq("paciente_id", editPaciente)
+        .eq("tipo_agendamento", "pack")
+        .not("pack_grupo_id", "is", null);
+      if (data) {
+        const grouped = (data as { pack_grupo_id: string }[]).reduce(
+          (acc: Record<string, number>, r) => {
+            acc[r.pack_grupo_id] = (acc[r.pack_grupo_id] || 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+        setPackGroups(Object.entries(grouped).map(([pack_grupo_id, count]) => ({ pack_grupo_id, count: count as number })));
+      }
+    })();
+  }, [editPaciente, editTipoAgendamento]);
 
   if (!session) return null;
 
@@ -247,12 +289,21 @@ export function SessionManagementModal({
       await onUpdateSession(session.id, {
         start_time: startTime,
         end_time: endTime,
+        paciente_id: editPaciente,
         profissional_id: editProfissional,
         servico_id: editServico,
         status: editStatus,
         price: parseFloat(editPrice) || 0,
         notes: editNotes,
-      });
+      } as any);
+      // Update extended fields directly via supabase
+      await (supabase as any).from("sessoes").update({
+        tipo_agendamento: editTipoAgendamento,
+        pack_grupo_id: editTipoAgendamento === "pack" && editPackGrupoId ? editPackGrupoId : null,
+        pagamento_estado: editPaymentStatus,
+        pagamento_metodo: editPaymentStatus !== "pendente" && editPaymentMethod ? editPaymentMethod : null,
+        pagamento_data: editPaymentStatus !== "pendente" && editPaymentDate ? editPaymentDate : null,
+      }).eq("id", session.id);
       toast.success("Sessão actualizada!");
       setIsEditing(false);
       onClose();
@@ -542,6 +593,61 @@ export function SessionManagementModal({
                   <Pencil className="h-4 w-4" />
                   Editar Sessão Completa
                 </div>
+
+                {/* Patient — searchable combobox */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Utente</Label>
+                  <Popover open={patientSearchOpen} onOpenChange={setPatientSearchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start font-normal min-h-[40px]">
+                        <User className="mr-2 h-4 w-4" />
+                        {editPaciente
+                          ? patients.find((p) => p.id === editPaciente)?.full_name || "Selecionar utente"
+                          : "Selecionar utente"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="start">
+                      <Command>
+                        <CommandInput
+                          placeholder="Pesquisar utente..."
+                          value={patientSearchQuery}
+                          onValueChange={setPatientSearchQuery}
+                        />
+                        <CommandList>
+                          <CommandEmpty>Nenhum utente encontrado</CommandEmpty>
+                          <CommandGroup>
+                            {patients
+                              .filter((p) =>
+                                p.full_name.toLowerCase().includes(patientSearchQuery.toLowerCase()),
+                              )
+                              .slice(0, 50)
+                              .map((p) => (
+                                <CommandItem
+                                  key={p.id}
+                                  value={p.full_name}
+                                  onSelect={() => {
+                                    setEditPaciente(p.id);
+                                    setPatientSearchOpen(false);
+                                    setPatientSearchQuery("");
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      editPaciente === p.id ? "opacity-100" : "opacity-0",
+                                    )}
+                                  />
+                                  {p.full_name}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Date */}
                 <div className="space-y-1">
                   <Label className="text-xs">Data</Label>
                   <Popover>
@@ -562,6 +668,8 @@ export function SessionManagementModal({
                     </PopoverContent>
                   </Popover>
                 </div>
+
+                {/* Start/End time */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Hora início</Label>
@@ -622,6 +730,8 @@ export function SessionManagementModal({
                     </div>
                   </div>
                 </div>
+
+                {/* Professional */}
                 <div className="space-y-1">
                   <Label className="text-xs">Profissional</Label>
                   <Select value={editProfissional} onValueChange={setEditProfissional}>
@@ -637,6 +747,8 @@ export function SessionManagementModal({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Service */}
                 <div className="space-y-1">
                   <Label className="text-xs">Serviço</Label>
                   <Select value={editServico} onValueChange={setEditServico}>
@@ -658,6 +770,68 @@ export function SessionManagementModal({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Session type toggle */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Tipo de Agendamento</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={editTipoAgendamento === "avulso" ? "default" : "outline"}
+                      className="flex-1"
+                      onClick={() => {
+                        setEditTipoAgendamento("avulso");
+                        setEditPackGrupoId("");
+                      }}
+                    >
+                      Avulso
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={editTipoAgendamento === "pack" ? "default" : "outline"}
+                      className="flex-1 gap-1"
+                      onClick={() => setEditTipoAgendamento("pack")}
+                    >
+                      <Package className="h-3.5 w-3.5" />
+                      Pack
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Pack group — only when type=pack */}
+                {editTipoAgendamento === "pack" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Grupo de Pack</Label>
+                    <Select
+                      value={editPackGrupoId}
+                      onValueChange={(v) => {
+                        if (v === "__new__") {
+                          setEditPackGrupoId(crypto.randomUUID());
+                        } else {
+                          setEditPackGrupoId(v);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="min-h-[40px]">
+                        <SelectValue placeholder="Selecione grupo..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {packGroups.map((g) => (
+                          <SelectItem key={g.pack_grupo_id} value={g.pack_grupo_id}>
+                            {g.pack_grupo_id.slice(0, 8)}… ({g.count} sessões)
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__new__">
+                          ➕ Criar novo grupo
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Status & Price */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Status</Label>
@@ -687,6 +861,53 @@ export function SessionManagementModal({
                     />
                   </div>
                 </div>
+
+                {/* Payment status */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Estado de Pagamento</Label>
+                  <Select value={editPaymentStatus} onValueChange={setEditPaymentStatus}>
+                    <SelectTrigger className="min-h-[40px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pendente">Pendente</SelectItem>
+                      <SelectItem value="pago">Pago</SelectItem>
+                      <SelectItem value="parcial">Parcial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Payment method & date — visible when pago/parcial */}
+                {(editPaymentStatus === "pago" || editPaymentStatus === "parcial") && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Método</Label>
+                      <Select value={editPaymentMethod} onValueChange={setEditPaymentMethod}>
+                        <SelectTrigger className="min-h-[40px]">
+                          <SelectValue placeholder="Método..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PAYMENT_METHOD_OPTIONS.map((m) => (
+                            <SelectItem key={m.value} value={m.value}>
+                              {m.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Data pagamento</Label>
+                      <Input
+                        type="date"
+                        value={editPaymentDate}
+                        onChange={(e) => setEditPaymentDate(e.target.value)}
+                        className="min-h-[40px]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes */}
                 <div className="space-y-1">
                   <Label className="text-xs">Notas</Label>
                   <Textarea
