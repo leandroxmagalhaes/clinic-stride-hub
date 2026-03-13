@@ -154,6 +154,15 @@ export function SessionManagementModal({
   const [editStatus, setEditStatus] = useState<SessionStatus>("agendado");
   const [editPrice, setEditPrice] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editPaciente, setEditPaciente] = useState("");
+  const [editTipoAgendamento, setEditTipoAgendamento] = useState<"avulso" | "pack">("avulso");
+  const [editPackGrupoId, setEditPackGrupoId] = useState("");
+  const [editPaymentStatus, setEditPaymentStatus] = useState("pendente");
+  const [editPaymentMethod, setEditPaymentMethod] = useState("");
+  const [editPaymentDate, setEditPaymentDate] = useState("");
+  const [packGroups, setPackGroups] = useState<{ pack_grupo_id: string; count: number }[]>([]);
+  const [patientSearchOpen, setPatientSearchOpen] = useState(false);
+  const [patientSearchQuery, setPatientSearchQuery] = useState("");
 
   const {
     briefing,
