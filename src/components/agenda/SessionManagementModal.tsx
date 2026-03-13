@@ -115,7 +115,7 @@ export function SessionManagementModal({
   onDuplicateSession,
 }: SessionManagementModalProps) {
   const navigate = useNavigate();
-  const { professionals, services, packs, getActivePack, incrementPackUsage, decrementPackUsage } = useData();
+  const { patients, professionals, services, packs, getActivePack, incrementPackUsage, decrementPackUsage } = useData();
 
   const [isLoading, setIsLoading] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
