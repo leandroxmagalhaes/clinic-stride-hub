@@ -69,6 +69,7 @@ export default function Pacientes() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [isOnboardingLinkModalOpen, setIsOnboardingLinkModalOpen] = useState(false);
   const [genericLinkCopied, setGenericLinkCopied] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
