@@ -361,8 +361,8 @@ export function SessionManagementModal({
         else if (restantes === 2) toast.info(`Pack ${packToCheck.numero_pack}: restam 2 sessões.`);
       }
       // Fire post-consultation automation trigger (non-blocking)
-      if (session.paciente?.id && session.clinic_id) {
-        checkPostConsultationTrigger(session.id, session.paciente.id, session.clinic_id)
+      if (session.paciente_id && session.clinic_id) {
+        checkPostConsultationTrigger(session.id, session.paciente_id, session.clinic_id)
           .catch(err => console.error('Post-consultation automation error:', err));
       }
       setShowEvolutionPrompt(true);
