@@ -45,6 +45,7 @@ import { HealthTag } from "@/services/HealthTagService";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { TableSkeleton } from "@/components/skeletons/PageSkeletons";
+import { DuplicatePatientsModal } from "@/components/patients/DuplicatePatientsModal";
 
 export default function Pacientes() {
   const { patients, refreshPatients, deletePatient, updatePatient, isLoading } = useData();
