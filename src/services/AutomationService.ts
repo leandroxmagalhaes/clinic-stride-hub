@@ -140,22 +140,52 @@ export class AutomationService {
   }
 
   /**
-   * Get mock metrics (for demo purposes)
+   * Get real metrics from automation_logs and automation_flows
    */
-  static getMetrics(flows: AutomationFlow[]): {
+  static async getMetrics(clinicId?: string): Promise<{
+    activeFlows: number;
+    messagesSent: number;
+    successRate: number;
+  }> {
+    try {
+      // Count active flows
+      const { count: activeCount } = await supabase
+        .from('automation_flows')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
+
+      // Count total logs and sent logs
+      let logsQuery = (supabase as any).from('automation_logs').select('*', { count: 'exact', head: true });
+      let sentQuery = (supabase as any).from('automation_logs').select('*', { count: 'exact', head: true }).eq('status', 'sent');
+
+      const [{ count: totalLogs }, { count: sentLogs }] = await Promise.all([logsQuery, sentQuery]);
+
+      const messagesSent = totalLogs || 0;
+      const successRate = messagesSent > 0 ? Math.round(((sentLogs || 0) / messagesSent) * 100) : 0;
+
+      return {
+        activeFlows: activeCount || 0,
+        messagesSent,
+        successRate: messagesSent === 0 ? 100 : successRate,
+      };
+    } catch (err) {
+      console.error('Error fetching automation metrics:', err);
+      return { activeFlows: 0, messagesSent: 0, successRate: 0 };
+    }
+  }
+
+  /**
+   * Legacy sync metrics for components that pass flows array
+   */
+  static getMetricsSync(flows: AutomationFlow[]): {
     activeFlows: number;
     messagesSent: number;
     successRate: number;
   } {
-    const activeFlows = flows.filter(f => f.is_active).length;
-    // Mock data for messages sent and success rate
-    const messagesSent = activeFlows * 127; // Simulated
-    const successRate = 94.5; // Simulated
-
     return {
-      activeFlows,
-      messagesSent,
-      successRate,
+      activeFlows: flows.filter(f => f.is_active).length,
+      messagesSent: 0,
+      successRate: 0,
     };
   }
 }

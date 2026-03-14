@@ -15,17 +15,12 @@ export interface MessageTemplateData {
 }
 
 /**
- * Process a message template by replacing variables with actual data
- */
-/**
  * Get the production base URL for patient portal links
  */
 export function getPortalBaseUrl(): string {
-  // Use window.location.origin to get the current domain (works for both preview and production)
   if (typeof window !== 'undefined') {
     return getPublicBaseUrl();
   }
-  // Fallback for SSR or edge cases
   return 'https://clinic-stride-hub.lovable.app';
 }
 
@@ -52,22 +47,16 @@ export function processMessageTemplate(template: string, data: MessageTemplateDa
  * Generate WhatsApp Web URL for sending message
  */
 export function generateWhatsAppUrl(phone: string, message: string): string {
-  // Clean phone number - remove all non-digits
   const cleanPhone = phone.replace(/\D/g, '');
   
-  // Add country code if not present (assume Portugal +351 or Brazil +55)
   let formattedPhone = cleanPhone;
   if (cleanPhone.length === 9) {
-    // Portuguese mobile number
     formattedPhone = `351${cleanPhone}`;
   } else if (cleanPhone.length === 11 || cleanPhone.length === 10) {
-    // Brazilian number
     formattedPhone = `55${cleanPhone}`;
   }
   
-  // Encode message for URL
   const encodedMessage = encodeURIComponent(message);
-  
   return `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
 }
 
@@ -132,6 +121,51 @@ export interface AutomationTriggerResult {
 }
 
 /**
+ * Invoke the send-automation-email edge function for a given flow
+ */
+async function invokeEmailForFlow(
+  flow: AutomationFlow,
+  pacienteId: string,
+  clinicId: string,
+  sessaoId?: string
+): Promise<void> {
+  try {
+    const { error } = await supabase.functions.invoke('send-automation-email', {
+      body: {
+        flowId: flow.id,
+        pacienteId,
+        sessaoId: sessaoId || null,
+        triggerType: flow.trigger_type,
+        clinicId,
+      },
+    });
+    if (error) {
+      console.error(`Automation email error for flow ${flow.name}:`, error);
+    }
+  } catch (err) {
+    console.error(`Failed to invoke send-automation-email for flow ${flow.name}:`, err);
+  }
+}
+
+/**
+ * Process all active email flows for a given trigger type
+ */
+async function processEmailFlowsForTrigger(
+  triggerType: AutomationFlow['trigger_type'],
+  pacienteId: string,
+  clinicId: string,
+  sessaoId?: string
+): Promise<void> {
+  const flows = await getActiveFlowsByTrigger(triggerType);
+  
+  for (const flow of flows) {
+    if (flow.channel === 'email') {
+      await invokeEmailForFlow(flow, pacienteId, clinicId, sessaoId);
+    }
+  }
+}
+
+/**
  * Check and prepare automation trigger for appointment creation
  */
 export async function checkAppointmentCreatedTrigger(data: {
@@ -141,31 +175,30 @@ export async function checkAppointmentCreatedTrigger(data: {
   serviceName?: string;
   date: Date;
   hour: number;
+  sessaoId?: string;
+  pacienteId?: string;
+  clinicId?: string;
 }): Promise<AutomationTriggerResult> {
-  // Get active flows for appointment_created trigger
+  // Process email flows in the background
+  if (data.pacienteId && data.clinicId) {
+    processEmailFlowsForTrigger('appointment_created', data.pacienteId, data.clinicId, data.sessaoId)
+      .catch(err => console.error('Background email trigger error:', err));
+  }
+
+  // Keep existing WhatsApp flow logic
   const flows = await getActiveFlowsByTrigger('appointment_created');
+  const whatsappFlow = flows.find(f => f.channel === 'whatsapp');
   
-  if (flows.length === 0) {
+  if (!whatsappFlow || !data.patientPhone) {
     return { shouldTrigger: false };
   }
 
-  // Use the highest priority flow
-  const flow = flows[0];
-  
-  // Check if patient has a phone number
-  if (!data.patientPhone) {
-    return { shouldTrigger: false };
-  }
-
-  // Get clinic name
-  const clinicId = await getCurrentClinicId();
+  const clinicId = data.clinicId || await getCurrentClinicId();
   const clinicName = clinicId ? await getClinicName(clinicId) : 'Clínica';
 
-  // Format time
   const time = `${String(data.hour).padStart(2, '0')}:00`;
 
-  // Process the message template
-  const processedMessage = processMessageTemplate(flow.message_template, {
+  const processedMessage = processMessageTemplate(whatsappFlow.message_template, {
     patientName: data.patientName,
     patientPhone: data.patientPhone,
     date: data.date,
@@ -175,14 +208,55 @@ export async function checkAppointmentCreatedTrigger(data: {
     clinicName,
   });
 
-  // Generate WhatsApp URL
   const whatsappUrl = generateWhatsAppUrl(data.patientPhone, processedMessage);
 
   return {
     shouldTrigger: true,
-    flow,
+    flow: whatsappFlow,
     processedMessage,
     whatsappUrl,
     patientPhone: data.patientPhone,
   };
+}
+
+/**
+ * Trigger: 24h before appointment
+ */
+export async function check24hBeforeTrigger(
+  sessaoId: string,
+  pacienteId: string,
+  clinicId: string
+): Promise<void> {
+  await processEmailFlowsForTrigger('24h_before', pacienteId, clinicId, sessaoId);
+}
+
+/**
+ * Trigger: Post consultation (session marked as realizado)
+ */
+export async function checkPostConsultationTrigger(
+  sessaoId: string,
+  pacienteId: string,
+  clinicId: string
+): Promise<void> {
+  await processEmailFlowsForTrigger('post_consultation', pacienteId, clinicId, sessaoId);
+}
+
+/**
+ * Trigger: Patient birthday
+ */
+export async function checkBirthdayTrigger(
+  pacienteId: string,
+  clinicId: string
+): Promise<void> {
+  await processEmailFlowsForTrigger('birthday', pacienteId, clinicId);
+}
+
+/**
+ * Trigger: Patient inactive for 30 days
+ */
+export async function checkInactive30DaysTrigger(
+  pacienteId: string,
+  clinicId: string
+): Promise<void> {
+  await processEmailFlowsForTrigger('inactive_30_days', pacienteId, clinicId);
 }

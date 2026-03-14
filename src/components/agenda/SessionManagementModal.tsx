@@ -51,6 +51,7 @@ import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCa
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { useData } from "@/contexts/DataContext";
 import { supabase } from "@/integrations/supabase/client";
+import { checkPostConsultationTrigger } from "@/services/AutomationEngine";
 
 export type SessionStatus = "agendado" | "confirmado" | "realizado" | "cancelado" | "falta";
 export type PaymentStatus = "pago" | "pendente";
@@ -358,6 +359,11 @@ export function SessionManagementModal({
         if (restantes <= 0) toast.warning(`⚠️ Pack ${packToCheck.numero_pack} esgotado! Considere criar um novo pack.`);
         else if (restantes === 1) toast.warning(`⚠️ Última sessão do Pack ${packToCheck.numero_pack}!`);
         else if (restantes === 2) toast.info(`Pack ${packToCheck.numero_pack}: restam 2 sessões.`);
+      }
+      // Fire post-consultation automation trigger (non-blocking)
+      if (session.paciente_id && session.clinic_id) {
+        checkPostConsultationTrigger(session.id, session.paciente_id, session.clinic_id)
+          .catch(err => console.error('Post-consultation automation error:', err));
       }
       setShowEvolutionPrompt(true);
     } catch (err: any) {

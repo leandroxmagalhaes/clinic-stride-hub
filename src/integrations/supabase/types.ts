@@ -158,6 +158,94 @@ export type Database = {
           },
         ]
       }
+      automation_logs: {
+        Row: {
+          channel: string | null
+          clinic_id: string
+          error_message: string | null
+          flow_id: string | null
+          id: string
+          paciente_id: string | null
+          recipient_email: string | null
+          sent_at: string | null
+          sessao_id: string | null
+          status: string | null
+          subject: string | null
+          trigger_type: string | null
+        }
+        Insert: {
+          channel?: string | null
+          clinic_id: string
+          error_message?: string | null
+          flow_id?: string | null
+          id?: string
+          paciente_id?: string | null
+          recipient_email?: string | null
+          sent_at?: string | null
+          sessao_id?: string | null
+          status?: string | null
+          subject?: string | null
+          trigger_type?: string | null
+        }
+        Update: {
+          channel?: string | null
+          clinic_id?: string
+          error_message?: string | null
+          flow_id?: string | null
+          id?: string
+          paciente_id?: string | null
+          recipient_email?: string | null
+          sent_at?: string | null
+          sessao_id?: string | null
+          status?: string | null
+          subject?: string | null
+          trigger_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "automation_logs_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "automation_logs_sessao_id_fkey"
+            columns: ["sessao_id"]
+            isOneToOne: false
+            referencedRelation: "sessoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clinic_settings: {
         Row: {
           ai_clinical_enabled: boolean

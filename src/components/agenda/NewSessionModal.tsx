@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthContext } from "@/lib/auth-helpers";
+import { checkAppointmentCreatedTrigger } from "@/services/AutomationEngine";
 
 // Keep export for backward compatibility
 export interface PackageSubmitData {
@@ -290,7 +291,7 @@ export function NewSessionModal({
 
         const isPast = startTime < new Date();
 
-        const { error } = await supabase.from("sessoes").insert({
+        const { data: insertedSession, error } = await supabase.from("sessoes").insert({
           clinic_id: clinicId,
           paciente_id: selectedPaciente,
           profissional_id: selectedProfissional,
@@ -311,9 +312,25 @@ export function NewSessionModal({
             ? format(pagamentoData, "yyyy-MM-dd")
             : null,
           created_by: userId,
-        });
+        }).select('id').single();
 
         if (error) throw error;
+
+        // Fire automation trigger for appointment creation (non-blocking)
+        if (insertedSession?.id) {
+          const selectedPatient = patients.find(p => p.id === selectedPaciente);
+          const selectedProf = professionals.find(p => p.id === selectedProfissional);
+          checkAppointmentCreatedTrigger({
+            patientName: selectedPatient?.full_name || '',
+            professionalName: selectedProf?.full_name || '',
+            serviceName: selectedService?.name,
+            date: startTime,
+            hour: parseInt(slot.hour, 10),
+            sessaoId: insertedSession.id,
+            pacienteId: selectedPaciente,
+            clinicId,
+          }).catch(err => console.error('Automation trigger error:', err));
+        }
       }
 
       toast.success(`${quantidade} sessão${quantidade > 1 ? "ões" : ""} agendada${quantidade > 1 ? "s" : ""} com sucesso!`);
