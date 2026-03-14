@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Zap, MessageSquare, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { AutomationFlow, AutomationService } from "@/services/AutomationService";
@@ -7,7 +8,11 @@ interface AutomationDashboardProps {
 }
 
 export function AutomationDashboard({ flows }: AutomationDashboardProps) {
-  const metrics = AutomationService.getMetrics(flows);
+  const [metrics, setMetrics] = useState({ activeFlows: 0, messagesSent: 0, successRate: 0 });
+
+  useEffect(() => {
+    AutomationService.getMetrics().then(setMetrics).catch(() => {});
+  }, [flows]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
