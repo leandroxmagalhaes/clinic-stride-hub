@@ -360,6 +360,11 @@ export function SessionManagementModal({
         else if (restantes === 1) toast.warning(`⚠️ Última sessão do Pack ${packToCheck.numero_pack}!`);
         else if (restantes === 2) toast.info(`Pack ${packToCheck.numero_pack}: restam 2 sessões.`);
       }
+      // Fire post-consultation automation trigger (non-blocking)
+      if (session.paciente?.id && session.clinic_id) {
+        checkPostConsultationTrigger(session.id, session.paciente.id, session.clinic_id)
+          .catch(err => console.error('Post-consultation automation error:', err));
+      }
       setShowEvolutionPrompt(true);
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "Tente novamente"));
