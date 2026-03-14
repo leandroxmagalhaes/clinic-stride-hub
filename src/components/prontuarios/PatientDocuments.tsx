@@ -958,9 +958,40 @@ export function PatientDocuments({ pacienteId, prontuarioId, clinicId }: Patient
       <CameraModal
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
-        onCapture={(file) => {
+        onCapture={async (file) => {
           setCameraOpen(false);
-          handleFileSelect(file);
+          setUploading(true);
+          try {
+            const { data: userData } = await supabase.auth.getUser();
+            if (!userData.user) throw new Error("Não autenticado");
+            const storagePath = `${clinicId}/${pacienteId}/${Date.now()}_${file.name}`;
+            const { error: storageError } = await supabase.storage
+              .from("patient-documents")
+              .upload(storagePath, file, { contentType: file.type, upsert: false });
+            if (storageError) throw storageError;
+            const { error: dbError } = await (supabase as any).from("patient_documents").insert({
+              clinic_id: clinicId,
+              paciente_id: pacienteId,
+              prontuario_id: prontuarioId,
+              uploaded_by: userData.user.id,
+              file_name: file.name,
+              file_type: file.type,
+              file_size: file.size,
+              storage_path: storagePath,
+              category: "evolucao_clinica",
+              description: null,
+            });
+            if (dbError) {
+              await supabase.storage.from("patient-documents").remove([storagePath]);
+              throw dbError;
+            }
+            toast.success("Foto capturada e guardada!");
+            await fetchDocuments();
+          } catch (err: any) {
+            toast.error("Erro ao guardar foto: " + (err.message || "Tente novamente"));
+          } finally {
+            setUploading(false);
+          }
         }}
       />
 
