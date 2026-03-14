@@ -188,7 +188,6 @@ function CameraModal({ open, onClose, onCapture }: CameraModalProps) {
         if (!blob) return;
         const file = new (File as any)([blob], `foto_${makeTimestamp()}.jpg`, { type: "image/jpeg" });
         onCapture(file);
-        handleClose();
       },
       "image/jpeg",
       0.92,
