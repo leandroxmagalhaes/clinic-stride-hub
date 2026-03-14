@@ -764,6 +764,13 @@ export default function Pacientes() {
           }}
         />
       )}
+
+      <DuplicatePatientsModal
+        isOpen={isDuplicateModalOpen}
+        onClose={() => setIsDuplicateModalOpen(false)}
+        patients={patients}
+        onMergeComplete={refreshPatients}
+      />
     </AppLayout>
   );
 }
