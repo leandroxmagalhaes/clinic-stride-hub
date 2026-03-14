@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthContext } from "@/lib/auth-helpers";
+import { checkAppointmentCreatedTrigger } from "@/services/AutomationEngine";
 
 // Keep export for backward compatibility
 export interface PackageSubmitData {
