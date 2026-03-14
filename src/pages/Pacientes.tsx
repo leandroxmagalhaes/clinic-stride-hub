@@ -27,6 +27,7 @@ import {
   ArrowUp,
   ArrowDown,
   Download,
+  Users,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
