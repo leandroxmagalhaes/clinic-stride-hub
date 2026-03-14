@@ -305,6 +305,10 @@ export default function Pacientes() {
       subtitle={`${patients.length} pacientes cadastrados`}
       actions={
         <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setIsDuplicateModalOpen(true)} className="gap-2 min-h-[44px]">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Verificar Duplicados</span>
+          </Button>
           <Button variant="outline" onClick={() => setIsReportModalOpen(true)} className="gap-2 min-h-[44px]">
             <FileBarChart2 className="h-4 w-4" />
             <span className="hidden sm:inline">Relatório</span>
