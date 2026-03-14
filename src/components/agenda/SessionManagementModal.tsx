@@ -51,6 +51,7 @@ import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCa
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { useData } from "@/contexts/DataContext";
 import { supabase } from "@/integrations/supabase/client";
+import { checkPostConsultationTrigger } from "@/services/AutomationEngine";
 
 export type SessionStatus = "agendado" | "confirmado" | "realizado" | "cancelado" | "falta";
 export type PaymentStatus = "pago" | "pendente";
