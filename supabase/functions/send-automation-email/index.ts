@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
 
         if (session.profissional_id) {
           const { data: prof, error: profError } = await supabase
-            .from("profissionais")
+            .from("profiles")
             .select("full_name")
             .eq("id", session.profissional_id)
             .single();
