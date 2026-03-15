@@ -118,6 +118,9 @@ Deno.serve(async (req) => {
       .replace(/\{\{time\}\}/gi, sessionTime)
       .replace(/\{\{profissional\}\}/gi, professionalName)
       .replace(/\{\{professional\}\}/gi, professionalName)
+      .replace(/\{\{professional_name\}\}/gi, professionalName)
+      .replace(/\{\{servico\}\}/gi, serviceName)
+      .replace(/\{\{service\}\}/gi, serviceName)
       .replace(/\{\{clinica\}\}/gi, clinicName)
       .replace(/\{\{clinic_name\}\}/gi, clinicName);
 
