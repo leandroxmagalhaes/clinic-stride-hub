@@ -92,20 +92,22 @@ Deno.serve(async (req) => {
         sessionTime = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
 
         if (session.profissional_id) {
-          const { data: prof } = await supabase
+          const { data: prof, error: profError } = await supabase
             .from("profissionais")
             .select("full_name")
             .eq("id", session.profissional_id)
             .single();
+          console.log('DEBUG prof result:', JSON.stringify(prof), 'error:', profError?.message);
           professionalName = prof?.full_name || "";
         }
 
         if (session.servico_id) {
-          const { data: serv } = await supabase
+          const { data: serv, error: servError } = await supabase
             .from("servicos")
             .select("name")
             .eq("id", session.servico_id)
             .single();
+          console.log('DEBUG serv result:', JSON.stringify(serv), 'error:', servError?.message);
           serviceName = serv?.name || "";
         }
       }
