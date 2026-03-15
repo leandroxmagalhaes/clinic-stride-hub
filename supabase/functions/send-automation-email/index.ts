@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
     let sessionDate = "";
     let sessionTime = "";
     let professionalName = "";
+    let serviceName = "";
 
     if (sessaoId) {
       const { data: session } = await supabase
@@ -94,6 +95,15 @@ Deno.serve(async (req) => {
             .eq("id", session.profissional_id)
             .single();
           professionalName = prof?.full_name || "";
+        }
+
+        if (session.servico_id) {
+          const { data: serv } = await supabase
+            .from("servicos")
+            .select("name")
+            .eq("id", session.servico_id)
+            .single();
+          serviceName = serv?.name || "";
         }
       }
     }
