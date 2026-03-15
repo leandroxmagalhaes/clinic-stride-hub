@@ -35,6 +35,7 @@ Deno.serve(async (req) => {
       .eq("id", flowId)
       .single();
     if (flowError || !flow) throw new Error("Flow not found: " + (flowError?.message || ""));
+    console.log('DEBUG flow:', JSON.stringify(flow));
 
     // Fetch patient
     const { data: patient, error: patientError } = await supabase
