@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
         .single();
 
       if (session) {
+        console.log('DEBUG session:', JSON.stringify(session));
         const dt = new Date(session.start_time);
         sessionDate = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
         sessionTime = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
