@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { flowId, pacienteId, sessaoId, triggerType, clinicId } = await req.json();
+    console.log('DEBUG body:', { flowId, pacienteId, sessaoId, triggerType, clinicId });
 
     if (!flowId || !pacienteId || !clinicId) {
       throw new Error("Missing required fields: flowId, pacienteId, clinicId");
@@ -34,6 +35,7 @@ Deno.serve(async (req) => {
       .eq("id", flowId)
       .single();
     if (flowError || !flow) throw new Error("Flow not found: " + (flowError?.message || ""));
+    console.log('DEBUG flow:', JSON.stringify(flow));
 
     // Fetch patient
     const { data: patient, error: patientError } = await supabase
@@ -84,6 +86,7 @@ Deno.serve(async (req) => {
         .single();
 
       if (session) {
+        console.log('DEBUG session:', JSON.stringify(session));
         const dt = new Date(session.start_time);
         sessionDate = `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
         sessionTime = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
