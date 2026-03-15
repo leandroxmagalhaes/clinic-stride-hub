@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { flowId, pacienteId, sessaoId, triggerType, clinicId } = await req.json();
+    console.log('DEBUG body:', { flowId, pacienteId, sessaoId, triggerType, clinicId });
 
     if (!flowId || !pacienteId || !clinicId) {
       throw new Error("Missing required fields: flowId, pacienteId, clinicId");
