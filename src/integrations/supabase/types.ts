@@ -1596,6 +1596,41 @@ export type Database = {
         }
         Relationships: []
       }
+      role_permissions: {
+        Row: {
+          clinic_id: string
+          id: string
+          permissions: Json
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          clinic_id: string
+          id?: string
+          permissions?: Json
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          clinic_id?: string
+          id?: string
+          permissions?: Json
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_leads: {
         Row: {
           clinic_id: string

@@ -2,6 +2,8 @@ import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useUserRole } from "./useUserRole";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserPermissionService, UserPermissions, ModulePermission } from "@/services/UserPermissionService";
+import { RolePermissionService } from "@/services/RolePermissionService";
+import { supabase } from "@/integrations/supabase/client";
 
 export type PermissionModule = 
   | 'dashboard'
@@ -35,6 +37,7 @@ export function usePermissions() {
   const { user } = useAuth();
   const { roles, isLoading: rolesLoading, isAdmin, isProfessional, hasRole } = useUserRole();
   const [customPermissions, setCustomPermissions] = useState<UserPermissions | null>(null);
+  const [roleDefaults, setRoleDefaults] = useState<UserPermissions | null>(null);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(true);
   const hasLoadedPermissions = useRef(false);
 
@@ -42,16 +45,34 @@ export function usePermissions() {
   const isAdminMaster = isAdmin;
   const isFisioterapeuta = isProfessional && !isAdmin && !isSecretary;
 
-  // Load custom permissions from database using user.id directly (no extra getUser() call)
+  // Load custom permissions and role defaults from database
   useEffect(() => {
     if (rolesLoading || !user?.id) return;
 
     const loadPermissions = async () => {
       try {
-        const permissions = await UserPermissionService.getUserPermissions(user.id);
-        setCustomPermissions(permissions);
+        // Load custom user permissions
+        const userPerms = await UserPermissionService.getUserPermissions(user.id);
+        setCustomPermissions(userPerms);
+
+        // Load role defaults from DB (for non-admin users)
+        if (!isAdminMaster) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('clinic_id')
+            .eq('user_id', user.id)
+            .single();
+
+          if (profile?.clinic_id) {
+            const primaryRole = isSecretary ? 'secretary' : isFisioterapeuta ? 'professional' : null;
+            if (primaryRole) {
+              const dbDefaults = await RolePermissionService.getRolePermissions(profile.clinic_id, primaryRole);
+              setRoleDefaults(dbDefaults);
+            }
+          }
+        }
       } catch (error) {
-        console.error('Error loading custom permissions:', error);
+        console.error('Error loading permissions:', error);
       } finally {
         if (!hasLoadedPermissions.current) {
           hasLoadedPermissions.current = true;
@@ -61,21 +82,16 @@ export function usePermissions() {
     };
 
     loadPermissions();
-  }, [rolesLoading, user?.id]);
+  }, [rolesLoading, user?.id, isAdminMaster, isSecretary, isFisioterapeuta]);
 
   const permissions = useMemo(() => {
     const getModulePermissions = (module: PermissionModule): ModulePermissions => {
-      // Admin Master: full access to everything (cannot be customized)
+      // Admin Master: full access always
       if (isAdminMaster) {
-        return {
-          canView: true,
-          canEdit: true,
-          canDelete: true,
-          canViewFinancialDetails: true,
-        };
+        return { canView: true, canEdit: true, canDelete: true, canViewFinancialDetails: true };
       }
 
-      // Check for custom permissions first
+      // 1. Check custom user-level permissions first
       if (customPermissions && customPermissions[module]) {
         const customPerms = customPermissions[module] as ModulePermission;
         return {
@@ -86,56 +102,41 @@ export function usePermissions() {
         };
       }
 
-      // Fall back to role-based defaults
-      // Secretary: access to everything except financial reports/totals
+      // 2. Check role defaults from DB
+      if (roleDefaults && roleDefaults[module]) {
+        const dbPerms = roleDefaults[module] as ModulePermission;
+        return {
+          canView: dbPerms.view === true || dbPerms.view === 'own',
+          canEdit: dbPerms.edit === true || dbPerms.edit === 'own',
+          canDelete: dbPerms.delete === true || dbPerms.delete === 'own',
+          canViewFinancialDetails: dbPerms.financial === true,
+        };
+      }
+
+      // 3. Fall back to hardcoded role-based defaults
       if (isSecretary) {
         return {
           canView: true,
           canEdit: module !== 'configuracoes',
           canDelete: module !== 'configuracoes',
-          canViewFinancialDetails: false, // Can see individual payments but not totals/reports
+          canViewFinancialDetails: false,
         };
       }
 
-      // Fisioterapeuta: restricted access
       if (isFisioterapeuta) {
         const restrictedModules: PermissionModule[] = ['profissionais', 'comercial', 'financeiro', 'configuracoes', 'equipe'];
         const viewOnlyModules: PermissionModule[] = ['servicos', 'engajamento'];
         
         if (restrictedModules.includes(module)) {
-          return {
-            canView: false,
-            canEdit: false,
-            canDelete: false,
-            canViewFinancialDetails: false,
-          };
+          return { canView: false, canEdit: false, canDelete: false, canViewFinancialDetails: false };
         }
-
         if (viewOnlyModules.includes(module)) {
-          return {
-            canView: true,
-            canEdit: false,
-            canDelete: false,
-            canViewFinancialDetails: false,
-          };
+          return { canView: true, canEdit: false, canDelete: false, canViewFinancialDetails: false };
         }
-
-        // Can view/edit their own patients, sessions, records
-        return {
-          canView: true,
-          canEdit: true,
-          canDelete: false,
-          canViewFinancialDetails: false,
-        };
+        return { canView: true, canEdit: true, canDelete: false, canViewFinancialDetails: false };
       }
 
-      // Default: no access
-      return {
-        canView: false,
-        canEdit: false,
-        canDelete: false,
-        canViewFinancialDetails: false,
-      };
+      return { canView: false, canEdit: false, canDelete: false, canViewFinancialDetails: false };
     };
 
     return {
@@ -152,7 +153,7 @@ export function usePermissions() {
       equipe: getModulePermissions('equipe'),
       permissoes: getModulePermissions('permissoes'),
     };
-  }, [isAdminMaster, isSecretary, isFisioterapeuta, customPermissions]);
+  }, [isAdminMaster, isSecretary, isFisioterapeuta, customPermissions, roleDefaults]);
 
   const getRoleLabel = useCallback((role: string): string => {
     return ROLE_LABELS[role] || role;
