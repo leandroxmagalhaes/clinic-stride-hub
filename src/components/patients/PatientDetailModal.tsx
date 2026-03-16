@@ -265,11 +265,33 @@ export function PatientDetailModal({
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleDeletePatient}
-        title="Apagar Paciente"
+        title="Inativar Paciente"
         description="O paciente não aparecerá mais nas listagens, mas os dados serão mantidos para histórico."
         entityName={patient.full_name}
         warnings={[]}
+        confirmLabel="Confirmar Inativação"
       />
+
+      {isAdminMaster && onPermanentlyDeletePatient && (
+        <DeleteConfirmationDialog
+          isOpen={isPermanentDeleteDialogOpen}
+          onClose={() => setIsPermanentDeleteDialogOpen(false)}
+          onConfirm={async () => {
+            await onPermanentlyDeletePatient(patient.id);
+            toast.success("Paciente excluído permanentemente");
+            onClose();
+          }}
+          title="Excluir Paciente Permanentemente"
+          description="Esta ação é irreversível. Todos os dados do paciente serão apagados permanentemente da base de dados, incluindo sessões, evoluções e transações associadas."
+          entityName={patient.full_name}
+          warnings={[
+            "Esta ação NÃO pode ser desfeita.",
+            "Todos os registos associados poderão ser afetados.",
+            "Apenas o Admin Master pode executar esta ação.",
+          ]}
+          confirmLabel="Excluir Permanentemente"
+        />
+      )}
 
       {onUpdatePatient && (
         <EditPatientModal

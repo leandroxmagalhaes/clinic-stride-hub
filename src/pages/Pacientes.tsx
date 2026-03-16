@@ -456,6 +456,20 @@ export default function Pacientes() {
         onDeletePatient={deletePatient}
         onUpdatePatient={handleUpdatePatient}
         onNavigateToProntuario={handleNavigateToProntuario}
+        isAdminMaster={isAdminMaster}
+        onPermanentlyDeletePatient={isAdminMaster ? async (patientId: string) => {
+          const patient = patients.find(p => p.id === patientId);
+          await AuditService.log({
+            action: 'delete',
+            entityType: 'patient',
+            entityId: patientId,
+            entityName: patient?.full_name || 'Desconhecido',
+            details: { type: 'permanent_delete' },
+          });
+          const { error } = await supabase.from('pacientes').delete().eq('id', patientId);
+          if (error) throw error;
+          await refreshPatients();
+        } : undefined}
       />
 
       {/* New Patient Modal */}
