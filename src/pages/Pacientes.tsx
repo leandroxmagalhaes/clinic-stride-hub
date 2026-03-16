@@ -459,56 +459,8 @@ export default function Pacientes() {
         isAdminMaster={isAdminMaster}
         onPermanentlyDeletePatient={isAdminMaster ? async (patientId: string) => {
           const patient = patients.find(p => p.id === patientId);
-          
-          // Delete all dependent records first (order matters for FK constraints)
-          const dependentDeletes = [
-            supabase.from('session_briefings').delete().eq('patient_id', patientId),
-            supabase.from('automation_logs').delete().eq('paciente_id', patientId),
-            supabase.from('notifications').delete().eq('patient_id', patientId),
-            supabase.from('patient_feedback').delete().eq('patient_id', patientId),
-            supabase.from('patient_diary').delete().eq('patient_id', patientId),
-            supabase.from('professional_patient_assignments').delete().eq('patient_id', patientId),
-            supabase.from('credit_transactions').delete().eq('patient_id', patientId),
-          ];
-          await Promise.all(dependentDeletes);
-          
-          // Delete evolutions (both tables)
-          await supabase.from('evolucoes').delete().eq('patient_id', patientId);
-          
-          // Delete evolucoes_clinicas via prontuarios
-          const { data: prontuarios } = await supabase.from('prontuarios').select('id').eq('paciente_id', patientId);
-          if (prontuarios && prontuarios.length > 0) {
-            const prontuarioIds = prontuarios.map(p => p.id);
-            await supabase.from('evolucoes_clinicas').delete().in('prontuario_id', prontuarioIds);
-            await supabase.from('patient_documents').delete().eq('paciente_id', patientId);
-            await supabase.from('prontuarios').delete().eq('paciente_id', patientId);
-          }
-          
-          // Delete sessions, packs, scheduling packages, reserved slots, clinical reports
-          await Promise.all([
-            supabase.from('sessoes').delete().eq('paciente_id', patientId),
-            supabase.from('packs').delete().eq('paciente_id', patientId),
-            supabase.from('scheduling_packages').delete().eq('paciente_id', patientId),
-            supabase.from('horarios_reservados').delete().eq('patient_id', patientId),
-            supabase.from('relatorios_clinicos').delete().eq('patient_id', patientId),
-            supabase.from('transacoes_credito').delete().eq('patient_id', patientId),
-          ]);
-          
-          // Nullify converted_patient_id on sales_leads
-          await supabase.from('sales_leads').update({ converted_patient_id: null }).eq('converted_patient_id', patientId);
-          
-          // Audit log before final delete
-          await AuditService.log({
-            action: 'delete',
-            entityType: 'patient',
-            entityId: patientId,
-            entityName: patient?.full_name || 'Desconhecido',
-            details: { type: 'permanent_delete' },
-          });
-          
-          // Finally delete the patient
-          const { error } = await supabase.from('pacientes').delete().eq('id', patientId);
-          if (error) throw error;
+          const { cascadeDeletePatient } = await import('@/services/PatientCascadeDeleteService');
+          await cascadeDeletePatient(patientId, patient?.full_name);
           await refreshPatients();
         } : undefined}
       />
