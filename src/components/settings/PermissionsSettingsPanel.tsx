@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -6,23 +6,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Lock, Shield, Briefcase, User, Search, Check, X, Pencil } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Lock, Shield, Briefcase, User, Search, Check, X, Pencil, RotateCcw, Loader2 } from 'lucide-react';
 import { TeamService, TeamMember, AppRole } from '@/services/TeamService';
+import { DEFAULT_PERMISSIONS, type UserPermissions, type ModulePermission } from '@/services/UserPermissionService';
+import { RolePermissionService } from '@/services/RolePermissionService';
 import { EditPermissionsModal } from './EditPermissionsModal';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 type PermissionValue = boolean | 'own';
 
-interface ModulePermission {
-  view: PermissionValue;
-  edit: PermissionValue;
-  delete: PermissionValue;
-  financial: boolean;
-}
-
-interface PermissionMatrix {
-  [module: string]: ModulePermission;
-}
+const MODULE_KEYS = [
+  'dashboard', 'agenda', 'pacientes', 'prontuarios', 'profissionais',
+  'servicos', 'comercial', 'financeiro', 'engajamento', 'configuracoes', 'equipe',
+] as const;
 
 const MODULE_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -45,164 +44,141 @@ const ROLE_LABELS: Record<string, string> = {
   patient: 'Paciente',
 };
 
-const PERMISSION_MATRIX: Record<Exclude<AppRole, 'patient'>, PermissionMatrix> = {
-  admin: {
-    dashboard: { view: true, edit: true, delete: true, financial: true },
-    agenda: { view: true, edit: true, delete: true, financial: true },
-    pacientes: { view: true, edit: true, delete: true, financial: true },
-    prontuarios: { view: true, edit: true, delete: true, financial: true },
-    profissionais: { view: true, edit: true, delete: true, financial: true },
-    servicos: { view: true, edit: true, delete: true, financial: true },
-    comercial: { view: true, edit: true, delete: true, financial: true },
-    financeiro: { view: true, edit: true, delete: true, financial: true },
-    engajamento: { view: true, edit: true, delete: true, financial: true },
-    configuracoes: { view: true, edit: true, delete: true, financial: true },
-    equipe: { view: true, edit: true, delete: true, financial: true },
-  },
-  secretary: {
-    dashboard: { view: true, edit: true, delete: true, financial: false },
-    agenda: { view: true, edit: true, delete: true, financial: false },
-    pacientes: { view: true, edit: true, delete: true, financial: false },
-    prontuarios: { view: true, edit: true, delete: true, financial: false },
-    profissionais: { view: true, edit: true, delete: true, financial: false },
-    servicos: { view: true, edit: true, delete: true, financial: false },
-    comercial: { view: true, edit: true, delete: true, financial: false },
-    financeiro: { view: true, edit: true, delete: false, financial: false },
-    engajamento: { view: true, edit: true, delete: true, financial: false },
-    configuracoes: { view: false, edit: false, delete: false, financial: false },
-    equipe: { view: false, edit: false, delete: false, financial: false },
-  },
-  professional: {
-    dashboard: { view: true, edit: false, delete: false, financial: false },
-    agenda: { view: true, edit: true, delete: false, financial: false },
-    pacientes: { view: 'own', edit: 'own', delete: false, financial: false },
-    prontuarios: { view: 'own', edit: 'own', delete: false, financial: false },
-    profissionais: { view: false, edit: false, delete: false, financial: false },
-    servicos: { view: true, edit: false, delete: false, financial: false },
-    comercial: { view: false, edit: false, delete: false, financial: false },
-    financeiro: { view: false, edit: false, delete: false, financial: false },
-    engajamento: { view: true, edit: false, delete: false, financial: false },
-    configuracoes: { view: false, edit: false, delete: false, financial: false },
-    equipe: { view: false, edit: false, delete: false, financial: false },
-  },
+const PERM_FIELDS = ['view', 'edit', 'delete', 'financial'] as const;
+const PERM_LABELS: Record<string, string> = {
+  view: 'Ver',
+  edit: 'Editar',
+  delete: 'Apagar',
+  financial: 'Financeiro',
 };
 
-function PermissionIcon({ value }: { value: PermissionValue }) {
-  if (value === true) {
-    return <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
-  }
-  if (value === 'own') {
-    return (
-      <Badge variant="outline" className="text-xs px-1.5 py-0 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-500">
-        Próprio
-      </Badge>
-    );
-  }
-  return <X className="h-4 w-4 text-muted-foreground/50" />;
-}
-
-function PermissionMatrixTable({ role }: { role: Exclude<AppRole, 'patient'> }) {
-  const permissions = PERMISSION_MATRIX[role];
-
+function AdminMatrixTable() {
   return (
     <div className="rounded-lg border overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted/50">
           <tr>
             <th className="text-left p-3 font-medium">Módulo</th>
-            <th className="text-center p-3 font-medium w-16">Ver</th>
-            <th className="text-center p-3 font-medium w-16">Editar</th>
-            <th className="text-center p-3 font-medium w-16">Apagar</th>
-            <th className="text-center p-3 font-medium w-20">Financeiro</th>
+            {PERM_FIELDS.map(f => (
+              <th key={f} className="text-center p-3 font-medium w-20">{PERM_LABELS[f]}</th>
+            ))}
           </tr>
         </thead>
         <tbody className="divide-y">
-          {Object.entries(permissions).map(([module, perms]) => (
-            <tr key={module} className="hover:bg-muted/30">
-              <td className="p-3 font-medium">{MODULE_LABELS[module] || module}</td>
-              <td className="p-3 text-center">
-                <div className="flex justify-center">
-                  <PermissionIcon value={perms.view} />
-                </div>
-              </td>
-              <td className="p-3 text-center">
-                <div className="flex justify-center">
-                  <PermissionIcon value={perms.edit} />
-                </div>
-              </td>
-              <td className="p-3 text-center">
-                <div className="flex justify-center">
-                  <PermissionIcon value={perms.delete} />
-                </div>
-              </td>
-              <td className="p-3 text-center">
-                <div className="flex justify-center">
-                  <PermissionIcon value={perms.financial} />
-                </div>
-              </td>
+          {MODULE_KEYS.map(mod => (
+            <tr key={mod} className="hover:bg-muted/30">
+              <td className="p-3 font-medium">{MODULE_LABELS[mod]}</td>
+              {PERM_FIELDS.map(f => (
+                <td key={f} className="p-3 text-center">
+                  <div className="flex justify-center">
+                    <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
       </table>
-      {role === 'professional' && (
       <div className="p-3 bg-muted/30 border-t">
-        <p className="text-xs text-muted-foreground flex items-center gap-1">
-          <Badge variant="outline" className="text-xs px-1.5 py-0 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-500">
-            Próprio
-          </Badge>
-          = Apenas pacientes/sessões atribuídos a este profissional
+        <p className="text-xs text-muted-foreground">
+          O Admin Master tem sempre acesso total e não pode ser restringido.
         </p>
       </div>
-    )}
-  </div>
-);
+    </div>
+  );
 }
 
-function UserListItem({ 
-  member, 
-  onEdit 
-}: { 
-  member: TeamMember; 
-  onEdit: (member: TeamMember) => void;
+function EditableMatrixTable({
+  role,
+  permissions,
+  onToggle,
+  onReset,
+  isSaving,
+}: {
+  role: Exclude<AppRole, 'patient' | 'admin'>;
+  permissions: UserPermissions;
+  onToggle: (module: string, field: string) => void;
+  onReset: () => void;
+  isSaving: boolean;
 }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          {isSaving && <span className="text-xs text-muted-foreground">A guardar...</span>}
+        </div>
+        <Button variant="outline" size="sm" onClick={onReset} className="gap-2">
+          <RotateCcw className="h-3.5 w-3.5" />
+          Restaurar Padrão
+        </Button>
+      </div>
+      <div className="rounded-lg border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="text-left p-3 font-medium">Módulo</th>
+              {PERM_FIELDS.map(f => (
+                <th key={f} className="text-center p-3 font-medium w-20">{PERM_LABELS[f]}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {MODULE_KEYS.map(mod => {
+              const modPerms = permissions[mod] || { view: false, edit: false, delete: false, financial: false };
+              return (
+                <tr key={mod} className="hover:bg-muted/30">
+                  <td className="p-3 font-medium">{MODULE_LABELS[mod]}</td>
+                  {PERM_FIELDS.map(field => {
+                    const val = modPerms[field as keyof ModulePermission];
+                    const isChecked = val === true || val === 'own';
+                    return (
+                      <td key={field} className="p-3 text-center">
+                        <div className="flex justify-center">
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={() => onToggle(mod, field)}
+                          />
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function UserListItem({ member, onEdit }: { member: TeamMember; onEdit: (m: TeamMember) => void }) {
   const mainRole = member.roles.find(r => r !== 'patient') || member.roles[0];
-  const initials = member.full_name
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = member.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
   return (
     <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10">
           <AvatarImage src={member.avatar_url || undefined} />
-          <AvatarFallback className="bg-primary/10 text-primary">
-            {initials}
-          </AvatarFallback>
+          <AvatarFallback className="bg-primary/10 text-primary">{initials}</AvatarFallback>
         </Avatar>
         <div>
           <p className="font-medium">{member.full_name}</p>
           <p className="text-sm text-muted-foreground">{member.email}</p>
         </div>
       </div>
-      
       <div className="flex items-center gap-3">
-        <Badge 
-          variant={mainRole === 'admin' ? 'default' : 'secondary'}
-          className="flex items-center gap-1"
-        >
+        <Badge variant={mainRole === 'admin' ? 'default' : 'secondary'} className="flex items-center gap-1">
           {mainRole === 'admin' && <Shield className="h-3 w-3" />}
           {mainRole === 'professional' && <Briefcase className="h-3 w-3" />}
           {mainRole === 'secretary' && <User className="h-3 w-3" />}
           {ROLE_LABELS[mainRole] || mainRole}
         </Badge>
-        
         <Badge variant={member.is_active ? 'outline' : 'destructive'}>
           {member.is_active ? 'Ativo' : 'Inativo'}
         </Badge>
-        
         <Button variant="ghost" size="sm" onClick={() => onEdit(member)}>
           <Pencil className="h-4 w-4" />
         </Button>
@@ -212,11 +188,38 @@ function UserListItem({
 }
 
 export function PermissionsSettingsPanel() {
+  const { user } = useAuth();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Role permissions state
+  const [professionalPerms, setProfessionalPerms] = useState<UserPermissions>({ ...DEFAULT_PERMISSIONS.professional });
+  const [secretaryPerms, setSecretaryPerms] = useState<UserPermissions>({ ...DEFAULT_PERMISSIONS.secretary });
+  const [isSaving, setIsSaving] = useState(false);
+  const [clinicId, setClinicId] = useState<string | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load clinic ID and role permissions
+  useEffect(() => {
+    const loadClinicAndPerms = async () => {
+      if (!user?.id) return;
+      const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('user_id', user.id).single();
+      if (!profile?.clinic_id) return;
+      setClinicId(profile.clinic_id);
+
+      const dbPerms = await RolePermissionService.getAllRolePermissions(profile.clinic_id);
+      if (dbPerms.professional && Object.keys(dbPerms.professional).length > 0) {
+        setProfessionalPerms(dbPerms.professional);
+      }
+      if (dbPerms.secretary && Object.keys(dbPerms.secretary).length > 0) {
+        setSecretaryPerms(dbPerms.secretary);
+      }
+    };
+    loadClinicAndPerms();
+  }, [user?.id]);
 
   const loadMembers = async () => {
     setIsLoading(true);
@@ -231,9 +234,49 @@ export function PermissionsSettingsPanel() {
     }
   };
 
-  useEffect(() => {
-    loadMembers();
-  }, []);
+  useEffect(() => { loadMembers(); }, []);
+
+  const debouncedSave = useCallback((role: AppRole, perms: UserPermissions) => {
+    if (!clinicId) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    setIsSaving(true);
+    saveTimeoutRef.current = setTimeout(async () => {
+      const result = await RolePermissionService.saveRolePermissions(clinicId, role, perms);
+      setIsSaving(false);
+      if (result.success) {
+        toast.success('Permissões guardadas');
+      } else {
+        toast.error('Erro ao guardar permissões');
+      }
+    }, 800);
+  }, [clinicId]);
+
+  const handleToggle = useCallback((role: 'professional' | 'secretary', module: string, field: string) => {
+    const setter = role === 'professional' ? setProfessionalPerms : setSecretaryPerms;
+    setter(prev => {
+      const modPerms = prev[module] || { view: false, edit: false, delete: false, financial: false };
+      const currentVal = modPerms[field as keyof ModulePermission];
+      const newVal = currentVal === true || currentVal === 'own' ? false : true;
+      const updated = {
+        ...prev,
+        [module]: { ...modPerms, [field]: newVal },
+      };
+      debouncedSave(role, updated);
+      return updated;
+    });
+  }, [debouncedSave]);
+
+  const handleReset = useCallback(async (role: 'professional' | 'secretary') => {
+    if (!clinicId) return;
+    const defaults = { ...DEFAULT_PERMISSIONS[role] };
+    if (role === 'professional') setProfessionalPerms(defaults);
+    else setSecretaryPerms(defaults);
+    
+    const result = await RolePermissionService.resetToDefaults(clinicId, role);
+    if (result.success) {
+      toast.success('Permissões restauradas para o padrão');
+    }
+  }, [clinicId]);
 
   const handleEditMember = (member: TeamMember) => {
     setSelectedMember(member);
@@ -254,15 +297,11 @@ export function PermissionsSettingsPanel() {
 
   const filteredMembers = members.filter(member => {
     const query = searchQuery.toLowerCase();
-    return (
-      member.full_name.toLowerCase().includes(query) ||
-      member.email?.toLowerCase().includes(query)
-    );
+    return member.full_name.toLowerCase().includes(query) || member.email?.toLowerCase().includes(query);
   });
 
   return (
     <div className="space-y-6">
-      {/* Permission Matrix Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -270,7 +309,7 @@ export function PermissionsSettingsPanel() {
             Matriz de Permissões por Função
           </CardTitle>
           <CardDescription>
-            Consulte as permissões de cada função do sistema
+            Configure as permissões de cada função do sistema. As alterações são guardadas automaticamente.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -291,43 +330,47 @@ export function PermissionsSettingsPanel() {
             </TabsList>
 
             <TabsContent value="admin">
-              <PermissionMatrixTable role="admin" />
+              <AdminMatrixTable />
             </TabsContent>
             <TabsContent value="professional">
-              <PermissionMatrixTable role="professional" />
+              <EditableMatrixTable
+                role="professional"
+                permissions={professionalPerms}
+                onToggle={(mod, field) => handleToggle('professional', mod, field)}
+                onReset={() => handleReset('professional')}
+                isSaving={isSaving}
+              />
             </TabsContent>
             <TabsContent value="secretary">
-              <PermissionMatrixTable role="secretary" />
+              <EditableMatrixTable
+                role="secretary"
+                permissions={secretaryPerms}
+                onToggle={(mod, field) => handleToggle('secretary', mod, field)}
+                onReset={() => handleReset('secretary')}
+                isSaving={isSaving}
+              />
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
 
-      {/* Users List Card */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Utilizadores</CardTitle>
-              <CardDescription>
-                Gerencie as permissões de cada membro da sua clínica
-              </CardDescription>
+              <CardDescription>Gerencie as permissões de cada membro da sua clínica</CardDescription>
             </div>
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar utilizador..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+              <Input placeholder="Buscar utilizador..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
+              {[1, 2, 3].map(i => (
                 <div key={i} className="flex items-center gap-3 p-4 border rounded-lg">
                   <Skeleton className="h-10 w-10 rounded-full" />
                   <div className="space-y-2 flex-1">
@@ -340,26 +383,18 @@ export function PermissionsSettingsPanel() {
             </div>
           ) : filteredMembers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              {searchQuery 
-                ? 'Nenhum utilizador encontrado com essa busca'
-                : 'Nenhum membro da equipe encontrado'
-              }
+              {searchQuery ? 'Nenhum utilizador encontrado com essa busca' : 'Nenhum membro da equipe encontrado'}
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredMembers.map((member) => (
-                <UserListItem
-                  key={member.profile_id}
-                  member={member}
-                  onEdit={handleEditMember}
-                />
+              {filteredMembers.map(member => (
+                <UserListItem key={member.profile_id} member={member} onEdit={handleEditMember} />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Edit Permissions Modal */}
       <EditPermissionsModal
         member={selectedMember}
         open={isEditModalOpen}
