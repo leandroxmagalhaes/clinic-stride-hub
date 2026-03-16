@@ -217,7 +217,17 @@ export function PatientDetailModal({
                   className="gap-2 text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Apagar
+                  Inativar
+                </Button>
+              )}
+              {isAdminMaster && onPermanentlyDeletePatient && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setIsPermanentDeleteDialogOpen(true)}
+                  className="gap-2"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Excluir Permanentemente
                 </Button>
               )}
               <Button
