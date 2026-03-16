@@ -26,6 +26,8 @@ interface PatientDetailModalProps {
   onDeletePatient?: (patientId: string) => Promise<void>;
   onUpdatePatient?: (patientId: string, data: Partial<Patient>) => Promise<void>;
   onNavigateToProntuario?: (patientId: string) => void;
+  isAdminMaster?: boolean;
+  onPermanentlyDeletePatient?: (patientId: string) => Promise<void>;
 }
 
 export function PatientDetailModal({
