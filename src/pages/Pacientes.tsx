@@ -52,6 +52,7 @@ import { DuplicatePatientsModal } from "@/components/patients/DuplicatePatientsM
 export default function Pacientes() {
   const { patients, refreshPatients, deletePatient, updatePatient, isLoading } = useData();
   const { user } = useAuth();
+  const { isAdminMaster } = usePermissions();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [clinicId, setClinicId] = useState<string | null>(null);
