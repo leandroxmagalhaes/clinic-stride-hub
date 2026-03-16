@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package } from "lucide-react";
+import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package, AlertTriangle } from "lucide-react";
 import { PatientStatementButton } from "./PatientStatementButton";
 import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
