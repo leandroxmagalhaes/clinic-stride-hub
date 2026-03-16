@@ -44,6 +44,8 @@ export function DeleteConfirmationDialog({
       onClose();
     } catch (error) {
       console.error("Error during deletion:", error);
+      const { toast } = await import("sonner");
+      toast.error(error instanceof Error ? error.message : "Erro ao executar a ação");
     } finally {
       setIsLoading(false);
     }
