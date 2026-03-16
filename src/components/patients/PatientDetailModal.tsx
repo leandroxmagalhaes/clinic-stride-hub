@@ -37,11 +37,14 @@ export function PatientDetailModal({
   onDeletePatient,
   onUpdatePatient,
   onNavigateToProntuario,
+  isAdminMaster,
+  onPermanentlyDeletePatient,
 }: PatientDetailModalProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [isSendingPortalLink, setIsSendingPortalLink] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isPermanentDeleteDialogOpen, setIsPermanentDeleteDialogOpen] = useState(false);
   const { data: clinicInfo } = useClinicInfo();
 
   useEffect(() => {
