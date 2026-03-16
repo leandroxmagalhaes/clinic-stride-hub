@@ -828,6 +828,7 @@ export default function Pacientes() {
         onClose={() => setIsDuplicateModalOpen(false)}
         patients={patients}
         onMergeComplete={refreshPatients}
+        isAdminMaster={isAdminMaster}
       />
     </AppLayout>
   );
