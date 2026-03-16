@@ -43,13 +43,16 @@ import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { PatientDetailModal } from "@/components/patients/PatientDetailModal";
 import { HealthTag } from "@/services/HealthTagService";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
+import { AuditService } from "@/services/AuditService";
 import { TableSkeleton } from "@/components/skeletons/PageSkeletons";
 import { DuplicatePatientsModal } from "@/components/patients/DuplicatePatientsModal";
 
 export default function Pacientes() {
   const { patients, refreshPatients, deletePatient, updatePatient, isLoading } = useData();
   const { user } = useAuth();
+  const { isAdminMaster } = usePermissions();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [clinicId, setClinicId] = useState<string | null>(null);
@@ -453,6 +456,20 @@ export default function Pacientes() {
         onDeletePatient={deletePatient}
         onUpdatePatient={handleUpdatePatient}
         onNavigateToProntuario={handleNavigateToProntuario}
+        isAdminMaster={isAdminMaster}
+        onPermanentlyDeletePatient={isAdminMaster ? async (patientId: string) => {
+          const patient = patients.find(p => p.id === patientId);
+          await AuditService.log({
+            action: 'delete',
+            entityType: 'patient',
+            entityId: patientId,
+            entityName: patient?.full_name || 'Desconhecido',
+            details: { type: 'permanent_delete' },
+          });
+          const { error } = await supabase.from('pacientes').delete().eq('id', patientId);
+          if (error) throw error;
+          await refreshPatients();
+        } : undefined}
       />
 
       {/* New Patient Modal */}

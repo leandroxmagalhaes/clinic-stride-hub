@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package } from "lucide-react";
+import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package, AlertTriangle } from "lucide-react";
 import { PatientStatementButton } from "./PatientStatementButton";
 import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
@@ -26,6 +26,8 @@ interface PatientDetailModalProps {
   onDeletePatient?: (patientId: string) => Promise<void>;
   onUpdatePatient?: (patientId: string, data: Partial<Patient>) => Promise<void>;
   onNavigateToProntuario?: (patientId: string) => void;
+  isAdminMaster?: boolean;
+  onPermanentlyDeletePatient?: (patientId: string) => Promise<void>;
 }
 
 export function PatientDetailModal({
@@ -35,11 +37,14 @@ export function PatientDetailModal({
   onDeletePatient,
   onUpdatePatient,
   onNavigateToProntuario,
+  isAdminMaster,
+  onPermanentlyDeletePatient,
 }: PatientDetailModalProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [isSendingPortalLink, setIsSendingPortalLink] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isPermanentDeleteDialogOpen, setIsPermanentDeleteDialogOpen] = useState(false);
   const { data: clinicInfo } = useClinicInfo();
 
   useEffect(() => {
@@ -212,7 +217,17 @@ export function PatientDetailModal({
                   className="gap-2 text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Apagar
+                  Inativar
+                </Button>
+              )}
+              {isAdminMaster && onPermanentlyDeletePatient && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setIsPermanentDeleteDialogOpen(true)}
+                  className="gap-2"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Excluir Permanentemente
                 </Button>
               )}
               <Button
@@ -250,11 +265,33 @@ export function PatientDetailModal({
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleDeletePatient}
-        title="Apagar Paciente"
+        title="Inativar Paciente"
         description="O paciente não aparecerá mais nas listagens, mas os dados serão mantidos para histórico."
         entityName={patient.full_name}
         warnings={[]}
+        confirmLabel="Confirmar Inativação"
       />
+
+      {isAdminMaster && onPermanentlyDeletePatient && (
+        <DeleteConfirmationDialog
+          isOpen={isPermanentDeleteDialogOpen}
+          onClose={() => setIsPermanentDeleteDialogOpen(false)}
+          onConfirm={async () => {
+            await onPermanentlyDeletePatient(patient.id);
+            toast.success("Paciente excluído permanentemente");
+            onClose();
+          }}
+          title="Excluir Paciente Permanentemente"
+          description="Esta ação é irreversível. Todos os dados do paciente serão apagados permanentemente da base de dados, incluindo sessões, evoluções e transações associadas."
+          entityName={patient.full_name}
+          warnings={[
+            "Esta ação NÃO pode ser desfeita.",
+            "Todos os registos associados poderão ser afetados.",
+            "Apenas o Admin Master pode executar esta ação.",
+          ]}
+          confirmLabel="Excluir Permanentemente"
+        />
+      )}
 
       {onUpdatePatient && (
         <EditPatientModal
