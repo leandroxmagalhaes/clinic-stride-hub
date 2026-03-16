@@ -43,7 +43,9 @@ import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { PatientDetailModal } from "@/components/patients/PatientDetailModal";
 import { HealthTag } from "@/services/HealthTagService";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
+import { AuditService } from "@/services/AuditService";
 import { TableSkeleton } from "@/components/skeletons/PageSkeletons";
 import { DuplicatePatientsModal } from "@/components/patients/DuplicatePatientsModal";
 
