@@ -39,8 +39,11 @@ export async function cascadeDeletePatient(patientId: string, patientName?: stri
     supabase.from('transacoes_credito').delete().eq('patient_id', patientId),
   ]);
 
-  // 5. Nullify lead references
-  await supabase.from('sales_leads').update({ converted_patient_id: null }).eq('converted_patient_id', patientId);
+  // 5. Nullify lead and import_queue references
+  await Promise.all([
+    supabase.from('sales_leads').update({ converted_patient_id: null }).eq('converted_patient_id', patientId),
+    supabase.from('import_queue').update({ suggested_patient_id: null }).eq('suggested_patient_id', patientId),
+  ]);
 
   // 6. Audit log
   await AuditService.log({
