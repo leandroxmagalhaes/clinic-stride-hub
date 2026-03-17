@@ -10,6 +10,8 @@ Analisa o conteúdo do relatório e devolve os dados clínicos extraídos.
 Campos obrigatórios (usa string vazia "" se não encontrado):
 - nome, data (dd/MM/yyyy), idade, peso, altura, bmi, pnv (cmH2O)
 - sindex_best (cmH2O), sindex_avg (cmH2O), percentagem_pnv, pif (L/s), volume (litros)
+- respiracoes (formato "X/30" — Breaths Completed / Breaths Proposed), carga_alvo (Target Load cmH2O), tipo_sessao (Session Type ex: "Test / SIndex")
+- sindex_session_avg (S.Avg da tabela Session Detail), pif_session_avg (PIF S.Avg da tabela Session Detail), volume_session_avg (Volume S.Avg da tabela Session Detail)
 - grau_fraqueza (Leve|Moderado|Severo baseado na % PNV: >70% normal, 50-70% leve, 30-50% moderado, <30% severo)
 - diagnostico (3-4 frases clínicas profissionais), observacao_clinica
 - equipamento, frequencia, repeticoes, carga_inicial (35-40% do SIndex best), tecnica
