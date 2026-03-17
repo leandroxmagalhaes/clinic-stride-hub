@@ -742,13 +742,13 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
             ))}
             <button
               onClick={() =>
-                setData({
-                  ...data,
+                setData((prev: any) => ({
+                  ...prev,
                   progressao: [
-                    ...data.progressao,
-                    { semana: String(data.progressao.length + 1), carga: "", criterio: "" },
+                    ...prev.progressao,
+                    { semana: String(prev.progressao.length + 1), carga: "", criterio: "" },
                   ],
-                })
+                }))
               }
               style={btn("outline", { fontSize: 13, marginTop: 8 })}
             >
