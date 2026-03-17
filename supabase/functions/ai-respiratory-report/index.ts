@@ -115,7 +115,7 @@ serve(async (req) => {
                   },
                 },
               },
-              required: ["nome", "data", "idade", "peso", "altura", "bmi", "pnv", "sindex_best", "sindex_avg", "percentagem_pnv", "pif", "volume", "grau_fraqueza", "diagnostico", "observacao_clinica", "equipamento", "frequencia", "repeticoes", "carga_inicial", "tecnica", "meta_curto", "meta_medio", "mobilidade", "fisioterapeuta", "cedula", "progressao"],
+              required: ["nome", "data", "idade", "peso", "altura", "bmi", "pnv", "sindex_best", "sindex_avg", "percentagem_pnv", "pif", "volume", "grau_fraqueza", "respiracoes", "carga_alvo", "tipo_sessao", "sindex_session_avg", "pif_session_avg", "volume_session_avg", "diagnostico", "observacao_clinica", "equipamento", "frequencia", "repeticoes", "carga_inicial", "tecnica", "meta_curto", "meta_medio", "mobilidade", "fisioterapeuta", "cedula", "progressao"],
               additionalProperties: false,
             },
           },
