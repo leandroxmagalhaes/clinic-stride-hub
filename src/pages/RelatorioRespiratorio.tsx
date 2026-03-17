@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect, CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { getAuthContext } from "@/lib/auth-helpers";
+import { toast } from "sonner";
 
 /* ─── Paleta ────────────────────────────────────────────────────────────── */
 const G = {
@@ -1215,9 +1217,16 @@ function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNe
   const handleDelete = async (id: string) => {
     if (!confirm("Apagar este relatório? Esta acção não pode ser desfeita.")) return;
     setDeleting(id);
-    await (supabase as any).from("respiratory_reports").delete().eq("id", id);
-    setReports((r) => r.filter((x) => x.id !== id));
-    setDeleting(null);
+    try {
+      const { error } = await (supabase as any).from("respiratory_reports").delete().eq("id", id);
+      if (error) throw error;
+      setReports((r) => r.filter((x) => x.id !== id));
+    } catch (err) {
+      console.error("Erro ao apagar relatório:", err);
+      toast.error("Erro ao apagar relatório");
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const filtered = reports.filter((r) => r.patient_name.toLowerCase().includes(search.toLowerCase()));
@@ -1385,22 +1394,29 @@ export default function RelatorioRespiratório() {
   };
 
   const handleSaveAndReturn = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const reportData = {
-      patient_name: data.nome || "Sem nome",
-      report_date: data.data || new Date().toISOString().slice(0, 10),
-      data: data,
-      created_by: user?.id,
-    };
-    if (editingId) {
-      await (supabase as any).from("respiratory_reports").update(reportData).eq("id", editingId);
-    } else {
-      const { data: saved } = await (supabase as any).from("respiratory_reports").insert(reportData).select().single();
-      if (saved) setEditingId(saved.id);
+    try {
+      const { userId, clinicId } = await getAuthContext();
+      const reportData = {
+        patient_name: data.nome || "Sem nome",
+        report_date: data.data || new Date().toISOString().slice(0, 10),
+        data: data,
+        created_by: userId,
+        clinic_id: clinicId,
+      };
+      if (editingId) {
+        const { error } = await (supabase as any).from("respiratory_reports").update(reportData).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { data: saved, error } = await (supabase as any).from("respiratory_reports").insert(reportData).select().single();
+        if (error) throw error;
+        if (saved) setEditingId(saved.id);
+      }
+      toast.success("Relatório guardado com sucesso");
+      setView("history");
+    } catch (err) {
+      console.error("Erro ao guardar relatório:", err);
+      toast.error("Erro ao guardar relatório. Verifique a consola para mais detalhes.");
     }
-    setView("history");
   };
 
   const bgStyle: CSSProperties = {

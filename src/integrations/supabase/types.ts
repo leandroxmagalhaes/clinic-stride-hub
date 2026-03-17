@@ -1568,6 +1568,7 @@ export type Database = {
       }
       respiratory_reports: {
         Row: {
+          clinic_id: string | null
           created_at: string | null
           created_by: string | null
           data: Json
@@ -1577,6 +1578,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          clinic_id?: string | null
           created_at?: string | null
           created_by?: string | null
           data: Json
@@ -1586,6 +1588,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          clinic_id?: string | null
           created_at?: string | null
           created_by?: string | null
           data?: Json
@@ -1594,7 +1597,15 @@ export type Database = {
           report_date?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "respiratory_reports_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       role_permissions: {
         Row: {
