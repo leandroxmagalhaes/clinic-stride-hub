@@ -512,6 +512,52 @@ function StepIA({ file, fileData, onDone }) {
   );
 }
 
+/* ─── Memoized Field component (outside StepEditor to preserve identity) ── */
+const EditorField = React.memo(function EditorField({
+  label: lbl,
+  fieldKey,
+  data,
+  setData,
+  type = "text",
+  rows = 3,
+}: {
+  label: string;
+  fieldKey: string;
+  data: any;
+  setData: React.Dispatch<React.SetStateAction<any>>;
+  type?: string;
+  rows?: number;
+}) {
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const val = e.target.value;
+      setData((prev: any) => ({ ...prev, [fieldKey]: val }));
+    },
+    [fieldKey, setData]
+  );
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={label()}>{lbl}</label>
+      {type === "textarea" ? (
+        <textarea
+          value={data[fieldKey] || ""}
+          rows={rows}
+          onChange={handleChange}
+          style={{ ...input(), resize: "vertical" as const }}
+        />
+      ) : (
+        <input
+          type={type}
+          value={data[fieldKey] || ""}
+          onChange={handleChange}
+          style={input()}
+        />
+      )}
+    </div>
+  );
+});
+
 /* ═══════════════════════════════════════════════════════════════════════════
    STEP 3 — EDITOR
 ═══════════════════════════════════════════════════════════════════════════ */
@@ -527,32 +573,17 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
     { id: "secoes", label: "⚙️ Secções" },
   ];
 
-  const Field = ({ label: lbl, fieldKey, type = "text", rows = 3 }) => (
-    <div style={{ marginBottom: 14 }}>
-      <label style={label()}>{lbl}</label>
-      {type === "textarea" ? (
-        <textarea
-          value={data[fieldKey] || ""}
-          rows={rows}
-          onChange={(e) => setData({ ...data, [fieldKey]: e.target.value })}
-          style={{ ...input(), resize: "vertical" as const }}
-        />
-      ) : (
-        <input
-          type={type}
-          value={data[fieldKey] || ""}
-          onChange={(e) => setData({ ...data, [fieldKey]: e.target.value })}
-          style={input()}
-        />
-      )}
-    </div>
-  );
+  const Field = useCallback(({ label: lbl, fieldKey, type = "text", rows = 3 }: { label: string; fieldKey: string; type?: string; rows?: number }) => (
+    <EditorField label={lbl} fieldKey={fieldKey} data={data} setData={setData} type={type} rows={rows} />
+  ), [data, setData]);
 
-  const updateProgressao = (i, field, value) => {
-    const p = [...data.progressao];
-    p[i] = { ...p[i], [field]: value };
-    setData({ ...data, progressao: p });
-  };
+  const updateProgressao = useCallback((i, field, value) => {
+    setData((prev: any) => {
+      const p = [...prev.progressao];
+      p[i] = { ...p[i], [field]: value };
+      return { ...prev, progressao: p };
+    });
+  }, [setData]);
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto" }}>
