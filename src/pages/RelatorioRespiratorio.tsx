@@ -1369,6 +1369,9 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview }: { onOpen: (r: any) =>
               </div>
 
               <div style={{ display: "flex" as const, gap: 8, flexShrink: 0 }}>
+                <button onClick={() => onPreview(r)} style={btn("outline", { padding: "7px 14px", fontSize: 12 })}>
+                  📄 Gerar novamente
+                </button>
                 <button onClick={() => onOpen(r)} style={btn("outline", { padding: "7px 14px", fontSize: 12 })}>
                   ✏️ Editar
                 </button>
