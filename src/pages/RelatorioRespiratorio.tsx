@@ -721,8 +721,10 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
                   <div style={{ paddingTop: 20 }}>
                     <button
                       onClick={() => {
-                        const p = data.progressao.filter((_, idx) => idx !== i);
-                        setData({ ...data, progressao: p });
+                        setData((prev: any) => ({
+                          ...prev,
+                          progressao: prev.progressao.filter((_, idx) => idx !== i),
+                        }));
                       }}
                       style={{
                         background: "none",
