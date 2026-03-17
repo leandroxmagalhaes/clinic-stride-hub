@@ -573,9 +573,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
     { id: "secoes", label: "⚙️ Secções" },
   ];
 
-  const Field = useCallback(({ label: lbl, fieldKey, type = "text", rows = 3 }: { label: string; fieldKey: string; type?: string; rows?: number }) => (
-    <EditorField label={lbl} fieldKey={fieldKey} data={data} setData={setData} type={type} rows={rows} />
-  ), [data, setData]);
+  // Field wrapper removed — use EditorField directly to preserve input focus
 
   const updateProgressao = useCallback((i, field, value) => {
     setData((prev: any) => {
@@ -611,62 +609,62 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
         {tab === "paciente" && (
           <div style={{ display: "grid" as const, gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
             <div style={{ gridColumn: "1/-1" }}>
-              <Field label="Nome do Utente" fieldKey="nome" />
+              <EditorField label="Nome do Utente" fieldKey="nome" data={data} setData={setData} />
             </div>
-            <Field label="Data da Avaliação" fieldKey="data" />
-            <Field label="Idade (anos)" fieldKey="idade" />
-            <Field label="Peso (kg)" fieldKey="peso" />
-            <Field label="Altura (cm)" fieldKey="altura" />
-            <Field label="IMC" fieldKey="bmi" />
-            <Field label="Fisioterapeuta" fieldKey="fisioterapeuta" />
-            <Field label="Cédula Profissional" fieldKey="cedula" />
+            <EditorField label="Data da Avaliação" fieldKey="data" data={data} setData={setData} />
+            <EditorField label="Idade (anos)" fieldKey="idade" data={data} setData={setData} />
+            <EditorField label="Peso (kg)" fieldKey="peso" data={data} setData={setData} />
+            <EditorField label="Altura (cm)" fieldKey="altura" data={data} setData={setData} />
+            <EditorField label="IMC" fieldKey="bmi" data={data} setData={setData} />
+            <EditorField label="Fisioterapeuta" fieldKey="fisioterapeuta" data={data} setData={setData} />
+            <EditorField label="Cédula Profissional" fieldKey="cedula" data={data} setData={setData} />
           </div>
         )}
 
         {tab === "parametros" && (
           <div style={{ display: "grid" as const, gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-            <Field label="SIndex Máximo (cmH2O)" fieldKey="sindex_best" />
-            <Field label="SIndex Média (cmH2O)" fieldKey="sindex_avg" />
-            <Field label="PNV (cmH2O)" fieldKey="pnv" />
-            <Field label="% do PNV" fieldKey="percentagem_pnv" />
-            <Field label="PIF (L/s)" fieldKey="pif" />
-            <Field label="Volume Inspiratório (L)" fieldKey="volume" />
+            <EditorField label="SIndex Máximo (cmH2O)" fieldKey="sindex_best" data={data} setData={setData} />
+            <EditorField label="SIndex Média (cmH2O)" fieldKey="sindex_avg" data={data} setData={setData} />
+            <EditorField label="PNV (cmH2O)" fieldKey="pnv" data={data} setData={setData} />
+            <EditorField label="% do PNV" fieldKey="percentagem_pnv" data={data} setData={setData} />
+            <EditorField label="PIF (L/s)" fieldKey="pif" data={data} setData={setData} />
+            <EditorField label="Volume Inspiratório (L)" fieldKey="volume" data={data} setData={setData} />
             <div style={{ gridColumn: "1/-1", borderTop: `1px solid ${G.borderLight}`, margin: "10px 0 14px", paddingTop: 14 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: G.gold, textTransform: "uppercase" as const, letterSpacing: "0.8px" }}>
                 Dados da Sessão (Session Detail)
               </span>
             </div>
-            <Field label="Tipo de Sessão" fieldKey="tipo_sessao" />
-            <Field label="Respirações (Realizadas/Propostas)" fieldKey="respiracoes" />
-            <Field label="Carga Alvo (cmH2O)" fieldKey="carga_alvo" />
-            <Field label="SIndex Média de Sessão" fieldKey="sindex_session_avg" />
-            <Field label="PIF Média de Sessão (L/s)" fieldKey="pif_session_avg" />
-            <Field label="Volume Médio de Sessão (L)" fieldKey="volume_session_avg" />
+            <EditorField label="Tipo de Sessão" fieldKey="tipo_sessao" data={data} setData={setData} />
+            <EditorField label="Respirações (Realizadas/Propostas)" fieldKey="respiracoes" data={data} setData={setData} />
+            <EditorField label="Carga Alvo (cmH2O)" fieldKey="carga_alvo" data={data} setData={setData} />
+            <EditorField label="SIndex Média de Sessão" fieldKey="sindex_session_avg" data={data} setData={setData} />
+            <EditorField label="PIF Média de Sessão (L/s)" fieldKey="pif_session_avg" data={data} setData={setData} />
+            <EditorField label="Volume Médio de Sessão (L)" fieldKey="volume_session_avg" data={data} setData={setData} />
             <div style={{ gridColumn: "1/-1" }}>
-              <Field label="Grau de Fraqueza" fieldKey="grau_fraqueza" />
+              <EditorField label="Grau de Fraqueza" fieldKey="grau_fraqueza" data={data} setData={setData} />
             </div>
           </div>
         )}
 
         {tab === "diagnostico" && (
           <div>
-            <Field label="Diagnóstico Funcional Respiratório" fieldKey="diagnostico" type="textarea" rows={5} />
-            <Field label="Observação Clínica Adicional" fieldKey="observacao_clinica" type="textarea" rows={3} />
+            <EditorField label="Diagnóstico Funcional Respiratório" fieldKey="diagnostico" data={data} setData={setData} type="textarea" rows={5} />
+            <EditorField label="Observação Clínica Adicional" fieldKey="observacao_clinica" data={data} setData={setData} type="textarea" rows={3} />
           </div>
         )}
 
         {tab === "intervencao" && (
           <div>
-            <Field label="Equipamento" fieldKey="equipamento" />
+            <EditorField label="Equipamento" fieldKey="equipamento" data={data} setData={setData} />
             <div style={{ display: "grid" as const, gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <Field label="Frequência" fieldKey="frequencia" />
-              <Field label="Repetições" fieldKey="repeticoes" />
-              <Field label="Carga Inicial" fieldKey="carga_inicial" />
+              <EditorField label="Frequência" fieldKey="frequencia" data={data} setData={setData} />
+              <EditorField label="Repetições" fieldKey="repeticoes" data={data} setData={setData} />
+              <EditorField label="Carga Inicial" fieldKey="carga_inicial" data={data} setData={setData} />
             </div>
-            <Field label="Técnica de Execução" fieldKey="tecnica" type="textarea" rows={3} />
-            <Field label="Meta Curto Prazo (4 semanas)" fieldKey="meta_curto" type="textarea" rows={2} />
-            <Field label="Meta Médio Prazo" fieldKey="meta_medio" type="textarea" rows={2} />
-            <Field label="Exercícios de Mobilidade" fieldKey="mobilidade" type="textarea" rows={3} />
+            <EditorField label="Técnica de Execução" fieldKey="tecnica" data={data} setData={setData} type="textarea" rows={3} />
+            <EditorField label="Meta Curto Prazo (4 semanas)" fieldKey="meta_curto" data={data} setData={setData} type="textarea" rows={2} />
+            <EditorField label="Meta Médio Prazo" fieldKey="meta_medio" data={data} setData={setData} type="textarea" rows={2} />
+            <EditorField label="Exercícios de Mobilidade" fieldKey="mobilidade" data={data} setData={setData} type="textarea" rows={3} />
           </div>
         )}
 
@@ -1226,7 +1224,7 @@ function StepRelatorio({ data, secoes, onEdit, onSave = null }) {
    APP ROOT
 ═══════════════════════════════════════════════════════════════════════════ */
 /* ─── Histórico ──────────────────────────────────────────────────────────── */
-function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNew: () => void }) {
+function HistoricoRelatorios({ onOpen, onNew, onPreview }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void }) {
   const { user } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1237,9 +1235,13 @@ function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNe
     setLoading(true);
     const { data, error } = await (supabase as any)
       .from("respiratory_reports")
-      .select("id, patient_name, report_date, data")
-      .order("report_date", { ascending: false });
-    if (!error && data) setReports(data);
+      .select("id, patient_name, report_date, data, created_at")
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Erro ao carregar relatórios:", error);
+      toast.error("Erro ao carregar histórico de relatórios");
+    }
+    if (data) setReports(data);
     setLoading(false);
   }, []);
 
@@ -1367,6 +1369,9 @@ function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNe
               </div>
 
               <div style={{ display: "flex" as const, gap: 8, flexShrink: 0 }}>
+                <button onClick={() => onPreview(r)} style={btn("outline", { padding: "7px 14px", fontSize: 12 })}>
+                  📄 Gerar novamente
+                </button>
                 <button onClick={() => onOpen(r)} style={btn("outline", { padding: "7px 14px", fontSize: 12 })}>
                   ✏️ Editar
                 </button>
@@ -1497,7 +1502,12 @@ export default function RelatorioRespiratório() {
             backdropFilter: "blur(12px)",
           }}
         >
-          <HistoricoRelatorios onOpen={handleOpenReport} onNew={handleNew} />
+          <HistoricoRelatorios onOpen={handleOpenReport} onNew={handleNew} onPreview={(r) => {
+            setData({ ...EMPTY_DATA, ...r.data });
+            setEditingId(r.id);
+            setStep(4);
+            setView("new");
+          }} />
         </div>
       </div>
     );
