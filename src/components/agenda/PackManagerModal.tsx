@@ -60,7 +60,7 @@ interface PackManagerModalProps {
 
 type ViewMode = "list" | "create" | "edit";
 
-export function PackManagerModal({ isOpen, onClose, pacienteId, pacienteNome }: PackManagerModalProps) {
+export function PackManagerModal({ isOpen, onClose, pacienteId, pacienteNome, embedded = false }: PackManagerModalProps) {
   const { packs, addPack, updatePack, deletePack, sessions, associateSessionToPack, refreshPacks } = useData();
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
