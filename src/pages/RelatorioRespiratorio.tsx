@@ -1434,6 +1434,10 @@ export default function RelatorioRespiratório() {
   const handleSaveAndReturn = async () => {
     try {
       const { userId, clinicId } = await getAuthContext();
+      if (!clinicId) {
+        toast.error("Clínica não encontrada. Faça login novamente.");
+        return;
+      }
       const reportData = {
         patient_name: data.nome || "Sem nome",
         report_date: data.data || new Date().toISOString().slice(0, 10),
