@@ -1502,7 +1502,12 @@ export default function RelatorioRespiratório() {
             backdropFilter: "blur(12px)",
           }}
         >
-          <HistoricoRelatorios onOpen={handleOpenReport} onNew={handleNew} />
+          <HistoricoRelatorios onOpen={handleOpenReport} onNew={handleNew} onPreview={(r) => {
+            setData({ ...EMPTY_DATA, ...r.data });
+            setEditingId(r.id);
+            setStep(4);
+            setView("new");
+          }} />
         </div>
       </div>
     );
