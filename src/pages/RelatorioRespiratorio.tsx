@@ -609,15 +609,15 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
         {tab === "paciente" && (
           <div style={{ display: "grid" as const, gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
             <div style={{ gridColumn: "1/-1" }}>
-              <Field label="Nome do Utente" fieldKey="nome" />
+              <EditorField label="Nome do Utente" fieldKey="nome" data={data} setData={setData} />
             </div>
-            <Field label="Data da Avaliação" fieldKey="data" />
-            <Field label="Idade (anos)" fieldKey="idade" />
-            <Field label="Peso (kg)" fieldKey="peso" />
-            <Field label="Altura (cm)" fieldKey="altura" />
-            <Field label="IMC" fieldKey="bmi" />
-            <Field label="Fisioterapeuta" fieldKey="fisioterapeuta" />
-            <Field label="Cédula Profissional" fieldKey="cedula" />
+            <EditorField label="Data da Avaliação" fieldKey="data" data={data} setData={setData} />
+            <EditorField label="Idade (anos)" fieldKey="idade" data={data} setData={setData} />
+            <EditorField label="Peso (kg)" fieldKey="peso" data={data} setData={setData} />
+            <EditorField label="Altura (cm)" fieldKey="altura" data={data} setData={setData} />
+            <EditorField label="IMC" fieldKey="bmi" data={data} setData={setData} />
+            <EditorField label="Fisioterapeuta" fieldKey="fisioterapeuta" data={data} setData={setData} />
+            <EditorField label="Cédula Profissional" fieldKey="cedula" data={data} setData={setData} />
           </div>
         )}
 
