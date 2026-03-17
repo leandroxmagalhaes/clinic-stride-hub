@@ -55,11 +55,12 @@ interface PackManagerModalProps {
   onClose: () => void;
   pacienteId: string;
   pacienteNome: string;
+  embedded?: boolean;
 }
 
 type ViewMode = "list" | "create" | "edit";
 
-export function PackManagerModal({ isOpen, onClose, pacienteId, pacienteNome }: PackManagerModalProps) {
+export function PackManagerModal({ isOpen, onClose, pacienteId, pacienteNome, embedded = false }: PackManagerModalProps) {
   const { packs, addPack, updatePack, deletePack, sessions, associateSessionToPack, refreshPacks } = useData();
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -598,35 +599,70 @@ export function PackManagerModal({ isOpen, onClose, pacienteId, pacienteNome }: 
     edit: `Editar Pack ${editingPack?.numero_pack}`,
   };
 
+  const content = (
+    <>
+      {!embedded && (
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" />
+            {titleMap[viewMode]}
+          </DialogTitle>
+          {viewMode === "list" && (
+            <DialogDescription>
+              {patientPacks.length} pack{patientPacks.length !== 1 ? "s" : ""} registado
+              {patientPacks.length !== 1 ? "s" : ""}
+              {" · "}Pack activo:{" "}
+              {patientPacks.find((p) => p.is_active)
+                ? `Pack ${patientPacks.find((p) => p.is_active)!.numero_pack}`
+                : "nenhum"}
+            </DialogDescription>
+          )}
+          {viewMode === "create" && (
+            <DialogDescription>
+              As sessões a partir da data de início serão associadas automaticamente.
+            </DialogDescription>
+          )}
+        </DialogHeader>
+      )}
+
+      {viewMode === "list" && renderList()}
+      {viewMode === "create" && renderForm("create")}
+      {viewMode === "edit" && renderForm("edit")}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <>
+        {content}
+        <AlertDialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remover Pack?</AlertDialogTitle>
+              <AlertDialogDescription>
+                As sessões associadas a este pack serão desassociadas mas não apagadas. Esta acção não pode ser revertida.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => deleteConfirmId && handleDeletePack(deleteConfirmId)}
+              >
+                Remover Pack
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
+    );
+  }
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" />
-              {titleMap[viewMode]}
-            </DialogTitle>
-            {viewMode === "list" && (
-              <DialogDescription>
-                {patientPacks.length} pack{patientPacks.length !== 1 ? "s" : ""} registado
-                {patientPacks.length !== 1 ? "s" : ""}
-                {" · "}Pack activo:{" "}
-                {patientPacks.find((p) => p.is_active)
-                  ? `Pack ${patientPacks.find((p) => p.is_active)!.numero_pack}`
-                  : "nenhum"}
-              </DialogDescription>
-            )}
-            {viewMode === "create" && (
-              <DialogDescription>
-                As sessões a partir da data de início serão associadas automaticamente.
-              </DialogDescription>
-            )}
-          </DialogHeader>
-
-          {viewMode === "list" && renderList()}
-          {viewMode === "create" && renderForm("create")}
-          {viewMode === "edit" && renderForm("edit")}
+          {content}
         </DialogContent>
       </Dialog>
 

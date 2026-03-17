@@ -204,7 +204,7 @@ export function PatientDetailModal({
 
             {/* ── Tab Packs ──────────────────────────────────────────── */}
             <TabsContent value="packs" className="py-2">
-              <PackManagerModal isOpen={true} onClose={() => {}} pacienteId={patient.id} pacienteNome={patient.full_name} />
+              <PackManagerModal embedded isOpen={true} onClose={() => {}} pacienteId={patient.id} pacienteNome={patient.full_name} />
             </TabsContent>
           </Tabs>
 
