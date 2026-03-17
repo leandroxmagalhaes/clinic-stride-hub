@@ -1394,22 +1394,29 @@ export default function RelatorioRespiratório() {
   };
 
   const handleSaveAndReturn = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const reportData = {
-      patient_name: data.nome || "Sem nome",
-      report_date: data.data || new Date().toISOString().slice(0, 10),
-      data: data,
-      created_by: user?.id,
-    };
-    if (editingId) {
-      await (supabase as any).from("respiratory_reports").update(reportData).eq("id", editingId);
-    } else {
-      const { data: saved } = await (supabase as any).from("respiratory_reports").insert(reportData).select().single();
-      if (saved) setEditingId(saved.id);
+    try {
+      const { userId, clinicId } = await getAuthContext();
+      const reportData = {
+        patient_name: data.nome || "Sem nome",
+        report_date: data.data || new Date().toISOString().slice(0, 10),
+        data: data,
+        created_by: userId,
+        clinic_id: clinicId,
+      };
+      if (editingId) {
+        const { error } = await (supabase as any).from("respiratory_reports").update(reportData).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { data: saved, error } = await (supabase as any).from("respiratory_reports").insert(reportData).select().single();
+        if (error) throw error;
+        if (saved) setEditingId(saved.id);
+      }
+      toast.success("Relatório guardado com sucesso");
+      setView("history");
+    } catch (err) {
+      console.error("Erro ao guardar relatório:", err);
+      toast.error("Erro ao guardar relatório. Verifique a consola para mais detalhes.");
     }
-    setView("history");
   };
 
   const bgStyle: CSSProperties = {
