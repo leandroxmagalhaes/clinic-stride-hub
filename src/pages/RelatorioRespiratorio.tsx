@@ -598,6 +598,17 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
             <Field label="% do PNV" fieldKey="percentagem_pnv" />
             <Field label="PIF (L/s)" fieldKey="pif" />
             <Field label="Volume Inspiratório (L)" fieldKey="volume" />
+            <div style={{ gridColumn: "1/-1", borderTop: `1px solid ${G.borderLight}`, margin: "10px 0 14px", paddingTop: 14 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: G.gold, textTransform: "uppercase" as const, letterSpacing: "0.8px" }}>
+                Dados da Sessão (Session Detail)
+              </span>
+            </div>
+            <Field label="Tipo de Sessão" fieldKey="tipo_sessao" />
+            <Field label="Respirações (Realizadas/Propostas)" fieldKey="respiracoes" />
+            <Field label="Carga Alvo (cmH2O)" fieldKey="carga_alvo" />
+            <Field label="SIndex Média de Sessão" fieldKey="sindex_session_avg" />
+            <Field label="PIF Média de Sessão (L/s)" fieldKey="pif_session_avg" />
+            <Field label="Volume Médio de Sessão (L)" fieldKey="volume_session_avg" />
             <div style={{ gridColumn: "1/-1" }}>
               <Field label="Grau de Fraqueza" fieldKey="grau_fraqueza" />
             </div>
