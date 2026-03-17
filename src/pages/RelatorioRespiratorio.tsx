@@ -648,23 +648,23 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
 
         {tab === "diagnostico" && (
           <div>
-            <Field label="Diagnóstico Funcional Respiratório" fieldKey="diagnostico" type="textarea" rows={5} />
-            <Field label="Observação Clínica Adicional" fieldKey="observacao_clinica" type="textarea" rows={3} />
+            <EditorField label="Diagnóstico Funcional Respiratório" fieldKey="diagnostico" data={data} setData={setData} type="textarea" rows={5} />
+            <EditorField label="Observação Clínica Adicional" fieldKey="observacao_clinica" data={data} setData={setData} type="textarea" rows={3} />
           </div>
         )}
 
         {tab === "intervencao" && (
           <div>
-            <Field label="Equipamento" fieldKey="equipamento" />
+            <EditorField label="Equipamento" fieldKey="equipamento" data={data} setData={setData} />
             <div style={{ display: "grid" as const, gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <Field label="Frequência" fieldKey="frequencia" />
-              <Field label="Repetições" fieldKey="repeticoes" />
-              <Field label="Carga Inicial" fieldKey="carga_inicial" />
+              <EditorField label="Frequência" fieldKey="frequencia" data={data} setData={setData} />
+              <EditorField label="Repetições" fieldKey="repeticoes" data={data} setData={setData} />
+              <EditorField label="Carga Inicial" fieldKey="carga_inicial" data={data} setData={setData} />
             </div>
-            <Field label="Técnica de Execução" fieldKey="tecnica" type="textarea" rows={3} />
-            <Field label="Meta Curto Prazo (4 semanas)" fieldKey="meta_curto" type="textarea" rows={2} />
-            <Field label="Meta Médio Prazo" fieldKey="meta_medio" type="textarea" rows={2} />
-            <Field label="Exercícios de Mobilidade" fieldKey="mobilidade" type="textarea" rows={3} />
+            <EditorField label="Técnica de Execução" fieldKey="tecnica" data={data} setData={setData} type="textarea" rows={3} />
+            <EditorField label="Meta Curto Prazo (4 semanas)" fieldKey="meta_curto" data={data} setData={setData} type="textarea" rows={2} />
+            <EditorField label="Meta Médio Prazo" fieldKey="meta_medio" data={data} setData={setData} type="textarea" rows={2} />
+            <EditorField label="Exercícios de Mobilidade" fieldKey="mobilidade" data={data} setData={setData} type="textarea" rows={3} />
           </div>
         )}
 
