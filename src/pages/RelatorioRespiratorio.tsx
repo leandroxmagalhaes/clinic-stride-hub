@@ -573,9 +573,7 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
     { id: "secoes", label: "⚙️ Secções" },
   ];
 
-  const Field = useCallback(({ label: lbl, fieldKey, type = "text", rows = 3 }: { label: string; fieldKey: string; type?: string; rows?: number }) => (
-    <EditorField label={lbl} fieldKey={fieldKey} data={data} setData={setData} type={type} rows={rows} />
-  ), [data, setData]);
+  // Field wrapper removed — use EditorField directly to preserve input focus
 
   const updateProgressao = useCallback((i, field, value) => {
     setData((prev: any) => {
