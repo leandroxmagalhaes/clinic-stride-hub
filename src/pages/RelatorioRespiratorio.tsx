@@ -1217,9 +1217,16 @@ function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNe
   const handleDelete = async (id: string) => {
     if (!confirm("Apagar este relatório? Esta acção não pode ser desfeita.")) return;
     setDeleting(id);
-    await (supabase as any).from("respiratory_reports").delete().eq("id", id);
-    setReports((r) => r.filter((x) => x.id !== id));
-    setDeleting(null);
+    try {
+      const { error } = await (supabase as any).from("respiratory_reports").delete().eq("id", id);
+      if (error) throw error;
+      setReports((r) => r.filter((x) => x.id !== id));
+    } catch (err) {
+      console.error("Erro ao apagar relatório:", err);
+      toast.error("Erro ao apagar relatório");
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const filtered = reports.filter((r) => r.patient_name.toLowerCase().includes(search.toLowerCase()));
