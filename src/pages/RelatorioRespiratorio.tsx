@@ -1224,7 +1224,7 @@ function StepRelatorio({ data, secoes, onEdit, onSave = null }) {
    APP ROOT
 ═══════════════════════════════════════════════════════════════════════════ */
 /* ─── Histórico ──────────────────────────────────────────────────────────── */
-function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNew: () => void }) {
+function HistoricoRelatorios({ onOpen, onNew, onPreview }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void }) {
   const { user } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
