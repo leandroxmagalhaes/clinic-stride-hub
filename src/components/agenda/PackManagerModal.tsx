@@ -55,6 +55,7 @@ interface PackManagerModalProps {
   onClose: () => void;
   pacienteId: string;
   pacienteNome: string;
+  embedded?: boolean;
 }
 
 type ViewMode = "list" | "create" | "edit";
