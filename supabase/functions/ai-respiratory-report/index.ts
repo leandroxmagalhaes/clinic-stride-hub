@@ -10,6 +10,8 @@ Analisa o conteúdo do relatório e devolve os dados clínicos extraídos.
 Campos obrigatórios (usa string vazia "" se não encontrado):
 - nome, data (dd/MM/yyyy), idade, peso, altura, bmi, pnv (cmH2O)
 - sindex_best (cmH2O), sindex_avg (cmH2O), percentagem_pnv, pif (L/s), volume (litros)
+- respiracoes (formato "X/30" — Breaths Completed / Breaths Proposed), carga_alvo (Target Load cmH2O), tipo_sessao (Session Type ex: "Test / SIndex")
+- sindex_session_avg (S.Avg da tabela Session Detail), pif_session_avg (PIF S.Avg da tabela Session Detail), volume_session_avg (Volume S.Avg da tabela Session Detail)
 - grau_fraqueza (Leve|Moderado|Severo baseado na % PNV: >70% normal, 50-70% leve, 30-50% moderado, <30% severo)
 - diagnostico (3-4 frases clínicas profissionais), observacao_clinica
 - equipamento, frequencia, repeticoes, carga_inicial (35-40% do SIndex best), tecnica
@@ -81,6 +83,12 @@ serve(async (req) => {
                 pif: { type: "string" },
                 volume: { type: "string" },
                 grau_fraqueza: { type: "string", enum: ["Leve", "Moderado", "Severo"] },
+                respiracoes: { type: "string" },
+                carga_alvo: { type: "string" },
+                tipo_sessao: { type: "string" },
+                sindex_session_avg: { type: "string" },
+                pif_session_avg: { type: "string" },
+                volume_session_avg: { type: "string" },
                 diagnostico: { type: "string" },
                 observacao_clinica: { type: "string" },
                 equipamento: { type: "string" },
@@ -107,7 +115,7 @@ serve(async (req) => {
                   },
                 },
               },
-              required: ["nome", "data", "idade", "peso", "altura", "bmi", "pnv", "sindex_best", "sindex_avg", "percentagem_pnv", "pif", "volume", "grau_fraqueza", "diagnostico", "observacao_clinica", "equipamento", "frequencia", "repeticoes", "carga_inicial", "tecnica", "meta_curto", "meta_medio", "mobilidade", "fisioterapeuta", "cedula", "progressao"],
+              required: ["nome", "data", "idade", "peso", "altura", "bmi", "pnv", "sindex_best", "sindex_avg", "percentagem_pnv", "pif", "volume", "grau_fraqueza", "respiracoes", "carga_alvo", "tipo_sessao", "sindex_session_avg", "pif_session_avg", "volume_session_avg", "diagnostico", "observacao_clinica", "equipamento", "frequencia", "repeticoes", "carga_inicial", "tecnica", "meta_curto", "meta_medio", "mobilidade", "fisioterapeuta", "cedula", "progressao"],
               additionalProperties: false,
             },
           },
