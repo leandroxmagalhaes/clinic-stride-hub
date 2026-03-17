@@ -1235,9 +1235,13 @@ function HistoricoRelatorios({ onOpen, onNew }: { onOpen: (r: any) => void; onNe
     setLoading(true);
     const { data, error } = await (supabase as any)
       .from("respiratory_reports")
-      .select("id, patient_name, report_date, data")
-      .order("report_date", { ascending: false });
-    if (!error && data) setReports(data);
+      .select("id, patient_name, report_date, data, created_at")
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Erro ao carregar relatórios:", error);
+      toast.error("Erro ao carregar histórico de relatórios");
+    }
+    if (data) setReports(data);
     setLoading(false);
   }, []);
 
