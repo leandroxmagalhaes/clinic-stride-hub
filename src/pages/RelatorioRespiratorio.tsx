@@ -623,25 +623,25 @@ function StepEditor({ data, setData, secoes, setSocoes, onNext, extraActions = n
 
         {tab === "parametros" && (
           <div style={{ display: "grid" as const, gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-            <Field label="SIndex Máximo (cmH2O)" fieldKey="sindex_best" />
-            <Field label="SIndex Média (cmH2O)" fieldKey="sindex_avg" />
-            <Field label="PNV (cmH2O)" fieldKey="pnv" />
-            <Field label="% do PNV" fieldKey="percentagem_pnv" />
-            <Field label="PIF (L/s)" fieldKey="pif" />
-            <Field label="Volume Inspiratório (L)" fieldKey="volume" />
+            <EditorField label="SIndex Máximo (cmH2O)" fieldKey="sindex_best" data={data} setData={setData} />
+            <EditorField label="SIndex Média (cmH2O)" fieldKey="sindex_avg" data={data} setData={setData} />
+            <EditorField label="PNV (cmH2O)" fieldKey="pnv" data={data} setData={setData} />
+            <EditorField label="% do PNV" fieldKey="percentagem_pnv" data={data} setData={setData} />
+            <EditorField label="PIF (L/s)" fieldKey="pif" data={data} setData={setData} />
+            <EditorField label="Volume Inspiratório (L)" fieldKey="volume" data={data} setData={setData} />
             <div style={{ gridColumn: "1/-1", borderTop: `1px solid ${G.borderLight}`, margin: "10px 0 14px", paddingTop: 14 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: G.gold, textTransform: "uppercase" as const, letterSpacing: "0.8px" }}>
                 Dados da Sessão (Session Detail)
               </span>
             </div>
-            <Field label="Tipo de Sessão" fieldKey="tipo_sessao" />
-            <Field label="Respirações (Realizadas/Propostas)" fieldKey="respiracoes" />
-            <Field label="Carga Alvo (cmH2O)" fieldKey="carga_alvo" />
-            <Field label="SIndex Média de Sessão" fieldKey="sindex_session_avg" />
-            <Field label="PIF Média de Sessão (L/s)" fieldKey="pif_session_avg" />
-            <Field label="Volume Médio de Sessão (L)" fieldKey="volume_session_avg" />
+            <EditorField label="Tipo de Sessão" fieldKey="tipo_sessao" data={data} setData={setData} />
+            <EditorField label="Respirações (Realizadas/Propostas)" fieldKey="respiracoes" data={data} setData={setData} />
+            <EditorField label="Carga Alvo (cmH2O)" fieldKey="carga_alvo" data={data} setData={setData} />
+            <EditorField label="SIndex Média de Sessão" fieldKey="sindex_session_avg" data={data} setData={setData} />
+            <EditorField label="PIF Média de Sessão (L/s)" fieldKey="pif_session_avg" data={data} setData={setData} />
+            <EditorField label="Volume Médio de Sessão (L)" fieldKey="volume_session_avg" data={data} setData={setData} />
             <div style={{ gridColumn: "1/-1" }}>
-              <Field label="Grau de Fraqueza" fieldKey="grau_fraqueza" />
+              <EditorField label="Grau de Fraqueza" fieldKey="grau_fraqueza" data={data} setData={setData} />
             </div>
           </div>
         )}
