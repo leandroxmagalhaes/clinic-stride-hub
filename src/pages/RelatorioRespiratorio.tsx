@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, CSSProperties } from "react";
+import React, { useState, useCallback, useRef, useEffect, CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getAuthContext } from "@/lib/auth-helpers";
