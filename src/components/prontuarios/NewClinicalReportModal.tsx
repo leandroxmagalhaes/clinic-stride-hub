@@ -17,12 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  CalendarIcon,
   FileText,
   ClipboardList,
   Eye,
@@ -78,18 +75,10 @@ export function NewClinicalReportModal({
   const [saving, setSaving] = useState(false);
   const [loadingEvolutions, setLoadingEvolutions] = useState(false);
   const [loadingAIDraft, setLoadingAIDraft] = useState(false);
-  const [sessionsCount, setSessionsCount] = useState<number | null>(null);
 
   // Form state
   const [titulo, setTitulo] = useState("");
   const [tipo, setTipo] = useState<ReportType>("evolucao_periodica");
-  const [periodoInicio, setPeriodoInicio] = useState<Date | undefined>();
-  const [periodoFim, setPeriodoFim] = useState<Date | undefined>();
-  const [destinatarioNome, setDestinatarioNome] = useState("");
-  const [destinatarioEspecialidade, setDestinatarioEspecialidade] = useState("");
-  const [destinatarioIdentificacao, setDestinatarioIdentificacao] = useState("");
-  const [dataValidade, setDataValidade] = useState<Date | undefined>();
-  const [diasAviso, setDiasAviso] = useState("7");
 
   // Clinical content - simplified to single field
   const [conteudo, setConteudo] = useState("");
@@ -101,21 +90,11 @@ export function NewClinicalReportModal({
   useEffect(() => {
     if (open) {
       if (editingReport) {
-        // Populate form with existing report data
         setTitulo(editingReport.titulo);
         setTipo(editingReport.tipo);
-        setPeriodoInicio(new Date(editingReport.periodo_inicio));
-        setPeriodoFim(new Date(editingReport.periodo_fim));
-        setDestinatarioNome(editingReport.destinatario_nome || "");
-        setDestinatarioEspecialidade(editingReport.destinatario_especialidade || "");
-        setDestinatarioIdentificacao(editingReport.destinatario_identificacao || "");
-        setDataValidade(editingReport.data_validade ? new Date(editingReport.data_validade) : undefined);
-        setDiasAviso(String(editingReport.dias_aviso_antecedencia));
-        // Handle both new format (conteudo) and legacy format
         if (editingReport.conteudo) {
           setConteudo(editingReport.conteudo);
         } else {
-          // Build content from legacy fields for backward compatibility
           const legacyParts = [
             editingReport.diagnostico_clinico && `Diagnóstico Clínico:\n${editingReport.diagnostico_clinico}`,
             editingReport.objetivo_tratamento && `Objetivo do Tratamento:\n${editingReport.objetivo_tratamento}`,
@@ -127,53 +106,28 @@ export function NewClinicalReportModal({
           setConteudo(legacyParts.join('\n\n'));
         }
         setProfessionalId(editingReport.professional_id);
-        setSessionsCount(editingReport.sessoes_realizadas || null);
       } else {
-        // Reset to defaults
         setTitulo("");
         setTipo("evolucao_periodica");
-        setPeriodoInicio(undefined);
-        setPeriodoFim(undefined);
-        setDestinatarioNome("");
-        setDestinatarioEspecialidade("");
-        setDestinatarioIdentificacao("");
-        setDataValidade(undefined);
-        setDiasAviso("7");
         setConteudo("");
         setProfessionalId(professionals[0]?.id || "");
-        setSessionsCount(null);
       }
       setActiveTab("dados");
     }
   }, [open, editingReport, professionals]);
 
-  // Count sessions when period changes
-  useEffect(() => {
-    const countSessions = async () => {
-      if (periodoInicio && periodoFim) {
-        const count = await ClinicalReportService.countSessionsInPeriod(
-          patientId,
-          format(periodoInicio, "yyyy-MM-dd"),
-          format(periodoFim, "yyyy-MM-dd")
-        );
-        setSessionsCount(count);
-      }
-    };
-    countSessions();
-  }, [periodoInicio, periodoFim, patientId]);
-
   const handleImportEvolutions = async () => {
-    if (!periodoInicio || !periodoFim) {
-      toast.error("Selecione o período primeiro");
-      return;
-    }
-
     setLoadingEvolutions(true);
     try {
+      // Import all evolutions (no period filter — use full history)
+      const today = new Date();
+      const oneYearAgo = new Date(today);
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
       const evolutionsText = await ClinicalReportService.getEvolutionsForPeriod(
         prontuarioId,
-        format(periodoInicio, "yyyy-MM-dd"),
-        format(periodoFim, "yyyy-MM-dd")
+        format(oneYearAgo, "yyyy-MM-dd"),
+        format(today, "yyyy-MM-dd")
       );
 
       if (evolutionsText) {
@@ -182,7 +136,7 @@ export function NewClinicalReportModal({
         );
         toast.success("Evoluções importadas com sucesso!");
       } else {
-        toast.info("Nenhuma evolução encontrada no período");
+        toast.info("Nenhuma evolução encontrada");
       }
     } catch (error) {
       console.error("Error importing evolutions:", error);
@@ -193,19 +147,18 @@ export function NewClinicalReportModal({
   };
 
   const handleGenerateAIDraft = async () => {
-    if (!periodoInicio || !periodoFim) {
-      toast.error("Selecione o período primeiro");
-      return;
-    }
-
     setLoadingAIDraft(true);
     try {
+      const today = new Date();
+      const oneYearAgo = new Date(today);
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
       const result = await AIService.generateReportDraft({
         prontuarioId,
         patientName: undefined,
         tipo,
-        periodoInicio: format(periodoInicio, "yyyy-MM-dd"),
-        periodoFim: format(periodoFim, "yyyy-MM-dd"),
+        periodoInicio: format(oneYearAgo, "yyyy-MM-dd"),
+        periodoFim: format(today, "yyyy-MM-dd"),
       });
 
       if (result.data?.draft) {
@@ -228,11 +181,6 @@ export function NewClinicalReportModal({
       setActiveTab("dados");
       return false;
     }
-    if (!periodoInicio || !periodoFim) {
-      toast.error("Período é obrigatório");
-      setActiveTab("dados");
-      return false;
-    }
     if (!professionalId) {
       toast.error("Profissional é obrigatório");
       setActiveTab("dados");
@@ -247,21 +195,18 @@ export function NewClinicalReportModal({
     setSaving(true);
     try {
       const status: 'rascunho' | 'finalizado' = finalize ? 'finalizado' : 'rascunho';
+      const today = format(new Date(), "yyyy-MM-dd");
       const reportData = {
         clinic_id: clinicId,
         patient_id: patientId,
         professional_id: professionalId,
         titulo,
         tipo,
-        periodo_inicio: format(periodoInicio!, "yyyy-MM-dd"),
-        periodo_fim: format(periodoFim!, "yyyy-MM-dd"),
+        periodo_inicio: today,
+        periodo_fim: today,
         conteudo: conteudo || undefined,
-        sessoes_realizadas: sessionsCount || 0,
-        destinatario_nome: destinatarioNome || undefined,
-        destinatario_especialidade: destinatarioEspecialidade || undefined,
-        destinatario_identificacao: destinatarioIdentificacao || undefined,
-        data_validade: dataValidade ? format(dataValidade, "yyyy-MM-dd") : undefined,
-        dias_aviso_antecedencia: parseInt(diasAviso),
+        sessoes_realizadas: 0,
+        dias_aviso_antecedencia: 7,
         status,
       };
 
@@ -286,7 +231,7 @@ export function NewClinicalReportModal({
   const handleDownloadPDF = async () => {
     if (!validateForm()) return;
 
-    // Create a temporary report object for PDF generation
+    const today = format(new Date(), "yyyy-MM-dd");
     const tempReport: ClinicalReport = {
       id: editingReport?.id || "temp",
       clinic_id: clinicId,
@@ -294,15 +239,11 @@ export function NewClinicalReportModal({
       professional_id: professionalId,
       titulo,
       tipo,
-      periodo_inicio: format(periodoInicio!, "yyyy-MM-dd"),
-      periodo_fim: format(periodoFim!, "yyyy-MM-dd"),
+      periodo_inicio: today,
+      periodo_fim: today,
       conteudo: conteudo,
-      sessoes_realizadas: sessionsCount,
-      destinatario_nome: destinatarioNome,
-      destinatario_especialidade: destinatarioEspecialidade,
-      destinatario_identificacao: destinatarioIdentificacao,
-      data_validade: dataValidade ? format(dataValidade, "yyyy-MM-dd") : null,
-      dias_aviso_antecedencia: parseInt(diasAviso),
+      sessoes_realizadas: 0,
+      dias_aviso_antecedencia: 7,
       status: editingReport?.status || "rascunho",
       created_at: editingReport?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -401,139 +342,6 @@ export function NewClinicalReportModal({
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div>
-                  <Label>Período Início *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn("w-full justify-start text-left font-normal", !periodoInicio && "text-muted-foreground")}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {periodoInicio ? format(periodoInicio, "dd/MM/yyyy", { locale: ptBR }) : "Selecione..."}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={periodoInicio}
-                        onSelect={setPeriodoInicio}
-                        locale={ptBR}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div>
-                  <Label>Período Fim *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn("w-full justify-start text-left font-normal", !periodoFim && "text-muted-foreground")}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {periodoFim ? format(periodoFim, "dd/MM/yyyy", { locale: ptBR }) : "Selecione..."}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={periodoFim}
-                        onSelect={setPeriodoFim}
-                        locale={ptBR}
-                        disabled={(date) => periodoInicio ? date < periodoInicio : false}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {sessionsCount !== null && (
-                  <div className="col-span-2">
-                    <Alert>
-                      <Info className="h-4 w-4" />
-                      <AlertDescription>
-                        <strong>{sessionsCount}</strong> sessão(ões) realizada(s) no período selecionado
-                      </AlertDescription>
-                    </Alert>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t pt-4 mt-4">
-                <h4 className="font-medium mb-3">Destinatário do Relatório</h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="destinatarioNome">Nome</Label>
-                    <Input
-                      id="destinatarioNome"
-                      value={destinatarioNome}
-                      onChange={(e) => setDestinatarioNome(e.target.value)}
-                      placeholder="Dr. João Oliveira"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="destinatarioEspecialidade">Especialidade</Label>
-                    <Input
-                      id="destinatarioEspecialidade"
-                      value={destinatarioEspecialidade}
-                      onChange={(e) => setDestinatarioEspecialidade(e.target.value)}
-                      placeholder="Ortopedista"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="destinatarioIdentificacao">CRM/NIF</Label>
-                    <Input
-                      id="destinatarioIdentificacao"
-                      value={destinatarioIdentificacao}
-                      onChange={(e) => setDestinatarioIdentificacao(e.target.value)}
-                      placeholder="CRM 12345"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t pt-4 mt-4">
-                <h4 className="font-medium mb-3">Prazo de Entrega</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Data Limite</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn("w-full justify-start text-left font-normal", !dataValidade && "text-muted-foreground")}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dataValidade ? format(dataValidade, "dd/MM/yyyy", { locale: ptBR }) : "Opcional"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={dataValidade}
-                          onSelect={setDataValidade}
-                          locale={ptBR}
-                          disabled={(date) => date < new Date()}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div>
-                    <Label htmlFor="diasAviso">Avisar com antecedência de</Label>
-                    <Select value={diasAviso} onValueChange={setDiasAviso}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="3">3 dias</SelectItem>
-                        <SelectItem value="7">7 dias</SelectItem>
-                        <SelectItem value="15">15 dias</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
               </div>
             </TabsContent>
 
@@ -547,7 +355,7 @@ export function NewClinicalReportModal({
                     variant="outline"
                     size="sm"
                     onClick={handleGenerateAIDraft}
-                    disabled={loadingAIDraft || !periodoInicio || !periodoFim}
+                    disabled={loadingAIDraft}
                     className="gap-2"
                   >
                     {loadingAIDraft ? (
@@ -562,7 +370,7 @@ export function NewClinicalReportModal({
                     variant="outline"
                     size="sm"
                     onClick={handleImportEvolutions}
-                    disabled={loadingEvolutions || !periodoInicio || !periodoFim}
+                    disabled={loadingEvolutions}
                     className="gap-2"
                   >
                     {loadingEvolutions ? (
@@ -619,30 +427,7 @@ Pode incluir:
                       <p className="font-medium">Tipo:</p>
                       <p className="text-muted-foreground">{REPORT_TYPE_LABELS[tipo]}</p>
                     </div>
-                    <div>
-                      <p className="font-medium">Período:</p>
-                      <p className="text-muted-foreground">
-                        {periodoInicio && periodoFim
-                          ? `${format(periodoInicio, "dd/MM/yyyy")} a ${format(periodoFim, "dd/MM/yyyy")}`
-                          : "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-medium">Sessões:</p>
-                      <p className="text-muted-foreground">{sessionsCount || 0}</p>
-                    </div>
                   </div>
-
-                  {destinatarioNome && (
-                    <div className="border-t pt-4">
-                      <p className="font-medium text-sm">Destinatário:</p>
-                      <p className="text-sm text-muted-foreground">
-                        {destinatarioNome}
-                        {destinatarioEspecialidade && ` - ${destinatarioEspecialidade}`}
-                        {destinatarioIdentificacao && ` (${destinatarioIdentificacao})`}
-                      </p>
-                    </div>
-                  )}
 
                   {conteudo && (
                     <div className="border-t pt-4">
