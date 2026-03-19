@@ -1,26 +1,22 @@
 
 
-## Analysis: No Migration Needed — Everything Is Already in Place
+## Remove Fields from "Novo Relatório Fisioterapêutico" Modal
 
-### Findings
+Remove the highlighted fields from the "Dados Básicos" tab, keeping only Título, Tipo de Relatório, and Profissional.
 
-1. **Migration already exists and was applied**: `supabase/migrations/20260317103443_...sql` already adds `clinic_id uuid REFERENCES public.clinics(id)` to `respiratory_reports`, backfills existing rows, and creates all 4 RLS policies (SELECT, INSERT, UPDATE, DELETE) scoped to `clinic_id = get_user_clinic_id(auth.uid())`.
+### Changes in `src/components/prontuarios/NewClinicalReportModal.tsx`
 
-2. **The database schema confirms `clinic_id` exists**: The provided schema shows `clinic_id | uuid | Nullable: Yes` on `respiratory_reports` with the FK `respiratory_reports_clinic_id_fkey`.
+1. **Remove state variables** (lines 86-92): `periodoInicio`, `periodoFim`, `destinatarioNome`, `destinatarioEspecialidade`, `destinatarioIdentificacao`, `dataValidade`, `diasAviso`
 
-3. **Code already includes `clinic_id` in the insert payload** (line 1446): `clinic_id: clinicId` is set from `getAuthContext()`.
+2. **Remove reset logic** for those variables in the reset/edit-load effects
 
-4. **Guard already exists** (line 1437-1440): If `clinicId` is null, a toast error is shown and the function returns early.
+3. **Remove validation** for `periodoInicio`/`periodoFim` (lines 231-235)
 
-### Root Cause of Persistent 400
+4. **Update `handleSave` payload** (lines 250-265): Remove `periodo_inicio`, `periodo_fim`, `destinatario_*`, `data_validade`, `dias_aviso_antecedencia` — set sensible defaults (e.g., current date for periodo fields if DB requires them)
 
-The migration uses `ADD COLUMN clinic_id` without `IF NOT EXISTS`. If it was attempted twice, the second attempt would fail — but since it's already applied and the column exists, this isn't the issue.
+5. **Update `handleDownloadPDF` temp report** (lines 296-305): Same removals
 
-The most likely cause: **the migration was applied _after_ the user's last failed attempt**, and the error is now resolved. The code and schema are both correct.
+6. **Remove UI sections** (lines 405-540): The "Período Início/Fim" date pickers, the sessions count alert, the "Destinatário do Relatório" section, and the "Prazo de Entrega" section
 
-### Recommendation
-
-**No changes needed.** The migration, RLS policies, code payload, and auth guard are all correctly implemented. The user should retry saving a report — it should work now.
-
-If the 400 error persists, add `console.error` output inspection via the browser console to check the exact Supabase error message (e.g., RLS violation vs. column mismatch).
+7. **Clean up unused imports**: `Calendar`, `Popover`/`PopoverContent`/`PopoverTrigger`, `CalendarIcon`, `cn` (if no longer used), `Info`, `Alert`/`AlertDescription`
 
