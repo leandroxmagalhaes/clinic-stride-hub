@@ -75,6 +75,34 @@ export default function Agenda() {
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
   const [localPatients, setLocalPatients] = useState(patients);
 
+  // Quick Panel state
+  const [quickPanelOpen, setQuickPanelOpen] = useState(false);
+  const [waitingPatients, setWaitingPatients] = useState<WaitingPatient[]>(MOCK_WAITING_PATIENTS);
+  const [quickNotes, setQuickNotes] = useState<QuickNote[]>(MOCK_NOTES);
+
+  const handleAddWaitingPatient = (data: Omit<WaitingPatient, "id" | "daysWaiting" | "addedAt">) => {
+    const now = new Date().toISOString().split("T")[0];
+    setWaitingPatients((prev) => [...prev, { ...data, id: crypto.randomUUID(), daysWaiting: 0, addedAt: now }]);
+  };
+  const handleEditWaitingPatient = (id: string, data: Omit<WaitingPatient, "id" | "daysWaiting" | "addedAt">) => {
+    setWaitingPatients((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
+  };
+  const handleRemoveWaitingPatient = (id: string) => {
+    setWaitingPatients((prev) => prev.filter((p) => p.id !== id));
+  };
+  const handleAddNote = (data: { type: NoteType; text: string; deadline?: string }) => {
+    setQuickNotes((prev) => [...prev, { ...data, id: crypto.randomUUID(), completed: false, createdAt: new Date().toISOString().split("T")[0] }]);
+  };
+  const handleEditNote = (id: string, data: { type: NoteType; text: string; deadline?: string }) => {
+    setQuickNotes((prev) => prev.map((n) => (n.id === id ? { ...n, ...data } : n)));
+  };
+  const handleRemoveNote = (id: string) => {
+    setQuickNotes((prev) => prev.filter((n) => n.id !== id));
+  };
+  const handleToggleNote = (id: string) => {
+    setQuickNotes((prev) => prev.map((n) => (n.id === id ? { ...n, completed: !n.completed } : n)));
+  };
+
   useEffect(() => {
     setLocalPatients(patients);
   }, [patients]);
