@@ -11,6 +11,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useReservedSlots } from "@/hooks/useReservedSlots";
 import { CreateReservedSlotData, ReservedSlot, ReservedSlotService } from "@/services/ReservedSlotService";
+import { QuickPanel } from "@/components/agenda/quick-panel/QuickPanel";
+import { WaitingPatient, QuickNote, NoteType } from "@/components/agenda/quick-panel/types";
+import { MOCK_WAITING_PATIENTS, MOCK_NOTES } from "@/components/agenda/quick-panel/mockData";
 
 import { AgendaControls } from "@/components/agenda/AgendaControls";
 import { AgendaDesktopGrid } from "@/components/agenda/AgendaDesktopGrid";
