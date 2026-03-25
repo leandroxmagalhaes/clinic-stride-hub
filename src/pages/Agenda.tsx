@@ -11,6 +11,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useReservedSlots } from "@/hooks/useReservedSlots";
 import { CreateReservedSlotData, ReservedSlot, ReservedSlotService } from "@/services/ReservedSlotService";
+import { QuickPanel } from "@/components/agenda/quick-panel/QuickPanel";
+import { WaitingPatient, QuickNote, NoteType } from "@/components/agenda/quick-panel/types";
+import { MOCK_WAITING_PATIENTS, MOCK_NOTES } from "@/components/agenda/quick-panel/mockData";
 
 import { AgendaControls } from "@/components/agenda/AgendaControls";
 import { AgendaDesktopGrid } from "@/components/agenda/AgendaDesktopGrid";
@@ -71,6 +74,34 @@ export default function Agenda() {
   const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
   const [localPatients, setLocalPatients] = useState(patients);
+
+  // Quick Panel state
+  const [quickPanelOpen, setQuickPanelOpen] = useState(false);
+  const [waitingPatients, setWaitingPatients] = useState<WaitingPatient[]>(MOCK_WAITING_PATIENTS);
+  const [quickNotes, setQuickNotes] = useState<QuickNote[]>(MOCK_NOTES);
+
+  const handleAddWaitingPatient = (data: Omit<WaitingPatient, "id" | "daysWaiting" | "addedAt">) => {
+    const now = new Date().toISOString().split("T")[0];
+    setWaitingPatients((prev) => [...prev, { ...data, id: crypto.randomUUID(), daysWaiting: 0, addedAt: now }]);
+  };
+  const handleEditWaitingPatient = (id: string, data: Omit<WaitingPatient, "id" | "daysWaiting" | "addedAt">) => {
+    setWaitingPatients((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
+  };
+  const handleRemoveWaitingPatient = (id: string) => {
+    setWaitingPatients((prev) => prev.filter((p) => p.id !== id));
+  };
+  const handleAddNote = (data: { type: NoteType; text: string; deadline?: string }) => {
+    setQuickNotes((prev) => [...prev, { ...data, id: crypto.randomUUID(), completed: false, createdAt: new Date().toISOString().split("T")[0] }]);
+  };
+  const handleEditNote = (id: string, data: { type: NoteType; text: string; deadline?: string }) => {
+    setQuickNotes((prev) => prev.map((n) => (n.id === id ? { ...n, ...data } : n)));
+  };
+  const handleRemoveNote = (id: string) => {
+    setQuickNotes((prev) => prev.filter((n) => n.id !== id));
+  };
+  const handleToggleNote = (id: string) => {
+    setQuickNotes((prev) => prev.map((n) => (n.id === id ? { ...n, completed: !n.completed } : n)));
+  };
 
   useEffect(() => {
     setLocalPatients(patients);
@@ -201,6 +232,7 @@ export default function Agenda() {
   if (!prefsLoaded) return null;
 
   return (
+    <div className="relative" style={{ marginRight: quickPanelOpen ? 380 : 0, transition: "margin-right 0.3s ease" }}>
     <AppLayout
       title="Agenda"
       subtitle="Gerencie os agendamentos da clínica"
@@ -335,5 +367,20 @@ export default function Agenda() {
         />
       )}
     </AppLayout>
+
+      <QuickPanel
+        isOpen={quickPanelOpen}
+        onToggle={() => setQuickPanelOpen((v) => !v)}
+        patients={waitingPatients}
+        notes={quickNotes}
+        onAddPatient={handleAddWaitingPatient}
+        onEditPatient={handleEditWaitingPatient}
+        onRemovePatient={handleRemoveWaitingPatient}
+        onAddNote={handleAddNote}
+        onEditNote={handleEditNote}
+        onRemoveNote={handleRemoveNote}
+        onToggleNote={handleToggleNote}
+      />
+    </div>
   );
 }
