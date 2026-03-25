@@ -232,6 +232,7 @@ export default function Agenda() {
   if (!prefsLoaded) return null;
 
   return (
+    <div className="relative" style={{ marginRight: quickPanelOpen ? 380 : 0, transition: "margin-right 0.3s ease" }}>
     <AppLayout
       title="Agenda"
       subtitle="Gerencie os agendamentos da clínica"
@@ -366,5 +367,20 @@ export default function Agenda() {
         />
       )}
     </AppLayout>
+
+      <QuickPanel
+        isOpen={quickPanelOpen}
+        onToggle={() => setQuickPanelOpen((v) => !v)}
+        patients={waitingPatients}
+        notes={quickNotes}
+        onAddPatient={handleAddWaitingPatient}
+        onEditPatient={handleEditWaitingPatient}
+        onRemovePatient={handleRemoveWaitingPatient}
+        onAddNote={handleAddNote}
+        onEditNote={handleEditNote}
+        onRemoveNote={handleRemoveNote}
+        onToggleNote={handleToggleNote}
+      />
+    </div>
   );
 }
