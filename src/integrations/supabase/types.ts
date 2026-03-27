@@ -814,6 +814,47 @@ export type Database = {
           },
         ]
       }
+      notas_lembretes: {
+        Row: {
+          clinic_id: string | null
+          concluida: boolean | null
+          created_at: string | null
+          data_prazo: string | null
+          id: string
+          texto: string
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          clinic_id?: string | null
+          concluida?: boolean | null
+          created_at?: string | null
+          data_prazo?: string | null
+          id?: string
+          texto: string
+          tipo?: string
+          updated_at?: string | null
+        }
+        Update: {
+          clinic_id?: string | null
+          concluida?: boolean | null
+          created_at?: string | null
+          data_prazo?: string | null
+          id?: string
+          texto?: string
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notas_lembretes_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           clinic_id: string
