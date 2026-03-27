@@ -51,13 +51,14 @@ export function WaitingPatientForm({ editingPatient, onSubmit, onCancel }: Props
       <Input placeholder="Nome do paciente" value={name} onChange={(e) => setName(e.target.value)} className="h-9 text-sm" />
       <Input placeholder="912 345 678" value={phone} onChange={(e) => handlePhoneChange(e.target.value)} className="h-9 text-sm" maxLength={11} />
 
-      <select
-        value={specialty}
-        onChange={(e) => setSpecialty(e.target.value)}
-        className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-      >
-        {SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
+      <Select value={specialty} onValueChange={setSpecialty}>
+        <SelectTrigger className="h-9 text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {SPECIALTIES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+        </SelectContent>
+      </Select>
 
       <div className="flex gap-2">
         {(["normal", "alta", "urgente"] as Priority[]).map((p) => {
