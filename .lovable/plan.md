@@ -1,45 +1,88 @@
 
 
-## Painel Rápido — Side Panel for Agenda
+## Persistência do Painel Rápido — Supabase
 
-Build a modular floating side panel ("Painel Rápido") with two tabs: "Lista de Espera" and "Lembretes & Notas", integrated into the existing Agenda page.
+Replace mock data with Supabase-backed persistence for the Quick Panel. Zero UI changes.
 
-### Architecture
+### Step 1: Create database tables
 
-The panel will be a **standalone component** (`QuickPanel`) that receives data and callbacks via props, making it reusable for future integration. It will be composed of several sub-components for maintainability.
+Two migrations:
 
-### Files to Create
+**Migration 1 — `lista_espera`**
+```sql
+CREATE TABLE IF NOT EXISTS public.lista_espera (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  clinic_id uuid REFERENCES public.clinics(id),
+  nome text NOT NULL,
+  telefone text NOT NULL,
+  especialidade text NOT NULL,
+  prioridade text NOT NULL DEFAULT 'normal',
+  observacoes text DEFAULT '',
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
 
-1. **`src/components/agenda/quick-panel/types.ts`** — Shared types for WaitingPatient, Note, NoteType, Priority
-2. **`src/components/agenda/quick-panel/QuickPanel.tsx`** — Main panel container (collapsed button + expanded panel, slide animation, tab switching)
-3. **`src/components/agenda/quick-panel/QuickPanelButton.tsx`** — Collapsed state: fixed right-edge button with counters, urgency pulse animation
-4. **`src/components/agenda/quick-panel/WaitingListTab.tsx`** — Tab 1: specialty filter chips, patient cards with priority sorting, inline delete confirmation
-5. **`src/components/agenda/quick-panel/WaitingPatientCard.tsx`** — Individual patient card (colored border by wait time, priority badge, action buttons)
-6. **`src/components/agenda/quick-panel/WaitingPatientForm.tsx`** — Add/edit patient form with phone mask (PT format), priority toggles
-7. **`src/components/agenda/quick-panel/NotesTab.tsx`** — Tab 2: filter chips, note cards sorted (fixed → pending → done), inline delete
-8. **`src/components/agenda/quick-panel/NoteCard.tsx`** — Individual note card (checkbox for tasks/reminders, strikethrough when done, deadline badges)
-9. **`src/components/agenda/quick-panel/NoteForm.tsx`** — Add/edit note form with type toggle, conditional deadline field
-10. **`src/components/agenda/quick-panel/mockData.ts`** — Initial mock data (6 patients + 6 notes as specified)
+ALTER TABLE public.lista_espera ENABLE ROW LEVEL SECURITY;
 
-### File to Modify
+CREATE POLICY "Users can manage waiting list in own clinic"
+  ON public.lista_espera FOR ALL
+  TO authenticated
+  USING (clinic_id = get_user_clinic_id(auth.uid()))
+  WITH CHECK (clinic_id = get_user_clinic_id(auth.uid()));
+```
 
-**`src/pages/Agenda.tsx`** — Import and render `QuickPanel`. Add state management for waiting list and notes. When panel is open, add `mr-[380px]` transition to the main content area so it pushes rather than overlaps.
+**Migration 2 — `notas_lembretes`**
+```sql
+CREATE TABLE IF NOT EXISTS public.notas_lembretes (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  clinic_id uuid REFERENCES public.clinics(id),
+  tipo text NOT NULL DEFAULT 'tarefa',
+  texto text NOT NULL,
+  concluida boolean DEFAULT false,
+  data_prazo date,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
 
-### Key Behaviors
+ALTER TABLE public.notas_lembretes ENABLE ROW LEVEL SECURITY;
 
-- **Collapsed button**: Fixed right edge, two stacked counters (waiting list icon + notes icon), red badges for urgencies, 10-second pulse animation via CSS keyframes
-- **Panel open/close**: 380px width, slide-in from right (CSS transition `transform`), white background with left shadow
-- **Waiting list sorting**: Urgente → Alta → Normal, then by days waiting (descending)
-- **Notes sorting**: Fixed notes first → uncompleted → completed, then by recency
-- **Phone mask**: Portuguese format (9 digits, displayed as `912 345 678`)
-- **Inline delete confirmation**: Red background inside the card with "Sim"/"Não" buttons
-- **Toast notifications**: Using existing `sonner` toast system already in the project
-- **Content push**: When panel opens, Agenda content gets a right margin transition so nothing is hidden behind the panel
+CREATE POLICY "Users can manage notes in own clinic"
+  ON public.notas_lembretes FOR ALL
+  TO authenticated
+  USING (clinic_id = get_user_clinic_id(auth.uid()))
+  WITH CHECK (clinic_id = get_user_clinic_id(auth.uid()));
+```
 
-### Technical Notes
+Note: Using proper clinic-scoped RLS (not open `USING (true)`) to match the project's security model. The column is named `clinic_id` (not `id_da_clínica`) to follow existing conventions.
 
-- All state is local (`useState`) — no database integration needed yet
-- Uses Lucide React for all action icons, emojis only for note type indicators (☐, 🔔, 📌)
-- Uses existing Tailwind config and shadcn/ui components (Input, Select, Textarea, Button)
-- Inter font is already available in the project
+### Step 2: Create a custom hook `useQuickPanelData`
+
+**New file: `src/hooks/useQuickPanelData.ts`**
+
+This hook encapsulates all Supabase operations and field mapping. It:
+- Fetches both lists on mount (so collapsed button badges are accurate)
+- Re-fetches when panel opens
+- Provides `addPatient`, `editPatient`, `removePatient`, `addNote`, `editNote`, `removeNote`, `toggleNote` — each does the Supabase mutation, then refreshes the list
+- Maps DB fields (Portuguese) to component fields (English): `nome→name`, `telefone→phone`, `especialidade→specialty`, `prioridade→priority`, `observacoes→observations`, `texto→text`, `tipo→type`, `concluida→completed`, `data_prazo→deadline`
+- Computes `daysWaiting` from `created_at`
+- Uses `(supabase as any).from(...)` since tables aren't in generated types
+- Exposes `loading` boolean for a subtle loading indicator
+- Includes `clinic_id` from the already-fetched `clinicId` state in Agenda
+
+### Step 3: Modify `src/pages/Agenda.tsx`
+
+- Remove import of `MOCK_WAITING_PATIENTS`, `MOCK_NOTES` and `mockData`
+- Remove all inline handler functions (`handleAddWaitingPatient`, `handleEditWaitingPatient`, etc.)
+- Remove `waitingPatients` and `quickNotes` useState
+- Import and call `useQuickPanelData(clinicId)` hook
+- Pass hook's data and callbacks to `<QuickPanel>`
+- Pass `quickPanelOpen` to hook so it re-fetches on open
+
+### Step 4: Delete mock data file
+
+Delete `src/components/agenda/quick-panel/mockData.ts` (no longer needed).
+
+### What stays untouched
+
+All visual components (`QuickPanel`, `QuickPanelButton`, `WaitingListTab`, `WaitingPatientCard`, `WaitingPatientForm`, `NotesTab`, `NoteCard`, `NoteForm`, `types.ts`) remain exactly as they are. The props interface is unchanged — only where the data comes from changes.
 
