@@ -358,13 +358,13 @@ export default function Agenda() {
         onToggle={() => setQuickPanelOpen((v) => !v)}
         patients={waitingPatients}
         notes={quickNotes}
-        onAddPatient={handleAddWaitingPatient}
-        onEditPatient={handleEditWaitingPatient}
-        onRemovePatient={handleRemoveWaitingPatient}
-        onAddNote={handleAddNote}
-        onEditNote={handleEditNote}
-        onRemoveNote={handleRemoveNote}
-        onToggleNote={handleToggleNote}
+        onAddPatient={addPatient}
+        onEditPatient={editPatient}
+        onRemovePatient={removePatient}
+        onAddNote={addNote}
+        onEditNote={editNote}
+        onRemoveNote={removeNote}
+        onToggleNote={toggleNote}
       />
     </div>
   );
