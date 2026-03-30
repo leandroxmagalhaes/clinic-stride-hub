@@ -442,6 +442,31 @@ export default function Pacientes() {
           </CardContent>
         </Card>
 
+        {/* Status filter chips */}
+        <div className="flex gap-2 flex-wrap">
+          {(["ativos", "inativos", "todos", ...(isAdminMaster ? ["excluidos"] : [])] as const).map((filter) => {
+            const labels: Record<string, string> = {
+              ativos: `Ativos (${activeCount})`,
+              inativos: `Inativos (${inactiveCount})`,
+              todos: `Todos (${patients.length})`,
+              excluidos: `Excluídos (${deletedPatients.length})`,
+            };
+            const isActive = statusFilter === filter;
+            return (
+              <button
+                key={filter}
+                onClick={() => setStatusFilter(filter as any)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  isActive
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                }`}
+              >
+                {labels[filter]}
+              </button>
+            );
+          })}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredPatients.map((patient) => {
             const healthTags = (patient.health_tags as HealthTag[]) || [];
