@@ -1,59 +1,74 @@
 
 
-## New 5-Step Scheduling Wizard (Patient First)
+## Reativar, Excluir e Filtrar Pacientes
 
-Replace the existing 4-step wizard in `NewSessionModal.tsx` with a new 5-step flow that starts with patient selection and auto-detects active packs.
+### Step 1: Database Migration — Create `pacientes_excluidos` table
 
-### Flow Overview
+```sql
+CREATE TABLE IF NOT EXISTS public.pacientes_excluidos (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  clinic_id uuid,
+  paciente_id_original uuid,
+  dados_paciente jsonb NOT NULL,
+  excluido_por uuid,
+  excluido_em timestamptz DEFAULT now(),
+  motivo text DEFAULT 'Exclusão manual'
+);
 
-```text
-Step 1: Patient     → Search/select patient, detect active packs
-Step 2: Type        → Avulso / Pack existente / Novo pack
-Step 3: Dates       → Date+time per session
-Step 4: Details     → Service + Professional + Notes
-Step 5: Confirmation → Summary + Confirm button
+ALTER TABLE public.pacientes_excluidos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage deleted patients in own clinic"
+  ON public.pacientes_excluidos FOR ALL
+  TO authenticated
+  USING (clinic_id = get_user_clinic_id(auth.uid()))
+  WITH CHECK (clinic_id = get_user_clinic_id(auth.uid()));
 ```
 
-### File Changes
+Note: Adding `clinic_id` column (not in user's SQL) for proper RLS scoping consistent with the project's security model.
 
-**Replace: `src/components/agenda/NewSessionModal.tsx`** (full rewrite, ~750 lines → ~900 lines)
+### Step 2: Modify `PatientDetailModal.tsx` — Dynamic Inativar/Reativar + Excluir button
 
-Key changes:
+**Inativar/Reativar logic:**
+- If `patient.is_active === true`: show current red "Inativar" button (unchanged)
+- If `patient.is_active === false`: show green "Reativar" button (RotateCcw icon, green text, outline style)
+- Add `onReactivatePatient` prop callback
+- Reactivation sets `is_active = true` via the existing `onUpdatePatient` callback
 
-1. **Step 1 — Patient**: Debounced search (300ms) querying `pacientes` by `full_name`. On select, fetch active packs from `packs` table (`is_active = true, paciente_id = selected`). Show patient card with avatar (initials), name, phone, email, "Alterar" button. Green banner if active packs detected. "Criar paciente rápido" link always visible; inline form with name (required), phone, email. If search yields no results, show create link with pre-filled name.
+**Excluir Permanentemente button:**
+- Replace the existing `onPermanentlyDeletePatient` button/dialog with new two-step confirmation:
+  - Step 1: Simple warning dialog
+  - Step 2: Type patient name to confirm (input must match exactly to enable button)
+- Before deleting: copy full patient data to `pacientes_excluidos` via `(supabase as any).from('pacientes_excluidos').insert(...)`, then call cascade delete
 
-2. **Step 2 — Type**: Three vertical card options:
-   - **Avulso**: quantity selector (1/5/10/20 + custom). Always available.
-   - **Pack existente**: Only rendered if patient has active packs. Lists packs as sub-cards with progress bar (sessoes_usadas/quantidade_sessoes), payment badge. Auto-selects if single pack. Sets quantity = remaining sessions.
-   - **Criar novo pack**: Quantity selector + valor total input + pago/pendente toggle.
+### Step 3: Modify `Pacientes.tsx` — Add status filter chips
 
-3. **Step 3 — Dates**: Contextual banner (grey/green/blue by type). One row per session with date input + time select (07:00–21:30, 30min intervals). Yellow border on empty rows. Counter "X de Y preenchidas". Scrollable if >~360px.
+**Above the patient grid (below search bar):**
+- Three toggle chips: "Ativos (N)", "Inativos (N)", "Todos (N)"
+- Default: "Ativos"
+- State: `statusFilter: "ativos" | "inativos" | "todos"`
+- Filter `filteredPatients` by `is_active` before rendering
+- Style: same chip pattern as Quick Panel filters (border, blue highlight when active)
 
-4. **Step 4 — Details**: Service select (pre-filled from pack if applicable), Professional select, Notes textarea.
+**Add "Excluídos" tab** (visible only when `isAdminMaster`):
+- Fourth chip "Excluídos (N)" that switches to a list view of `pacientes_excluidos`
+- Fetch from `(supabase as any).from('pacientes_excluidos').select('*').order('excluido_em', { ascending: false })`
+- Each row shows: name (from jsonb), deletion date, deleted by
+- "Ver dados" button → read-only modal showing all jsonb fields
+- "Recuperar" button → insert into `pacientes` from jsonb data (with `is_active: false`), then delete from `pacientes_excluidos`, refresh lists
 
-5. **Step 5 — Confirmation**: Summary card with patient info, type badge (color-coded), service, professional, session list table, notes. Green "Confirmar Agendamento" button.
+### Step 4: Wire up in `Pacientes.tsx`
 
-### Data Integration
+- Pass `onReactivatePatient` to `PatientDetailModal` (calls `supabase.from('pacientes').update({ is_active: true })` then `refreshPatients()`)
+- Update the `onPermanentlyDeletePatient` flow to archive first, then cascade delete
+- Add counters for active/inactive patients using `useMemo`
 
-- **Patient search**: Query `pacientes` with `ilike` filter on `full_name`, limit 10
-- **Pack detection**: Query `packs` where `paciente_id = X`, `is_active = true`; join with `servicos` to get service name
-- **Pack creation** (new pack flow): Insert into `packs` table before creating sessions, then set `package_id` on each session
-- **Session creation**: Same individual insert logic as current wizard, with `package_id` set when applicable
-- **Professional mapping**: Keep existing behavior — `sessoes.profissional_id` references `profiles` table (use professionals list passed as props which already has the correct IDs)
+### Files changed
+- **New migration**: `pacientes_excluidos` table
+- **Modified**: `src/components/patients/PatientDetailModal.tsx` (dynamic button + two-step delete)
+- **Modified**: `src/pages/Pacientes.tsx` (filter chips + excluídos tab)
 
-### Progress Bar
-
-5 segments rendered as 5 divs in a flex row. Active segment: `bg-[#3b82f6]`, others: `bg-[#e2e8f0]`. Replaces current `<Progress>` component.
-
-### Props Interface
-
-No changes to `NewSessionModalProps` — same props, same callbacks. The `selectedSlot` prop pre-fills date/time on the first session slot in Step 3.
-
-### What stays unchanged
-
-- `BatchSchedulingModal` (Lote) — untouched
-- `NewReservedSlotModal` (Reservar) — untouched
-- `Agenda.tsx` integration — same props passed, no changes needed
-- Automation trigger on session creation — preserved
-- `PackageSubmitData` export — kept for backward compatibility
+### Technical notes
+- Uses `(supabase as any).from('pacientes_excluidos')` since table won't be in generated types
+- Individual inserts only (no arrays)
+- All existing visual layout preserved — only adding filter chips and swapping button text/color conditionally
 
