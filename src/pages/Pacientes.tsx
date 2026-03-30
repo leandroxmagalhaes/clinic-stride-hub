@@ -58,6 +58,10 @@ export default function Pacientes() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [clinicId, setClinicId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos" | "excluidos">("ativos");
+  const [deletedPatients, setDeletedPatients] = useState<any[]>([]);
+  const [isLoadingDeleted, setIsLoadingDeleted] = useState(false);
+  const [viewDeletedData, setViewDeletedData] = useState<any | null>(null);
 
   useEffect(() => {
     async function fetchClinicId() {
