@@ -916,6 +916,32 @@ export default function Pacientes() {
         onMergeComplete={refreshPatients}
         isAdminMaster={isAdminMaster}
       />
+
+      {/* View deleted patient data modal */}
+      <Dialog open={!!viewDeletedData} onOpenChange={(open) => !open && setViewDeletedData(null)}>
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Dados do Paciente Excluído</DialogTitle>
+          </DialogHeader>
+          {viewDeletedData && (
+            <div className="space-y-3 text-sm">
+              {Object.entries(viewDeletedData)
+                .filter(([_, v]) => v !== null && v !== undefined && v !== "")
+                .map(([key, value]) => (
+                  <div key={key}>
+                    <p className="text-xs text-muted-foreground font-medium">{key}</p>
+                    <p className="font-medium break-words">
+                      {typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)}
+                    </p>
+                  </div>
+                ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewDeletedData(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
