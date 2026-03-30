@@ -467,73 +467,117 @@ export default function Pacientes() {
             );
           })}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredPatients.map((patient) => {
-            const healthTags = (patient.health_tags as HealthTag[]) || [];
-            return (
-              <Card
-                key={patient.id}
-                className="shadow-card hover:shadow-medium transition-shadow cursor-pointer"
-                onClick={() => handleOpenPatient(patient)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
-                    <Avatar className="h-12 w-12">
-                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                        {(patient.full_name ?? "")
-                          .split(" ")
-                          .filter(Boolean)
-                          .map((n) => n[0])
-                          .join("")
-                          .slice(0, 2) || "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold truncate">{patient.full_name}</h3>
-                        {patient.is_active ? (
-                          <Badge variant="secondary" className="bg-success/10 text-success text-[10px]">
-                            Ativo
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px]">
-                            Inativo
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-3 w-3" />
-                          <span className="truncate">{patient.phone}</span>
-                        </div>
-                        {patient.email && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-3 w-3" />
-                            <span className="truncate">{patient.email}</span>
-                          </div>
-                        )}
-                      </div>
-                      {healthTags.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                          <HealthTagList tags={healthTags} maxVisible={2} size="sm" showTooltip={false} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
+        {statusFilter === "excluidos" && isAdminMaster ? (
+          <div className="space-y-3">
+            {isLoadingDeleted ? (
+              <TableSkeleton rows={4} />
+            ) : deletedPatients.length === 0 ? (
+              <Card className="shadow-card">
+                <CardContent className="p-12 text-center">
+                  <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                  <h3 className="font-semibold mb-1">Nenhum paciente excluído</h3>
+                  <p className="text-sm text-muted-foreground">Pacientes excluídos permanentemente aparecerão aqui</p>
                 </CardContent>
               </Card>
-            );
-          })}
-        </div>
+            ) : (
+              deletedPatients.map((dp) => {
+                const dados = dp.dados_paciente || {};
+                return (
+                  <Card key={dp.id} className="shadow-card">
+                    <CardContent className="p-4 flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{dados.full_name || "Desconhecido"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Excluído em {dp.excluido_em ? format(new Date(dp.excluido_em), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "—"}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setViewDeletedData(dados)} className="gap-1.5">
+                          <Eye className="h-3.5 w-3.5" />
+                          Ver dados
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleRecoverPatient(dp)} className="gap-1.5 text-green-600 border-green-300 hover:border-green-400">
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Recuperar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPatients.map((patient) => {
+                const healthTags = (patient.health_tags as HealthTag[]) || [];
+                return (
+                  <Card
+                    key={patient.id}
+                    className="shadow-card hover:shadow-medium transition-shadow cursor-pointer"
+                    onClick={() => handleOpenPatient(patient)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <Avatar className="h-12 w-12">
+                          <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                            {(patient.full_name ?? "")
+                              .split(" ")
+                              .filter(Boolean)
+                              .map((n) => n[0])
+                              .join("")
+                              .slice(0, 2) || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold truncate">{patient.full_name}</h3>
+                            {patient.is_active ? (
+                              <Badge variant="secondary" className="bg-success/10 text-success text-[10px]">
+                                Ativo
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px]">
+                                Inativo
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="space-y-1 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-3 w-3" />
+                              <span className="truncate">{patient.phone}</span>
+                            </div>
+                            {patient.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-3 w-3" />
+                                <span className="truncate">{patient.email}</span>
+                              </div>
+                            )}
+                          </div>
+                          {healthTags.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                              <HealthTagList tags={healthTags} maxVisible={2} size="sm" showTooltip={false} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
 
-        {filteredPatients.length === 0 && (
-          <Card className="shadow-card">
-            <CardContent className="p-12 text-center">
-              <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-              <h3 className="font-semibold mb-1">Nenhum paciente encontrado</h3>
-              <p className="text-sm text-muted-foreground">Tente ajustar sua busca ou cadastre um novo paciente</p>
-            </CardContent>
-          </Card>
+            {filteredPatients.length === 0 && (
+              <Card className="shadow-card">
+                <CardContent className="p-12 text-center">
+                  <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                  <h3 className="font-semibold mb-1">Nenhum paciente encontrado</h3>
+                  <p className="text-sm text-muted-foreground">Tente ajustar sua busca ou cadastre um novo paciente</p>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
       </div>
 
