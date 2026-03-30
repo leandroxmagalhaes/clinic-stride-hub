@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package, RotateCcw, XCircle } from "lucide-react";
 import { PatientStatementButton } from "./PatientStatementButton";
 import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
@@ -15,6 +16,7 @@ import { PackManagerModal } from "@/components/agenda/PackManagerModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useClinicInfo } from "@/hooks/useClinicInfo";
+import { useAuth } from "@/hooks/useAuth";
 
 interface PatientDetailModalProps {
   patient: Patient | null;
@@ -28,6 +30,7 @@ interface PatientDetailModalProps {
   onNavigateToProntuario?: (patientId: string) => void;
   isAdminMaster?: boolean;
   onPermanentlyDeletePatient?: (patientId: string) => Promise<void>;
+  onReactivatePatient?: (patientId: string) => Promise<void>;
 }
 
 export function PatientDetailModal({
@@ -39,16 +42,26 @@ export function PatientDetailModal({
   onNavigateToProntuario,
   isAdminMaster,
   onPermanentlyDeletePatient,
+  onReactivatePatient,
 }: PatientDetailModalProps) {
+  const { user } = useAuth();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [isSendingPortalLink, setIsSendingPortalLink] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isPermanentDeleteDialogOpen, setIsPermanentDeleteDialogOpen] = useState(false);
+  const [isReactivateDialogOpen, setIsReactivateDialogOpen] = useState(false);
+  // Two-step permanent delete
+  const [permDeleteStep, setPermDeleteStep] = useState<0 | 1 | 2>(0);
+  const [permDeleteNameInput, setPermDeleteNameInput] = useState("");
+  const [isPermDeleting, setIsPermDeleting] = useState(false);
   const { data: clinicInfo } = useClinicInfo();
 
   useEffect(() => {
-    if (isOpen) setActiveTab("info");
+    if (isOpen) {
+      setActiveTab("info");
+      setPermDeleteStep(0);
+      setPermDeleteNameInput("");
+    }
   }, [isOpen]);
 
   if (!patient) return null;
@@ -94,9 +107,57 @@ export function PatientDetailModal({
   const handleDeletePatient = async () => {
     if (!patient || !onDeletePatient) return;
     await onDeletePatient(patient.id);
-    toast.success("Paciente desativado com sucesso");
+    toast.success("Paciente inativado com sucesso");
     onClose();
   };
+
+  const handleReactivatePatient = async () => {
+    if (!patient || !onReactivatePatient) return;
+    await onReactivatePatient(patient.id);
+    toast.success("Paciente reativado com sucesso");
+    onClose();
+  };
+
+  const handlePermanentDeleteStep1 = () => {
+    setPermDeleteStep(1);
+  };
+
+  const handlePermanentDeleteStep2 = () => {
+    setPermDeleteNameInput("");
+    setPermDeleteStep(2);
+  };
+
+  const handlePermanentDeleteConfirm = async () => {
+    if (!patient || !onPermanentlyDeletePatient) return;
+    setIsPermDeleting(true);
+    try {
+      // Archive patient data before deletion
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("clinic_id")
+        .eq("user_id", user?.id || "")
+        .maybeSingle();
+
+      await (supabase as any).from("pacientes_excluidos").insert({
+        clinic_id: profileData?.clinic_id || (patient as any).clinic_id,
+        paciente_id_original: patient.id,
+        dados_paciente: patient,
+        excluido_por: user?.id,
+        motivo: "Exclusão manual",
+      });
+
+      await onPermanentlyDeletePatient(patient.id);
+      toast.success("Paciente excluído permanentemente");
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao excluir paciente");
+    } finally {
+      setIsPermDeleting(false);
+      setPermDeleteStep(0);
+    }
+  };
+
+  const nameMatches = permDeleteNameInput.trim() === patient.full_name.trim();
 
   return (
     <>
@@ -129,7 +190,6 @@ export function PatientDetailModal({
               </TabsTrigger>
             </TabsList>
 
-            {/* ── Tab Dados ──────────────────────────────────────────── */}
             <TabsContent value="info" className="space-y-4 py-4">
               {onUpdatePatient && (
                 <div className="flex justify-end">
@@ -185,7 +245,6 @@ export function PatientDetailModal({
               )}
             </TabsContent>
 
-            {/* ── Tab Etiquetas ──────────────────────────────────────── */}
             <TabsContent value="tags" className="py-4">
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
@@ -202,7 +261,6 @@ export function PatientDetailModal({
               </div>
             </TabsContent>
 
-            {/* ── Tab Packs ──────────────────────────────────────────── */}
             <TabsContent value="packs" className="py-2">
               <PackManagerModal embedded isOpen={true} onClose={() => {}} pacienteId={patient.id} pacienteNome={patient.full_name} />
             </TabsContent>
@@ -210,24 +268,39 @@ export function PatientDetailModal({
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <div className="flex gap-2 flex-wrap">
-              {onDeletePatient && (
-                <Button
-                  variant="outline"
-                  onClick={() => setIsDeleteDialogOpen(true)}
-                  className="gap-2 text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Inativar
-                </Button>
+              {/* Dynamic Inativar / Reativar */}
+              {patient.is_active ? (
+                onDeletePatient && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsDeleteDialogOpen(true)}
+                    className="gap-2 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Inativar
+                  </Button>
+                )
+              ) : (
+                onReactivatePatient && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsReactivateDialogOpen(true)}
+                    className="gap-2 text-green-600 hover:text-green-700 border-green-300 hover:border-green-400"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reativar
+                  </Button>
+                )
               )}
+              {/* Permanent delete — admin only */}
               {isAdminMaster && onPermanentlyDeletePatient && (
                 <Button
-                  variant="destructive"
-                  onClick={() => setIsPermanentDeleteDialogOpen(true)}
-                  className="gap-2"
+                  variant="ghost"
+                  onClick={handlePermanentDeleteStep1}
+                  className="gap-2 text-[#991b1b] hover:text-[#991b1b] hover:bg-red-50"
                 >
-                  <AlertTriangle className="h-4 w-4" />
-                  Excluir Permanentemente
+                  <XCircle className="h-4 w-4" />
+                  Excluir
                 </Button>
               )}
               <Button
@@ -261,6 +334,7 @@ export function PatientDetailModal({
         </DialogContent>
       </Dialog>
 
+      {/* Inativar confirmation */}
       <DeleteConfirmationDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
@@ -269,29 +343,68 @@ export function PatientDetailModal({
         description="O paciente não aparecerá mais nas listagens, mas os dados serão mantidos para histórico."
         entityName={patient.full_name}
         warnings={[]}
-        confirmLabel="Confirmar Inativação"
+        confirmLabel="Sim, inativar"
       />
 
-      {isAdminMaster && onPermanentlyDeletePatient && (
-        <DeleteConfirmationDialog
-          isOpen={isPermanentDeleteDialogOpen}
-          onClose={() => setIsPermanentDeleteDialogOpen(false)}
-          onConfirm={async () => {
-            await onPermanentlyDeletePatient(patient.id);
-            toast.success("Paciente excluído permanentemente");
-            onClose();
-          }}
-          title="Excluir Paciente Permanentemente"
-          description="Esta ação é irreversível. Todos os dados do paciente serão apagados permanentemente da base de dados, incluindo sessões, evoluções e transações associadas."
-          entityName={patient.full_name}
-          warnings={[
-            "Esta ação NÃO pode ser desfeita.",
-            "Todos os registos associados poderão ser afetados.",
-            "Apenas o Admin Master pode executar esta ação.",
-          ]}
-          confirmLabel="Excluir Permanentemente"
-        />
-      )}
+      {/* Reativar confirmation */}
+      <DeleteConfirmationDialog
+        isOpen={isReactivateDialogOpen}
+        onClose={() => setIsReactivateDialogOpen(false)}
+        onConfirm={handleReactivatePatient}
+        title="Reativar Paciente"
+        description="Deseja reativar este paciente? Ele voltará a aparecer nas listagens."
+        entityName={patient.full_name}
+        warnings={[]}
+        confirmLabel="Sim, reativar"
+      />
+
+      {/* Permanent delete — Step 1 */}
+      <Dialog open={permDeleteStep === 1} onOpenChange={(open) => !open && setPermDeleteStep(0)}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Excluir Permanentemente</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir <strong>PERMANENTEMENTE</strong> o paciente{" "}
+            <strong>{patient.full_name}</strong>? Esta ação não pode ser desfeita.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPermDeleteStep(0)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handlePermanentDeleteStep2}>Continuar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permanent delete — Step 2 (type name) */}
+      <Dialog open={permDeleteStep === 2} onOpenChange={(open) => !open && setPermDeleteStep(0)}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Confirmar Exclusão</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Para confirmar a exclusão, digite o nome do paciente:
+            </p>
+            <p className="text-sm font-medium">{patient.full_name}</p>
+            <Input
+              value={permDeleteNameInput}
+              onChange={(e) => setPermDeleteNameInput(e.target.value)}
+              placeholder="Digite o nome completo..."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPermDeleteStep(0)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={!nameMatches || isPermDeleting}
+              onClick={handlePermanentDeleteConfirm}
+            >
+              {isPermDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Excluir permanentemente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {onUpdatePatient && (
         <EditPatientModal

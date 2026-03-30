@@ -1028,6 +1028,36 @@ export type Database = {
           },
         ]
       }
+      pacientes_excluidos: {
+        Row: {
+          clinic_id: string | null
+          dados_paciente: Json
+          excluido_em: string | null
+          excluido_por: string | null
+          id: string
+          motivo: string | null
+          paciente_id_original: string | null
+        }
+        Insert: {
+          clinic_id?: string | null
+          dados_paciente: Json
+          excluido_em?: string | null
+          excluido_por?: string | null
+          id?: string
+          motivo?: string | null
+          paciente_id_original?: string | null
+        }
+        Update: {
+          clinic_id?: string | null
+          dados_paciente?: Json
+          excluido_em?: string | null
+          excluido_por?: string | null
+          id?: string
+          motivo?: string | null
+          paciente_id_original?: string | null
+        }
+        Relationships: []
+      }
       packs: {
         Row: {
           clinic_id: string
