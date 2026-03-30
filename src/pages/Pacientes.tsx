@@ -202,7 +202,64 @@ export default function Pacientes() {
     privacy_consent: false,
   });
 
-  const filteredPatients = PatientService.filterBySearch(patients, searchTerm);
+  const activeCount = useMemo(() => patients.filter(p => p.is_active !== false).length, [patients]);
+  const inactiveCount = useMemo(() => patients.filter(p => p.is_active === false).length, [patients]);
+
+  const statusFilteredPatients = useMemo(() => {
+    if (statusFilter === "ativos") return patients.filter(p => p.is_active !== false);
+    if (statusFilter === "inativos") return patients.filter(p => p.is_active === false);
+    return patients;
+  }, [patients, statusFilter]);
+
+  const filteredPatients = PatientService.filterBySearch(statusFilteredPatients, searchTerm);
+
+  const fetchDeletedPatients = async () => {
+    setIsLoadingDeleted(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from("pacientes_excluidos")
+        .select("*")
+        .order("excluido_em", { ascending: false });
+      if (error) throw error;
+      setDeletedPatients(data || []);
+    } catch {
+      toast.error("Erro ao carregar pacientes excluídos");
+    } finally {
+      setIsLoadingDeleted(false);
+    }
+  };
+
+  useEffect(() => {
+    if (statusFilter === "excluidos" && isAdminMaster) {
+      fetchDeletedPatients();
+    }
+  }, [statusFilter, isAdminMaster]);
+
+  const handleRecoverPatient = async (deleted: any) => {
+    try {
+      const dados = deleted.dados_paciente;
+      const { id, created_at, updated_at, ...insertData } = dados;
+      await supabase.from("pacientes").insert({ ...insertData, is_active: false });
+      await (supabase as any).from("pacientes_excluidos").delete().eq("id", deleted.id);
+      toast.success(`Paciente ${dados.full_name} recuperado com sucesso (status: inativo)`);
+      await refreshPatients();
+      fetchDeletedPatients();
+    } catch {
+      toast.error("Erro ao recuperar paciente");
+    }
+  };
+
+  const handleReactivatePatient = async (patientId: string) => {
+    const { error } = await supabase.from("pacientes").update({ is_active: true }).eq("id", patientId);
+    if (error) {
+      toast.error("Erro ao reativar paciente");
+      return;
+    }
+    await refreshPatients();
+    if (selectedPatient?.id === patientId) {
+      setSelectedPatient({ ...selectedPatient, is_active: true } as Patient);
+    }
+  };
 
   const handleOpenPatient = (patient: Patient) => setSelectedPatient(patient);
 
