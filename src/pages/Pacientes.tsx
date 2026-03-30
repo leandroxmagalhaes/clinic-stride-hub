@@ -545,11 +545,13 @@ export default function Pacientes() {
         onUpdatePatient={handleUpdatePatient}
         onNavigateToProntuario={handleNavigateToProntuario}
         isAdminMaster={isAdminMaster}
+        onReactivatePatient={handleReactivatePatient}
         onPermanentlyDeletePatient={isAdminMaster ? async (patientId: string) => {
           const patient = patients.find(p => p.id === patientId);
           const { cascadeDeletePatient } = await import('@/services/PatientCascadeDeleteService');
           await cascadeDeletePatient(patientId, patient?.full_name);
           await refreshPatients();
+          if (statusFilter === "excluidos") fetchDeletedPatients();
         } : undefined}
       />
 
