@@ -8,6 +8,7 @@ import { PageTitleProvider } from '@/contexts/PageTitleContext';
 import { CopilotFAB } from '@/components/copilot/CopilotFAB';
 import { CopilotChat } from '@/components/copilot/CopilotChat';
 import { useCopilot } from '@/hooks/useCopilot';
+import { DiaryFloatingButton } from '@/components/notifications/DiaryFloatingButton';
 
 interface PersistentLayoutProps {
   children: ReactNode;
