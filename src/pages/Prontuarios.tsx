@@ -45,6 +45,7 @@ import { AIAssistButton } from "@/components/ai/AIAssistButton";
 import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { PatientDiaryTab } from "@/components/prontuarios/PatientDiaryTab";
+import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
 
 interface ProntuarioData {
   id: string;

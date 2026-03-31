@@ -34,6 +34,7 @@ export function PersistentLayout({ children }: PersistentLayoutProps) {
           <MemoizedFooter />
         </SidebarInset>
       </SidebarProvider>
+      <DiaryFloatingButton />
       <CopilotFAB onClick={togglePanel} isOpen={isOpen} />
       <CopilotChat
         isOpen={isOpen}
