@@ -7,7 +7,9 @@ export type NotificationType =
   | 'report_expiring' 
   | 'sessions_today'
   | 'inactive_patient'
-  | 'new_patient';
+  | 'new_patient'
+  | 'diary_entry'
+  | 'diary_reply';
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
@@ -29,15 +31,16 @@ export class NotificationService {
    * Get all notifications aggregated from multiple sources + DB
    */
   static async getNotifications(): Promise<AppNotification[]> {
-    const [birthdays, reports, sessions, inactive, dbNotifications] = await Promise.all([
+    const [birthdays, reports, sessions, inactive, dbNotifications, diaryNotifications] = await Promise.all([
       this.getBirthdayNotifications(),
       this.getReportAlerts(),
       this.getTodaySessions(),
       this.getInactivePatientNotifications(),
       this.getDbNotifications(),
+      this.getDiaryNotifications(),
     ]);
 
-    const notifications = [...birthdays, ...reports, ...sessions, ...inactive, ...dbNotifications];
+    const notifications = [...birthdays, ...reports, ...sessions, ...inactive, ...dbNotifications, ...diaryNotifications];
 
     return notifications.sort((a, b) => {
       const priorityOrder = { high: 0, medium: 1, low: 2 };
@@ -269,6 +272,51 @@ export class NotificationService {
       console.error('Error fetching inactive patients:', error);
       return [];
     }
+  }
+
+  /**
+   * Get diary notifications from portal_notificacoes
+   */
+  static async getDiaryNotifications(): Promise<AppNotification[]> {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('portal_notificacoes')
+        .select('*')
+        .eq('lida', false)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Error fetching diary notifications:', error);
+        return [];
+      }
+
+      return (data || []).map((n: any) => ({
+        id: `diary-${n.id}`,
+        type: (n.tipo === 'diary_reply' ? 'diary_reply' : 'diary_entry') as NotificationType,
+        title: n.titulo,
+        message: n.texto_preview || '',
+        priority: (n.urgente ? 'high' : 'medium') as NotificationPriority,
+        link: `/prontuarios?paciente=${n.paciente_id}&tab=diario`,
+        createdAt: new Date(n.created_at),
+        patientId: n.paciente_id,
+        isDbNotification: true,
+      }));
+    } catch (error) {
+      console.error('Error fetching diary notifications:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Mark a diary notification as read
+   */
+  static async markDiaryNotificationAsRead(id: string): Promise<void> {
+    const realId = id.replace('diary-', '');
+    await (supabase as any)
+      .from('portal_notificacoes')
+      .update({ lida: true })
+      .eq('id', realId);
   }
 
   /**

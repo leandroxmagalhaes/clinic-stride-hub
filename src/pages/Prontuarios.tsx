@@ -23,6 +23,7 @@ import {
   ArrowDown,
   ArrowUp,
   Paperclip,
+  BookOpen,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -43,6 +44,7 @@ import { AIService, type AIClinicalSummary } from "@/services/AIService";
 import { AIAssistButton } from "@/components/ai/AIAssistButton";
 import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
+import { PatientDiaryTab } from "@/components/prontuarios/PatientDiaryTab";
 
 interface ProntuarioData {
   id: string;
@@ -552,6 +554,10 @@ export default function Prontuarios() {
                     <FileText className="h-4 w-4" />
                     Prontuário
                   </TabsTrigger>
+                  <TabsTrigger value="diario" className="gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    📖 Diário
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Evoluções */}
@@ -818,6 +824,14 @@ export default function Prontuarios() {
                       ))}
                     </CardContent>
                   </Card>
+                </TabsContent>
+
+                {/* Diário do Paciente */}
+                <TabsContent value="diario">
+                  <PatientDiaryTab
+                    pacienteId={selectedProntuario.paciente_id}
+                    patientName={selectedProntuario.paciente?.full_name || "Paciente"}
+                  />
                 </TabsContent>
               </Tabs>
             </div>
