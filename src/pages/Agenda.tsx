@@ -98,6 +98,16 @@ export default function Agenda() {
     removeFixedClient,
   } = useFixedClients(clinicId);
 
+  // Fetch fixed clients when panel opens
+  useEffect(() => {
+    if (quickPanelOpen && clinicId) fetchFixedClients();
+  }, [quickPanelOpen, clinicId, fetchFixedClients]);
+
+  // Initial fetch
+  useEffect(() => {
+    if (clinicId) fetchFixedClients();
+  }, [clinicId, fetchFixedClients]);
+
   useEffect(() => {
     setLocalPatients(patients);
   }, [patients]);
