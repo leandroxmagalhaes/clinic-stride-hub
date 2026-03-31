@@ -48,6 +48,7 @@ import {
 import { Session, SessionService } from "@/services/SessionService";
 import { DeleteConfirmationDialog } from "@/components/shared/DeleteConfirmationDialog";
 import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
+import { DiaryBriefingSection } from "@/components/prontuarios/DiaryBriefingSection";
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { useData } from "@/contexts/DataContext";
 import { supabase } from "@/integrations/supabase/client";
