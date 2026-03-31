@@ -385,6 +385,20 @@ export default function Agenda() {
         onEditNote={editNote}
         onRemoveNote={removeNote}
         onToggleNote={toggleNote}
+        fixedClients={fixedClients}
+        fixedClientSessions={fixedClientSessions}
+        totalMissingSessions={totalMissingSessions}
+        onAddFixedClient={addFixedClient}
+        onEditFixedClient={editFixedClient}
+        onRemoveFixedClient={removeFixedClient}
+        onScheduleFixedClient={(patientId) => {
+          const patient = patients.find(p => p.id === patientId);
+          if (patient) {
+            setSelectedSlot(null);
+            setIsModalOpen(true);
+          }
+        }}
+        allPatients={patients.map(p => ({ id: p.id, full_name: p.full_name }))}
       />
     </div>
   );
