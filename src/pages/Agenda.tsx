@@ -13,7 +13,7 @@ import { useReservedSlots } from "@/hooks/useReservedSlots";
 import { CreateReservedSlotData, ReservedSlot, ReservedSlotService } from "@/services/ReservedSlotService";
 import { QuickPanel } from "@/components/agenda/quick-panel/QuickPanel";
 import { useQuickPanelData } from "@/hooks/useQuickPanelData";
-
+import { useFixedClients } from "@/hooks/useFixedClients";
 import { AgendaControls } from "@/components/agenda/AgendaControls";
 import { AgendaDesktopGrid } from "@/components/agenda/AgendaDesktopGrid";
 import { AgendaMobileTimeline } from "@/components/agenda/AgendaMobileTimeline";
@@ -87,6 +87,26 @@ export default function Agenda() {
     removeNote,
     toggleNote,
   } = useQuickPanelData(clinicId, quickPanelOpen);
+
+  const {
+    fixedClients,
+    fixedClientSessions,
+    totalMissingSessions,
+    fetchFixedClients,
+    addFixedClient,
+    editFixedClient,
+    removeFixedClient,
+  } = useFixedClients(clinicId);
+
+  // Fetch fixed clients when panel opens
+  useEffect(() => {
+    if (quickPanelOpen && clinicId) fetchFixedClients();
+  }, [quickPanelOpen, clinicId, fetchFixedClients]);
+
+  // Initial fetch
+  useEffect(() => {
+    if (clinicId) fetchFixedClients();
+  }, [clinicId, fetchFixedClients]);
 
   useEffect(() => {
     setLocalPatients(patients);
@@ -365,6 +385,20 @@ export default function Agenda() {
         onEditNote={editNote}
         onRemoveNote={removeNote}
         onToggleNote={toggleNote}
+        fixedClients={fixedClients}
+        fixedClientSessions={fixedClientSessions}
+        totalMissingSessions={totalMissingSessions}
+        onAddFixedClient={addFixedClient}
+        onEditFixedClient={editFixedClient}
+        onRemoveFixedClient={removeFixedClient}
+        onScheduleFixedClient={(patientId) => {
+          const patient = patients.find(p => p.id === patientId);
+          if (patient) {
+            setSelectedSlot(null);
+            setIsModalOpen(true);
+          }
+        }}
+        allPatients={patients.map(p => ({ id: p.id, full_name: p.full_name }))}
       />
     </div>
   );

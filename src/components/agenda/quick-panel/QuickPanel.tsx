@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { WaitingPatient, QuickNote, NoteType } from "./types";
 import { QuickPanelButton } from "./QuickPanelButton";
 import { WaitingListTab } from "./WaitingListTab";
 import { NotesTab } from "./NotesTab";
+import { FixedClient, Frequency } from "@/hooks/useFixedClients";
 
 export interface QuickPanelProps {
   isOpen: boolean;
@@ -17,6 +18,14 @@ export interface QuickPanelProps {
   onEditNote: (id: string, data: { type: NoteType; text: string; deadline?: string }) => void;
   onRemoveNote: (id: string) => void;
   onToggleNote: (id: string) => void;
+  fixedClients: FixedClient[];
+  fixedClientSessions: Record<string, number>;
+  totalMissingSessions: number;
+  onAddFixedClient: (data: { nome: string; telefone?: string; especialidade?: string; frequencia: Frequency; sessoes_por_periodo: number; paciente_id?: string }) => void;
+  onEditFixedClient: (id: string, data: { nome: string; telefone?: string; especialidade?: string; frequencia: Frequency; sessoes_por_periodo: number; paciente_id?: string }) => void;
+  onRemoveFixedClient: (id: string) => void;
+  onScheduleFixedClient: (patientId: string) => void;
+  allPatients?: Array<{ id: string; full_name: string }>;
 }
 
 type Tab = "espera" | "notas";
@@ -25,6 +34,9 @@ export function QuickPanel({
   isOpen, onToggle, patients, notes,
   onAddPatient, onEditPatient, onRemovePatient,
   onAddNote, onEditNote, onRemoveNote, onToggleNote,
+  fixedClients, fixedClientSessions, totalMissingSessions,
+  onAddFixedClient, onEditFixedClient, onRemoveFixedClient, onScheduleFixedClient,
+  allPatients,
 }: QuickPanelProps) {
   const [tab, setTab] = useState<Tab>("espera");
 
@@ -37,6 +49,7 @@ export function QuickPanel({
         waitingCount={patients.length}
         notesCount={pendingNotesCount}
         hasUrgent={hasUrgent}
+        missingSessions={totalMissingSessions}
         onClick={onToggle}
       />
     );
@@ -83,7 +96,20 @@ export function QuickPanel({
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {tab === "espera" ? (
-          <WaitingListTab patients={patients} onAdd={onAddPatient} onEdit={onEditPatient} onRemove={onRemovePatient} />
+          <WaitingListTab
+            patients={patients}
+            onAdd={onAddPatient}
+            onEdit={onEditPatient}
+            onRemove={onRemovePatient}
+            fixedClients={fixedClients}
+            fixedClientSessions={fixedClientSessions}
+            totalMissingSessions={totalMissingSessions}
+            onAddFixedClient={onAddFixedClient}
+            onEditFixedClient={onEditFixedClient}
+            onRemoveFixedClient={onRemoveFixedClient}
+            onScheduleFixedClient={onScheduleFixedClient}
+            allPatients={allPatients}
+          />
         ) : (
           <NotesTab notes={notes} onAdd={onAddNote} onEdit={onEditNote} onRemove={onRemoveNote} onToggle={onToggleNote} />
         )}
