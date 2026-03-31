@@ -269,6 +269,15 @@ export function PatientDetailModal({
             <TabsContent value="packs" className="py-2">
               <PackManagerModal embedded isOpen={true} onClose={() => {}} pacienteId={patient.id} pacienteNome={patient.full_name} />
             </TabsContent>
+
+            <TabsContent value="portal" className="py-4">
+              <PatientPortalTab
+                patientId={patient.id}
+                patientEmail={patient.email}
+                patientPhone={patient.phone}
+                patientName={patient.full_name}
+              />
+            </TabsContent>
           </Tabs>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
