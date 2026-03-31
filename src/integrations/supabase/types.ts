@@ -246,6 +246,48 @@ export type Database = {
           },
         ]
       }
+      clientes_fixos: {
+        Row: {
+          ativo: boolean | null
+          clinic_id: string | null
+          created_at: string | null
+          especialidade: string | null
+          frequencia: string
+          id: string
+          nome: string
+          paciente_id: string | null
+          sessoes_por_periodo: number
+          telefone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          clinic_id?: string | null
+          created_at?: string | null
+          especialidade?: string | null
+          frequencia?: string
+          id?: string
+          nome: string
+          paciente_id?: string | null
+          sessoes_por_periodo?: number
+          telefone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          clinic_id?: string | null
+          created_at?: string | null
+          especialidade?: string | null
+          frequencia?: string
+          id?: string
+          nome?: string
+          paciente_id?: string | null
+          sessoes_por_periodo?: number
+          telefone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       clinic_settings: {
         Row: {
           ai_clinical_enabled: boolean
