@@ -13,7 +13,7 @@ import { useReservedSlots } from "@/hooks/useReservedSlots";
 import { CreateReservedSlotData, ReservedSlot, ReservedSlotService } from "@/services/ReservedSlotService";
 import { QuickPanel } from "@/components/agenda/quick-panel/QuickPanel";
 import { useQuickPanelData } from "@/hooks/useQuickPanelData";
-
+import { useFixedClients } from "@/hooks/useFixedClients";
 import { AgendaControls } from "@/components/agenda/AgendaControls";
 import { AgendaDesktopGrid } from "@/components/agenda/AgendaDesktopGrid";
 import { AgendaMobileTimeline } from "@/components/agenda/AgendaMobileTimeline";
