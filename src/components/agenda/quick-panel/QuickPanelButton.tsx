@@ -1,31 +1,33 @@
 import { useEffect, useState, useRef } from "react";
-import { UserPlus, ClipboardList } from "lucide-react";
+import { UserPlus, ClipboardList, Calendar } from "lucide-react";
 
 interface Props {
   waitingCount: number;
   notesCount: number;
   hasUrgent: boolean;
+  missingSessions: number;
   onClick: () => void;
 }
 
-export function QuickPanelButton({ waitingCount, notesCount, hasUrgent, onClick }: Props) {
+export function QuickPanelButton({ waitingCount, notesCount, hasUrgent, missingSessions, onClick }: Props) {
   const [pulse, setPulse] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
 
+  const shouldPulse = hasUrgent || missingSessions > 0;
+
   useEffect(() => {
-    if (hasUrgent) {
+    if (shouldPulse) {
       intervalRef.current = setInterval(() => {
         setPulse(true);
         setTimeout(() => setPulse(false), 1000);
       }, 10000);
-      // trigger once immediately
       setPulse(true);
       setTimeout(() => setPulse(false), 1000);
     } else {
       setPulse(false);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [hasUrgent]);
+  }, [shouldPulse]);
 
   return (
     <button
@@ -37,6 +39,18 @@ export function QuickPanelButton({ waitingCount, notesCount, hasUrgent, onClick 
         transition: "box-shadow 0.4s ease",
       }}
     >
+      {/* Fixed clients badge */}
+      {missingSessions > 0 && (
+        <>
+          <div className="flex flex-col items-center px-2.5 py-2.5 gap-0.5">
+            <Calendar className="h-4 w-4 text-white/90" />
+            <span className="text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white">
+              !{missingSessions}
+            </span>
+          </div>
+          <div className="w-6 border-t border-white/20" />
+        </>
+      )}
       <div className="flex flex-col items-center px-2.5 py-3 gap-0.5">
         <UserPlus className="h-4 w-4 text-white/90" />
         <span className={`text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full ${hasUrgent ? "bg-red-500 text-white" : "bg-white/20 text-white"}`}>
