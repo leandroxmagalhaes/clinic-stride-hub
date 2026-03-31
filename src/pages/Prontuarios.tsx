@@ -824,6 +824,14 @@ export default function Prontuarios() {
                     </CardContent>
                   </Card>
                 </TabsContent>
+
+                {/* Diário do Paciente */}
+                <TabsContent value="diario">
+                  <PatientDiaryTab
+                    pacienteId={selectedProntuario.paciente_id}
+                    patientName={selectedProntuario.paciente?.full_name || "Paciente"}
+                  />
+                </TabsContent>
               </Tabs>
             </div>
           ) : (

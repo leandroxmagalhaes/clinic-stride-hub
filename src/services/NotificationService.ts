@@ -275,6 +275,51 @@ export class NotificationService {
   }
 
   /**
+   * Get diary notifications from portal_notificacoes
+   */
+  static async getDiaryNotifications(): Promise<AppNotification[]> {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('portal_notificacoes')
+        .select('*')
+        .eq('lida', false)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Error fetching diary notifications:', error);
+        return [];
+      }
+
+      return (data || []).map((n: any) => ({
+        id: `diary-${n.id}`,
+        type: (n.tipo === 'diary_reply' ? 'diary_reply' : 'diary_entry') as NotificationType,
+        title: n.titulo,
+        message: n.texto_preview || '',
+        priority: (n.urgente ? 'high' : 'medium') as NotificationPriority,
+        link: `/prontuarios?paciente=${n.paciente_id}&tab=diario`,
+        createdAt: new Date(n.created_at),
+        patientId: n.paciente_id,
+        isDbNotification: true,
+      }));
+    } catch (error) {
+      console.error('Error fetching diary notifications:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Mark a diary notification as read
+   */
+  static async markDiaryNotificationAsRead(id: string): Promise<void> {
+    const realId = id.replace('diary-', '');
+    await (supabase as any)
+      .from('portal_notificacoes')
+      .update({ lida: true })
+      .eq('id', realId);
+  }
+
+  /**
    * Get count of high priority notifications (for badge)
    */
   static getHighPriorityCount(notifications: AppNotification[]): number {

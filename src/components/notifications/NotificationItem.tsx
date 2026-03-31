@@ -19,6 +19,8 @@ const iconMap: Record<NotificationType, React.ElementType> = {
   sessions_today: Calendar,
   inactive_patient: UserX,
   new_patient: UserPlus,
+  diary_entry: BookOpen,
+  diary_reply: MessageCircle,
 };
 
 const priorityStyles: Record<string, string> = {

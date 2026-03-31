@@ -593,6 +593,12 @@ export function SessionManagementModal({
               <PreSessionBriefingCard briefing={briefing!} isLoading={briefingLoading} onRefresh={refreshBriefing} />
             )}
 
+            {/* Diary Briefing */}
+            <DiaryBriefingSection
+              pacienteId={session.paciente_id}
+              lastSessionDate={null}
+            />
+
             {/* Edição completa */}
             {isEditing ? (
               <div className="space-y-4 p-4 border-2 border-primary/20 rounded-xl bg-primary/5">
