@@ -551,8 +551,8 @@ export default function Prontuarios() {
                     Documentos
                   </TabsTrigger>
                   <TabsTrigger value="prontuario" className="gap-2">
-                    <FileText className="h-4 w-4" />
-                    Prontuário
+                    <ClipboardList className="h-4 w-4" />
+                    Anamnese
                   </TabsTrigger>
                   <TabsTrigger value="diario" className="gap-2">
                     <BookOpen className="h-4 w-4" />
