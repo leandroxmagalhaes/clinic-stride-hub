@@ -24,7 +24,7 @@ interface Props {
 
 const PRIORITY_ORDER: Record<Priority, number> = { urgente: 0, alta: 1, normal: 2 };
 
-export function WaitingListTab({ patients, onAdd, onEdit, onRemove }: Props) {
+export function WaitingListTab({ patients, onAdd, onEdit, onRemove, fixedClients, fixedClientSessions, totalMissingSessions, onAddFixedClient, onEditFixedClient, onRemoveFixedClient, onScheduleFixedClient, allPatients }: Props) {
   const [filter, setFilter] = useState("Todas");
   const [showForm, setShowForm] = useState(false);
   const [editingPatient, setEditingPatient] = useState<WaitingPatient | null>(null);
