@@ -67,6 +67,18 @@ export function WaitingListTab({ patients, onAdd, onEdit, onRemove, fixedClients
 
   return (
     <div className="flex flex-col h-full">
+      {/* Fixed Clients Section */}
+      <FixedClientsSection
+        fixedClients={fixedClients}
+        fixedClientSessions={fixedClientSessions}
+        totalMissingSessions={totalMissingSessions}
+        onAdd={onAddFixedClient}
+        onEdit={onEditFixedClient}
+        onRemove={onRemoveFixedClient}
+        onSchedule={onScheduleFixedClient}
+        patients={allPatients}
+      />
+
       {/* Filter chips */}
       <div className="px-4 py-2 overflow-x-auto">
         <div className="flex gap-1.5 min-w-max">
