@@ -31,15 +31,16 @@ export class NotificationService {
    * Get all notifications aggregated from multiple sources + DB
    */
   static async getNotifications(): Promise<AppNotification[]> {
-    const [birthdays, reports, sessions, inactive, dbNotifications] = await Promise.all([
+    const [birthdays, reports, sessions, inactive, dbNotifications, diaryNotifications] = await Promise.all([
       this.getBirthdayNotifications(),
       this.getReportAlerts(),
       this.getTodaySessions(),
       this.getInactivePatientNotifications(),
       this.getDbNotifications(),
+      this.getDiaryNotifications(),
     ]);
 
-    const notifications = [...birthdays, ...reports, ...sessions, ...inactive, ...dbNotifications];
+    const notifications = [...birthdays, ...reports, ...sessions, ...inactive, ...dbNotifications, ...diaryNotifications];
 
     return notifications.sort((a, b) => {
       const priorityOrder = { high: 0, medium: 1, low: 2 };
