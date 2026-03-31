@@ -88,6 +88,16 @@ export default function Agenda() {
     toggleNote,
   } = useQuickPanelData(clinicId, quickPanelOpen);
 
+  const {
+    fixedClients,
+    fixedClientSessions,
+    totalMissingSessions,
+    fetchFixedClients,
+    addFixedClient,
+    editFixedClient,
+    removeFixedClient,
+  } = useFixedClients(clinicId);
+
   useEffect(() => {
     setLocalPatients(patients);
   }, [patients]);
