@@ -553,6 +553,10 @@ export default function Prontuarios() {
                     <FileText className="h-4 w-4" />
                     Prontuário
                   </TabsTrigger>
+                  <TabsTrigger value="diario" className="gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    📖 Diário
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Evoluções */}
