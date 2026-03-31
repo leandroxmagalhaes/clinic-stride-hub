@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package, RotateCcw, XCircle } from "lucide-react";
+import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package, RotateCcw, XCircle, Globe } from "lucide-react";
 import { PatientStatementButton } from "./PatientStatementButton";
+import { PatientPortalTab } from "./PatientPortalTab";
 import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
@@ -175,7 +176,7 @@ export function PatientDetailModal({
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="info" className="gap-1.5">
                 <User className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Dados</span>
@@ -187,6 +188,10 @@ export function PatientDetailModal({
               <TabsTrigger value="packs" className="gap-1.5">
                 <Package className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Packs</span>
+              </TabsTrigger>
+              <TabsTrigger value="portal" className="gap-1.5">
+                <Globe className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Portal</span>
               </TabsTrigger>
             </TabsList>
 
@@ -263,6 +268,15 @@ export function PatientDetailModal({
 
             <TabsContent value="packs" className="py-2">
               <PackManagerModal embedded isOpen={true} onClose={() => {}} pacienteId={patient.id} pacienteNome={patient.full_name} />
+            </TabsContent>
+
+            <TabsContent value="portal" className="py-4">
+              <PatientPortalTab
+                patientId={patient.id}
+                patientEmail={patient.email}
+                patientPhone={patient.phone}
+                patientName={patient.full_name}
+              />
             </TabsContent>
           </Tabs>
 

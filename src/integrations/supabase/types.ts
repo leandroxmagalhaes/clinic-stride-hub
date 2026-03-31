@@ -1357,6 +1357,123 @@ export type Database = {
           },
         ]
       }
+      portal_contas: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          onboarding_completo: boolean | null
+          paciente_id: string
+          provider: string | null
+          status: string | null
+          ultimo_acesso: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          onboarding_completo?: boolean | null
+          paciente_id: string
+          provider?: string | null
+          status?: string | null
+          ultimo_acesso?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          onboarding_completo?: boolean | null
+          paciente_id?: string
+          provider?: string | null
+          status?: string | null
+          ultimo_acesso?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      portal_convites: {
+        Row: {
+          codigo: string
+          created_at: string | null
+          enviado_para_email: string | null
+          enviado_para_telefone: string | null
+          expira_em: string
+          id: string
+          link_token: string
+          max_tentativas: number | null
+          paciente_id: string
+          tentativas: number | null
+          utilizado: boolean | null
+        }
+        Insert: {
+          codigo: string
+          created_at?: string | null
+          enviado_para_email?: string | null
+          enviado_para_telefone?: string | null
+          expira_em: string
+          id?: string
+          link_token: string
+          max_tentativas?: number | null
+          paciente_id: string
+          tentativas?: number | null
+          utilizado?: boolean | null
+        }
+        Update: {
+          codigo?: string
+          created_at?: string | null
+          enviado_para_email?: string | null
+          enviado_para_telefone?: string | null
+          expira_em?: string
+          id?: string
+          link_token?: string
+          max_tentativas?: number | null
+          paciente_id?: string
+          tentativas?: number | null
+          utilizado?: boolean | null
+        }
+        Relationships: []
+      }
+      portal_questionario: {
+        Row: {
+          completo: boolean | null
+          created_at: string | null
+          dados_pessoais: Json | null
+          expectativas: Json | null
+          id: string
+          paciente_id: string
+          perfil_saude: Json | null
+          perfil_tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          completo?: boolean | null
+          created_at?: string | null
+          dados_pessoais?: Json | null
+          expectativas?: Json | null
+          id?: string
+          paciente_id: string
+          perfil_saude?: Json | null
+          perfil_tipo: string
+          updated_at?: string | null
+        }
+        Update: {
+          completo?: boolean | null
+          created_at?: string | null
+          dados_pessoais?: Json | null
+          expectativas?: Json | null
+          id?: string
+          paciente_id?: string
+          perfil_saude?: Json | null
+          perfil_tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       professional_patient_assignments: {
         Row: {
           assigned_at: string

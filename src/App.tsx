@@ -50,6 +50,8 @@ const Configuracoes = lazyWithRetry(() => import("./pages/Configuracoes"));
 const PatientPortal = lazyWithRetry(() => import("./pages/PatientPortal"));
 const PreRegisto = lazyWithRetry(() => import("./pages/PreRegisto"));
 const RelatorioResp = lazyWithRetry(() => import("./pages/RelatorioRespiratorio"));
+const PortalVerificacao = lazyWithRetry(() => import("./pages/PortalVerificacao"));
+const PortalOnboarding = lazyWithRetry(() => import("./pages/PortalOnboarding"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -115,6 +117,22 @@ const App = () => (
                     element={
                       <Suspense fallback={<PageLoadingFallback />}>
                         <PreRegisto />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/portal/:token"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <PortalVerificacao />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/portal/onboarding"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <PortalOnboarding />
                       </Suspense>
                     }
                   />
