@@ -176,7 +176,7 @@ export function PatientDetailModal({
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="info" className="gap-1.5">
                 <User className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Dados</span>
@@ -188,6 +188,10 @@ export function PatientDetailModal({
               <TabsTrigger value="packs" className="gap-1.5">
                 <Package className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Packs</span>
+              </TabsTrigger>
+              <TabsTrigger value="portal" className="gap-1.5">
+                <Globe className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Portal</span>
               </TabsTrigger>
             </TabsList>
 
