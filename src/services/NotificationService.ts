@@ -7,7 +7,9 @@ export type NotificationType =
   | 'report_expiring' 
   | 'sessions_today'
   | 'inactive_patient'
-  | 'new_patient';
+  | 'new_patient'
+  | 'diary_entry'
+  | 'diary_reply';
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
