@@ -45,6 +45,7 @@ import { AIAssistButton } from "@/components/ai/AIAssistButton";
 import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { PatientDiaryTab } from "@/components/prontuarios/PatientDiaryTab";
+import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
 
 interface ProntuarioData {
   id: string;
@@ -551,8 +552,8 @@ export default function Prontuarios() {
                     Documentos
                   </TabsTrigger>
                   <TabsTrigger value="prontuario" className="gap-2">
-                    <FileText className="h-4 w-4" />
-                    Prontuário
+                    <ClipboardList className="h-4 w-4" />
+                    Anamnese
                   </TabsTrigger>
                   <TabsTrigger value="diario" className="gap-2">
                     <BookOpen className="h-4 w-4" />
@@ -769,61 +770,66 @@ export default function Prontuarios() {
                   </Card>
                 </TabsContent>
 
-                {/* Prontuário */}
+                {/* Anamnese (antigo Prontuário) */}
                 <TabsContent value="prontuario">
-                  <Card className="shadow-card">
-                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                      <CardTitle className="font-display text-lg">Dados Clínicos</CardTitle>
-                      <Button variant="ghost" size="sm" onClick={() => setIsEditClinicalOpen(true)} className="gap-2">
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      {selectedProntuario.primary_specialty_id && (
-                        <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                          <Badge variant="secondary" className="bg-primary/10 text-primary">
-                            {templates.find((t) => t.id === selectedProntuario.primary_specialty_id)?.name ||
-                              "Especialidade"}
-                          </Badge>
-                        </div>
-                      )}
-                      {selectedProntuario.initial_assessment_data && selectedProntuario.primary_specialty_id && (
-                        <div className="p-4 rounded-lg border bg-muted/20">
-                          <h4 className="font-medium text-sm mb-3">Avaliação Inicial</h4>
-                          {(() => {
-                            const template = templates.find((t) => t.id === selectedProntuario.primary_specialty_id);
-                            return template ? (
-                              <StructuredDataViewer
-                                schema={template.schema}
-                                data={
-                                  selectedProntuario.initial_assessment_data as Record<
-                                    string,
-                                    string | number | string[] | null
-                                  >
-                                }
-                              />
-                            ) : null;
-                          })()}
-                        </div>
-                      )}
-                      {[
-                        { label: "Anamnese", key: "anamnese" },
-                        { label: "Diagnóstico", key: "diagnostico" },
-                        { label: "Objetivos", key: "objetivos" },
-                        { label: "Observações", key: "observacoes" },
-                      ].map(({ label, key }) => (
-                        <div key={key}>
-                          <h4 className="font-medium text-sm mb-2 text-muted-foreground">{label}</h4>
-                          <p className="text-sm leading-relaxed">
-                            {(selectedProntuario as any)[key] || (
-                              <span className="text-muted-foreground italic">Não preenchido</span>
-                            )}
-                          </p>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
+                  <div className="space-y-4">
+                    {/* Questionnaire Summary */}
+                    <QuestionnaireHealthSummary pacienteId={selectedProntuario.paciente_id} />
+
+                    <Card className="shadow-card">
+                      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                        <CardTitle className="font-display text-lg">Dados Clínicos</CardTitle>
+                        <Button variant="ghost" size="sm" onClick={() => setIsEditClinicalOpen(true)} className="gap-2">
+                          <Pencil className="h-4 w-4" />
+                          Editar
+                        </Button>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        {selectedProntuario.primary_specialty_id && (
+                          <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                            <Badge variant="secondary" className="bg-primary/10 text-primary">
+                              {templates.find((t) => t.id === selectedProntuario.primary_specialty_id)?.name ||
+                                "Especialidade"}
+                            </Badge>
+                          </div>
+                        )}
+                        {selectedProntuario.initial_assessment_data && selectedProntuario.primary_specialty_id && (
+                          <div className="p-4 rounded-lg border bg-muted/20">
+                            <h4 className="font-medium text-sm mb-3">Avaliação Inicial</h4>
+                            {(() => {
+                              const template = templates.find((t) => t.id === selectedProntuario.primary_specialty_id);
+                              return template ? (
+                                <StructuredDataViewer
+                                  schema={template.schema}
+                                  data={
+                                    selectedProntuario.initial_assessment_data as Record<
+                                      string,
+                                      string | number | string[] | null
+                                    >
+                                  }
+                                />
+                              ) : null;
+                            })()}
+                          </div>
+                        )}
+                        {[
+                          { label: "Anamnese", key: "anamnese" },
+                          { label: "Diagnóstico", key: "diagnostico" },
+                          { label: "Objetivos", key: "objetivos" },
+                          { label: "Observações", key: "observacoes" },
+                        ].map(({ label, key }) => (
+                          <div key={key}>
+                            <h4 className="font-medium text-sm mb-2 text-muted-foreground">{label}</h4>
+                            <p className="text-sm leading-relaxed">
+                              {(selectedProntuario as any)[key] || (
+                                <span className="text-muted-foreground italic">Não preenchido</span>
+                              )}
+                            </p>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </div>
                 </TabsContent>
 
                 {/* Diário do Paciente */}
