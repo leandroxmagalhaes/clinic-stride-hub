@@ -1,74 +1,94 @@
 
 
-## Reativar, Excluir e Filtrar Pacientes
+## Clientes Fixos (Recorrentes) no Painel Rápido
 
-### Step 1: Database Migration — Create `pacientes_excluidos` table
+Add a "Clientes Fixos" collapsible section at the top of the "Lista de Espera" tab, with Supabase persistence and automatic session counting.
+
+### Step 1: Database Migration
+
+Create `clientes_fixos` table with proper RLS scoped by `clinic_id`:
 
 ```sql
-CREATE TABLE IF NOT EXISTS public.pacientes_excluidos (
+CREATE TABLE IF NOT EXISTS public.clientes_fixos (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   clinic_id uuid,
-  paciente_id_original uuid,
-  dados_paciente jsonb NOT NULL,
-  excluido_por uuid,
-  excluido_em timestamptz DEFAULT now(),
-  motivo text DEFAULT 'Exclusão manual'
+  paciente_id uuid,
+  nome text NOT NULL,
+  telefone text,
+  especialidade text,
+  frequencia text NOT NULL DEFAULT 'weekly',
+  sessoes_por_periodo integer NOT NULL DEFAULT 1,
+  ativo boolean DEFAULT true,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
 );
 
-ALTER TABLE public.pacientes_excluidos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.clientes_fixos ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can manage deleted patients in own clinic"
-  ON public.pacientes_excluidos FOR ALL
+CREATE POLICY "Users can manage clientes_fixos in own clinic"
+  ON public.clientes_fixos FOR ALL
   TO authenticated
   USING (clinic_id = get_user_clinic_id(auth.uid()))
   WITH CHECK (clinic_id = get_user_clinic_id(auth.uid()));
 ```
 
-Note: Adding `clinic_id` column (not in user's SQL) for proper RLS scoping consistent with the project's security model.
+Note: Using `clinic_id` (not `id_da_clínica`) and proper RLS via `get_user_clinic_id` instead of open policy.
 
-### Step 2: Modify `PatientDetailModal.tsx` — Dynamic Inativar/Reativar + Excluir button
+### Step 2: Extend `useQuickPanelData.ts`
 
-**Inativar/Reativar logic:**
-- If `patient.is_active === true`: show current red "Inativar" button (unchanged)
-- If `patient.is_active === false`: show green "Reativar" button (RotateCcw icon, green text, outline style)
-- Add `onReactivatePatient` prop callback
-- Reactivation sets `is_active = true` via the existing `onUpdatePatient` callback
+Add to the existing hook:
+- State: `fixedClients` array + `fixedClientSessions` map (clientId → count of sessions in period)
+- `fetchFixedClients()`: query `clientes_fixos` where `ativo = true`, `clinic_id = clinicId`
+- `fetchFixedClientSessions()`: for each client with `paciente_id`, query `sessoes` count within the calculated period (using `start_time` field, not `data`)
+- CRUD: `addFixedClient`, `editFixedClient`, `removeFixedClient` (soft delete: `ativo = false`)
+- Period calculation helper: given frequency, compute start/end dates for current period
+- Return `totalMissingSessions` count for badge use
 
-**Excluir Permanentemente button:**
-- Replace the existing `onPermanentlyDeletePatient` button/dialog with new two-step confirmation:
-  - Step 1: Simple warning dialog
-  - Step 2: Type patient name to confirm (input must match exactly to enable button)
-- Before deleting: copy full patient data to `pacientes_excluidos` via `(supabase as any).from('pacientes_excluidos').insert(...)`, then call cascade delete
+### Step 3: New Components
 
-### Step 3: Modify `Pacientes.tsx` — Add status filter chips
+**`src/components/agenda/quick-panel/FixedClientsSection.tsx`** — Collapsible section:
+- Header bar: 📅 icon + "Clientes Fixos" + alert badge (red pulse if missing, green if all ok) + chevron
+- When expanded: list of `FixedClientCard` components + "Adicionar Cliente Fixo" button
+- Form for add/edit (inline, same pattern as WaitingPatientForm): name with patient autocomplete, specialty select, frequency select, sessions per period buttons (1-5)
 
-**Above the patient grid (below search bar):**
-- Three toggle chips: "Ativos (N)", "Inativos (N)", "Todos (N)"
-- Default: "Ativos"
-- State: `statusFilter: "ativos" | "inativos" | "todos"`
-- Filter `filteredPatients` by `is_active` before rendering
-- Style: same chip pattern as Quick Panel filters (border, blue highlight when active)
+**`src/components/agenda/quick-panel/FixedClientCard.tsx`** — Individual card:
+- Left border colored by status (green/red)
+- Name + specialty + frequency badge ("3x/sem", "1x/mês", etc.)
+- Status badge (✓ 3/3 or 1/3 — faltam 2)
+- 4px progress bar (green/yellow/red)
+- Action buttons: "Agendar" (opens new session wizard with patient pre-selected, only when missing), edit, remove
 
-**Add "Excluídos" tab** (visible only when `isAdminMaster`):
-- Fourth chip "Excluídos (N)" that switches to a list view of `pacientes_excluidos`
-- Fetch from `(supabase as any).from('pacientes_excluidos').select('*').order('excluido_em', { ascending: false })`
-- Each row shows: name (from jsonb), deletion date, deleted by
-- "Ver dados" button → read-only modal showing all jsonb fields
-- "Recuperar" button → insert into `pacientes` from jsonb data (with `is_active: false`), then delete from `pacientes_excluidos`, refresh lists
+### Step 4: Integrate into `WaitingListTab.tsx`
 
-### Step 4: Wire up in `Pacientes.tsx`
+Add `FixedClientsSection` at the top of the component, before the filter chips. Pass fixed clients data and callbacks as props. Separated by `border-b border-[#e2e8f0]`.
 
-- Pass `onReactivatePatient` to `PatientDetailModal` (calls `supabase.from('pacientes').update({ is_active: true })` then `refreshPatients()`)
-- Update the `onPermanentlyDeletePatient` flow to archive first, then cascade delete
-- Add counters for active/inactive patients using `useMemo`
+New props needed on `WaitingListTab`:
+- `fixedClients`, `fixedClientSessions`, `onAddFixedClient`, `onEditFixedClient`, `onRemoveFixedClient`
+- `onOpenNewSession(patientId)` — callback to open scheduling wizard with pre-selected patient
 
-### Files changed
-- **New migration**: `pacientes_excluidos` table
-- **Modified**: `src/components/patients/PatientDetailModal.tsx` (dynamic button + two-step delete)
-- **Modified**: `src/pages/Pacientes.tsx` (filter chips + excluídos tab)
+### Step 5: Update `QuickPanelButton.tsx`
 
-### Technical notes
-- Uses `(supabase as any).from('pacientes_excluidos')` since table won't be in generated types
-- Individual inserts only (no arrays)
-- All existing visual layout preserved — only adding filter chips and swapping button text/color conditionally
+Add `missingSessions` prop. Render a third badge section at the top:
+- If `missingSessions > 0`: red badge with `!X`
+- If zero: nothing or subtle green ✓
+
+### Step 6: Wire up in `QuickPanel.tsx` and `Agenda.tsx`
+
+- Pass new props through `QuickPanel` → `WaitingListTab`
+- In `Agenda.tsx`: destructure new returns from `useQuickPanelData`, pass to `QuickPanel`, add `onOpenNewSession` callback that opens `NewSessionModal` with patient pre-selected
+
+### Files Changed
+- **New migration**: `clientes_fixos` table
+- **Modified**: `src/hooks/useQuickPanelData.ts` (add fixed clients CRUD + session counting)
+- **New**: `src/components/agenda/quick-panel/FixedClientsSection.tsx`
+- **New**: `src/components/agenda/quick-panel/FixedClientCard.tsx`
+- **Modified**: `src/components/agenda/quick-panel/WaitingListTab.tsx` (add section at top)
+- **Modified**: `src/components/agenda/quick-panel/QuickPanel.tsx` (pass new props)
+- **Modified**: `src/components/agenda/quick-panel/QuickPanelButton.tsx` (third badge)
+- **Modified**: `src/pages/Agenda.tsx` (wire everything)
+
+### What stays untouched
+- Waiting list cards, form, filters, sorting — zero changes
+- Notes tab — zero changes
+- Panel layout, tabs, header — zero changes
 
