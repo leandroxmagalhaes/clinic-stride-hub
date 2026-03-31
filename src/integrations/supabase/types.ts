@@ -1438,6 +1438,81 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_diario: {
+        Row: {
+          autor_nome: string
+          categoria: string | null
+          created_at: string | null
+          foto_url: string | null
+          humor: string | null
+          id: string
+          nivel_dor: number | null
+          paciente_id: string
+          tem_foto: boolean | null
+          texto: string
+        }
+        Insert: {
+          autor_nome: string
+          categoria?: string | null
+          created_at?: string | null
+          foto_url?: string | null
+          humor?: string | null
+          id?: string
+          nivel_dor?: number | null
+          paciente_id: string
+          tem_foto?: boolean | null
+          texto: string
+        }
+        Update: {
+          autor_nome?: string
+          categoria?: string | null
+          created_at?: string | null
+          foto_url?: string | null
+          humor?: string | null
+          id?: string
+          nivel_dor?: number | null
+          paciente_id?: string
+          tem_foto?: boolean | null
+          texto?: string
+        }
+        Relationships: []
+      }
+      portal_notificacoes: {
+        Row: {
+          created_at: string | null
+          id: string
+          lida: boolean | null
+          paciente_id: string
+          referencia_id: string | null
+          texto_preview: string | null
+          tipo: string
+          titulo: string
+          urgente: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          lida?: boolean | null
+          paciente_id: string
+          referencia_id?: string | null
+          texto_preview?: string | null
+          tipo: string
+          titulo: string
+          urgente?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          lida?: boolean | null
+          paciente_id?: string
+          referencia_id?: string | null
+          texto_preview?: string | null
+          tipo?: string
+          titulo?: string
+          urgente?: boolean | null
+        }
+        Relationships: []
+      }
       portal_questionario: {
         Row: {
           completo: boolean | null
@@ -1473,6 +1548,41 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      portal_respostas: {
+        Row: {
+          autor_nome: string
+          autor_tipo: string
+          created_at: string | null
+          diario_id: string
+          id: string
+          texto: string
+        }
+        Insert: {
+          autor_nome: string
+          autor_tipo?: string
+          created_at?: string | null
+          diario_id: string
+          id?: string
+          texto: string
+        }
+        Update: {
+          autor_nome?: string
+          autor_tipo?: string
+          created_at?: string | null
+          diario_id?: string
+          id?: string
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_respostas_diario_id_fkey"
+            columns: ["diario_id"]
+            isOneToOne: false
+            referencedRelation: "portal_diario"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       professional_patient_assignments: {
         Row: {
