@@ -3,6 +3,8 @@ import { Plus } from "lucide-react";
 import { WaitingPatient, Priority, SPECIALTIES } from "./types";
 import { WaitingPatientCard } from "./WaitingPatientCard";
 import { WaitingPatientForm } from "./WaitingPatientForm";
+import { FixedClientsSection } from "./FixedClientsSection";
+import { FixedClient, Frequency } from "@/hooks/useFixedClients";
 import { toast } from "sonner";
 
 interface Props {
@@ -10,6 +12,14 @@ interface Props {
   onAdd: (data: Omit<WaitingPatient, "id" | "daysWaiting" | "addedAt">) => void;
   onEdit: (id: string, data: Omit<WaitingPatient, "id" | "daysWaiting" | "addedAt">) => void;
   onRemove: (id: string) => void;
+  fixedClients: FixedClient[];
+  fixedClientSessions: Record<string, number>;
+  totalMissingSessions: number;
+  onAddFixedClient: (data: { nome: string; telefone?: string; especialidade?: string; frequencia: Frequency; sessoes_por_periodo: number; paciente_id?: string }) => void;
+  onEditFixedClient: (id: string, data: { nome: string; telefone?: string; especialidade?: string; frequencia: Frequency; sessoes_por_periodo: number; paciente_id?: string }) => void;
+  onRemoveFixedClient: (id: string) => void;
+  onScheduleFixedClient: (patientId: string) => void;
+  allPatients?: Array<{ id: string; full_name: string }>;
 }
 
 const PRIORITY_ORDER: Record<Priority, number> = { urgente: 0, alta: 1, normal: 2 };
