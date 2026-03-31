@@ -121,6 +121,22 @@ const App = () => (
                     }
                   />
                   <Route
+                    path="/portal/:token"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <PortalVerificacao />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/portal/onboarding"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <PortalOnboarding />
+                      </Suspense>
+                    }
+                  />
+                  <Route
                     path="/r/:slug"
                     element={
                       <Suspense fallback={<PageLoadingFallback />}>
