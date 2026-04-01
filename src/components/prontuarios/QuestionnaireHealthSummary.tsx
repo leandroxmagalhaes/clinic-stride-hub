@@ -6,15 +6,50 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Pencil, Save, X, Plus } from "lucide-react";
+import { FileText, Pencil, Save, X, Plus, History, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Props {
   pacienteId: string;
   birthDate?: string | null;
 }
+
+const FIELD_LABELS: Record<string, string> = {
+  gestation: "Semanas de gestação",
+  deliveryType: "Tipo de parto",
+  induced: "Parto induzido",
+  instruments: "Instrumentos (ventosa/fórceps)",
+  birthWeight: "Peso ao nascer",
+  birthLength: "Comprimento ao nascer",
+  breastfeeding: "Amamentação",
+  reflux: "Refluxo",
+  colic: "Cólicas",
+  sleep: "Sono",
+  bowel: "Eliminação intestinal",
+  respiratoryInfections: "Infecções respiratórias",
+  posturalPreference: "Preferência postural",
+  vaccines: "Vacinas",
+  allergies: "Alergias",
+  medication: "Medicação",
+  diagnosis: "Diagnóstico médico",
+  reason: "Motivo da consulta",
+  activity: "Atividade física",
+  objective: "Objectivo do tratamento",
+  previousInjuries: "Lesões anteriores",
+  surgeries: "Cirurgias",
+  chronicConditions: "Condições crónicas",
+  fallHistory: "Histórico de quedas",
+  walkingAid: "Auxílio de marcha",
+  autonomy: "Autonomia diária",
+  caregiverName: "Cuidador",
+  schoolDifficulties: "Dificuldades escolares",
+  expectations: "Expectativas",
+  concerns: "Preocupações",
+};
 
 const babyFields = [
   { key: "gestation", label: "Semanas de gestação", type: "text" },
@@ -93,7 +128,74 @@ function detectProfile(birthDate: string | null | undefined): string | null {
   return "adult";
 }
 
+interface HistoryEntry {
+  id: string;
+  campo_alterado: string;
+  valor_anterior: string | null;
+  valor_novo: string | null;
+  alterado_por: string;
+  created_at: string;
+}
+
+function ChangeHistorySection({ pacienteId }: { pacienteId: string }) {
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const loadHistory = async () => {
+    if (history.length > 0) return;
+    setLoading(true);
+    const { data } = await (supabase as any)
+      .from("portal_questionario_historico")
+      .select("*")
+      .eq("paciente_id", pacienteId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setHistory(data || []);
+    setLoading(false);
+  };
+
+  return (
+    <Collapsible open={open} onOpenChange={(o) => { setOpen(o); if (o) loadHistory(); }}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+          <History className="h-3.5 w-3.5" />
+          Ver histórico de alterações
+          {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2">
+        {loading ? (
+          <Skeleton className="h-16 w-full" />
+        ) : history.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-2">Sem alterações registadas.</p>
+        ) : (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {history.map((h) => (
+              <div key={h.id} className="bg-muted/30 rounded-lg p-2.5 text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{FIELD_LABELS[h.campo_alterado] || h.campo_alterado}</span>
+                  <span className="text-muted-foreground">
+                    {new Date(h.created_at).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="line-through text-destructive">{h.valor_anterior || "—"}</span>
+                  <span className="text-muted-foreground">→</span>
+                  <span className="text-green-600 font-medium">{h.valor_novo || "—"}</span>
+                </div>
+                <p className="text-muted-foreground">por {h.alterado_por}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
+  const { user } = useAuth();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -102,6 +204,7 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
   const [editValues, setEditValues] = useState<Record<string, any>>({});
   const [editExpectativas, setEditExpectativas] = useState<Record<string, string>>({});
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
+  const [professionalName, setProfessionalName] = useState("Profissional");
 
   useEffect(() => {
     (async () => {
@@ -121,6 +224,13 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
       }
     })();
   }, [pacienteId]);
+
+  // Get professional name for history logging
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle()
+      .then(({ data: p }) => { if (p?.full_name) setProfessionalName(p.full_name); });
+  }, [user]);
 
   if (loading) return <Skeleton className="h-24 w-full" />;
 
@@ -185,6 +295,51 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Record changes in history when editing (not creating)
+      if (data?.id && !creating) {
+        const originalSaude = typeof data.perfil_saude === 'string' ? JSON.parse(data.perfil_saude) : (data.perfil_saude || {});
+        const originalDados = typeof data.dados_pessoais === 'string' ? JSON.parse(data.dados_pessoais) : (data.dados_pessoais || {});
+        const originalExpect = typeof data.expectativas === 'string' ? JSON.parse(data.expectativas) : (data.expectativas || {});
+        const originalAll = { ...originalDados, ...originalSaude };
+
+        const allKeys = new Set([...Object.keys(originalAll), ...Object.keys(editValues)]);
+        for (const key of allKeys) {
+          const oldVal = String(originalAll[key] || "");
+          const newVal = String(editValues[key] || "");
+          if (oldVal !== newVal) {
+            await (supabase as any)
+              .from("portal_questionario_historico")
+              .insert({
+                questionario_id: data.id,
+                paciente_id: pacienteId,
+                campo_alterado: key,
+                valor_anterior: oldVal,
+                valor_novo: newVal,
+                alterado_por: professionalName,
+              });
+          }
+        }
+
+        // Check expectativas changes
+        const expectKeys = ["expectations", "concerns"];
+        for (const key of expectKeys) {
+          const oldVal = String(originalExpect[key] || "");
+          const newVal = String(editExpectativas[key] || "");
+          if (oldVal !== newVal) {
+            await (supabase as any)
+              .from("portal_questionario_historico")
+              .insert({
+                questionario_id: data.id,
+                paciente_id: pacienteId,
+                campo_alterado: key,
+                valor_anterior: oldVal,
+                valor_novo: newVal,
+                alterado_por: professionalName,
+              });
+          }
+        }
+      }
+
       const payload = {
         paciente_id: pacienteId,
         perfil_tipo: perfilTipo,
@@ -195,13 +350,11 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
       };
 
       if (data?.id && !creating) {
-        // Update
         await (supabase as any)
           .from("portal_questionario")
           .update(payload)
           .eq("id", data.id);
       } else {
-        // Insert
         await (supabase as any)
           .from("portal_questionario")
           .insert(payload);
@@ -286,6 +439,10 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
     );
   };
 
+  const lastUpdate = data?.updated_at
+    ? new Date(data.updated_at).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    : null;
+
   return (
     <Card className="border-blue-200 bg-blue-50/60">
       <CardHeader className="pb-3">
@@ -317,9 +474,16 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
           </div>
         </div>
         {!editing && !creating && (
-          <p className="text-xs text-blue-600/70 mt-1">
-            Informações fornecidas pelo paciente/responsável no portal
-          </p>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <p className="text-xs text-blue-600/70">
+              Informações fornecidas pelo paciente/responsável no portal
+            </p>
+            {lastUpdate && (
+              <span className="text-[10px] text-muted-foreground">
+                · Última atualização: {lastUpdate}
+              </span>
+            )}
+          </div>
         )}
       </CardHeader>
       <CardContent className="space-y-4">
@@ -372,6 +536,13 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
               )}
             </div>
           )
+        )}
+
+        {/* Change history */}
+        {!editing && !creating && data && (
+          <div className="border-t border-blue-200 pt-3">
+            <ChangeHistorySection pacienteId={pacienteId} />
+          </div>
         )}
       </CardContent>
     </Card>
