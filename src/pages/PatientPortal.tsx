@@ -283,12 +283,18 @@ export default function PatientPortal() {
               <p className="text-xs text-muted-foreground">{patientName}</p>
             </div>
           </div>
-          {linkedPatients.length > 1 && (
-            <Button variant="ghost" size="sm" onClick={handleSwitchProfile} className="gap-1.5 text-xs">
-              <ArrowLeftRight className="h-3.5 w-3.5" />
-              Trocar
+          <div className="flex items-center gap-1">
+            {linkedPatients.length > 1 && (
+              <Button variant="ghost" size="sm" onClick={handleSwitchProfile} className="gap-1.5 text-xs">
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+                Trocar
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-1.5 text-xs text-slate-500 hover:text-red-500 hover:bg-transparent">
+              <LogOut className="h-3.5 w-3.5" />
+              Sair
             </Button>
-          )}
+          </div>
         </div>
       </header>
 
