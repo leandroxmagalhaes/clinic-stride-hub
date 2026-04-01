@@ -81,6 +81,38 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
   const handleGenerateInvite = async () => {
     setGenerating(true);
     try {
+      // Smart association: check if the email already has a portal account
+      if (patientEmail) {
+        const { data: existingAccount } = await (supabase as any)
+          .from("portal_contas")
+          .select("id")
+          .eq("email", patientEmail.toLowerCase())
+          .neq("paciente_id", patientId)
+          .maybeSingle();
+
+        if (existingAccount) {
+          // Email already has a portal account — link this patient to it
+          const { error: linkError } = await (supabase as any)
+            .from("portal_conta_pacientes")
+            .insert({
+              conta_id: existingAccount.id,
+              paciente_id: patientId,
+              relacao: "responsavel",
+              is_primary: false,
+            });
+
+          if (!linkError) {
+            toast.success("Paciente associado!", {
+              description: `${patientEmail} já tem conta no portal. ${patientName} foi adicionado ao perfil existente.`,
+            });
+            await loadData();
+            setGenerating(false);
+            return;
+          }
+          // If link failed (e.g. already exists), proceed with normal invite
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke("generate-portal-invite", {
         body: { paciente_id: patientId, email: patientEmail, telefone: patientPhone },
       });

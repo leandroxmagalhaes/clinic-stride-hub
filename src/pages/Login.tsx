@@ -6,18 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Loader2, Activity } from 'lucide-react';
+import { Loader2, Activity, Stethoscope, Users } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showRoleChoice, setShowRoleChoice] = useState(false);
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get the intended destination or default to home
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,7 +43,23 @@ export default function Login() {
       return;
     }
 
-    // Check for pending invites for this email and process them
+    // Check if user has dual role (professional + patient portal)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('portal_role')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      if (profile?.portal_role === 'both') {
+        setIsLoading(false);
+        setShowRoleChoice(true);
+        return;
+      }
+    }
+
+    // Check for pending invites
     try {
       const { data: pendingInvite } = await supabase
         .from('team_invites')
@@ -66,12 +83,21 @@ export default function Login() {
       }
     } catch (err) {
       console.error('Error processing pending invite:', err);
-      // Don't block login if invite processing fails
     }
 
     setIsLoading(false);
     toast.success('Login realizado com sucesso!');
     navigate(from, { replace: true });
+  };
+
+  const handleRoleChoice = (role: 'professional' | 'patient') => {
+    setShowRoleChoice(false);
+    if (role === 'professional') {
+      toast.success('Login realizado com sucesso!');
+      navigate(from, { replace: true });
+    } else {
+      navigate('/patient-portal', { replace: true });
+    }
   };
 
   return (
@@ -136,6 +162,37 @@ export default function Login() {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Dual-role choice dialog */}
+      <Dialog open={showRoleChoice} onOpenChange={setShowRoleChoice}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-center">Como deseja entrar?</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <Card
+              className="cursor-pointer hover:shadow-lg hover:scale-105 transition-all"
+              onClick={() => handleRoleChoice('professional')}
+            >
+              <CardContent className="flex flex-col items-center py-6 text-center">
+                <Stethoscope className="h-10 w-10 text-primary mb-3" />
+                <p className="font-semibold text-sm">Profissional</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Gestão da clínica</p>
+              </CardContent>
+            </Card>
+            <Card
+              className="cursor-pointer hover:shadow-lg hover:scale-105 transition-all"
+              onClick={() => handleRoleChoice('patient')}
+            >
+              <CardContent className="flex flex-col items-center py-6 text-center">
+                <Users className="h-10 w-10 text-primary mb-3" />
+                <p className="font-semibold text-sm">Responsável</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Portal do Paciente</p>
+              </CardContent>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
