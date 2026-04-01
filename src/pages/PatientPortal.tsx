@@ -37,6 +37,8 @@ export default function PatientPortal() {
   const [perfilTipo, setPerfilTipo] = useState<ProfileType>("adult");
   const [patientName, setPatientName] = useState("Paciente");
   const [resolving, setResolving] = useState(true);
+  const [showHealthEdit, setShowHealthEdit] = useState(false);
+  const [hasQuestionnaire, setHasQuestionnaire] = useState(false);
 
   // Resolve conta and linked patients
   useEffect(() => {
