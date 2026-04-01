@@ -269,6 +269,11 @@ export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
     return items;
   };
 
+  // Only show for professionals/admins/secretaries - never for patients
+  const hasStaffRole = isProfessional || isAdmin || isSecretary;
+  if (!hasStaffRole && isPatient) return null;
+  if (roleLoading) return null;
+
   return (
     <>
       {/* Floating Button */}
