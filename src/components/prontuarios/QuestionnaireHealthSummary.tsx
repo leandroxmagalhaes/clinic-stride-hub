@@ -10,55 +10,55 @@ interface Props {
 }
 
 const babyFields = [
-  { key: "semanas_gestacao", label: "Semanas de gestação" },
-  { key: "tipo_parto", label: "Tipo de parto" },
-  { key: "parto_induzido", label: "Parto induzido" },
-  { key: "instrumentos", label: "Instrumentos (ventosa/fórceps)" },
-  { key: "peso_nascer", label: "Peso ao nascer" },
-  { key: "comprimento_nascer", label: "Comprimento ao nascer" },
-  { key: "amamentacao", label: "Amamentação" },
-  { key: "refluxo", label: "Refluxo" },
-  { key: "colicas", label: "Cólicas" },
-  { key: "sono", label: "Sono" },
-  { key: "eliminacao_intestinal", label: "Eliminação intestinal" },
-  { key: "infecoes_respiratorias", label: "Infecções respiratórias" },
-  { key: "preferencia_postural", label: "Preferência postural" },
-  { key: "vacinas", label: "Vacinas" },
-  { key: "alergias", label: "Alergias" },
-  { key: "medicacao", label: "Medicação" },
-  { key: "diagnostico", label: "Diagnóstico médico" },
+  { key: "gestation", label: "Semanas de gestação" },
+  { key: "deliveryType", label: "Tipo de parto" },
+  { key: "induced", label: "Parto induzido" },
+  { key: "instruments", label: "Instrumentos (ventosa/fórceps)" },
+  { key: "birthWeight", label: "Peso ao nascer" },
+  { key: "birthLength", label: "Comprimento ao nascer" },
+  { key: "breastfeeding", label: "Amamentação" },
+  { key: "reflux", label: "Refluxo" },
+  { key: "colic", label: "Cólicas" },
+  { key: "sleep", label: "Sono" },
+  { key: "bowel", label: "Eliminação intestinal" },
+  { key: "respiratoryInfections", label: "Infecções respiratórias" },
+  { key: "posturalPreference", label: "Preferência postural" },
+  { key: "vaccines", label: "Vacinas" },
+  { key: "allergies", label: "Alergias" },
+  { key: "medication", label: "Medicação" },
+  { key: "diagnosis", label: "Diagnóstico médico" },
 ];
 
 const adultFields = [
-  { key: "motivo_consulta", label: "Motivo da consulta" },
-  { key: "atividade_fisica", label: "Atividade física" },
-  { key: "objetivo_tratamento", label: "Objectivo do tratamento" },
-  { key: "lesoes_anteriores", label: "Lesões anteriores" },
-  { key: "cirurgias", label: "Cirurgias" },
-  { key: "medicacao", label: "Medicação" },
-  { key: "alergias", label: "Alergias" },
-  { key: "condicoes_cronicas", label: "Condições crónicas" },
+  { key: "reason", label: "Motivo da consulta" },
+  { key: "activity", label: "Atividade física" },
+  { key: "objective", label: "Objectivo do tratamento" },
+  { key: "previousInjuries", label: "Lesões anteriores" },
+  { key: "surgeries", label: "Cirurgias" },
+  { key: "medication", label: "Medicação" },
+  { key: "allergies", label: "Alergias" },
+  { key: "chronicConditions", label: "Condições crónicas" },
 ];
 
 const elderlyFields = [
-  { key: "condicoes_cronicas", label: "Condições crónicas" },
-  { key: "medicacao", label: "Medicação" },
-  { key: "alergias", label: "Alergias" },
-  { key: "historico_quedas", label: "Histórico de quedas" },
-  { key: "auxilio_marcha", label: "Auxílio de marcha" },
-  { key: "autonomia_diaria", label: "Autonomia diária" },
-  { key: "cuidador", label: "Cuidador" },
+  { key: "chronicConditions", label: "Condições crónicas" },
+  { key: "medication", label: "Medicação" },
+  { key: "allergies", label: "Alergias" },
+  { key: "fallHistory", label: "Histórico de quedas" },
+  { key: "walkingAid", label: "Auxílio de marcha" },
+  { key: "autonomy", label: "Autonomia diária" },
+  { key: "caregiverName", label: "Cuidador" },
 ];
 
 const childFields = [
-  { key: "motivo_consulta", label: "Motivo da consulta" },
-  { key: "atividade_fisica", label: "Atividade física" },
-  { key: "dificuldades_escolares", label: "Dificuldades escolares" },
-  { key: "cirurgias", label: "Cirurgias/internamentos" },
-  { key: "alergias", label: "Alergias" },
-  { key: "medicacao", label: "Medicação" },
-  { key: "vacinas", label: "Vacinas" },
-  { key: "diagnostico", label: "Diagnóstico" },
+  { key: "reason", label: "Motivo da consulta" },
+  { key: "activity", label: "Atividade física" },
+  { key: "schoolDifficulties", label: "Dificuldades escolares" },
+  { key: "surgeries", label: "Cirurgias/internamentos" },
+  { key: "allergies", label: "Alergias" },
+  { key: "medication", label: "Medicação" },
+  { key: "vaccines", label: "Vacinas" },
+  { key: "diagnosis", label: "Diagnóstico" },
 ];
 
 const fieldsByProfile: Record<string, typeof babyFields> = {
@@ -102,9 +102,15 @@ export function QuestionnaireHealthSummary({ pacienteId }: Props) {
   if (!data) return null;
 
   const perfilTipo: string = data.perfil_tipo || "adult";
-  const perfilSaude: Record<string, unknown> = data.perfil_saude || {};
-  const dadosPessoais: Record<string, unknown> = data.dados_pessoais || {};
-  const expectativas: Record<string, unknown> = data.expectativas || {};
+  const perfilSaude: Record<string, unknown> = typeof data.perfil_saude === 'string'
+    ? JSON.parse(data.perfil_saude)
+    : (data.perfil_saude || {});
+  const dadosPessoais: Record<string, unknown> = typeof data.dados_pessoais === 'string'
+    ? JSON.parse(data.dados_pessoais)
+    : (data.dados_pessoais || {});
+  const expectativas: Record<string, unknown> = typeof data.expectativas === 'string'
+    ? JSON.parse(data.expectativas)
+    : (data.expectativas || {});
   const fields = fieldsByProfile[perfilTipo] || adultFields;
 
   // Merge dados_pessoais + perfil_saude for lookup
@@ -137,18 +143,18 @@ export function QuestionnaireHealthSummary({ pacienteId }: Props) {
         </div>
 
         {/* Expectativas */}
-        {(expectativas.objetivos || expectativas.preocupacoes) && (
+        {(expectativas.expectations || expectativas.concerns) && (
           <div className="border-t border-blue-200 pt-3 space-y-2">
-            {expectativas.objetivos && (
+            {expectativas.expectations && (
               <div>
                 <p className="text-xs text-muted-foreground">O que espera alcançar</p>
-                <p className="text-sm font-medium">{String(expectativas.objetivos)}</p>
+                <p className="text-sm font-medium">{String(expectativas.expectations)}</p>
               </div>
             )}
-            {expectativas.preocupacoes && (
+            {expectativas.concerns && (
               <div>
                 <p className="text-xs text-muted-foreground">Preocupações</p>
-                <p className="text-sm font-medium">{String(expectativas.preocupacoes)}</p>
+                <p className="text-sm font-medium">{String(expectativas.concerns)}</p>
               </div>
             )}
           </div>

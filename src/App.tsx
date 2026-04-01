@@ -52,6 +52,7 @@ const PreRegisto = lazyWithRetry(() => import("./pages/PreRegisto"));
 const RelatorioResp = lazyWithRetry(() => import("./pages/RelatorioRespiratorio"));
 const PortalVerificacao = lazyWithRetry(() => import("./pages/PortalVerificacao"));
 const PortalOnboarding = lazyWithRetry(() => import("./pages/PortalOnboarding"));
+const PortalLogin = lazyWithRetry(() => import("./pages/PortalLogin"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -125,6 +126,14 @@ const App = () => (
                     element={
                       <Suspense fallback={<PageLoadingFallback />}>
                         <PortalVerificacao />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/portal/login"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <PortalLogin />
                       </Suspense>
                     }
                   />
