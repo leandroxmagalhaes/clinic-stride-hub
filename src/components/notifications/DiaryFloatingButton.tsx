@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { MessageCircle, X, CheckCheck, ArrowLeft, Send, ExternalLink } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
