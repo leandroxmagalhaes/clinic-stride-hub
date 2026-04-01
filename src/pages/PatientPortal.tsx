@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, BookOpen, ArrowLeftRight } from "lucide-react";
+import { Plus, BookOpen, ArrowLeftRight, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +18,12 @@ type ProfileType = "baby" | "child" | "adult" | "elderly";
 export default function PatientPortal() {
   const { user, loading: authLoading } = useAuth();
   const { isPatient, isLoading: roleLoading } = useUserRole();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/portal/login');
+  };
 
   const [contaId, setContaId] = useState<string | null>(null);
   const [linkedPatients, setLinkedPatients] = useState<string[]>([]);
@@ -277,12 +283,18 @@ export default function PatientPortal() {
               <p className="text-xs text-muted-foreground">{patientName}</p>
             </div>
           </div>
-          {linkedPatients.length > 1 && (
-            <Button variant="ghost" size="sm" onClick={handleSwitchProfile} className="gap-1.5 text-xs">
-              <ArrowLeftRight className="h-3.5 w-3.5" />
-              Trocar
+          <div className="flex items-center gap-1">
+            {linkedPatients.length > 1 && (
+              <Button variant="ghost" size="sm" onClick={handleSwitchProfile} className="gap-1.5 text-xs">
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+                Trocar
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-1.5 text-xs text-slate-500 hover:text-red-500 hover:bg-transparent">
+              <LogOut className="h-3.5 w-3.5" />
+              Sair
             </Button>
-          )}
+          </div>
         </div>
       </header>
 
