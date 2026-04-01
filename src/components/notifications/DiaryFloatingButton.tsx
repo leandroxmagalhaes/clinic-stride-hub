@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { MessageCircle, X, CheckCheck, ArrowLeft, Send, ExternalLink } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +77,7 @@ function getAvatarColor(name: string) {
 }
 
 export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
+  const { isPatient, isProfessional, isAdmin, isSecretary, isLoading: roleLoading } = useUserRole();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"list" | "chat">("list");
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -266,6 +268,11 @@ export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
     items.sort((a, b) => new Date(a.data.created_at).getTime() - new Date(b.data.created_at).getTime());
     return items;
   };
+
+  // Only show for professionals/admins/secretaries - never for patients
+  const hasStaffRole = isProfessional || isAdmin || isSecretary;
+  if (!hasStaffRole && isPatient) return null;
+  if (roleLoading) return null;
 
   return (
     <>

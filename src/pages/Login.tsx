@@ -43,51 +43,90 @@ export default function Login() {
       return;
     }
 
-    // Check if user has dual role (professional + patient portal)
+    // Check user roles to determine where to redirect
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('portal_role')
-        .eq('user_id', session.user.id)
-        .maybeSingle();
-
-      if (profile?.portal_role === 'both') {
-        setIsLoading(false);
-        setShowRoleChoice(true);
-        return;
-      }
+    if (!session?.user) {
+      setIsLoading(false);
+      return;
     }
 
-    // Check for pending invites
-    try {
-      const { data: pendingInvite } = await supabase
-        .from('team_invites')
-        .select('token, role, full_name')
-        .eq('email', email.toLowerCase())
-        .eq('status', 'pending')
-        .gt('expires_at', new Date().toISOString())
-        .maybeSingle();
+    const userId = session.user.id;
 
-      if (pendingInvite) {
-        const { data: result } = await supabase.rpc('process_team_invite', {
-          invite_token: pendingInvite.token
-        });
+    // Check if user has dual role (professional + patient portal)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('portal_role, role')
+      .eq('user_id', userId)
+      .maybeSingle();
 
-        const resultData = result as { success?: boolean; error?: string } | null;
-        if (resultData?.success) {
-          toast.success('Convite aceito automaticamente!', {
-            description: `Você agora faz parte da clínica como ${pendingInvite.role === 'professional' ? 'Fisioterapeuta' : pendingInvite.role}`,
+    if (profile?.portal_role === 'both') {
+      setIsLoading(false);
+      setShowRoleChoice(true);
+      return;
+    }
+
+    // Check user_roles to determine access
+    const { data: userRoles } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId);
+
+    const roles = (userRoles || []).map(r => r.role);
+    const hasStaffRole = roles.some(r => ['admin', 'professional', 'secretary'].includes(r));
+    const hasPatientRole = roles.includes('patient');
+
+    // Check for pending invites (only for staff)
+    if (hasStaffRole) {
+      try {
+        const { data: pendingInvite } = await supabase
+          .from('team_invites')
+          .select('token, role, full_name')
+          .eq('email', email.toLowerCase())
+          .eq('status', 'pending')
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle();
+
+        if (pendingInvite) {
+          const { data: result } = await supabase.rpc('process_team_invite', {
+            invite_token: pendingInvite.token
           });
+
+          const resultData = result as { success?: boolean; error?: string } | null;
+          if (resultData?.success) {
+            toast.success('Convite aceito automaticamente!', {
+              description: `Você agora faz parte da clínica como ${pendingInvite.role === 'professional' ? 'Fisioterapeuta' : pendingInvite.role}`,
+            });
+          }
         }
+      } catch (err) {
+        console.error('Error processing pending invite:', err);
       }
-    } catch (err) {
-      console.error('Error processing pending invite:', err);
     }
 
     setIsLoading(false);
-    toast.success('Login realizado com sucesso!');
-    navigate(from, { replace: true });
+
+    if (hasStaffRole) {
+      toast.success('Login realizado com sucesso!');
+      navigate(from, { replace: true });
+    } else if (hasPatientRole) {
+      // Patient-only user → redirect to portal
+      navigate('/patient-portal', { replace: true });
+    } else {
+      // No recognized role — might be new user with default patient role
+      // Check if they have a portal account
+      const { data: portalConta } = await (supabase as any)
+        .from('portal_contas')
+        .select('id')
+        .eq('auth_user_id', userId)
+        .maybeSingle();
+
+      if (portalConta) {
+        navigate('/patient-portal', { replace: true });
+      } else {
+        toast.success('Login realizado com sucesso!');
+        navigate(from, { replace: true });
+      }
+    }
   };
 
   const handleRoleChoice = (role: 'professional' | 'patient') => {
