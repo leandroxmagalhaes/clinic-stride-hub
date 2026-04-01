@@ -53,6 +53,7 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
   const [toggling, setToggling] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
+  const [sendingLink, setSendingLink] = useState(false);
 
   useEffect(() => {
     loadData();
