@@ -126,10 +126,11 @@ export default function PatientPortal() {
       // Load profile type
       const { data: questionario } = await (supabase as any)
         .from("portal_questionario")
-        .select("perfil_tipo")
+        .select("perfil_tipo, completo")
         .eq("paciente_id", selectedPacienteId)
         .maybeSingle();
       if (questionario?.perfil_tipo) setPerfilTipo(questionario.perfil_tipo);
+      setHasQuestionnaire(!!questionario?.completo);
 
       // Load patient name
       const { data: paciente } = await supabase
