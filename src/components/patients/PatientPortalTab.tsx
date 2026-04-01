@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { getPublicBaseUrl } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
