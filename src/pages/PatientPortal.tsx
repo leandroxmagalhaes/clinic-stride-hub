@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, BookOpen } from "lucide-react";
+import { Plus, BookOpen, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DiaryNewEntryForm } from "@/components/patient-portal/DiaryNewEntryForm";
 import { DiaryEntryCard, type DiaryEntry } from "@/components/patient-portal/DiaryEntryCard";
 import type { DiaryReply } from "@/components/patient-portal/DiaryReplyThread";
+import { ProfileSelector } from "@/components/patient-portal/ProfileSelector";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,25 +19,66 @@ export default function PatientPortal() {
   const { user, loading: authLoading } = useAuth();
   const { isPatient, isLoading: roleLoading } = useUserRole();
 
+  const [contaId, setContaId] = useState<string | null>(null);
+  const [linkedPatients, setLinkedPatients] = useState<string[]>([]);
+  const [selectedPacienteId, setSelectedPacienteId] = useState<string | null>(null);
+  const [showProfileSelector, setShowProfileSelector] = useState(false);
+
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [perfilTipo, setPerfilTipo] = useState<ProfileType>("adult");
   const [patientName, setPatientName] = useState("Paciente");
-  const [pacienteId, setPacienteId] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(true);
 
-  // Resolve paciente_id from portal_contas using auth user id
-  const resolvePatientId = useCallback(async () => {
-    if (!user) return null;
-    const { data } = await (supabase as any)
-      .from("portal_contas")
-      .select("paciente_id")
-      .eq("auth_user_id", user.id)
-      .maybeSingle();
-    return data?.paciente_id || null;
+  // Resolve conta and linked patients
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      setResolving(true);
+
+      // Get portal account
+      const { data: conta } = await (supabase as any)
+        .from("portal_contas")
+        .select("id, paciente_id")
+        .eq("auth_user_id", user.id)
+        .maybeSingle();
+
+      if (!conta) {
+        setResolving(false);
+        return;
+      }
+
+      setContaId(conta.id);
+
+      // Get linked patients from portal_conta_pacientes
+      const { data: links } = await (supabase as any)
+        .from("portal_conta_pacientes")
+        .select("paciente_id")
+        .eq("conta_id", conta.id);
+
+      const patientIds = (links || []).map((l: any) => l.paciente_id);
+
+      // Fallback: if no links exist yet, use legacy paciente_id
+      if (patientIds.length === 0 && conta.paciente_id) {
+        patientIds.push(conta.paciente_id);
+      }
+
+      setLinkedPatients(patientIds);
+
+      if (patientIds.length === 1) {
+        setSelectedPacienteId(patientIds[0]);
+        setShowProfileSelector(false);
+      } else if (patientIds.length > 1) {
+        setShowProfileSelector(true);
+      }
+
+      setResolving(false);
+    })();
   }, [user]);
 
+  // Load diary when patient selected
   const loadEntries = useCallback(async (pid: string) => {
     setIsLoadingEntries(true);
     try {
@@ -71,17 +113,13 @@ export default function PatientPortal() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!selectedPacienteId) return;
     (async () => {
-      const pid = await resolvePatientId();
-      if (!pid) return;
-      setPacienteId(pid);
-
       // Load profile type
       const { data: questionario } = await (supabase as any)
         .from("portal_questionario")
         .select("perfil_tipo")
-        .eq("paciente_id", pid)
+        .eq("paciente_id", selectedPacienteId)
         .maybeSingle();
       if (questionario?.perfil_tipo) setPerfilTipo(questionario.perfil_tipo);
 
@@ -89,13 +127,25 @@ export default function PatientPortal() {
       const { data: paciente } = await supabase
         .from("pacientes")
         .select("full_name")
-        .eq("id", pid)
+        .eq("id", selectedPacienteId)
         .maybeSingle();
       if (paciente) setPatientName(paciente.full_name);
 
-      await loadEntries(pid);
+      await loadEntries(selectedPacienteId);
     })();
-  }, [user, resolvePatientId, loadEntries]);
+  }, [selectedPacienteId, loadEntries]);
+
+  const handleProfileSelect = (pacienteId: string) => {
+    setSelectedPacienteId(pacienteId);
+    setShowProfileSelector(false);
+  };
+
+  const handleSwitchProfile = () => {
+    setSelectedPacienteId(null);
+    setShowProfileSelector(true);
+    setEntries([]);
+    setShowForm(false);
+  };
 
   const handleSubmit = async (data: {
     humor: string;
@@ -104,16 +154,15 @@ export default function PatientPortal() {
     nivel_dor: number | null;
     foto_file: File | null;
   }) => {
-    if (!pacienteId) return;
+    if (!selectedPacienteId) return;
     setIsSubmitting(true);
     try {
       let fotoUrl: string | null = null;
       let temFoto = false;
 
-      // Upload photo if present
       if (data.foto_file) {
         const filename = `${Date.now()}_${data.foto_file.name}`;
-        const path = `${pacienteId}/diary/${filename}`;
+        const path = `${selectedPacienteId}/diary/${filename}`;
         const { error: uploadError } = await supabase.storage
           .from("patient-documents")
           .upload(path, data.foto_file);
@@ -127,11 +176,10 @@ export default function PatientPortal() {
       const autorNome = patientName.split(" ")[0];
       const isUrgent = data.categoria === "worsening" || data.categoria === "fall" || (data.nivel_dor != null && data.nivel_dor >= 6);
 
-      // Insert diary entry
       const { data: newEntry, error } = await (supabase as any)
         .from("portal_diario")
         .insert({
-          paciente_id: pacienteId,
+          paciente_id: selectedPacienteId,
           autor_nome: autorNome,
           humor: data.humor,
           categoria: data.categoria,
@@ -148,9 +196,8 @@ export default function PatientPortal() {
         return;
       }
 
-      // Create notification for professional
       await (supabase as any).from("portal_notificacoes").insert({
-        paciente_id: pacienteId,
+        paciente_id: selectedPacienteId,
         tipo: "diary_entry",
         titulo: `${autorNome} escreveu no diário de ${patientName}`,
         texto_preview: data.texto.slice(0, 100),
@@ -160,7 +207,7 @@ export default function PatientPortal() {
 
       toast.success("Entrada guardada!");
       setShowForm(false);
-      await loadEntries(pacienteId);
+      await loadEntries(selectedPacienteId);
     } catch (err) {
       toast.error("Erro inesperado");
     } finally {
@@ -169,7 +216,7 @@ export default function PatientPortal() {
   };
 
   const handleReply = async (diarioId: string, texto: string) => {
-    if (!pacienteId) return;
+    if (!selectedPacienteId) return;
     const autorNome = patientName.split(" ")[0];
 
     const { error } = await (supabase as any).from("portal_respostas").insert({
@@ -184,9 +231,8 @@ export default function PatientPortal() {
       return;
     }
 
-    // Notification
     await (supabase as any).from("portal_notificacoes").insert({
-      paciente_id: pacienteId,
+      paciente_id: selectedPacienteId,
       tipo: "diary_reply",
       titulo: `${autorNome} respondeu no diário`,
       texto_preview: texto.slice(0, 100),
@@ -195,11 +241,11 @@ export default function PatientPortal() {
     });
 
     toast.success("Resposta enviada!");
-    await loadEntries(pacienteId);
+    await loadEntries(selectedPacienteId);
   };
 
   // Loading state
-  if (authLoading || roleLoading) {
+  if (authLoading || roleLoading || resolving) {
     return (
       <div className="min-h-screen bg-background p-4 md:p-8">
         <div className="max-w-lg mx-auto space-y-6">
@@ -214,6 +260,11 @@ export default function PatientPortal() {
   if (!user) return <Navigate to="/login" replace />;
   if (!isPatient) return <Navigate to="/" replace />;
 
+  // Profile selector for multi-patient accounts
+  if (showProfileSelector && contaId) {
+    return <ProfileSelector contaId={contaId} onSelect={handleProfileSelect} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
       {/* Header */}
@@ -221,13 +272,21 @@ export default function PatientPortal() {
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-display font-bold">Meu Diário</h1>
+            <div>
+              <h1 className="text-xl font-display font-bold">Meu Diário</h1>
+              <p className="text-xs text-muted-foreground">{patientName}</p>
+            </div>
           </div>
+          {linkedPatients.length > 1 && (
+            <Button variant="ghost" size="sm" onClick={handleSwitchProfile} className="gap-1.5 text-xs">
+              <ArrowLeftRight className="h-3.5 w-3.5" />
+              Trocar
+            </Button>
+          )}
         </div>
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
-        {/* Show Form or CTA Button */}
         {showForm ? (
           <DiaryNewEntryForm
             perfilTipo={perfilTipo}
@@ -251,7 +310,6 @@ export default function PatientPortal() {
           </Card>
         )}
 
-        {/* Entry list */}
         {isLoadingEntries ? (
           <div className="space-y-3">
             <Skeleton className="h-32 w-full rounded-xl" />

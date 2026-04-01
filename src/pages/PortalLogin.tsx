@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -18,9 +18,10 @@ export default function PortalLogin() {
   const navigate = useNavigate();
 
   const checkPortalAccount = async (userId: string) => {
+    // Get portal account — now we store conta_id, not paciente_id
     const { data: conta } = await (supabase as any)
       .from("portal_contas")
-      .select("paciente_id, onboarding_completo")
+      .select("id, onboarding_completo")
       .eq("auth_user_id", userId)
       .maybeSingle();
 
@@ -32,7 +33,16 @@ export default function PortalLogin() {
       return;
     }
 
-    localStorage.setItem("portal_paciente_id", conta.paciente_id);
+    // Check linked patients via portal_conta_pacientes
+    const { data: links } = await (supabase as any)
+      .from("portal_conta_pacientes")
+      .select("paciente_id")
+      .eq("conta_id", conta.id);
+
+    // Store first paciente_id for onboarding compatibility
+    if (links && links.length > 0) {
+      localStorage.setItem("portal_paciente_id", links[0].paciente_id);
+    }
 
     if (!conta.onboarding_completo) {
       navigate("/portal/onboarding");
@@ -75,13 +85,14 @@ export default function PortalLogin() {
   };
 
   // Handle OAuth redirect
-  useState(() => {
-    supabase.auth.onAuthStateChange(async (event, session) => {
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session?.user) {
         await checkPortalAccount(session.user.id);
       }
     });
-  });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleResetPassword = async () => {
     if (!resetEmail) {
@@ -155,7 +166,6 @@ export default function PortalLogin() {
           <>
             <form onSubmit={handleEmailLogin}>
               <CardContent className="space-y-4">
-                {/* Google */}
                 <Button
                   type="button"
                   variant="outline"
