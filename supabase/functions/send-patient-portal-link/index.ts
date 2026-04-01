@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "https://esm.sh/resend@2.0.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,16 +7,14 @@ const corsHeaders = {
 };
 
 interface PortalLinkRequest {
-  patientEmail: string;
+  to: string;
   patientName: string;
-  portalUrl: string;
-  clinicName: string;
-  clinicPhone?: string;
-  clinicEmail?: string;
+  subject?: string;
+  includeCode?: string;
+  type?: "invite" | "ready" | "access";
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -28,27 +25,29 @@ serve(async (req) => {
       throw new Error("RESEND_API_KEY not configured");
     }
 
-    const resend = new Resend(resendApiKey);
-
     const body: PortalLinkRequest = await req.json();
-    const {
-      patientEmail,
-      patientName,
-      portalUrl,
-      clinicName,
-      clinicPhone,
-      clinicEmail,
-    } = body;
+    const { to, patientName, subject, includeCode, type = "access" } = body;
 
-    // Validate required fields
-    if (!patientEmail || !patientName || !portalUrl) {
-      throw new Error("Missing required fields: patientEmail, patientName, portalUrl");
+    if (!to || !patientName) {
+      throw new Error("Missing required fields: to, patientName");
     }
 
-    console.log(`Sending portal link to ${patientEmail}`);
+    console.log(`Sending portal link to ${to} (type: ${type})`);
 
-    const emailHtml = `
-<!DOCTYPE html>
+    const portalUrl = "https://physione.app/portal/login";
+
+    const codeSection = includeCode
+      ? `<tr><td style="padding: 16px 0; text-align: center;">
+           <p style="margin: 0 0 8px; color: #71717a; font-size: 14px;">O seu código de verificação:</p>
+           <p style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 6px; color: #1e40af; font-family: monospace;">${includeCode}</p>
+         </td></tr>`
+      : "";
+
+    const mainText = type === "ready"
+      ? "O seu perfil no Portal do Paciente foi completado com sucesso! 🎉<br/>Guarde este link para aceder ao diário e acompanhar o tratamento a qualquer momento:"
+      : "O seu acesso ao Portal do Paciente está activo.<br/>Use o botão abaixo para aceder ao diário e acompanhar o tratamento:";
+
+    const emailHtml = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -61,69 +60,52 @@ serve(async (req) => {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr>
             <td style="text-align: center; padding-bottom: 30px; border-bottom: 1px solid #e4e4e7;">
-              <h1 style="margin: 0; color: #6366f1; font-size: 24px;">🏥 Portal do Paciente</h1>
+              <h1 style="margin: 0; color: #1e40af; font-size: 24px;">Physione</h1>
+              <p style="margin: 4px 0 0; color: #71717a; font-size: 13px;">Portal do Paciente</p>
             </td>
           </tr>
-        </table>
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr>
             <td style="padding: 30px 0 20px;">
               <p style="margin: 0; color: #3f3f46; font-size: 16px;">
                 Olá <strong>${patientName}</strong>,
               </p>
               <p style="margin: 16px 0 0; color: #71717a; font-size: 14px;">
-                Agora você tem acesso ao Portal do Paciente da <strong>${clinicName || "nossa clínica"}</strong>!
+                ${mainText}
               </p>
             </td>
           </tr>
-        </table>
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #eef2ff; border-radius: 8px; margin-bottom: 20px; border: 1px solid #c7d2fe;">
-          <tr>
-            <td style="padding: 24px;">
-              <p style="margin: 0 0 16px; color: #3730a3; font-size: 14px; font-weight: 600;">
-                No portal você pode:
-              </p>
-              <ul style="margin: 0; padding-left: 20px; color: #4338ca; font-size: 14px;">
-                <li style="margin-bottom: 8px;">📝 Registar o seu diário de atividades</li>
-                <li style="margin-bottom: 8px;">📊 Acompanhar o seu progresso</li>
-                <li style="margin-bottom: 8px;">📅 Ver os seus próximos agendamentos</li>
-                <li>💬 Comunicar com a equipa clínica</li>
-              </ul>
-            </td>
-          </tr>
-        </table>
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          ${codeSection}
           <tr>
             <td style="text-align: center; padding: 20px 0;">
-              <a href="${portalUrl}" style="display: inline-block; background-color: #6366f1; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600;">
+              <a href="${portalUrl}" style="display: inline-block; background-color: #1e40af; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600;">
                 Aceder ao Portal
               </a>
             </td>
           </tr>
-        </table>
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          ${type === "ready" ? `<tr><td style="padding: 16px 0;">
+            <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px;">
+              <p style="margin: 0; color: #1e40af; font-size: 13px;">Pode aceder sempre que quiser para:</p>
+              <ul style="margin: 8px 0 0; padding-left: 20px; color: #3b82f6; font-size: 13px;">
+                <li>Escrever no diário como está o dia a dia</li>
+                <li>Ver respostas da fisioterapeuta</li>
+                <li>Atualizar os seus dados de saúde</li>
+              </ul>
+            </div>
+          </td></tr>` : ""}
           <tr>
             <td style="padding: 20px 0; border-top: 1px solid #e4e4e7;">
               <p style="margin: 0; color: #71717a; font-size: 12px;">
                 Se o botão não funcionar, copie e cole este link no seu navegador:
               </p>
-              <p style="margin: 8px 0 0; color: #6366f1; font-size: 12px; word-break: break-all;">
+              <p style="margin: 8px 0 0; color: #1e40af; font-size: 12px; word-break: break-all;">
                 ${portalUrl}
               </p>
             </td>
           </tr>
-        </table>
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr>
             <td style="padding-top: 30px; border-top: 1px solid #e4e4e7; text-align: center;">
-              <p style="margin: 0 0 8px; color: #18181b; font-size: 16px; font-weight: 600;">${clinicName || "Clínica"}</p>
-              ${clinicPhone ? `<p style="margin: 0 0 4px; color: #71717a; font-size: 14px;">📞 ${clinicPhone}</p>` : ""}
-              ${clinicEmail ? `<p style="margin: 0; color: #71717a; font-size: 14px;">✉️ ${clinicEmail}</p>` : ""}
+              <p style="margin: 0 0 4px; color: #18181b; font-size: 14px; font-weight: 600;">Respira & Desenvolve</p>
+              <p style="margin: 0; color: #71717a; font-size: 12px;">Fisioterapia Neonatal e Pediátrica</p>
             </td>
           </tr>
         </table>
@@ -131,16 +113,28 @@ serve(async (req) => {
     </tr>
   </table>
 </body>
-</html>
-    `;
+</html>`;
 
-    const emailResponse = await resend.emails.send({
-      from: `${clinicName || "Clínica"} <onboarding@resend.dev>`,
-      to: [patientEmail],
-      subject: `Acesso ao Portal do Paciente - ${clinicName || "Clínica"}`,
-      html: emailHtml,
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${resendApiKey}`,
+      },
+      body: JSON.stringify({
+        from: "Physione <noreply@respiraedesenvolve.com>",
+        to: [to],
+        subject: subject || "Physione — Acesso ao Portal do Paciente",
+        html: emailHtml,
+      }),
     });
 
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Resend error: ${errText}`);
+    }
+
+    const emailResponse = await res.json();
     console.log("Portal link email sent successfully:", emailResponse);
 
     return new Response(

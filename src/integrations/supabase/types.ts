@@ -1576,6 +1576,39 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_questionario_historico: {
+        Row: {
+          alterado_por: string
+          campo_alterado: string
+          created_at: string | null
+          id: string
+          paciente_id: string
+          questionario_id: string
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          alterado_por: string
+          campo_alterado: string
+          created_at?: string | null
+          id?: string
+          paciente_id: string
+          questionario_id: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          alterado_por?: string
+          campo_alterado?: string
+          created_at?: string | null
+          id?: string
+          paciente_id?: string
+          questionario_id?: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: []
+      }
       portal_respostas: {
         Row: {
           autor_nome: string

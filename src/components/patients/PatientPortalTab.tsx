@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { getPublicBaseUrl } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -53,6 +53,7 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
   const [toggling, setToggling] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
+  const [sendingLink, setSendingLink] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -126,6 +127,36 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
     }
   };
 
+  const handleSendPortalLink = async () => {
+    if (!patientEmail) {
+      toast.error("Paciente não tem email registado.");
+      return;
+    }
+    setSendingLink(true);
+    try {
+      const code = lastInvite && !lastInvite.utilizado && new Date(lastInvite.expira_em) > new Date()
+        ? lastInvite.codigo
+        : undefined;
+
+      const { error } = await supabase.functions.invoke("send-patient-portal-link", {
+        body: {
+          to: patientEmail,
+          patientName,
+          subject: "Physione — Acesso ao Portal do Paciente",
+          includeCode: code,
+          type: account ? "access" : "invite",
+        },
+      });
+      if (error) throw error;
+      toast.success(`Link do portal enviado para ${patientEmail}`);
+    } catch (err: any) {
+      console.error("Erro ao enviar link:", err);
+      toast.error("Erro ao enviar email. Verifique o email do paciente.");
+    } finally {
+      setSendingLink(false);
+    }
+  };
+
   const handleCopyLink = () => {
     if (!lastInvite) return;
     const link = `${getPublicBaseUrl()}/portal/${lastInvite.link_token}`;
@@ -180,6 +211,13 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
           {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           {lastInvite ? "Gerar novo convite" : "Gerar convite"}
         </Button>
+
+        {patientEmail && (
+          <Button size="sm" variant="outline" onClick={handleSendPortalLink} disabled={sendingLink} className="gap-1.5">
+            {sendingLink ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+            Enviar Link do Portal
+          </Button>
+        )}
 
         {lastInvite && !lastInvite.utilizado && new Date(lastInvite.expira_em) > new Date() && (
           <Button size="sm" variant="outline" onClick={handleCopyLink} className="gap-1.5">

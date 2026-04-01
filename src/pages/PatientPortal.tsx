@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, BookOpen, ArrowLeftRight, LogOut } from "lucide-react";
+import { Plus, BookOpen, ArrowLeftRight, LogOut, HeartPulse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,6 +9,7 @@ import { DiaryNewEntryForm } from "@/components/patient-portal/DiaryNewEntryForm
 import { DiaryEntryCard, type DiaryEntry } from "@/components/patient-portal/DiaryEntryCard";
 import type { DiaryReply } from "@/components/patient-portal/DiaryReplyThread";
 import { ProfileSelector } from "@/components/patient-portal/ProfileSelector";
+import { EditHealthProfileModal } from "@/components/patient-portal/EditHealthProfileModal";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +38,8 @@ export default function PatientPortal() {
   const [perfilTipo, setPerfilTipo] = useState<ProfileType>("adult");
   const [patientName, setPatientName] = useState("Paciente");
   const [resolving, setResolving] = useState(true);
+  const [showHealthEdit, setShowHealthEdit] = useState(false);
+  const [hasQuestionnaire, setHasQuestionnaire] = useState(false);
 
   // Resolve conta and linked patients
   useEffect(() => {
@@ -124,10 +127,11 @@ export default function PatientPortal() {
       // Load profile type
       const { data: questionario } = await (supabase as any)
         .from("portal_questionario")
-        .select("perfil_tipo")
+        .select("perfil_tipo, completo")
         .eq("paciente_id", selectedPacienteId)
         .maybeSingle();
       if (questionario?.perfil_tipo) setPerfilTipo(questionario.perfil_tipo);
+      setHasQuestionnaire(!!questionario?.completo);
 
       // Load patient name
       const { data: paciente } = await supabase
@@ -299,6 +303,18 @@ export default function PatientPortal() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
+        {/* Health data update button */}
+        {hasQuestionnaire && !showForm && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowHealthEdit(true)}
+            className="gap-1.5 text-xs text-muted-foreground hover:text-primary w-full justify-center"
+          >
+            <HeartPulse className="h-3.5 w-3.5" />
+            📝 Atualizar dados de saúde
+          </Button>
+        )}
         {showForm ? (
           <DiaryNewEntryForm
             perfilTipo={perfilTipo}
@@ -347,6 +363,16 @@ export default function PatientPortal() {
           </div>
         )}
       </main>
+
+      {selectedPacienteId && (
+        <EditHealthProfileModal
+          open={showHealthEdit}
+          onOpenChange={setShowHealthEdit}
+          pacienteId={selectedPacienteId}
+          patientName={patientName}
+          perfilTipo={perfilTipo}
+        />
+      )}
     </div>
   );
 }
