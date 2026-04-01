@@ -303,6 +303,18 @@ export default function PatientPortal() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
+        {/* Health data update button */}
+        {hasQuestionnaire && !showForm && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowHealthEdit(true)}
+            className="gap-1.5 text-xs text-muted-foreground hover:text-primary w-full justify-center"
+          >
+            <HeartPulse className="h-3.5 w-3.5" />
+            📝 Atualizar dados de saúde
+          </Button>
+        )}
         {showForm ? (
           <DiaryNewEntryForm
             perfilTipo={perfilTipo}
