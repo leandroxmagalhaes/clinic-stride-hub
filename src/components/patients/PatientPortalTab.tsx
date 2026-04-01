@@ -181,6 +181,13 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
           {lastInvite ? "Gerar novo convite" : "Gerar convite"}
         </Button>
 
+        {patientEmail && (
+          <Button size="sm" variant="outline" onClick={handleSendPortalLink} disabled={sendingLink} className="gap-1.5">
+            {sendingLink ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+            Enviar Link do Portal
+          </Button>
+        )}
+
         {lastInvite && !lastInvite.utilizado && new Date(lastInvite.expira_em) > new Date() && (
           <Button size="sm" variant="outline" onClick={handleCopyLink} className="gap-1.5">
             <Copy className="h-3.5 w-3.5" /> Copiar link
