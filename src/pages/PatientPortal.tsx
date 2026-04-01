@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Plus, BookOpen, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
