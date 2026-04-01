@@ -774,7 +774,7 @@ export default function Prontuarios() {
                 <TabsContent value="prontuario">
                   <div className="space-y-4">
                     {/* Questionnaire Summary */}
-                    <QuestionnaireHealthSummary pacienteId={selectedProntuario.paciente_id} />
+                    <QuestionnaireHealthSummary pacienteId={selectedProntuario.paciente_id} birthDate={patients.find(p => p.id === selectedProntuario.paciente_id)?.birth_date} />
 
                     <Card className="shadow-card">
                       <CardHeader className="pb-3 flex flex-row items-center justify-between">
