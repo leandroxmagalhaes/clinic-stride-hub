@@ -1,93 +1,68 @@
 
 
-## Portal do Paciente — Fase 2: Diário + Respostas + Notificações
+## Corrigir Chat Flutuante + Questionário + Login de Utente
 
-This is a large feature adding 3 new tables, replacing the existing PatientPortal page with a richer diary, adding a new tab to Prontuários, a briefing section in SessionManagementModal, and diary notifications.
+### Problem Analysis
 
-### Step 1: Database Migrations
+**Issue 1 — Chat navigates away**: `DiaryFloatingButton.tsx` line 94 calls `navigate()` on notification click. Needs to be replaced with a two-state inline chat (conversation list → individual chat thread).
 
-Create 3 tables in a single migration:
+**Issue 2 — Questionnaire data not showing**: The onboarding saves health data with English keys (`gestation`, `deliveryType`, `reason`, `activity`, etc.) but `QuestionnaireHealthSummary.tsx` looks up Portuguese keys (`semanas_gestacao`, `tipo_parto`, `motivo_consulta`, etc.). The keys don't match, so all values show "—".
 
-- **`portal_diario`**: `id`, `paciente_id`, `autor_nome`, `humor`, `categoria`, `texto`, `nivel_dor`, `tem_foto`, `foto_url`, `created_at`. Open RLS (patient-facing, pre-auth scenarios).
-- **`portal_respostas`**: `id`, `diario_id` (FK → `portal_diario.id` ON DELETE CASCADE), `autor_nome`, `autor_tipo`, `texto`, `created_at`. Open RLS.
-- **`portal_notificacoes`**: `id`, `paciente_id`, `tipo`, `titulo`, `texto_preview`, `urgente`, `lida`, `referencia_id`, `created_at`. Open RLS.
+**Issue 3 — No patient login**: After onboarding, patients have no way to return to the diary. Need a `/portal/login` page.
 
-### Step 2: Replace `PatientPortal.tsx` — New Diary with Profile-Adaptive Form
+---
 
-Rewrite the existing `PatientPortal.tsx` page to use the new `portal_diario` table instead of `patient_diary`.
+### Step 1: Fix QuestionnaireHealthSummary field key mapping
 
-**On mount**: Fetch patient's `perfil_tipo` from `portal_questionario` to determine available categories and placeholder text.
+**File**: `src/components/prontuarios/QuestionnaireHealthSummary.tsx`
 
-**New entry form**: Mood emoji row (5 options) → Pain scale (only adult/elderly, 1-10 color-coded buttons) → Category buttons (profile-specific) → Textarea (profile-specific placeholder) → Photo upload button (to `patient-documents` bucket, path `{paciente_id}/diary/{filename}`) → Submit.
+Update the field key arrays to match what the onboarding actually saves:
 
-**On submit**: Insert into `portal_diario` + insert notification into `portal_notificacoes` (urgent if category is worsening/fall or pain ≥ 6).
+- Baby: `gestation`, `deliveryType`, `induced`, `instruments`, `birthWeight`, `birthLength`, `breastfeeding`, `reflux`, `colic`, `sleep`, `bowel`, `respiratoryInfections`, `posturalPreference`, `vaccines`, `allergies`, `medication`, `diagnosis`
+- Adult: `reason`, `activity`, `objective`, `previousInjuries`, `surgeries`, `medication`, `allergies`, `chronicConditions`
+- Elderly: `chronicConditions`, `medication`, `allergies`, `fallHistory`, `walkingAid`, `autonomy`, `caregiverName`
+- Child: `reason`, `activity`, `schoolDifficulties`, `surgeries`, `allergies`, `medication`, `vaccines`, `diagnosis`
 
-**Entry list**: Chronological with mood emoji, category badge, pain badge, text, photo indicator. Below each entry: reply thread from `portal_respostas` (blue bg for professional, grey for patient). Inline "Responder" button with textarea.
+Also update expectativas keys from `objetivos`/`preocupacoes` to `expectations`/`concerns` (matching onboarding step 3 line 174).
 
-**On patient reply**: Insert into `portal_respostas` with `autor_tipo: 'patient'` + insert notification with `tipo: 'diary_reply'`.
+---
 
-Components to create:
-- `src/components/patient-portal/DiaryNewEntryForm.tsx` — adaptive form
-- `src/components/patient-portal/DiaryEntryCard.tsx` — single entry with replies
-- `src/components/patient-portal/DiaryReplyThread.tsx` — reply list + reply form
+### Step 2: Rewrite DiaryFloatingButton as two-state inline chat
 
-The old `DiaryEntryForm.tsx` and `DiaryHistory.tsx` can remain (unused) or be removed.
+**File**: `src/components/notifications/DiaryFloatingButton.tsx` — full rewrite
 
-### Step 3: New "Diário" Tab in `Prontuarios.tsx`
+**State 1 — Conversation list**: Group `portal_notificacoes` by `paciente_id`. Show patient avatar (initials), name, last message preview, unread count per patient, urgency indicator. Click patient → State 2.
 
-Add a 5th tab `📖 Diário` to the existing TabsList (line ~537):
+**State 2 — Chat thread**: Fetch `portal_diario` entries + `portal_respostas` for that patient. Display chronologically (oldest first, like WhatsApp). Patient messages left-aligned (grey bg), professional replies right-aligned (blue bg). Include mood emoji, category badge, pain badge. Bottom: textarea + send button to insert into `portal_respostas` with `autor_tipo: 'professional'`. On open: mark all that patient's notifications as read. Header: back arrow, patient name, "Ver prontuário" link (only navigation point).
 
-```text
-Evoluções | Relatórios | Documentos | Prontuário | 📖 Diário (badge: N)
-```
+**Critical**: Remove all `navigate()` calls from notification clicks. Only "Ver prontuário" link navigates.
 
-**Tab content** (`src/components/prontuarios/PatientDiaryTab.tsx`):
-- Header: "Diário do Paciente" + "Registos por: [Pais/Paciente/Cuidador]" + entry count
-- **Alert box** (red, top): If entries with category `worsening`/`fall` or `nivel_dor ≥ 6` exist since last completed session → show "Pontos de atenção" with list
-- **Timeline**: Vertical line connector, each entry shows mood emoji, date, author, category badge, pain badge, full text, photo link, reply thread
-- **Reply button**: Professional can reply inline → inserts into `portal_respostas` with `autor_tipo: 'professional'`, `autor_nome` from logged-in user's profile
+Panel specs: `w-[380px]`, `max-h-[500px]`, `z-[95]`, slide-up animation.
 
-Data fetching: Query `portal_diario` by `paciente_id`, join `portal_respostas` by `diario_id`.
+---
 
-### Step 4: Pre-Session Briefing in `SessionManagementModal.tsx`
+### Step 3: Create patient login page
 
-Add a "✨ Briefing Pré-Sessão" section after the patient info area (~line 200-300 area of the modal).
+**New file**: `src/pages/PortalLogin.tsx`
 
-**Condition**: Only render if the patient has `portal_diario` entries since their last `realizado` session.
+- Route: `/portal/login` (public)
+- Physione branding (blue P square + "Portal do Paciente")
+- Email + password login via `supabase.auth.signInWithPassword()`
+- Google OAuth button via `supabase.auth.signInWithOAuth({ provider: 'google' })`
+- "Esqueci a password" link → `supabase.auth.resetPasswordForEmail()`
+- After login: check `portal_contas` for `auth_user_id` match → if not found, show error → if `onboarding_completo` false, redirect to `/portal/onboarding` → else redirect to `/patient-portal`
+- Footer link: "É profissional? Aceda aqui ao Physione →" → `/login`
 
-**Content**: 3 mini-cards (recent moods, category counters, entry count) + alerts if concerning entries + last 2-3 entries (compact: emoji + date + truncated text + badge) + "Ver diário completo →" link navigating to Prontuários diary tab.
+**Modify**: `src/pages/Login.tsx` — add footer link "É utente? Aceda ao Portal do Paciente →" → `/portal/login`
 
-Component: `src/components/prontuarios/DiaryBriefingSection.tsx`
+**Modify**: `src/App.tsx` — add route `/portal/login` → `PortalLogin`
 
-### Step 5: Integrate Diary Notifications into `NotificationService.ts`
+---
 
-Add a new method `getDiaryNotifications()` that fetches unread entries from `portal_notificacoes` where `lida = false`.
-
-Map to the existing `AppNotification` interface:
-- `type`: extend `NotificationType` union with `'diary_entry' | 'diary_reply'`
-- `priority`: `'high'` if `urgente`, else `'medium'`
-- Icon differentiation happens in `NotificationItem.tsx`
-- On click: navigate to `/prontuarios?paciente={paciente_id}&tab=diario`
-
-Add to the aggregated `getNotifications()` call. Mark as read on click via update to `portal_notificacoes`.
-
-### Files to Create
-- `src/components/patient-portal/DiaryNewEntryForm.tsx`
-- `src/components/patient-portal/DiaryEntryCard.tsx`
-- `src/components/patient-portal/DiaryReplyThread.tsx`
-- `src/components/prontuarios/PatientDiaryTab.tsx`
-- `src/components/prontuarios/DiaryBriefingSection.tsx`
-- Migration SQL
-
-### Files to Modify
-- `src/pages/PatientPortal.tsx` — rewrite to use new diary tables
-- `src/pages/Prontuarios.tsx` — add 5th "Diário" tab
-- `src/components/agenda/SessionManagementModal.tsx` — add briefing section
-- `src/services/NotificationService.ts` — add diary notification source
-- `src/components/notifications/NotificationItem.tsx` — handle diary notification types
-
-### What stays untouched
-- Evoluções, Relatórios, Documentos, Prontuário tabs — zero changes
-- Portal verification & onboarding (Fase 1) — zero changes
-- Existing notification types — preserved, diary adds alongside
+### Files Changed
+- **Modified**: `src/components/prontuarios/QuestionnaireHealthSummary.tsx` (fix field keys)
+- **Rewritten**: `src/components/notifications/DiaryFloatingButton.tsx` (two-state chat)
+- **New**: `src/pages/PortalLogin.tsx`
+- **Modified**: `src/pages/Login.tsx` (add portal link)
+- **Modified**: `src/App.tsx` (add route)
 
