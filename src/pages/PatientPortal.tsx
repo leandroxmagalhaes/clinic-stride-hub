@@ -363,6 +363,16 @@ export default function PatientPortal() {
           </div>
         )}
       </main>
+
+      {selectedPacienteId && (
+        <EditHealthProfileModal
+          open={showHealthEdit}
+          onOpenChange={setShowHealthEdit}
+          pacienteId={selectedPacienteId}
+          patientName={patientName}
+          perfilTipo={perfilTipo}
+        />
+      )}
     </div>
   );
 }
