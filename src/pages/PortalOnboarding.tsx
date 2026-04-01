@@ -204,6 +204,22 @@ export default function PortalOnboarding() {
         updated_at: new Date().toISOString(),
       }).eq("paciente_id", pacienteId);
 
+      // Auto-send portal link email
+      if (email) {
+        try {
+          await supabase.functions.invoke("send-patient-portal-link", {
+            body: {
+              to: email,
+              patientName: fullName || "Paciente",
+              subject: "Physione — O seu Portal está pronto!",
+              type: "ready",
+            },
+          });
+        } catch (e) {
+          console.error("Failed to send portal ready email:", e);
+        }
+      }
+
       setStep(3);
     } catch { toast.error("Erro ao guardar."); }
     finally { setSaving(false); }

@@ -127,6 +127,36 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
     }
   };
 
+  const handleSendPortalLink = async () => {
+    if (!patientEmail) {
+      toast.error("Paciente não tem email registado.");
+      return;
+    }
+    setSendingLink(true);
+    try {
+      const code = lastInvite && !lastInvite.utilizado && new Date(lastInvite.expira_em) > new Date()
+        ? lastInvite.codigo
+        : undefined;
+
+      const { error } = await supabase.functions.invoke("send-patient-portal-link", {
+        body: {
+          to: patientEmail,
+          patientName,
+          subject: "Physione — Acesso ao Portal do Paciente",
+          includeCode: code,
+          type: account ? "access" : "invite",
+        },
+      });
+      if (error) throw error;
+      toast.success(`Link do portal enviado para ${patientEmail}`);
+    } catch (err: any) {
+      console.error("Erro ao enviar link:", err);
+      toast.error("Erro ao enviar email. Verifique o email do paciente.");
+    } finally {
+      setSendingLink(false);
+    }
+  };
+
   const handleCopyLink = () => {
     if (!lastInvite) return;
     const link = `${getPublicBaseUrl()}/portal/${lastInvite.link_token}`;
