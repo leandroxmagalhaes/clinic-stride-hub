@@ -75,21 +75,45 @@ export default function PortalOnboarding() {
 
   const setHealth = (key: string, value: any) => setHealthData((prev) => ({ ...prev, [key]: value }));
 
-  // Check for Google OAuth callback
+  // Check for Google OAuth callback — also insert into portal_conta_pacientes
   useEffect(() => {
     const pending = localStorage.getItem("portal_google_pending");
     if (pending) {
       localStorage.removeItem("portal_google_pending");
       const pid = localStorage.getItem("portal_paciente_id");
       if (pid) {
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session?.user) {
-            (supabase as any).from("portal_contas").upsert({
+            const { data: upserted } = await (supabase as any).from("portal_contas").upsert({
               paciente_id: pid,
               auth_user_id: session.user.id,
               email: session.user.email,
               provider: "google",
-            }, { onConflict: "paciente_id" });
+            }, { onConflict: "paciente_id" }).select("id").single();
+
+            // Link in portal_conta_pacientes
+            if (upserted?.id) {
+              await (supabase as any).from("portal_conta_pacientes").insert({
+                conta_id: upserted.id,
+                paciente_id: pid,
+                relacao: "responsavel",
+                is_primary: true,
+              });
+            }
+
+            // Check dual-role
+            const { data: existingProfile } = await supabase
+              .from("profiles")
+              .select("id, role")
+              .eq("user_id", session.user.id)
+              .maybeSingle();
+
+            if (existingProfile && existingProfile.role !== 'patient') {
+              await supabase
+                .from("profiles")
+                .update({ portal_role: "both" } as any)
+                .eq("id", existingProfile.id);
+            }
           }
         });
       }

@@ -1357,6 +1357,33 @@ export type Database = {
           },
         ]
       }
+      portal_conta_pacientes: {
+        Row: {
+          conta_id: string
+          created_at: string | null
+          id: string
+          is_primary: boolean | null
+          paciente_id: string
+          relacao: string | null
+        }
+        Insert: {
+          conta_id: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          paciente_id: string
+          relacao?: string | null
+        }
+        Update: {
+          conta_id?: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          paciente_id?: string
+          relacao?: string | null
+        }
+        Relationships: []
+      }
       portal_contas: {
         Row: {
           auth_user_id: string | null
@@ -1658,6 +1685,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           phone: string | null
+          portal_role: string | null
           role: string
           specialty: string | null
           updated_at: string
@@ -1673,6 +1701,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           phone?: string | null
+          portal_role?: string | null
           role?: string
           specialty?: string | null
           updated_at?: string
@@ -1688,6 +1717,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           phone?: string | null
+          portal_role?: string | null
           role?: string
           specialty?: string | null
           updated_at?: string
