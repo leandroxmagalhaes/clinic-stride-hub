@@ -84,12 +84,9 @@ export function PatientDetailModal({
       const portalUrl = `${getPublicBaseUrl()}/patient-portal`;
       const { data, error } = await supabase.functions.invoke("send-patient-portal-link", {
         body: {
-          patientEmail: patient.email,
+          to: patient.email,
           patientName: patient.full_name,
-          portalUrl,
-          clinicName: clinicInfo?.name || "Clínica",
-          clinicPhone: clinicInfo?.phone,
-          clinicEmail: clinicInfo?.email,
+          type: "access",
         },
       });
       if (error) throw error;
