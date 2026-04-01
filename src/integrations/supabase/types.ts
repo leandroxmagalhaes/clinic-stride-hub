@@ -2827,6 +2827,7 @@ export type Database = {
         Args: { p_patient_id: string }
         Returns: number
       }
+      get_portal_patient_ids: { Args: { p_user_id: string }; Returns: string[] }
       get_user_clinic_id: { Args: { p_user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -2835,6 +2836,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_professional: { Args: { p_user_id: string }; Returns: boolean }
       process_team_invite: { Args: { invite_token: string }; Returns: Json }
       professional_can_access_patient: {
         Args: { p_patient_id: string; p_user_id: string }

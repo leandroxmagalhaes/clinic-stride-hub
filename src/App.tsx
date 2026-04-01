@@ -76,7 +76,7 @@ function ProtectedPage({ children, module }: { children: React.ReactNode; module
   const content = module ? <PermissionGuard module={module}>{children}</PermissionGuard> : children;
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireProfessional>
       <PersistentLayout>
         <Suspense fallback={<PageLoadingFallback />}>{content}</Suspense>
       </PersistentLayout>

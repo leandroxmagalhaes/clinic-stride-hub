@@ -76,6 +76,7 @@ function getAvatarColor(name: string) {
 }
 
 export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
+  const { isPatient, isProfessional, isAdmin, isSecretary, isLoading: roleLoading } = useUserRole();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"list" | "chat">("list");
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
