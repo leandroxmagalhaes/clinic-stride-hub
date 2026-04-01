@@ -127,6 +127,12 @@ export default function Login() {
             <p className="text-sm text-muted-foreground text-center">
               Para criar uma conta, solicite um convite ao administrador.
             </p>
+            <a
+              href="/portal/login"
+              className="text-xs text-muted-foreground hover:text-primary transition-colors text-center"
+            >
+              É utente/responsável? Aceda ao Portal do Paciente →
+            </a>
           </CardFooter>
         </form>
       </Card>
