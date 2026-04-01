@@ -18,6 +18,12 @@ type ProfileType = "baby" | "child" | "adult" | "elderly";
 export default function PatientPortal() {
   const { user, loading: authLoading } = useAuth();
   const { isPatient, isLoading: roleLoading } = useUserRole();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/portal/login');
+  };
 
   const [contaId, setContaId] = useState<string | null>(null);
   const [linkedPatients, setLinkedPatients] = useState<string[]>([]);
