@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2, Mail } from "lucide-react";
+import { lovable } from "@/integrations/lovable/index";
 
 export default function PortalLogin() {
   const [email, setEmail] = useState("");
@@ -74,14 +75,18 @@ export default function PortalLogin() {
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/portal/login` },
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin + "/portal/login",
     });
-    if (error) {
+    if (result.error) {
       setIsLoading(false);
       toast.error("Erro ao iniciar login com Google");
+      return;
     }
+    if (result.redirected) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) await checkPortalAccount(session.user.id);
+    setIsLoading(false);
   };
 
   // Handle OAuth redirect
