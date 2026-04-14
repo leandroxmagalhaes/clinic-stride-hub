@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
@@ -218,10 +219,12 @@ export default function PortalVerificacao() {
     localStorage.setItem("portal_paciente_id", invite.paciente_id);
     localStorage.setItem("portal_google_pending", "true");
 
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin + "/portal/onboarding" },
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin + "/portal/onboarding",
     });
+    if (result.error) {
+      toast.error("Erro ao iniciar login com Google");
+    }
   };
 
   // Logo component
