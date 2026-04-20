@@ -257,6 +257,29 @@ export function NewEvolutionModal({
           </div>
         ) : (
           <div className="space-y-6 py-4">
+            {/* Data e Hora */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="new-evolution-date">Data da evolução *</Label>
+                <Input
+                  id="new-evolution-date"
+                  type="date"
+                  value={evolutionDate}
+                  max={todayDateString()}
+                  onChange={(e) => setEvolutionDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-evolution-time">Hora da evolução *</Label>
+                <Input
+                  id="new-evolution-time"
+                  type="time"
+                  value={evolutionTime}
+                  onChange={(e) => setEvolutionTime(e.target.value)}
+                />
+              </div>
+            </div>
+
             {/* Specialty Selector */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
