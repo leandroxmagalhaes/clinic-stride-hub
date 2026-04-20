@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Activity, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -28,7 +29,24 @@ interface NewEvolutionModalProps {
     specialty_id: string | null;
     structured_data: StructuredData | null;
     evolution_date?: string | null;
+    created_at?: string | null;
   }) => void;
+}
+
+// Helpers para data/hora
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+function todayDateString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function nowTimeString(): string {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function combineDateTime(date: string, time: string): string {
+  return new Date(`${date}T${time}:00`).toISOString();
 }
 
 export function NewEvolutionModal({
