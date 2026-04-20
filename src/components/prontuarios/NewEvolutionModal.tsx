@@ -69,6 +69,8 @@ export function NewEvolutionModal({
   const [descricao, setDescricao] = useState("");
   const [escalaDor, setEscalaDor] = useState(5);
   const [structuredData, setStructuredData] = useState<StructuredData>({});
+  const [evolutionDate, setEvolutionDate] = useState<string>(prefilledDate || todayDateString());
+  const [evolutionTime, setEvolutionTime] = useState<string>(nowTimeString());
 
   const [isStructuring, setIsStructuring] = useState(false);
   const [soapSuggestion, setSoapSuggestion] = useState<string | null>(null);
@@ -77,8 +79,10 @@ export function NewEvolutionModal({
   useEffect(() => {
     if (isOpen) {
       loadTemplates();
+      setEvolutionDate(prefilledDate || todayDateString());
+      setEvolutionTime(nowTimeString());
     }
-  }, [isOpen]);
+  }, [isOpen, prefilledDate]);
 
   useEffect(() => {
     if (selectedTemplateId) {
@@ -115,6 +119,14 @@ export function NewEvolutionModal({
   };
 
   const handleSubmit = async () => {
+    if (!evolutionDate || !evolutionTime) {
+      toast.error("Data e hora são obrigatórias");
+      return;
+    }
+    if (evolutionDate > todayDateString()) {
+      toast.error("A data não pode ser futura");
+      return;
+    }
     if (!descricao.trim()) {
       toast.error("A descrição do atendimento é obrigatória");
       return;
@@ -149,6 +161,7 @@ export function NewEvolutionModal({
         specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId : null,
         structured_data: finalStructuredData,
         evolution_date: prefilledDate || null, // ── passa data da sessão
+        created_at: combineDateTime(evolutionDate, evolutionTime),
       });
 
       resetForm();
@@ -164,6 +177,8 @@ export function NewEvolutionModal({
     setSoapSuggestion(null);
     setRawTranscription(null);
     setIsStructuring(false);
+    setEvolutionDate(prefilledDate || todayDateString());
+    setEvolutionTime(nowTimeString());
     if (patientSpecialtyId) {
       setSelectedTemplateId(patientSpecialtyId);
     } else {
