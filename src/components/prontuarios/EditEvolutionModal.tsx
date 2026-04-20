@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -34,8 +35,30 @@ interface EditEvolutionModalProps {
       escala_dor: number;
       specialty_id: string | null;
       structured_data: StructuredData | null;
+      created_at: string;
     },
   ) => Promise<void>;
+}
+
+// Helpers para separar/juntar data e hora a partir de ISO local
+function splitDateTime(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
+
+function combineDateTime(date: string, time: string): string {
+  // Constrói um Date local e devolve ISO (UTC)
+  return new Date(`${date}T${time}:00`).toISOString();
+}
+
+function todayDateString(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export function EditEvolutionModal({
@@ -52,6 +75,8 @@ export function EditEvolutionModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [evolutionDate, setEvolutionDate] = useState<string>("");
+  const [evolutionTime, setEvolutionTime] = useState<string>("");
   const [descricao, setDescricao] = useState("");
   const [escalaDor, setEscalaDor] = useState(5);
   const [structuredData, setStructuredData] = useState<StructuredData>({});
@@ -84,6 +109,11 @@ export function EditEvolutionModal({
       setDescricao(evolution.descricao || "");
       setEscalaDor(evolution.escala_dor ?? 5);
 
+      // Data e hora a partir do created_at existente
+      const { date, time } = splitDateTime(evolution.created_at);
+      setEvolutionDate(date);
+      setEvolutionTime(time);
+
       // Especialidade
       const specialtyId = evolution.specialty_id || patientSpecialtyId || "";
       setSelectedTemplateId(specialtyId);
@@ -104,6 +134,14 @@ export function EditEvolutionModal({
 
   const handleSubmit = async () => {
     if (!evolution) return;
+    if (!evolutionDate || !evolutionTime) {
+      toast.error("Data e hora são obrigatórias");
+      return;
+    }
+    if (evolutionDate > todayDateString()) {
+      toast.error("A data não pode ser futura");
+      return;
+    }
     if (!descricao.trim()) {
       toast.error("A descrição do atendimento é obrigatória");
       return;
@@ -127,6 +165,7 @@ export function EditEvolutionModal({
         escala_dor: escalaDor,
         specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId || null : null,
         structured_data: hasStructuredData ? { ...structuredData } : null,
+        created_at: combineDateTime(evolutionDate, evolutionTime),
       });
     } finally {
       setIsSubmitting(false);
@@ -138,6 +177,8 @@ export function EditEvolutionModal({
     setEscalaDor(5);
     setStructuredData({});
     setSelectedTemplateId("");
+    setEvolutionDate("");
+    setEvolutionTime("");
     onClose();
   };
 
@@ -166,6 +207,29 @@ export function EditEvolutionModal({
           </div>
         ) : (
           <div className="space-y-6 py-4">
+            {/* Data e Hora */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-evolution-date">Data da evolução *</Label>
+                <Input
+                  id="edit-evolution-date"
+                  type="date"
+                  value={evolutionDate}
+                  max={todayDateString()}
+                  onChange={(e) => setEvolutionDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-evolution-time">Hora da evolução *</Label>
+                <Input
+                  id="edit-evolution-time"
+                  type="time"
+                  value={evolutionTime}
+                  onChange={(e) => setEvolutionTime(e.target.value)}
+                />
+              </div>
+            </div>
+
             {/* Specialty Selector */}
             <div className="space-y-2">
               <Label>Especialidade</Label>

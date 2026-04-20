@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Activity, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -28,7 +29,24 @@ interface NewEvolutionModalProps {
     specialty_id: string | null;
     structured_data: StructuredData | null;
     evolution_date?: string | null;
+    created_at?: string | null;
   }) => void;
+}
+
+// Helpers para data/hora
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+function todayDateString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function nowTimeString(): string {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function combineDateTime(date: string, time: string): string {
+  return new Date(`${date}T${time}:00`).toISOString();
 }
 
 export function NewEvolutionModal({
@@ -51,6 +69,8 @@ export function NewEvolutionModal({
   const [descricao, setDescricao] = useState("");
   const [escalaDor, setEscalaDor] = useState(5);
   const [structuredData, setStructuredData] = useState<StructuredData>({});
+  const [evolutionDate, setEvolutionDate] = useState<string>(prefilledDate || todayDateString());
+  const [evolutionTime, setEvolutionTime] = useState<string>(nowTimeString());
 
   const [isStructuring, setIsStructuring] = useState(false);
   const [soapSuggestion, setSoapSuggestion] = useState<string | null>(null);
@@ -59,8 +79,10 @@ export function NewEvolutionModal({
   useEffect(() => {
     if (isOpen) {
       loadTemplates();
+      setEvolutionDate(prefilledDate || todayDateString());
+      setEvolutionTime(nowTimeString());
     }
-  }, [isOpen]);
+  }, [isOpen, prefilledDate]);
 
   useEffect(() => {
     if (selectedTemplateId) {
@@ -97,6 +119,14 @@ export function NewEvolutionModal({
   };
 
   const handleSubmit = async () => {
+    if (!evolutionDate || !evolutionTime) {
+      toast.error("Data e hora são obrigatórias");
+      return;
+    }
+    if (evolutionDate > todayDateString()) {
+      toast.error("A data não pode ser futura");
+      return;
+    }
     if (!descricao.trim()) {
       toast.error("A descrição do atendimento é obrigatória");
       return;
@@ -131,6 +161,7 @@ export function NewEvolutionModal({
         specialty_id: selectedTemplate?.name !== "Geral" ? selectedTemplateId : null,
         structured_data: finalStructuredData,
         evolution_date: prefilledDate || null, // ── passa data da sessão
+        created_at: combineDateTime(evolutionDate, evolutionTime),
       });
 
       resetForm();
@@ -146,6 +177,8 @@ export function NewEvolutionModal({
     setSoapSuggestion(null);
     setRawTranscription(null);
     setIsStructuring(false);
+    setEvolutionDate(prefilledDate || todayDateString());
+    setEvolutionTime(nowTimeString());
     if (patientSpecialtyId) {
       setSelectedTemplateId(patientSpecialtyId);
     } else {
@@ -224,6 +257,29 @@ export function NewEvolutionModal({
           </div>
         ) : (
           <div className="space-y-6 py-4">
+            {/* Data e Hora */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="new-evolution-date">Data da evolução *</Label>
+                <Input
+                  id="new-evolution-date"
+                  type="date"
+                  value={evolutionDate}
+                  max={todayDateString()}
+                  onChange={(e) => setEvolutionDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-evolution-time">Hora da evolução *</Label>
+                <Input
+                  id="new-evolution-time"
+                  type="time"
+                  value={evolutionTime}
+                  onChange={(e) => setEvolutionTime(e.target.value)}
+                />
+              </div>
+            </div>
+
             {/* Specialty Selector */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">

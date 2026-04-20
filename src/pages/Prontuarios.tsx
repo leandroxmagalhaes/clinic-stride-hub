@@ -226,6 +226,7 @@ export default function Prontuarios() {
     specialty_id: string | null;
     structured_data: StructuredData | null;
     evolution_date?: string | null;
+    created_at?: string | null;
   }) => {
     if (!selectedProntuario) {
       toast.error("Selecione um utente primeiro");
@@ -237,7 +238,9 @@ export default function Prontuarios() {
       return;
     }
     try {
-      const createdAt = data.evolution_date
+      const createdAt = data.created_at
+        ? data.created_at
+        : data.evolution_date
         ? new Date(data.evolution_date + "T12:00:00").toISOString()
         : new Date().toISOString();
       const { data: newEvol, error } = await supabase
@@ -288,6 +291,7 @@ export default function Prontuarios() {
       escala_dor: number;
       specialty_id: string | null;
       structured_data: StructuredData | null;
+      created_at: string;
     },
   ) => {
     try {
@@ -298,6 +302,7 @@ export default function Prontuarios() {
           escala_dor: data.escala_dor,
           specialty_id: data.specialty_id,
           structured_data: data.structured_data,
+          created_at: data.created_at,
         })
         .eq("id", evolutionId);
       if (error) {
