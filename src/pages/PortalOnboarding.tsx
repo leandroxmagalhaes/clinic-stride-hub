@@ -59,6 +59,11 @@ export default function PortalOnboarding() {
   const [profileType, setProfileType] = useState<ProfileType>("adult");
   const [dynamicTemplate, setDynamicTemplate] = useState<QuestionnaireTemplate | null>(null);
   const [dynamicCompleted, setDynamicCompleted] = useState(false);
+  const [dynamicInitialAnswers, setDynamicInitialAnswers] = useState<Record<string, Record<string, any>> | null>(null);
+  const [resumeData, setResumeData] = useState<{ respostas: Record<string, Record<string, any>>; updatedAt: string } | null>(null);
+  const [showResumeDialog, setShowResumeDialog] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
 
   // Step 1 fields
   const [fullName, setFullName] = useState("");
