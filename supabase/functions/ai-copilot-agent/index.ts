@@ -306,7 +306,7 @@ async function executeTool(
               const slotStart = `${date}T${time}:00`;
               const slotEnd = new Date(new Date(slotStart).getTime() + 60 * 60000).toISOString();
               const conflict = (sessions || []).some(
-                (s) =>
+        (s: any) =>
                   s.profissional_id === prof.id &&
                   new Date(s.start_time) < new Date(slotEnd) &&
                   new Date(s.end_time) > new Date(slotStart)
@@ -385,15 +385,15 @@ async function executeTool(
           .order("start_time", { ascending: false })
           .limit(limit);
 
-        const sessionIds = (data || []).map((s) => s.id);
+        const sessionIds = (data || []).map((s: any) => s.id);
         if (sessionIds.length === 0) return JSON.stringify({ pending: [] });
 
         const { data: evolutions } = await supabaseAdmin
           .from("evolucoes_clinicas")
           .select("sessao_id")
           .in("sessao_id", sessionIds);
-        const evolvedIds = new Set((evolutions || []).map((e) => e.sessao_id));
-        const pending = (data || []).filter((s) => !evolvedIds.has(s.id)).map((s) => ({
+        const evolvedIds = new Set((evolutions || []).map((e: any) => e.sessao_id));
+        const pending = (data || []).filter((s: any) => !evolvedIds.has(s.id)).map((s: any) => ({
           session_id: s.id,
           date: s.start_time,
           patient_name: (s as any).pacientes?.full_name || "N/A",
@@ -411,7 +411,7 @@ async function executeTool(
           .eq("status", "realizado")
           .order("start_time", { ascending: false })
           .limit(limit);
-        const pending = (data || []).map((s) => ({
+        const pending = (data || []).map((s: any) => ({
           session_id: s.id,
           date: s.start_time,
           price: s.price,
@@ -432,7 +432,7 @@ async function executeTool(
           .not("end_date", "is", null)
           .lte("end_date", futureDate.toISOString().split("T")[0])
           .order("end_date", { ascending: true });
-        const packs = (data || []).map((p) => ({
+        const packs = (data || []).map((p: any) => ({
           id: p.id,
           patient_name: (p as any).pacientes?.full_name || "N/A",
           total: p.total_sessions,
@@ -466,9 +466,9 @@ async function executeTool(
 
         const sessions = sessionsRes.data || [];
         const total = sessions.length;
-        const confirmed = sessions.filter((s) => s.status === "agendado").length;
-        const completed = sessions.filter((s) => s.status === "realizado").length;
-        const cancelled = sessions.filter((s) => s.status === "cancelado" || s.status === "falta").length;
+        const confirmed = sessions.filter((s: any) => s.status === "agendado").length;
+        const completed = sessions.filter((s: any) => s.status === "realizado").length;
+        const cancelled = sessions.filter((s: any) => s.status === "cancelado" || s.status === "falta").length;
 
         return JSON.stringify({
           date: today,
@@ -477,7 +477,7 @@ async function executeTool(
           completed,
           cancelled,
           pending_payments: pendingPayRes.count || 0,
-          sessions: sessions.map((s) => ({
+          sessions: sessions.map((s: any) => ({
             time: s.start_time,
             patient: (s as any).pacientes?.full_name || "N/A",
             status: s.status,
@@ -498,7 +498,7 @@ async function executeTool(
 
         if (!patients || patients.length === 0) return JSON.stringify({ inactive: [] });
 
-        const patientIds = patients.map((p) => p.id);
+        const patientIds = patients.map((p: any) => p.id);
         const { data: recentSessions } = await supabaseAdmin
           .from("sessoes")
           .select("paciente_id, start_time")
@@ -507,11 +507,11 @@ async function executeTool(
           .gte("start_time", cutoff.toISOString())
           .not("status", "in", '("cancelado","falta")');
 
-        const activePatientIds = new Set((recentSessions || []).map((s) => s.paciente_id));
+        const activePatientIds = new Set((recentSessions || []).map((s: any) => s.paciente_id));
         const inactive = patients
-          .filter((p) => !activePatientIds.has(p.id))
+          .filter((p: any) => !activePatientIds.has(p.id))
           .slice(0, 20)
-          .map((p) => ({ id: p.id, name: p.full_name, phone: p.phone, email: p.email }));
+          .map((p: any) => ({ id: p.id, name: p.full_name, phone: p.phone, email: p.email }));
 
         return JSON.stringify({ inactive, days_threshold: days });
       }
@@ -745,7 +745,7 @@ async function executeTool(
         if (error) return JSON.stringify({ error: error.message });
 
         // Enrich with patient names
-        const patientIds = [...new Set((data || []).map((d) => d.suggested_patient_id).filter(Boolean))];
+        const patientIds = [...new Set((data || []).map((d: any) => d.suggested_patient_id).filter(Boolean))];
         let patientMap: Record<string, string> = {};
         if (patientIds.length > 0) {
           const { data: patients } = await supabaseAdmin
@@ -755,7 +755,7 @@ async function executeTool(
           for (const p of patients || []) patientMap[p.id] = p.full_name;
         }
 
-        const items = (data || []).map((d) => ({
+        const items = (data || []).map((d: any) => ({
           id: d.id,
           raw: d.raw_data,
           matched_patient: d.suggested_patient_id ? patientMap[d.suggested_patient_id] || "ID: " + d.suggested_patient_id : null,
