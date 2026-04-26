@@ -129,20 +129,45 @@ export default function PortalOnboarding() {
     if (!pid) { navigate("/login"); return; }
     setPacienteId(pid);
 
-    // Load patient data
-    supabase.from("pacientes").select("full_name, phone, email, birth_date, cpf, address").eq("id", pid).single()
-      .then(({ data }) => {
-        if (data) {
-          setFullName(data.full_name || "");
-          setPhone(data.phone || "");
-          setEmail(data.email || "");
-          setBirthDate(data.birth_date || "");
-          setNif(data.cpf || "");
-          setAddress(data.address || "");
-          if (data.birth_date) setProfileType(detectProfile(data.birth_date));
+    (async () => {
+      // Load patient data
+      const { data } = await supabase
+        .from("pacientes")
+        .select("full_name, phone, email, birth_date, cpf, address")
+        .eq("id", pid)
+        .single();
+
+      if (data) {
+        setFullName(data.full_name || "");
+        setPhone(data.phone || "");
+        setEmail(data.email || "");
+        setBirthDate(data.birth_date || "");
+        setNif(data.cpf || "");
+        setAddress(data.address || "");
+        if (data.birth_date) setProfileType(detectProfile(data.birth_date));
+      }
+
+      // Check the most recent invite for a template_id (dynamic flow)
+      const { data: inviteData } = await (supabase as any)
+        .from("portal_convites")
+        .select("template_id")
+        .eq("paciente_id", pid)
+        .not("template_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (inviteData?.template_id) {
+        try {
+          const tpl = await QuestionnaireTemplateService.getById(inviteData.template_id);
+          if (tpl) setDynamicTemplate(tpl);
+        } catch (e) {
+          console.warn("Failed to load template, falling back to legacy flow", e);
         }
-        setLoading(false);
-      });
+      }
+
+      setLoading(false);
+    })();
   }, [navigate]);
 
   const showGuardian = birthDate ? differenceInYears(new Date(), new Date(birthDate)) < 12 : false;
