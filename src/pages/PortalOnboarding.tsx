@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, ChevronLeft, PartyPopper, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
+import { DynamicQuestionnaireRenderer } from "@/components/patient-portal/DynamicQuestionnaireRenderer";
+import { QuestionnaireTemplateService, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
 
 type ProfileType = "baby" | "child" | "adult" | "elderly";
 
