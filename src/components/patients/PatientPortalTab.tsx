@@ -15,6 +15,7 @@ interface PortalTabProps {
   patientEmail?: string | null;
   patientPhone?: string | null;
   patientName: string;
+  patientBirthDate?: string | null;
 }
 
 interface PortalAccount {
@@ -46,7 +47,7 @@ interface Questionnaire {
   completo: boolean;
 }
 
-export function PatientPortalTab({ patientId, patientEmail, patientPhone, patientName }: PortalTabProps) {
+export function PatientPortalTab({ patientId, patientEmail, patientPhone, patientName, patientBirthDate }: PortalTabProps) {
   const [account, setAccount] = useState<PortalAccount | null>(null);
   const [lastInvite, setLastInvite] = useState<PortalInvite | null>(null);
   const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
@@ -56,10 +57,21 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
   const [inviteOpen, setInviteOpen] = useState(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [sendingLink, setSendingLink] = useState(false);
+  const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   useEffect(() => {
     loadData();
-  }, [patientId]);
+    QuestionnaireTemplateService.list()
+      .then((tpls) => {
+        setTemplates(tpls);
+        // Suggest by age
+        const suggestedIdentifier = QuestionnaireTemplateService.suggestIdentifierByAge(patientBirthDate);
+        const suggested = tpls.find((t) => t.identifier === suggestedIdentifier) || tpls[0];
+        if (suggested) setSelectedTemplateId(suggested.id);
+      })
+      .catch(() => {});
+  }, [patientId, patientBirthDate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -117,7 +129,7 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
       }
 
       const { data, error } = await supabase.functions.invoke("generate-portal-invite", {
-        body: { paciente_id: patientId, email: patientEmail, telefone: patientPhone },
+        body: { paciente_id: patientId, email: patientEmail, telefone: patientPhone, template_id: selectedTemplateId || null },
       });
       if (error) throw error;
       toast.success("Convite gerado e enviado com sucesso!");
@@ -204,6 +216,25 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
           <div className="flex justify-between"><span className="text-muted-foreground">Provider</span><span className="capitalize">{account.provider}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Último acesso</span><span>{account.ultimo_acesso ? new Date(account.ultimo_acesso).toLocaleDateString("pt-PT") : "-"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Onboarding</span><span>{account.onboarding_completo ? "✓ Completo" : "Incompleto"}</span></div>
+        </div>
+      )}
+
+      {/* Template selector */}
+      {templates.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Questionário a enviar</label>
+          <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Escolher questionário..." />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}{t.estimated_minutes ? ` (~${t.estimated_minutes})` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 

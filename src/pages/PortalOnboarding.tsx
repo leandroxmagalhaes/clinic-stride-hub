@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, ChevronLeft, PartyPopper, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
+import { DynamicQuestionnaireRenderer } from "@/components/patient-portal/DynamicQuestionnaireRenderer";
+import { QuestionnaireTemplateService, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
 
 type ProfileType = "baby" | "child" | "adult" | "elderly";
 
@@ -54,6 +56,8 @@ export default function PortalOnboarding() {
   const [saving, setSaving] = useState(false);
   const [pacienteId, setPacienteId] = useState<string | null>(null);
   const [profileType, setProfileType] = useState<ProfileType>("adult");
+  const [dynamicTemplate, setDynamicTemplate] = useState<QuestionnaireTemplate | null>(null);
+  const [dynamicCompleted, setDynamicCompleted] = useState(false);
 
   // Step 1 fields
   const [fullName, setFullName] = useState("");
@@ -125,20 +129,45 @@ export default function PortalOnboarding() {
     if (!pid) { navigate("/login"); return; }
     setPacienteId(pid);
 
-    // Load patient data
-    supabase.from("pacientes").select("full_name, phone, email, birth_date, cpf, address").eq("id", pid).single()
-      .then(({ data }) => {
-        if (data) {
-          setFullName(data.full_name || "");
-          setPhone(data.phone || "");
-          setEmail(data.email || "");
-          setBirthDate(data.birth_date || "");
-          setNif(data.cpf || "");
-          setAddress(data.address || "");
-          if (data.birth_date) setProfileType(detectProfile(data.birth_date));
+    (async () => {
+      // Load patient data
+      const { data } = await supabase
+        .from("pacientes")
+        .select("full_name, phone, email, birth_date, cpf, address")
+        .eq("id", pid)
+        .single();
+
+      if (data) {
+        setFullName(data.full_name || "");
+        setPhone(data.phone || "");
+        setEmail(data.email || "");
+        setBirthDate(data.birth_date || "");
+        setNif(data.cpf || "");
+        setAddress(data.address || "");
+        if (data.birth_date) setProfileType(detectProfile(data.birth_date));
+      }
+
+      // Check the most recent invite for a template_id (dynamic flow)
+      const { data: inviteData } = await (supabase as any)
+        .from("portal_convites")
+        .select("template_id")
+        .eq("paciente_id", pid)
+        .not("template_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (inviteData?.template_id) {
+        try {
+          const tpl = await QuestionnaireTemplateService.getById(inviteData.template_id);
+          if (tpl) setDynamicTemplate(tpl);
+        } catch (e) {
+          console.warn("Failed to load template, falling back to legacy flow", e);
         }
-        setLoading(false);
-      });
+      }
+
+      setLoading(false);
+    })();
   }, [navigate]);
 
   const showGuardian = birthDate ? differenceInYears(new Date(), new Date(birthDate)) < 12 : false;
@@ -225,10 +254,101 @@ export default function PortalOnboarding() {
     finally { setSaving(false); }
   };
 
+  const saveDynamicAnswers = async (respostas: Record<string, Record<string, any>>) => {
+    if (!pacienteId || !dynamicTemplate) return;
+    setSaving(true);
+    try {
+      await (supabase as any).from("portal_questionario").upsert({
+        paciente_id: pacienteId,
+        perfil_tipo: dynamicTemplate.identifier,
+        template_id: dynamicTemplate.id,
+        respostas,
+        completo: true,
+      }, { onConflict: "paciente_id" });
+
+      await (supabase as any).from("portal_contas").update({
+        onboarding_completo: true,
+        updated_at: new Date().toISOString(),
+      }).eq("paciente_id", pacienteId);
+
+      // Auto-send portal link email
+      if (email) {
+        try {
+          await supabase.functions.invoke("send-patient-portal-link", {
+            body: {
+              to: email,
+              patientName: fullName || "Paciente",
+              subject: "Physione — O seu Portal está pronto!",
+              type: "ready",
+            },
+          });
+        } catch (e) {
+          console.error("Failed to send portal ready email:", e);
+        }
+      }
+
+      setDynamicCompleted(true);
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao guardar questionário.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Dynamic flow — when invite has a template_id
+  if (dynamicTemplate) {
+    return (
+      <div className="min-h-screen bg-muted/30 py-8 px-4">
+        <div className="max-w-[600px] mx-auto space-y-6">
+          <div className="flex items-center justify-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-[#1e40af] flex items-center justify-center text-white font-bold text-lg">P</div>
+            <div>
+              <p className="font-bold text-foreground">Physione</p>
+              <p className="text-[10px] text-muted-foreground">Portal do Paciente</p>
+            </div>
+          </div>
+
+          {dynamicCompleted ? (
+            <Card>
+              <CardContent className="pt-8 text-center space-y-4">
+                <PartyPopper className="h-16 w-16 text-primary mx-auto" />
+                <h2 className="text-xl font-bold">Questionário concluído!</h2>
+                <p className="text-sm text-muted-foreground">
+                  Obrigado. A clínica vai rever as suas respostas antes da primeira sessão.
+                </p>
+                <Button onClick={() => { localStorage.removeItem("portal_paciente_id"); navigate("/patient-portal"); }} className="gap-2">
+                  Ir para o Portal <ArrowRight className="h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="text-center space-y-1">
+                <h1 className="text-xl font-bold">{dynamicTemplate.name}</h1>
+                {dynamicTemplate.description && (
+                  <p className="text-sm text-muted-foreground">{dynamicTemplate.description}</p>
+                )}
+                {dynamicTemplate.estimated_minutes && (
+                  <p className="text-xs text-muted-foreground">Tempo estimado: {dynamicTemplate.estimated_minutes}</p>
+                )}
+              </div>
+              <DynamicQuestionnaireRenderer
+                template={dynamicTemplate}
+                saving={saving}
+                onSubmit={saveDynamicAnswers}
+              />
+            </>
+          )}
+        </div>
       </div>
     );
   }

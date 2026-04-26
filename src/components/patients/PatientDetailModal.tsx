@@ -273,6 +273,7 @@ export function PatientDetailModal({
                 patientEmail={patient.email}
                 patientPhone={patient.phone}
                 patientName={patient.full_name}
+                patientBirthDate={patient.birth_date}
               />
             </TabsContent>
           </Tabs>

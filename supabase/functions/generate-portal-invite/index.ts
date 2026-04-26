@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { paciente_id, email, telefone } = await req.json();
+    const { paciente_id, email, telefone, template_id } = await req.json();
     if (!paciente_id) throw new Error("paciente_id is required");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
       enviado_para_email: email || null,
       enviado_para_telefone: telefone || null,
       expira_em,
+      template_id: template_id || null,
     });
 
     if (insertError) throw insertError;
