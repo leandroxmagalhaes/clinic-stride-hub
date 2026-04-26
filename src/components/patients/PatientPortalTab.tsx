@@ -219,6 +219,25 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
         </div>
       )}
 
+      {/* Template selector */}
+      {templates.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Questionário a enviar</label>
+          <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Escolher questionário..." />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}{t.estimated_minutes ? ` (~${t.estimated_minutes})` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={handleGenerateInvite} disabled={generating} className="gap-1.5">
