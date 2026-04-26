@@ -129,7 +129,7 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
       }
 
       const { data, error } = await supabase.functions.invoke("generate-portal-invite", {
-        body: { paciente_id: patientId, email: patientEmail, telefone: patientPhone },
+        body: { paciente_id: patientId, email: patientEmail, telefone: patientPhone, template_id: selectedTemplateId || null },
       });
       if (error) throw error;
       toast.success("Convite gerado e enviado com sucesso!");
