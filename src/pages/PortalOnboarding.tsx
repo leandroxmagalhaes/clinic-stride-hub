@@ -8,11 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ChevronLeft, PartyPopper, ArrowRight } from "lucide-react";
+import { Loader2, ChevronLeft, PartyPopper, ArrowRight, FileEdit } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
 import { DynamicQuestionnaireRenderer } from "@/components/patient-portal/DynamicQuestionnaireRenderer";
 import { QuestionnaireTemplateService, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 type ProfileType = "baby" | "child" | "adult" | "elderly";
 
@@ -58,6 +59,11 @@ export default function PortalOnboarding() {
   const [profileType, setProfileType] = useState<ProfileType>("adult");
   const [dynamicTemplate, setDynamicTemplate] = useState<QuestionnaireTemplate | null>(null);
   const [dynamicCompleted, setDynamicCompleted] = useState(false);
+  const [dynamicInitialAnswers, setDynamicInitialAnswers] = useState<Record<string, Record<string, any>> | null>(null);
+  const [resumeData, setResumeData] = useState<{ respostas: Record<string, Record<string, any>>; updatedAt: string } | null>(null);
+  const [showResumeDialog, setShowResumeDialog] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
 
   // Step 1 fields
   const [fullName, setFullName] = useState("");
@@ -160,7 +166,28 @@ export default function PortalOnboarding() {
       if (inviteData?.template_id) {
         try {
           const tpl = await QuestionnaireTemplateService.getById(inviteData.template_id);
-          if (tpl) setDynamicTemplate(tpl);
+          if (tpl) {
+            setDynamicTemplate(tpl);
+
+            // Check for in-progress questionnaire (resume flow)
+            const { data: existingQ } = await (supabase as any)
+              .from("portal_questionario")
+              .select("respostas, completo, updated_at")
+              .eq("paciente_id", pid)
+              .maybeSingle();
+
+            if (existingQ && existingQ.completo === true) {
+              // Already completed — show completion screen directly
+              setDynamicCompleted(true);
+            } else if (existingQ && existingQ.respostas && Object.keys(existingQ.respostas || {}).length > 0) {
+              // Has in-progress answers — offer resume
+              setResumeData({ respostas: existingQ.respostas, updatedAt: existingQ.updated_at });
+              setShowResumeDialog(true);
+            } else {
+              // No prior progress
+              setShowQuestionnaire(true);
+            }
+          }
         } catch (e) {
           console.warn("Failed to load template, falling back to legacy flow", e);
         }
@@ -330,7 +357,7 @@ export default function PortalOnboarding() {
                 </Button>
               </CardContent>
             </Card>
-          ) : (
+          ) : showQuestionnaire ? (
             <>
               <div className="text-center space-y-1">
                 <h1 className="text-xl font-bold">{dynamicTemplate.name}</h1>
@@ -343,12 +370,105 @@ export default function PortalOnboarding() {
               </div>
               <DynamicQuestionnaireRenderer
                 template={dynamicTemplate}
+                pacienteId={pacienteId}
+                initialAnswers={dynamicInitialAnswers || undefined}
                 saving={saving}
                 onSubmit={saveDynamicAnswers}
+                onExit={() => { localStorage.removeItem("portal_paciente_id"); navigate("/patient-portal"); }}
               />
             </>
+          ) : (
+            // Loading placeholder while resume dialog is open or before showing
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
           )}
         </div>
+
+        {/* Resume dialog */}
+        <Dialog open={showResumeDialog} onOpenChange={(open) => { if (!open) return; }}>
+          <DialogContent className="max-w-[440px]">
+            <DialogHeader>
+              <div className="flex justify-center mb-2">
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <FileEdit className="h-6 w-6 text-primary" />
+                </div>
+              </div>
+              <DialogTitle className="text-center">Tem um questionário em curso</DialogTitle>
+              <DialogDescription className="text-center">
+                Encontrámos um questionário que começou a preencher. Pode continuar de onde parou ou começar de novo.
+              </DialogDescription>
+            </DialogHeader>
+
+            {resumeData && dynamicTemplate && (() => {
+              const total = dynamicTemplate.schema.sections.length;
+              const filled = dynamicTemplate.schema.sections.filter((s) => {
+                const sa = (resumeData.respostas as any)[s.id] || {};
+                return Object.values(sa).some((v) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0));
+              }).length;
+              const dt = new Date(resumeData.updatedAt);
+              return (
+                <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1 text-center">
+                  <p>Já preencheu <strong>{filled}</strong> de <strong>{total}</strong> secções</p>
+                  <p className="text-xs text-muted-foreground">
+                    Última atualização: {dt.toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              );
+            })()}
+
+            {confirmRestart ? (
+              <div className="space-y-2">
+                <p className="text-sm text-center text-destructive">Tem a certeza? Vai perder o progresso anterior.</p>
+                <DialogFooter className="flex-col sm:flex-row gap-2">
+                  <Button variant="outline" onClick={() => setConfirmRestart(false)} className="w-full sm:w-auto">Cancelar</Button>
+                  <Button
+                    variant="destructive"
+                    className="w-full sm:w-auto"
+                    onClick={async () => {
+                      if (!pacienteId) return;
+                      try {
+                        await (supabase as any)
+                          .from("portal_questionario")
+                          .update({ respostas: {}, updated_at: new Date().toISOString() })
+                          .eq("paciente_id", pacienteId);
+                      } catch (e) {
+                        console.warn("Failed to clear progress", e);
+                      }
+                      setDynamicInitialAnswers({});
+                      setResumeData(null);
+                      setShowResumeDialog(false);
+                      setConfirmRestart(false);
+                      setShowQuestionnaire(true);
+                    }}
+                  >
+                    Sim, começar de novo
+                  </Button>
+                </DialogFooter>
+              </div>
+            ) : (
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => setConfirmRestart(true)}
+                >
+                  Começar de novo
+                </Button>
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    if (resumeData) setDynamicInitialAnswers(resumeData.respostas);
+                    setShowResumeDialog(false);
+                    setShowQuestionnaire(true);
+                  }}
+                >
+                  Continuar de onde parei
+                </Button>
+              </DialogFooter>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

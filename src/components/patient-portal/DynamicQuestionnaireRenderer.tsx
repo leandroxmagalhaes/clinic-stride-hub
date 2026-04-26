@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, Bookmark, Save, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import type {
   QuestionnaireTemplate,
   TemplateField,
@@ -14,17 +16,83 @@ import type {
 
 interface Props {
   template: QuestionnaireTemplate;
+  pacienteId?: string | null;
   initialAnswers?: Record<string, Record<string, any>>;
   saving?: boolean;
   onSubmit: (answers: Record<string, Record<string, any>>) => void;
+  onExit?: () => void;
 }
 
-export function DynamicQuestionnaireRenderer({ template, initialAnswers, saving, onSubmit }: Props) {
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, saving, onSubmit, onExit }: Props) {
   const [answers, setAnswers] = useState<Record<string, Record<string, any>>>(initialAnswers || {});
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const dirtyRef = useRef(false);
 
   const setVal = (sectionId: string, key: string, value: any) => {
+    dirtyRef.current = true;
     setAnswers((prev) => ({ ...prev, [sectionId]: { ...(prev[sectionId] || {}), [key]: value } }));
   };
+
+  // Autosave with 1500ms debounce — only when there is a paciente_id and dirty changes
+  useEffect(() => {
+    if (!pacienteId || !dirtyRef.current) return;
+    if (Object.keys(answers).length === 0) return;
+
+    const timer = setTimeout(async () => {
+      setSaveStatus("saving");
+      try {
+        const { error } = await (supabase as any)
+          .from("portal_questionario")
+          .upsert(
+            {
+              paciente_id: pacienteId,
+              perfil_tipo: template.identifier,
+              template_id: template.id,
+              respostas: answers,
+              completo: false,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "paciente_id" }
+          );
+        if (error) throw error;
+        setLastSaved(new Date());
+        setSaveStatus("saved");
+        dirtyRef.current = false;
+      } catch (err) {
+        console.error("Erro ao guardar progresso:", err);
+        setSaveStatus("error");
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [answers, pacienteId, template.id, template.identifier]);
+
+  // Progress: section is "filled" when at least one field has a non-empty value
+  const { filledSections, totalSections, percent, currentSectionIdx } = useMemo(() => {
+    const total = template.schema.sections.length;
+    let filled = 0;
+    let firstUnfilled = total;
+    template.schema.sections.forEach((section, idx) => {
+      const sectionAns = answers[section.id] || {};
+      const hasAny = Object.values(sectionAns).some(
+        (v) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)
+      );
+      if (hasAny) {
+        filled++;
+      } else if (firstUnfilled === total) {
+        firstUnfilled = idx;
+      }
+    });
+    return {
+      filledSections: filled,
+      totalSections: total,
+      percent: total > 0 ? Math.round((filled / total) * 100) : 0,
+      currentSectionIdx: Math.min(firstUnfilled + 1, total),
+    };
+  }, [answers, template.schema.sections]);
 
   const validate = (): boolean => {
     for (const section of template.schema.sections) {
@@ -39,6 +107,35 @@ export function DynamicQuestionnaireRenderer({ template, initialAnswers, saving,
       }
     }
     return true;
+  };
+
+  const handleExit = async () => {
+    // Force flush of any pending changes before exiting
+    if (pacienteId && dirtyRef.current && Object.keys(answers).length > 0) {
+      setSaveStatus("saving");
+      try {
+        await (supabase as any)
+          .from("portal_questionario")
+          .upsert(
+            {
+              paciente_id: pacienteId,
+              perfil_tipo: template.identifier,
+              template_id: template.id,
+              respostas: answers,
+              completo: false,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "paciente_id" }
+          );
+        setLastSaved(new Date());
+        setSaveStatus("saved");
+        dirtyRef.current = false;
+      } catch (err) {
+        console.error("Erro ao guardar antes de sair:", err);
+      }
+    }
+    toast.success("Progresso guardado. Pode voltar a qualquer momento usando o link do portal.");
+    onExit?.();
   };
 
   const renderField = (sectionId: string, field: TemplateField) => {
@@ -119,8 +216,39 @@ export function DynamicQuestionnaireRenderer({ template, initialAnswers, saving,
     }
   };
 
+  const formatTime = (d: Date) =>
+    d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+
   return (
     <div className="space-y-4">
+      {/* Top bar: progress + autosave indicator */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            Secção <strong className="text-foreground">{currentSectionIdx}</strong> de {totalSections}
+            <span className="ml-2">· {percent}%</span>
+          </p>
+          <div className="text-[11px] flex items-center gap-1 min-h-[16px]">
+            {saveStatus === "saving" && (
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Save className="h-3 w-3 animate-pulse" /> A guardar…
+              </span>
+            )}
+            {saveStatus === "saved" && lastSaved && (
+              <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Guardado às {formatTime(lastSaved)}
+              </span>
+            )}
+            {saveStatus === "error" && (
+              <span className="text-destructive flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> Erro ao guardar
+              </span>
+            )}
+          </div>
+        </div>
+        <Progress value={percent} className="h-1" />
+      </div>
+
       {template.schema.sections.map((section) => (
         <Card key={section.id}>
           <CardContent className="pt-6 space-y-4">
@@ -138,8 +266,14 @@ export function DynamicQuestionnaireRenderer({ template, initialAnswers, saving,
           </CardContent>
         </Card>
       ))}
-      <div className="flex justify-end">
-        <Button onClick={() => { if (validate()) onSubmit(answers); }} disabled={saving}>
+
+      <div className="flex flex-col sm:flex-row sm:justify-between gap-2">
+        {onExit ? (
+          <Button variant="ghost" onClick={handleExit} className="gap-1.5 sm:order-1">
+            <Bookmark className="h-4 w-4" /> Sair e continuar depois
+          </Button>
+        ) : <span />}
+        <Button onClick={() => { if (validate()) onSubmit(answers); }} disabled={saving} className="sm:order-2">
           {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           Concluir
         </Button>

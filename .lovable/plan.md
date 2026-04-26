@@ -1,117 +1,67 @@
-## Sistema de Templates de Questionário (4 perfis)
+## Autosave e Retomar Preenchimento do Questionário
 
-### Resumo
-Substitui o questionário hardcoded actual no `PortalOnboarding` por um sistema de templates configuráveis. A Camila escolhe o template ao gerar o link do portal, e o paciente preenche apenas o questionário escolhido.
+### Problema
+Quando o paciente sai a meio do questionário, perde todo o progresso. Precisa de poder continuar de onde parou.
 
-### Garantia de proteção de dados
-- ✅ Tabela `portal_questionario` actual **mantida intacta** (todos os 85+ campos JSONB existentes preservados)
-- ✅ **Nenhum** `DROP`, `TRUNCATE`, `DELETE`, `ALTER COLUMN`
-- ✅ Nova tabela `portal_questionario_templates` é separada
-- ✅ Adiciona apenas 1 coluna nova opcional em `portal_convites` (`template_id`, nullable)
-- ✅ Convites antigos sem `template_id` continuam a funcionar (fallback = detecção automática por idade actual)
+### Solução (apenas frontend — sem alterações de schema)
+
+Usar a coluna `respostas` (jsonb) já existente em `portal_questionario`, gravando parcialmente com `completo = false` enquanto preenche.
 
 ---
 
-### Step 1 — Migração de schema (apenas ADIÇÃO)
+### 1. `DynamicQuestionnaireRenderer.tsx` — autosave + UI
 
-**Nova tabela `portal_questionario_templates`:**
-```sql
-CREATE TABLE public.portal_questionario_templates (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  clinic_id uuid REFERENCES public.clinics(id) ON DELETE CASCADE,
-  identifier text NOT NULL,           -- 'template_baby_complete', 'template_child', etc.
-  name text NOT NULL,                  -- "Boas-Vindas Bebé (0-2 anos)"
-  description text,
-  estimated_minutes text,              -- "20-30 min"
-  schema jsonb NOT NULL,               -- secções + campos
-  is_active boolean DEFAULT true,
-  is_system boolean DEFAULT false,     -- protege os 4 templates iniciais de eliminação
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  UNIQUE(clinic_id, identifier)
-);
-ALTER TABLE public.portal_questionario_templates ENABLE ROW LEVEL SECURITY;
--- Policies: SELECT público (templates visíveis a todos); UPDATE/DELETE apenas para profissionais da clínica
-```
+Adicionar suporte a:
+- `pacienteId` como prop (necessário para autosave)
+- `initialAnswers` carregadas ao retomar
+- `onAutosave` callback (debounced 1500ms) — guarda `respostas` parciais via upsert no `portal_questionario` com `completo: false`
+- Indicador no canto superior direito: "💾 A guardar…" / "✓ Guardado às HH:MM" / "⚠️ Erro ao guardar" (12px, discreto)
+- Barra de progresso no topo: cálculo = secções com pelo menos 1 campo preenchido / total de secções; texto "Secção X de Y · NN%"
+- Botão "Sair e continuar depois" (variant ghost com ícone Bookmark) ao lado do "Concluir" — força flush do autosave e chama `onExit` callback
 
-**Coluna nova em `portal_convites` (opcional, nullable):**
-```sql
-ALTER TABLE public.portal_convites ADD COLUMN template_id uuid REFERENCES public.portal_questionario_templates(id);
-```
+### 2. `PortalOnboarding.tsx` — detecção e retomada
 
-**Coluna nova em `portal_questionario` (opcional, nullable) para rastrear qual template foi usado:**
-```sql
-ALTER TABLE public.portal_questionario ADD COLUMN template_id uuid REFERENCES public.portal_questionario_templates(id);
-ALTER TABLE public.portal_questionario ADD COLUMN respostas jsonb DEFAULT '{}'::jsonb;
-```
-> **Importante:** colunas existentes `dados_pessoais`, `perfil_saude`, `expectativas`, `perfil_tipo`, `completo` **mantidas como estão**. A coluna nova `respostas` é usada apenas para questionários novos baseados em template (formato `{ section_id: { field_key: value } }`). Os dados antigos continuam a ser lidos pelo código actual.
+Ao carregar (apenas no fluxo dinâmico com `template_id`):
+- Após carregar o template, fazer query a `portal_questionario` filtrando por `paciente_id`
+- Se `completo === false` E `respostas` tem chaves → mostrar diálogo "Continuar ou Recomeçar"
+- Se `completo === true` → ir direto para o portal (já completou — não reabrir)
+- Caso contrário → começar do zero
 
-### Step 2 — Inserir os 4 templates iniciais (`is_system = true`)
-Inserir via tool de inserção:
-- `template_baby_complete` — 15 secções, ~85 campos (estrutura já documentada)
-- `template_child` — 8 secções, ~40 campos
-- `template_adult` — 7 secções, ~45 campos
-- `template_elderly` — 8 secções, ~55 campos
+Diálogo "Continuar ou Recomeçar" (componente `Dialog` existente):
+- Ícone documento + título "Tem um questionário em curso"
+- Mostra "Já preencheu X de Y secções" e "Última atualização: [data formatada pt-PT]"
+- Botão primário **"Continuar de onde parei"** → carrega `respostas` no estado e abre o renderer
+- Botão secundário **"Começar de novo"** → confirmação inline ("Tem a certeza? Vai perder o progresso anterior.") → limpa `respostas` no DB (update setando `respostas: {}`) e abre o renderer vazio
 
-Schema JSONB de cada template segue formato:
-```json
-{
-  "sections": [
-    {
-      "id": "identification",
-      "title": "Identificação",
-      "fields": [
-        { "key": "full_name", "label": "Nome completo", "type": "text", "required": true },
-        { "key": "birth_date", "label": "Data de nascimento", "type": "date", "required": true },
-        { "key": "gender", "label": "Sexo", "type": "select", "options": ["Masculino","Feminino","Outro"], "required": true },
-        ...
-      ]
-    },
-    ...
-  ]
-}
-```
-Tipos de campo suportados: `text`, `textarea`, `date`, `select`, `multiselect`, `slider` (0-10), `checkbox`.
+Implementar callback `onExit` do renderer (botão "Sair e continuar depois"):
+- Toast "Progresso guardado. Pode voltar a qualquer momento."
+- `navigate("/patient-portal")` ou voltar para a página inicial do portal
 
-### Step 3 — `PatientPortalTab.tsx` — selector de template ao gerar convite
-- Carregar templates activos ao abrir a aba.
-- Adicionar dropdown "Questionário a enviar" antes do botão "Gerar convite" (default: detecção automática por idade actual do paciente).
-- `handleGenerateInvite` envia `template_id` no body para a edge function.
-- Edge function `generate-portal-invite` grava `template_id` na nova coluna de `portal_convites`.
+### 3. Compatibilidade
 
-### Step 4 — Renderer dinâmico no portal do paciente
-- Criar `src/components/patient-portal/DynamicQuestionnaireRenderer.tsx`:
-  - Recebe `schema` JSONB + `respostas` actuais.
-  - Renderiza secções e campos dinamicamente conforme tipo (`text`, `select`, `slider`, etc.).
-  - Validação de campos `required`.
-- `PortalOnboarding.tsx`:
-  - Ao carregar, lê `template_id` do convite (`portal_convites`).
-  - Se `template_id` existir → renderiza `<DynamicQuestionnaireRenderer />` com o schema do template.
-  - Se `template_id` não existir (convites antigos) → mantém o fluxo actual com `BabyProfile/ChildProfile/AdultProfile/ElderlyProfile` (compatibilidade total).
-  - Ao guardar, escreve em `portal_questionario.respostas` + `template_id`.
+- Fluxo legado (sem `template_id`) **não é alterado** — autosave é apenas no renderer dinâmico
+- Pacientes com `completo === true` mantêm comportamento atual (não veem retomada)
+- O upsert usa `onConflict: 'paciente_id'` para preservar o registo único existente
 
-### Step 5 — Visualização para a profissional
-- `PatientPortalTab.tsx` (secção "Ver questionário preenchido"):
-  - Se `template_id` existir → renderizar `respostas` segundo schema do template (label + valor por secção).
-  - Caso contrário → manter visualização actual (`dados_pessoais`, `perfil_saude`, `expectativas`).
+### Detalhes técnicos
 
----
+- Debounce 1500ms via `useEffect` + `setTimeout` cleanup
+- Upsert no autosave preserva `template_id`, `perfil_tipo`, define `completo: false`, atualiza `respostas` e `updated_at`
+- Submissão final ("Concluir") mantém o fluxo atual (`saveDynamicAnswers`) que define `completo: true`
+- Usar `(supabase as any).from("portal_questionario")` (padrão do projeto para tabelas do portal)
+- Formato data: `toLocaleString("pt-PT", { hour: "2-digit", minute: "2-digit" })`
 
-### Ficheiros alterados / criados
+### Ficheiros alterados
 
-| Ação | Ficheiro |
-|------|----------|
-| Migração SQL | nova tabela `portal_questionario_templates` + 3 colunas novas (todas nullable) |
-| Insert dados | 4 templates iniciais via insert tool |
-| Modificado | `src/components/patients/PatientPortalTab.tsx` (dropdown + visualização) |
-| Modificado | `supabase/functions/generate-portal-invite/index.ts` (recebe `template_id`) |
-| Modificado | `src/pages/PortalOnboarding.tsx` (renderer dinâmico com fallback) |
-| Criado | `src/components/patient-portal/DynamicQuestionnaireRenderer.tsx` |
-| Criado | `src/services/QuestionnaireTemplateService.ts` |
+| Acção | Ficheiro |
+|---|---|
+| Modificado | `src/components/patient-portal/DynamicQuestionnaireRenderer.tsx` |
+| Modificado | `src/pages/PortalOnboarding.tsx` |
 
 ### O que NÃO muda
-- ❌ Nenhum `DROP`, `TRUNCATE`, `DELETE`
-- ❌ Nenhuma alteração a colunas existentes
-- ❌ Nenhum questionário já preenchido é apagado ou modificado
-- ✅ Convites antigos sem `template_id` continuam a usar o fluxo actual (fallback)
-- ✅ Dados antigos continuam visíveis e editáveis no formato actual
+
+- Nenhuma migração SQL
+- Nenhum DROP / ALTER / TRUNCATE / DELETE
+- Schema `portal_questionario` intacto (usa colunas existentes `respostas`, `completo`, `template_id`, `updated_at`)
+- Fluxo legado de questionário (steps 0-3) preservado
+- Visual do portal e dos cards inalterado
