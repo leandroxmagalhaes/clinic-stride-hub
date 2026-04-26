@@ -115,7 +115,7 @@ Cada insight deve ter: título curto, descrição explicativa (1-2 frases) e tip
     });
   } catch (e) {
     console.error("ai-financial-insights error:", e);
-    return new Response(JSON.stringify({ error: e.message }), {
+    return new Response(JSON.stringify({ error: (e as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
