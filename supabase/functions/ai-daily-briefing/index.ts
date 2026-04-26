@@ -113,7 +113,7 @@ Cada ponto deve ser uma frase prática e direta. Inclua uma prioridade do dia.` 
     });
   } catch (e) {
     console.error("ai-daily-briefing error:", e);
-    return new Response(JSON.stringify({ error: e.message }), {
+    return new Response(JSON.stringify({ error: (e as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

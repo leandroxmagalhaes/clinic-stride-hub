@@ -123,7 +123,7 @@ Para cada lead dÃª: score (alto/medio/baixo), justificativa curta (1 frase), prÃ
     });
   } catch (e) {
     console.error("ai-lead-scoring error:", e);
-    return new Response(JSON.stringify({ error: e.message }), {
+    return new Response(JSON.stringify({ error: (e as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

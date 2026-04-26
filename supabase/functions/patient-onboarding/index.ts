@@ -10,7 +10,7 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 
 // Helper: resolve clinic_id from slug or clinic_id param
 async function resolveClinic(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   slug: string | null,
   clinicId: string | null
 ): Promise<{ id: string; name: string; logo_url: string; primary_color: string } | null> {
