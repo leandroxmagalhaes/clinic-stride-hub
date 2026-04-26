@@ -1434,6 +1434,7 @@ export type Database = {
           link_token: string
           max_tentativas: number | null
           paciente_id: string
+          template_id: string | null
           tentativas: number | null
           utilizado: boolean | null
         }
@@ -1447,6 +1448,7 @@ export type Database = {
           link_token: string
           max_tentativas?: number | null
           paciente_id: string
+          template_id?: string | null
           tentativas?: number | null
           utilizado?: boolean | null
         }
@@ -1460,10 +1462,19 @@ export type Database = {
           link_token?: string
           max_tentativas?: number | null
           paciente_id?: string
+          template_id?: string | null
           tentativas?: number | null
           utilizado?: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "portal_convites_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "portal_questionario_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       portal_diario: {
         Row: {
@@ -1550,6 +1561,8 @@ export type Database = {
           paciente_id: string
           perfil_saude: Json | null
           perfil_tipo: string
+          respostas: Json | null
+          template_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1561,6 +1574,8 @@ export type Database = {
           paciente_id: string
           perfil_saude?: Json | null
           perfil_tipo: string
+          respostas?: Json | null
+          template_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1572,9 +1587,19 @@ export type Database = {
           paciente_id?: string
           perfil_saude?: Json | null
           perfil_tipo?: string
+          respostas?: Json | null
+          template_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "portal_questionario_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "portal_questionario_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       portal_questionario_historico: {
         Row: {
@@ -1608,6 +1633,56 @@ export type Database = {
           valor_novo?: string | null
         }
         Relationships: []
+      }
+      portal_questionario_templates: {
+        Row: {
+          clinic_id: string | null
+          created_at: string
+          description: string | null
+          estimated_minutes: string | null
+          id: string
+          identifier: string
+          is_active: boolean
+          is_system: boolean
+          name: string
+          schema: Json
+          updated_at: string
+        }
+        Insert: {
+          clinic_id?: string | null
+          created_at?: string
+          description?: string | null
+          estimated_minutes?: string | null
+          id?: string
+          identifier: string
+          is_active?: boolean
+          is_system?: boolean
+          name: string
+          schema: Json
+          updated_at?: string
+        }
+        Update: {
+          clinic_id?: string | null
+          created_at?: string
+          description?: string | null
+          estimated_minutes?: string | null
+          id?: string
+          identifier?: string
+          is_active?: boolean
+          is_system?: boolean
+          name?: string
+          schema?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_questionario_templates_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       portal_respostas: {
         Row: {
