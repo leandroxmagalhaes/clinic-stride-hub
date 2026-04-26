@@ -56,6 +56,8 @@ export default function PortalOnboarding() {
   const [saving, setSaving] = useState(false);
   const [pacienteId, setPacienteId] = useState<string | null>(null);
   const [profileType, setProfileType] = useState<ProfileType>("adult");
+  const [dynamicTemplate, setDynamicTemplate] = useState<QuestionnaireTemplate | null>(null);
+  const [dynamicCompleted, setDynamicCompleted] = useState(false);
 
   // Step 1 fields
   const [fullName, setFullName] = useState("");
