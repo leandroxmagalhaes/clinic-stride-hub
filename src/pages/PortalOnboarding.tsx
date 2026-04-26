@@ -8,11 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ChevronLeft, PartyPopper, ArrowRight } from "lucide-react";
+import { Loader2, ChevronLeft, PartyPopper, ArrowRight, FileEdit } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
 import { DynamicQuestionnaireRenderer } from "@/components/patient-portal/DynamicQuestionnaireRenderer";
 import { QuestionnaireTemplateService, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 type ProfileType = "baby" | "child" | "adult" | "elderly";
 
