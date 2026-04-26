@@ -246,7 +246,7 @@ async function parseSpreadsheet(base64: string, mimeType: string): Promise<Recor
 async function executeTool(
   toolName: string,
   args: Record<string, unknown>,
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: any,
   clinicId: string,
   extraContext?: { fileUpload?: { name: string; base64: string; mime_type: string }; userId?: string; lovableApiKey?: string }
 ): Promise<string> {
