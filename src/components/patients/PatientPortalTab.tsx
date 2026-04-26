@@ -15,6 +15,7 @@ interface PortalTabProps {
   patientEmail?: string | null;
   patientPhone?: string | null;
   patientName: string;
+  patientBirthDate?: string | null;
 }
 
 interface PortalAccount {
@@ -46,7 +47,7 @@ interface Questionnaire {
   completo: boolean;
 }
 
-export function PatientPortalTab({ patientId, patientEmail, patientPhone, patientName }: PortalTabProps) {
+export function PatientPortalTab({ patientId, patientEmail, patientPhone, patientName, patientBirthDate }: PortalTabProps) {
   const [account, setAccount] = useState<PortalAccount | null>(null);
   const [lastInvite, setLastInvite] = useState<PortalInvite | null>(null);
   const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
@@ -56,10 +57,21 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
   const [inviteOpen, setInviteOpen] = useState(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [sendingLink, setSendingLink] = useState(false);
+  const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   useEffect(() => {
     loadData();
-  }, [patientId]);
+    QuestionnaireTemplateService.list()
+      .then((tpls) => {
+        setTemplates(tpls);
+        // Suggest by age
+        const suggestedIdentifier = QuestionnaireTemplateService.suggestIdentifierByAge(patientBirthDate);
+        const suggested = tpls.find((t) => t.identifier === suggestedIdentifier) || tpls[0];
+        if (suggested) setSelectedTemplateId(suggested.id);
+      })
+      .catch(() => {});
+  }, [patientId, patientBirthDate]);
 
   const loadData = async () => {
     setLoading(true);
