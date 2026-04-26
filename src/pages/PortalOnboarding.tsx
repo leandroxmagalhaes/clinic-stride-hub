@@ -166,7 +166,28 @@ export default function PortalOnboarding() {
       if (inviteData?.template_id) {
         try {
           const tpl = await QuestionnaireTemplateService.getById(inviteData.template_id);
-          if (tpl) setDynamicTemplate(tpl);
+          if (tpl) {
+            setDynamicTemplate(tpl);
+
+            // Check for in-progress questionnaire (resume flow)
+            const { data: existingQ } = await (supabase as any)
+              .from("portal_questionario")
+              .select("respostas, completo, updated_at")
+              .eq("paciente_id", pid)
+              .maybeSingle();
+
+            if (existingQ && existingQ.completo === true) {
+              // Already completed — show completion screen directly
+              setDynamicCompleted(true);
+            } else if (existingQ && existingQ.respostas && Object.keys(existingQ.respostas || {}).length > 0) {
+              // Has in-progress answers — offer resume
+              setResumeData({ respostas: existingQ.respostas, updatedAt: existingQ.updated_at });
+              setShowResumeDialog(true);
+            } else {
+              // No prior progress
+              setShowQuestionnaire(true);
+            }
+          }
         } catch (e) {
           console.warn("Failed to load template, falling back to legacy flow", e);
         }
