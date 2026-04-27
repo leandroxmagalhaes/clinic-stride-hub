@@ -85,3 +85,67 @@ export class QuestionnaireTemplateService {
     return "template_adult";
   }
 }
+
+/**
+ * Build a label map (sectionId.fieldKey -> "Secção · Campo") from a template schema,
+ * used to show readable labels in the change-history audit view.
+ */
+export function buildTemplateLabelMap(template: QuestionnaireTemplate | null | undefined): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (!template?.schema?.sections) return map;
+  for (const section of template.schema.sections) {
+    for (const field of section.fields || []) {
+      map[`${section.id}.${field.key}`] = `${section.title} · ${field.label}`;
+    }
+  }
+  return map;
+}
+
+function stringify(val: unknown): string {
+  if (val === null || val === undefined) return "";
+  if (Array.isArray(val)) return val.join(", ");
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+}
+
+/**
+ * Compares two `respostas` JSONB objects (section -> field -> value) and writes
+ * one row per changed field into `portal_questionario_historico` (individual inserts,
+ * per project convention). Used by both patient and professional edit flows.
+ */
+export async function logQuestionnaireChanges(params: {
+  questionarioId: string;
+  pacienteId: string;
+  before: Record<string, Record<string, any>> | null | undefined;
+  after: Record<string, Record<string, any>> | null | undefined;
+  alteradoPor: string; // e.g. "Maria Silva (utente)" or "Dr. João (profissional)"
+}): Promise<number> {
+  const { questionarioId, pacienteId, before, after, alteradoPor } = params;
+  const beforeObj = before || {};
+  const afterObj = after || {};
+  const sectionIds = new Set<string>([...Object.keys(beforeObj), ...Object.keys(afterObj)]);
+  let changes = 0;
+  for (const sectionId of sectionIds) {
+    const sBefore = (beforeObj as any)[sectionId] || {};
+    const sAfter = (afterObj as any)[sectionId] || {};
+    const fieldKeys = new Set<string>([...Object.keys(sBefore), ...Object.keys(sAfter)]);
+    for (const key of fieldKeys) {
+      const oldVal = stringify(sBefore[key]);
+      const newVal = stringify(sAfter[key]);
+      if (oldVal === newVal) continue;
+      // Individual insert (project rule: never batch)
+      const { error } = await (supabase as any)
+        .from("portal_questionario_historico")
+        .insert({
+          questionario_id: questionarioId,
+          paciente_id: pacienteId,
+          campo_alterado: `${sectionId}.${key}`,
+          valor_anterior: oldVal || null,
+          valor_novo: newVal || null,
+          alterado_por: alteradoPor,
+        });
+      if (!error) changes++;
+    }
+  }
+  return changes;
+}
