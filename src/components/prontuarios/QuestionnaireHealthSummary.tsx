@@ -12,6 +12,7 @@ import { FileText, Pencil, Save, X, Plus, History, ChevronDown, ChevronUp } from
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
+import { FullQuestionnaireView } from "@/components/patient-portal/FullQuestionnaireView";
 
 interface Props {
   pacienteId: string;
