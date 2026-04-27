@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
 import { DynamicQuestionnaireRenderer } from "@/components/patient-portal/DynamicQuestionnaireRenderer";
 import { QuestionnaireTemplateService, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
+import { PortalAccountService } from "@/services/PortalAccountService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 type ProfileType = "baby" | "child" | "adult" | "elderly";
@@ -94,22 +95,13 @@ export default function PortalOnboarding() {
       if (pid) {
         supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session?.user) {
-            const { data: upserted } = await (supabase as any).from("portal_contas").upsert({
-              paciente_id: pid,
-              auth_user_id: session.user.id,
-              email: session.user.email,
+            // Idempotente: cria conta se não existe + garante associação ao utente
+            await PortalAccountService.ensureAccountAndLink({
+              authUserId: session.user.id,
+              pacienteId: pid,
+              email: session.user.email ?? null,
               provider: "google",
-            }, { onConflict: "paciente_id" }).select("id").single();
-
-            // Link in portal_conta_pacientes
-            if (upserted?.id) {
-              await (supabase as any).from("portal_conta_pacientes").insert({
-                conta_id: upserted.id,
-                paciente_id: pid,
-                relacao: "responsavel",
-                is_primary: true,
-              });
-            }
+            });
 
             // Check dual-role
             const { data: existingProfile } = await supabase
@@ -134,34 +126,24 @@ export default function PortalOnboarding() {
     (async () => {
       let pid = localStorage.getItem("portal_paciente_id");
 
-      // Fallback: if localStorage was cleared (e.g. mobile browser killed the tab),
-      // recover the paciente_id from the authenticated portal account.
+      // Fallback: se localStorage foi limpo, recuperar via PortalAccountService
       if (!pid) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) {
           navigate("/portal/login");
           return;
         }
-        const { data: conta } = await (supabase as any)
-          .from("portal_contas")
-          .select("id, paciente_id")
-          .eq("auth_user_id", session.user.id)
-          .maybeSingle();
-        let recovered: string | null = conta?.paciente_id ?? null;
-        if (conta?.id && !recovered) {
-          const { data: link } = await (supabase as any)
-            .from("portal_conta_pacientes")
-            .select("paciente_id")
-            .eq("conta_id", conta.id)
-            .limit(1)
-            .maybeSingle();
-          recovered = link?.paciente_id ?? null;
+        const resolved = await PortalAccountService.resolveForUser(session.user.id);
+        if (resolved.status === "ok" && resolved.onboardingCompleto) {
+          // Já completou — vai direto para o portal
+          navigate("/patient-portal");
+          return;
         }
-        if (!recovered) {
+        if (!resolved.primaryPacienteId) {
           navigate("/portal/login");
           return;
         }
-        pid = recovered;
+        pid = resolved.primaryPacienteId;
         localStorage.setItem("portal_paciente_id", pid);
       }
       setPacienteId(pid);

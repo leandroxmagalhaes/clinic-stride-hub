@@ -2945,6 +2945,16 @@ export type Database = {
         Returns: boolean
       }
       is_professional: { Args: { p_user_id: string }; Returns: boolean }
+      portal_resolve_account: {
+        Args: { p_user_id: string }
+        Returns: {
+          conta_id: string
+          is_primary: boolean
+          onboarding_completo: boolean
+          paciente_id: string
+          paciente_nome: string
+        }[]
+      }
       process_team_invite: { Args: { invite_token: string }; Returns: Json }
       professional_can_access_patient: {
         Args: { p_patient_id: string; p_user_id: string }
