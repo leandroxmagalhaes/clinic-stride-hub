@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,17 @@ import { Loader2, KeyRound, CheckCircle2, AlertTriangle } from "lucide-react";
 type Stage = "checking" | "ready" | "no-token" | "done";
 
 /**
- * Handles password recovery links from Supabase.
- * Supports all return formats:
- *  - Hash with access_token + refresh_token + type=recovery (implicit flow)
- *  - Query string with code= (PKCE flow)
- *  - Query string with token_hash + type=recovery
- *  - Existing session (event PASSWORD_RECOVERY)
- *  - Error in hash/query (expired/invalid link)
+ * Página de redefinição de senha do Portal.
+ *
+ * Esta página processa a URL de recuperação de forma totalmente determinística:
+ *  - Não depende de `onAuthStateChange` (evita corridas com AuthContext / DataContext).
+ *  - Processa apenas UMA vez por carregamento (guard via ref).
+ *  - Suporta os 3 formatos de retorno do Supabase:
+ *      a) Hash:  #access_token=...&refresh_token=...&type=recovery
+ *      b) Query: ?code=...                       (PKCE)
+ *      c) Query: ?token_hash=...&type=recovery   (verifyOtp)
+ *  - Aceita ainda uma sessão válida pré-existente apenas se a URL indicar recovery
+ *    (evita que sessões antigas “mascarem” o reset).
  */
 export default function PortalResetPassword() {
   const navigate = useNavigate();
@@ -27,125 +31,118 @@ export default function PortalResetPassword() {
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Guarda contra duplo processamento (StrictMode em dev faz mount duplo).
+  const processedRef = useRef(false);
 
-    const finishOk = () => {
-      if (cancelled) return;
-      setStage("ready");
+  useEffect(() => {
+    if (processedRef.current) return;
+    processedRef.current = true;
+
+    const friendly = (raw?: string | null): string => {
+      if (!raw) return "Este link já foi usado ou expirou. Peça um novo link e abra-o uma única vez no mesmo dispositivo.";
+      const s = String(raw);
+      if (/aborted|abort/i.test(s)) {
+        return "O link parece ter sido aberto duas vezes (alguns clientes de email pré-visitam links). Peça um novo link e abra-o apenas uma vez.";
+      }
+      if (/expired|invalid|not.?found|otp_expired|access_denied/i.test(s)) {
+        return "Este link já foi usado ou expirou. Peça um novo link e abra-o uma única vez.";
+      }
+      return s;
     };
 
-    const finishFail = (msg?: string) => {
-      if (cancelled) return;
-      if (msg) setErrorMsg(msg);
+    const fail = (msg?: string | null) => {
+      setErrorMsg(friendly(msg));
       setStage("no-token");
     };
 
-    // Listen for PASSWORD_RECOVERY event (Supabase fires this when it detects the link)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (cancelled) return;
-      if (event === "PASSWORD_RECOVERY") {
-        finishOk();
-      } else if (event === "SIGNED_IN" && session) {
-        finishOk();
-      }
-    });
+    const ok = () => setStage("ready");
 
-    const processLink = async () => {
+    const cleanUrl = () => {
       try {
-        // 1) Read URL parts
+        window.history.replaceState(null, "", window.location.pathname);
+      } catch {
+        /* noop */
+      }
+    };
+
+    const run = async () => {
+      try {
         const rawHash = window.location.hash?.startsWith("#")
           ? window.location.hash.slice(1)
           : window.location.hash || "";
         const hashParams = new URLSearchParams(rawHash);
         const queryParams = new URLSearchParams(window.location.search);
 
-        const hashError =
+        // 0) Erros explícitos no link
+        const explicitError =
           hashParams.get("error_description") ||
           hashParams.get("error_code") ||
-          hashParams.get("error");
-        const queryError =
+          hashParams.get("error") ||
           queryParams.get("error_description") ||
           queryParams.get("error_code") ||
           queryParams.get("error");
-
-        if (hashError || queryError) {
-          finishFail(decodeURIComponent(hashError || queryError || ""));
+        if (explicitError) {
+          cleanUrl();
+          fail(decodeURIComponent(explicitError));
           return;
         }
 
-        // 2) Implicit flow — tokens in hash
         const accessToken = hashParams.get("access_token");
         const refreshToken = hashParams.get("refresh_token");
+        const code = queryParams.get("code");
+        const tokenHash = queryParams.get("token_hash") || hashParams.get("token_hash");
+        const type = queryParams.get("type") || hashParams.get("type");
+
+        const urlIndicatesRecovery =
+          !!(accessToken && refreshToken) ||
+          !!code ||
+          (!!tokenHash && type === "recovery") ||
+          type === "recovery";
+
+        // 1) Implicit flow (hash)
         if (accessToken && refreshToken) {
           const { error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
-          // Clean hash from URL so refresh doesn't reuse tokens
-          window.history.replaceState(null, "", window.location.pathname);
-          if (error) {
-            finishFail(error.message);
-            return;
-          }
-          finishOk();
-          return;
+          cleanUrl();
+          if (error) return fail(error.message);
+          return ok();
         }
 
-        // 3) PKCE flow — code in query string
-        const code = queryParams.get("code");
+        // 2) PKCE flow (?code=)
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
-          window.history.replaceState(null, "", window.location.pathname);
-          if (error) {
-            finishFail(error.message);
-            return;
-          }
-          finishOk();
-          return;
+          cleanUrl();
+          if (error) return fail(error.message);
+          return ok();
         }
 
-        // 4) OTP token_hash flow
-        const tokenHash = queryParams.get("token_hash") || hashParams.get("token_hash");
-        const type = queryParams.get("type") || hashParams.get("type");
+        // 3) OTP token_hash (?token_hash=&type=recovery)
         if (tokenHash && type === "recovery") {
           const { error } = await supabase.auth.verifyOtp({
             type: "recovery",
             token_hash: tokenHash,
           });
-          window.history.replaceState(null, "", window.location.pathname);
-          if (error) {
-            finishFail(error.message);
-            return;
-          }
-          finishOk();
-          return;
+          cleanUrl();
+          if (error) return fail(error.message);
+          return ok();
         }
 
-        // 5) Maybe a session is already there (link processed by SDK before mount)
+        // 4) Já existe sessão e URL indica recovery — aceitar
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          finishOk();
-          return;
+        if (session && urlIndicatesRecovery) {
+          return ok();
         }
 
-        // 6) Last resort — wait briefly for PASSWORD_RECOVERY event from listener
-        setTimeout(() => {
-          if (cancelled) return;
-          if (stage === "checking") finishFail("Link inválido ou expirado.");
-        }, 3500);
+        // 5) Nada utilizável
+        fail(null);
       } catch (e: any) {
-        finishFail(e?.message || "Não foi possível validar o link.");
+        fail(e?.message || null);
       }
     };
 
-    processLink();
-
-    return () => {
-      cancelled = true;
-      subscription.unsubscribe();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    run();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,8 +164,12 @@ export default function PortalResetPassword() {
     }
     setStage("done");
     toast.success("Senha redefinida com sucesso!");
-    // Sign out so the user logs in fresh with the new password
-    await supabase.auth.signOut();
+    // Termina a sessão temporária para o utilizador entrar com a nova senha.
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* noop */
+    }
     setTimeout(() => navigate("/portal/login", { replace: true }), 1500);
   };
 
@@ -196,10 +197,9 @@ export default function PortalResetPassword() {
           {stage === "no-token" && (
             <div className="text-center space-y-4 py-4">
               <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
-              <p className="text-sm text-muted-foreground">
-                {errorMsg
-                  ? `O link de recuperação é inválido ou expirou. (${errorMsg})`
-                  : "O link de recuperação é inválido ou expirou. Peça um novo link na página de login."}
+              <p className="text-sm text-muted-foreground">{errorMsg}</p>
+              <p className="text-xs text-muted-foreground">
+                Dica: peça um novo link e abra-o apenas uma vez, no mesmo dispositivo onde vai definir a nova senha.
               </p>
               <Button onClick={() => navigate("/portal/login")} className="w-full">
                 Voltar ao login
