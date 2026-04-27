@@ -14,6 +14,7 @@ import { FullQuestionnaireView } from "@/components/patient-portal/FullQuestionn
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { PortalAccountService } from "@/services/PortalAccountService";
 
 type ProfileType = "baby" | "child" | "adult" | "elderly";
 
