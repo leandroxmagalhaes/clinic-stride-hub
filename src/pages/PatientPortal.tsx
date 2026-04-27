@@ -10,6 +10,7 @@ import { DiaryEntryCard, type DiaryEntry } from "@/components/patient-portal/Dia
 import type { DiaryReply } from "@/components/patient-portal/DiaryReplyThread";
 import { ProfileSelector } from "@/components/patient-portal/ProfileSelector";
 import { EditHealthProfileModal } from "@/components/patient-portal/EditHealthProfileModal";
+import { FullQuestionnaireView } from "@/components/patient-portal/FullQuestionnaireView";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
