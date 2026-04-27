@@ -41,6 +41,8 @@ export default function PatientPortal() {
   const [resolving, setResolving] = useState(true);
   const [showHealthEdit, setShowHealthEdit] = useState(false);
   const [hasQuestionnaire, setHasQuestionnaire] = useState(false);
+  const [hasDynamicTemplate, setHasDynamicTemplate] = useState(false);
+  const [view, setView] = useState<"diary" | "questionnaire">("diary");
 
   // Resolve conta and linked patients
   useEffect(() => {
