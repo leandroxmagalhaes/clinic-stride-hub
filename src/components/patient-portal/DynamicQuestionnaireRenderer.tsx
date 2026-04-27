@@ -30,45 +30,72 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const dirtyRef = useRef(false);
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
 
   const setVal = (sectionId: string, key: string, value: any) => {
     dirtyRef.current = true;
     setAnswers((prev) => ({ ...prev, [sectionId]: { ...(prev[sectionId] || {}), [key]: value } }));
   };
 
+  // Flush helper — used by debounce, exit button, and background/pagehide events
+  const flushSave = async () => {
+    if (!pacienteId) return;
+    const current = answersRef.current;
+    if (!current || Object.keys(current).length === 0) return;
+    setSaveStatus("saving");
+    try {
+      const { error } = await (supabase as any)
+        .from("portal_questionario")
+        .upsert(
+          {
+            paciente_id: pacienteId,
+            perfil_tipo: template.identifier,
+            template_id: template.id,
+            respostas: current,
+            completo: false,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "paciente_id" }
+        );
+      if (error) throw error;
+      setLastSaved(new Date());
+      setSaveStatus("saved");
+      dirtyRef.current = false;
+    } catch (err) {
+      console.error("Erro ao guardar progresso:", err);
+      setSaveStatus("error");
+    }
+  };
+
   // Autosave with 1500ms debounce — only when there is a paciente_id and dirty changes
   useEffect(() => {
     if (!pacienteId || !dirtyRef.current) return;
     if (Object.keys(answers).length === 0) return;
-
-    const timer = setTimeout(async () => {
-      setSaveStatus("saving");
-      try {
-        const { error } = await (supabase as any)
-          .from("portal_questionario")
-          .upsert(
-            {
-              paciente_id: pacienteId,
-              perfil_tipo: template.identifier,
-              template_id: template.id,
-              respostas: answers,
-              completo: false,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "paciente_id" }
-          );
-        if (error) throw error;
-        setLastSaved(new Date());
-        setSaveStatus("saved");
-        dirtyRef.current = false;
-      } catch (err) {
-        console.error("Erro ao guardar progresso:", err);
-        setSaveStatus("error");
-      }
-    }, 1500);
-
+    const timer = setTimeout(() => { void flushSave(); }, 1500);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answers, pacienteId, template.id, template.identifier]);
+
+  // Flush on tab background / page hide — protects against mobile browsers killing the tab
+  useEffect(() => {
+    if (!pacienteId) return;
+    const onHide = () => {
+      if (dirtyRef.current) void flushSave();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden" && dirtyRef.current) void flushSave();
+    };
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("beforeunload", onHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("beforeunload", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pacienteId, template.id, template.identifier]);
 
   // Progress: section is "filled" when at least one field has a non-empty value
   const { filledSections, totalSections, percent, currentSectionIdx } = useMemo(() => {
@@ -110,29 +137,8 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
   };
 
   const handleExit = async () => {
-    // Force flush of any pending changes before exiting
-    if (pacienteId && dirtyRef.current && Object.keys(answers).length > 0) {
-      setSaveStatus("saving");
-      try {
-        await (supabase as any)
-          .from("portal_questionario")
-          .upsert(
-            {
-              paciente_id: pacienteId,
-              perfil_tipo: template.identifier,
-              template_id: template.id,
-              respostas: answers,
-              completo: false,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "paciente_id" }
-          );
-        setLastSaved(new Date());
-        setSaveStatus("saved");
-        dirtyRef.current = false;
-      } catch (err) {
-        console.error("Erro ao guardar antes de sair:", err);
-      }
+    if (pacienteId && dirtyRef.current) {
+      await flushSave();
     }
     toast.success("Progresso guardado. Pode voltar a qualquer momento usando o link do portal.");
     onExit?.();
