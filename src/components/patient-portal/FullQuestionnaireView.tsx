@@ -418,6 +418,11 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
                   {section.description}
                 </p>
               )}
+              {section.intro && (
+                <p className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-line pt-1 border-l-2 border-primary/30 pl-2">
+                  {section.intro}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
               {section.fields.map((field) => editing
