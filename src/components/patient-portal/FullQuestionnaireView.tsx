@@ -254,9 +254,9 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
         <CardContent className="py-6 text-center space-y-2">
           <FileText className="h-8 w-8 mx-auto text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            {!questionario
-              ? "Ainda não foi preenchido nenhum questionário no portal."
-              : "Este questionário foi preenchido num formato antigo (sem template) e não pode ser apresentado integralmente aqui."}
+            {!template
+              ? "Não foi possível carregar o modelo de questionário para este utente."
+              : "O utente ainda não preencheu o questionário através do portal."}
           </p>
         </CardContent>
       </Card>
