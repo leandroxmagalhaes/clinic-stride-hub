@@ -30,6 +30,10 @@ interface Props {
   canEdit: boolean;
   /** Optional title override. Defaults to "Questionário de Saúde". */
   title?: string;
+  /** Open the form already in edit mode (used by the patient portal when the questionnaire is incomplete). */
+  startInEditMode?: boolean;
+  /** Notified when the `completo` flag of the questionnaire changes (after Concluir). */
+  onCompletedChange?: (completo: boolean) => void;
 }
 
 interface HistoryEntry {
