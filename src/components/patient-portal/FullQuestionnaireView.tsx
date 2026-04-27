@@ -233,71 +233,124 @@ export function FullQuestionnaireView({
     }));
   };
 
-  const handleSave = async () => {
-    if (!questionario?.id) {
-      toast.error("Questionário não encontrado.");
+  /**
+   * Persist `draft` into `portal_questionario`. Creates the record via upsert when it
+   * does not exist yet (lets the patient start the integral form straight from the portal).
+   * `markComplete=true` flags the questionnaire as concluded.
+   */
+  const persistDraft = async (markComplete: boolean) => {
+    if (!template) {
+      toast.error("Modelo de questionário indisponível.");
       return;
     }
     setSaving(true);
     try {
-      // Persist new respostas; also link template_id when missing (legacy records)
-      const updatePayload: Record<string, any> = {
-        respostas: draft,
-        updated_at: new Date().toISOString(),
-      };
-      if (!questionario.template_id && template?.id) {
-        updatePayload.template_id = template.id;
-      }
-      const { error } = await (supabase as any)
-        .from("portal_questionario")
-        .update(updatePayload)
-        .eq("id", questionario.id);
-      if (error) throw error;
+      let questionarioId: string | null = questionario?.id || null;
 
-      // Audit: one insert per changed field
-      const attribution = `${alteradoPor} (${authorRole})`;
-      const changeCount = await logQuestionnaireChanges({
-        questionarioId: questionario.id,
-        pacienteId,
-        before: respostas,
-        after: draft,
-        alteradoPor: attribution,
-      });
-
-      // Notify the other side (only patient->prof; professional edits are silent)
-      if (authorRole === "utente" && changeCount > 0) {
-        await (supabase as any).from("portal_notificacoes").insert({
+      if (questionarioId) {
+        const updatePayload: Record<string, any> = {
+          respostas: draft,
+          updated_at: new Date().toISOString(),
+        };
+        if (!questionario.template_id && template.id) updatePayload.template_id = template.id;
+        if (markComplete) updatePayload.completo = true;
+        const { error } = await (supabase as any)
+          .from("portal_questionario")
+          .update(updatePayload)
+          .eq("id", questionarioId);
+        if (error) throw error;
+      } else {
+        const upsertPayload: Record<string, any> = {
           paciente_id: pacienteId,
-          tipo: "questionnaire_update",
-          titulo: `${alteradoPor} atualizou o questionário de saúde`,
-          texto_preview: `${changeCount} ${changeCount === 1 ? "campo alterado" : "campos alterados"}`,
-          urgente: false,
-        });
+          template_id: template.id,
+          perfil_tipo: template.identifier,
+          respostas: draft,
+          completo: !!markComplete,
+          updated_at: new Date().toISOString(),
+        };
+        const { data: created, error } = await (supabase as any)
+          .from("portal_questionario")
+          .upsert(upsertPayload, { onConflict: "paciente_id" })
+          .select("id")
+          .maybeSingle();
+        if (error) throw error;
+        questionarioId = created?.id || null;
       }
 
-      toast.success(changeCount > 0 ? `Guardado (${changeCount} ${changeCount === 1 ? "alteração" : "alterações"})` : "Sem alterações para guardar");
-      setEditing(false);
+      let changeCount = 0;
+      if (questionarioId) {
+        const attribution = `${alteradoPor} (${authorRole})`;
+        changeCount = await logQuestionnaireChanges({
+          questionarioId,
+          pacienteId,
+          before: respostas,
+          after: draft,
+          alteradoPor: attribution,
+        });
+
+        if (authorRole === "utente" && changeCount > 0) {
+          await (supabase as any).from("portal_notificacoes").insert({
+            paciente_id: pacienteId,
+            tipo: "questionnaire_update",
+            titulo: `${alteradoPor} ${markComplete ? "concluiu" : "atualizou"} o questionário de saúde`,
+            texto_preview: `${changeCount} ${changeCount === 1 ? "campo alterado" : "campos alterados"}`,
+            urgente: false,
+          });
+        }
+      }
+
+      if (markComplete) {
+        toast.success("Questionário concluído!");
+        onCompletedChange?.(true);
+        setEditing(false);
+      } else {
+        toast.success(
+          changeCount > 0
+            ? `Progresso guardado (${changeCount} ${changeCount === 1 ? "alteração" : "alterações"})`
+            : "Progresso guardado."
+        );
+      }
       await load();
     } catch (err) {
       console.error(err);
-      toast.error("Erro ao guardar alterações.");
+      toast.error("Erro ao guardar.");
     } finally {
       setSaving(false);
     }
   };
 
+  const handleSaveProgress = () => persistDraft(false);
+  const handleConclude = () => persistDraft(true);
+
   if (loading) return <Skeleton className="h-48 w-full" />;
 
-  if (!questionario || !template) {
+  if (!template) {
     return (
       <Card className="border-dashed border-muted-foreground/30">
         <CardContent className="py-6 text-center space-y-2">
           <FileText className="h-8 w-8 mx-auto text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            {!template
-              ? "Não foi possível carregar o modelo de questionário para este utente."
-              : "O utente ainda não preencheu o questionário através do portal."}
+            Não foi possível carregar o modelo de questionário para este utente.
           </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!questionario && !editing) {
+    return (
+      <Card className="border-amber-200 bg-amber-50/40">
+        <CardContent className="py-6 text-center space-y-3">
+          <FileText className="h-8 w-8 mx-auto text-amber-600" />
+          <h3 className="font-semibold">{title || "Questionário de Saúde"}</h3>
+          <p className="text-sm text-muted-foreground">
+            Ainda não começou a preencher o questionário. Pode iniciar agora — o progresso é guardado automaticamente.
+          </p>
+          {canEdit && (
+            <Button onClick={() => { setDraft({}); setEditing(true); }} className="gap-1.5">
+              <Pencil className="h-4 w-4" /> Começar a preencher
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
