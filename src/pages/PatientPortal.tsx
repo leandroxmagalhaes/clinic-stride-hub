@@ -40,9 +40,8 @@ export default function PatientPortal() {
   const [perfilTipo, setPerfilTipo] = useState<ProfileType>("adult");
   const [patientName, setPatientName] = useState("Paciente");
   const [resolving, setResolving] = useState(true);
-  const [showHealthEdit, setShowHealthEdit] = useState(false);
-  const [hasQuestionnaire, setHasQuestionnaire] = useState(false);
-  const [hasDynamicTemplate, setHasDynamicTemplate] = useState(false);
+  const [questionnaireComplete, setQuestionnaireComplete] = useState(false);
+  const [questionnaireResolvable, setQuestionnaireResolvable] = useState(false);
   const [view, setView] = useState<"diary" | "questionnaire">("diary");
 
   // Resolve conta e utentes ligados via serviço único (com filtragem de órfãos)
