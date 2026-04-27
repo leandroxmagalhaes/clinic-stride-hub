@@ -91,6 +91,8 @@ export default function PortalLogin() {
 
   // If a recovery link accidentally lands on /portal/login, forward it
   // to /portal/reset-password preserving hash + query so tokens survive.
+  // IMPORTANT: detect recovery only via UNAMBIGUOUS markers — do NOT treat
+  // a generic `?code=` as recovery (that also appears in OAuth callbacks).
   useEffect(() => {
     const hash = window.location.hash || "";
     const search = window.location.search || "";
@@ -98,7 +100,6 @@ export default function PortalLogin() {
       hash.includes("type=recovery") ||
       hash.includes("access_token=") ||
       search.includes("type=recovery") ||
-      search.includes("code=") ||
       search.includes("token_hash=");
     if (looksLikeRecovery) {
       navigate(`/portal/reset-password${search}${hash}`, { replace: true });
@@ -114,7 +115,6 @@ export default function PortalLogin() {
       hash.includes("type=recovery") ||
       hash.includes("access_token=") ||
       search.includes("type=recovery") ||
-      search.includes("code=") ||
       search.includes("token_hash=");
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
