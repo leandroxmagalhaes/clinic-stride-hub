@@ -169,26 +169,16 @@ export default function PortalVerificacao() {
       });
       if (authError) throw authError;
 
-      // Create portal account
-      const { data: newAccount } = await (supabase as any).from("portal_contas").insert({
-        paciente_id: invite.paciente_id,
-        auth_user_id: authData.user?.id || null,
-        email,
-        provider: "email",
-      }).select("id").single();
-
-      // Insert into portal_conta_pacientes linking table
-      if (newAccount?.id) {
-        await (supabase as any).from("portal_conta_pacientes").insert({
-          conta_id: newAccount.id,
-          paciente_id: invite.paciente_id,
-          relacao: "responsavel",
-          is_primary: true,
-        });
-      }
-
-      // Check if email exists in profiles (professional) — set portal_role to 'both'
+      // Criar/associar conta de forma idempotente (evita duplicados)
       if (authData.user?.id) {
+        await PortalAccountService.ensureAccountAndLink({
+          authUserId: authData.user.id,
+          pacienteId: invite.paciente_id,
+          email,
+          provider: "email",
+        });
+
+        // Check if email exists in profiles (professional) — set portal_role to 'both'
         const { data: existingProfile } = await supabase
           .from("profiles")
           .select("id, role")
