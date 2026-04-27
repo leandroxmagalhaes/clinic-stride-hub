@@ -90,14 +90,33 @@ export class QuestionnaireTemplateService {
   }
 
   /**
-   * Map a legacy `perfil_tipo` (baby/child/adult/elderly) to a template identifier.
+   * Map a legacy `perfil_tipo` (baby/child/adult/elderly) — or already a
+   * template identifier (template_baby_complete/template_child/...) — to a
+   * canonical template identifier. Accepts both formats so older records keep
+   * resolving to the same template after upgrades.
    */
   static identifierForPerfil(perfilTipo?: string | null): string {
-    switch ((perfilTipo || "").toLowerCase()) {
-      case "baby": return "template_baby_complete";
-      case "child": return "template_child";
-      case "elderly": return "template_elderly";
-      default: return "template_adult";
+    const raw = (perfilTipo || "").toLowerCase().trim();
+    if (!raw) return "template_adult";
+    // Already a template identifier — return as-is
+    if (raw.startsWith("template_")) return raw;
+    switch (raw) {
+      case "baby":
+      case "bebe":
+      case "bebé":
+        return "template_baby_complete";
+      case "child":
+      case "crianca":
+      case "criança":
+        return "template_child";
+      case "elderly":
+      case "idoso":
+      case "senior":
+        return "template_elderly";
+      case "adult":
+      case "adulto":
+      default:
+        return "template_adult";
     }
   }
 
@@ -122,9 +141,18 @@ export class QuestionnaireTemplateService {
   }
 
   /**
-   * Resolve the best template for a patient: prefers the questionnaire's own
-   * template_id, then the most recent invite with template_id, then a fallback
-   * by perfil_tipo / birth_date.
+   * Resolve the best template for a patient, treating any questionnaire that
+   * the patient has already started as the source of truth so the model never
+   * silently switches mid-fill.
+   *
+   * Priority:
+   *   1) `portal_questionario.template_id` if it exists.
+   *   2) `portal_questionario.perfil_tipo` mapped to a system identifier
+   *      (handles both legacy values like 'baby' and already-canonical
+   *      identifiers like 'template_baby_complete').
+   *   3) Most recent invite's `template_id` — only when no questionnaire row
+   *      yet exists for this patient.
+   *   4) Caller-provided `perfilTipo` / age as last resort.
    */
   static async resolveForPatient(params: {
     pacienteId: string;
@@ -132,34 +160,69 @@ export class QuestionnaireTemplateService {
     birthDate?: string | null;
   }): Promise<QuestionnaireTemplate | null> {
     const { pacienteId, perfilTipo, birthDate } = params;
-    // 1) Existing questionnaire template
+
+    // 1+2) Existing questionnaire wins — by template_id, otherwise by perfil_tipo.
+    // EXCEPTION: if the questionnaire is still empty (no answers in any of the
+    // legacy or dynamic buckets), a newer invite is allowed to set a different
+    // template, so a clinician resending a different model actually takes effect.
     const { data: q } = await (supabase as any)
       .from("portal_questionario")
-      .select("template_id")
+      .select("template_id, perfil_tipo, respostas, dados_pessoais, perfil_saude, expectativas, updated_at")
       .eq("paciente_id", pacienteId)
       .maybeSingle();
-    if (q?.template_id) {
-      const t = await this.getById(q.template_id);
-      if (t) return t;
-    }
-    // 2) Most recent invite with template_id
+
+    const hasAnswers = (() => {
+      const buckets = [q?.respostas, q?.dados_pessoais, q?.perfil_saude, q?.expectativas];
+      return buckets.some((b) => {
+        if (!b || typeof b !== "object") return false;
+        if (Array.isArray(b)) return b.length > 0;
+        // For respostas (sectionId -> {fieldKey:value}) and legacy flat objects
+        const values = Object.values(b as Record<string, any>);
+        return values.some((v) => {
+          if (v === null || v === undefined || v === "") return false;
+          if (Array.isArray(v)) return v.length > 0;
+          if (typeof v === "object") return Object.values(v).some((x) => x !== null && x !== undefined && x !== "");
+          return true;
+        });
+      });
+    })();
+
+    // Most recent invite with template_id (used as override only when no answers)
     const { data: inv } = await (supabase as any)
       .from("portal_convites")
-      .select("template_id")
+      .select("template_id, created_at")
       .eq("paciente_id", pacienteId)
       .not("template_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (inv?.template_id) {
+
+    if (q && !hasAnswers && inv?.template_id) {
+      // Empty questionnaire shell — let the latest invite's template win
       const t = await this.getById(inv.template_id);
       if (t) return t;
     }
-    // 3) Fallback by perfil_tipo / age
-    const identifier = perfilTipo
+
+    if (q?.template_id) {
+      const t = await this.getById(q.template_id);
+      if (t) return t;
+    }
+    if (q?.perfil_tipo) {
+      const identifier = this.identifierForPerfil(q.perfil_tipo);
+      const t = await this.getByIdentifier(identifier);
+      if (t) return t;
+    }
+
+    if (!q && inv?.template_id) {
+      const t = await this.getById(inv.template_id);
+      if (t) return t;
+    }
+
+    // Last resort: caller-provided perfil_tipo / age
+    const fallbackIdentifier = perfilTipo
       ? this.identifierForPerfil(perfilTipo)
       : this.suggestIdentifierByAge(birthDate);
-    return await this.getByIdentifier(identifier);
+    return await this.getByIdentifier(fallbackIdentifier);
   }
 }
 
