@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, BookOpen, ArrowLeftRight, LogOut, HeartPulse } from "lucide-react";
+import { Plus, BookOpen, ArrowLeftRight, LogOut, HeartPulse, FileEdit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,12 +9,12 @@ import { DiaryNewEntryForm } from "@/components/patient-portal/DiaryNewEntryForm
 import { DiaryEntryCard, type DiaryEntry } from "@/components/patient-portal/DiaryEntryCard";
 import type { DiaryReply } from "@/components/patient-portal/DiaryReplyThread";
 import { ProfileSelector } from "@/components/patient-portal/ProfileSelector";
-import { EditHealthProfileModal } from "@/components/patient-portal/EditHealthProfileModal";
 import { FullQuestionnaireView } from "@/components/patient-portal/FullQuestionnaireView";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { PortalAccountService } from "@/services/PortalAccountService";
+import { QuestionnaireTemplateService } from "@/services/QuestionnaireTemplateService";
 
 type ProfileType = "baby" | "child" | "adult" | "elderly";
 
