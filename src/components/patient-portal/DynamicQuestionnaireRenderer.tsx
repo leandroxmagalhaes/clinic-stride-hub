@@ -265,6 +265,11 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
                   {section.description}
                 </p>
               )}
+              {section.intro && (
+                <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-line pt-1 border-l-2 border-primary/30 pl-3">
+                  {section.intro}
+                </p>
+              )}
             </div>
             {section.fields.map((field) => (
               <div key={field.key} className="space-y-1.5">
@@ -272,6 +277,11 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
                   <label className="text-xs font-medium block">
                     {field.label} {field.required && <span className="text-destructive">*</span>}
                   </label>
+                )}
+                {field.helpText && (
+                  <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {field.helpText}
+                  </p>
                 )}
                 {renderField(section.id, field)}
               </div>
