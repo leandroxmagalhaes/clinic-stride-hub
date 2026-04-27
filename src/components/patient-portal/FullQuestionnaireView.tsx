@@ -200,13 +200,17 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
     }
     setSaving(true);
     try {
-      // Persist new respostas
+      // Persist new respostas; also link template_id when missing (legacy records)
+      const updatePayload: Record<string, any> = {
+        respostas: draft,
+        updated_at: new Date().toISOString(),
+      };
+      if (!questionario.template_id && template?.id) {
+        updatePayload.template_id = template.id;
+      }
       const { error } = await (supabase as any)
         .from("portal_questionario")
-        .update({
-          respostas: draft,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", questionario.id);
       if (error) throw error;
 
