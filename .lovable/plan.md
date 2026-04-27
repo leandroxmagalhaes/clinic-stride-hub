@@ -1,55 +1,32 @@
-# Corrigir arranque do preview — d3-array em vite.config.ts
+Vou corrigir de forma cirúrgica o fluxo de redefinição de senha do Portal, sem mexer em regras funcionais do questionário ou do portal.
 
-## Causa raiz
+Problema provável identificado:
+- O email de recuperação está a gerar login temporário, mas a aplicação não está a capturar de forma suficientemente robusta o retorno do link para mostrar a tela “Nova senha”.
+- Há risco de o estado global de autenticação/rotas processar o utilizador como “logado” antes da página de redefinição conseguir assumir o fluxo.
+- O link pode voltar com parâmetros/hash de recuperação em formatos diferentes, e a tela atual depende quase só do evento `PASSWORD_RECOVERY`/sessão existente.
 
-O dev server falha imediatamente com:
+Plano de correção:
+1. Tornar `/portal/reset-password` resiliente a todos os formatos de retorno do link
+   - Ler explicitamente `window.location.hash` e `window.location.search`.
+   - Detectar `type=recovery`, `access_token`, `refresh_token`, `code`, `token_hash` e erros como `error_code`.
+   - Se houver tokens no hash, chamar `supabase.auth.setSession(...)` antes de mostrar o formulário.
+   - Se houver sessão válida, mostrar imediatamente o formulário de nova senha.
+   - Se houver erro/expiração, mostrar mensagem clara e botão para solicitar novo link.
 
-```
-Error: ENOENT: no such file or directory, open '/dev-server/node_modules/d3-array/src/index.js'
-```
+2. Impedir redirecionamento indevido enquanto o link de recuperação está a ser processado
+   - Ajustar o handler da tela de login para não redirecionar automaticamente quando a URL contiver parâmetros de recuperação.
+   - Se a rota `/portal/login` receber acidentalmente um retorno de recuperação, encaminhar para `/portal/reset-password` preservando hash/query.
 
-O `vite.config.ts` contém um workaround antigo que:
+3. Melhorar mensagens de erro do pedido de recuperação
+   - No envio do email, exibir a mensagem real quando houver limite de email, link expirado ou erro de autenticação.
+   - Manter o `redirectTo` apontado para `/portal/reset-password`.
 
-1. Define um **alias hardcoded** `"d3-array" -> node_modules/d3-array/src/index.js`
-2. Força `optimizeDeps.include: ["d3-array"]`
-3. Adiciona `commonjsOptions.include: [/d3-array/, ...]`
+4. Validar build/preview após a alteração
+   - Rodar verificação de TypeScript/build para garantir que o preview continua a arrancar.
+   - Não alterar regras de negócio, tabelas, permissões, questionário ou autosave.
 
-Porém o pacote `d3-array` **já não está instalado** em `node_modules` (foi removido das dependências transitivas após uma alteração no lockfile). O alias aponta para um ficheiro inexistente, e como `optimizeDeps.include` força o Vite a pré-empacotá-lo no arranque, o servidor crasha antes de servir uma única requisição.
+Ficheiros previstos:
+- `src/pages/PortalResetPassword.tsx`
+- `src/pages/PortalLogin.tsx`
 
-## Correção (cirúrgica, sem alterações funcionais)
-
-Editar **apenas** `vite.config.ts`:
-
-- Remover a linha do alias `"d3-array": ...`
-- Remover o bloco `optimizeDeps: { include: ["d3-array"] }`
-- Remover o bloco `build.commonjsOptions` (específico ao d3-array)
-
-O resultado é a configuração padrão do Vite. Se algum componente (ex.: `recharts`) precisar de `d3-array`, o gestor de pacotes voltará a instalá-lo como dependência transitiva normalmente, sem necessidade de alias manual.
-
-## Resultado esperado
-
-- Vite arranca sem erro de ENOENT
-- Preview volta a carregar
-- Sem qualquer alteração ao código da aplicação, schema, ou comportamento funcional
-
-## Detalhes técnicos
-
-Ficheiro alterado: `vite.config.ts` (única alteração).
-
-Diff conceptual:
-
-```text
- export default defineConfig(({ mode }) => ({
-   server: { host: "::", port: 8080, hmr: { overlay: false } },
-   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
-   resolve: {
-     alias: {
-       "@": path.resolve(__dirname, "./src"),
--      "d3-array": path.resolve(__dirname, "node_modules/d3-array/src/index.js"),
-     },
-     dedupe: ["react", "react-dom", "react/jsx-runtime"],
-   },
--  optimizeDeps: { include: ["d3-array"] },
--  build: { commonjsOptions: { include: [/d3-array/, /node_modules/] } },
- }));
-```
+Sem alterações previstas em banco de dados.
