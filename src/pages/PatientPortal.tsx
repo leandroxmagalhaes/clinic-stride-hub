@@ -313,8 +313,8 @@ export default function PatientPortal() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
-        {/* Tabs: Diário / Questionário (only shown if dynamic template exists) */}
-        {hasDynamicTemplate && selectedPacienteId && (
+        {/* Tabs: Diário / Questionário (visível sempre que existe template resolvível) */}
+        {questionnaireResolvable && selectedPacienteId && (
           <div className="flex gap-2 border-b">
             <button
               type="button"
@@ -339,32 +339,46 @@ export default function PatientPortal() {
             >
               <HeartPulse className="inline h-4 w-4 mr-1" />
               Questionário de Saúde
+              {!questionnaireComplete && (
+                <span className="ml-1.5 inline-flex items-center justify-center text-[10px] font-semibold bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">
+                  incompleto
+                </span>
+              )}
             </button>
           </div>
         )}
 
-        {view === "questionnaire" && hasDynamicTemplate && selectedPacienteId ? (
-          <FullQuestionnaireView
-            pacienteId={selectedPacienteId}
-            alteradoPor={patientName}
-            authorRole="utente"
-            canEdit={true}
-            title="Meu Questionário de Saúde"
-          />
+        {view === "questionnaire" && questionnaireResolvable && selectedPacienteId ? (
+          questionnaireComplete ? (
+            <FullQuestionnaireView
+              pacienteId={selectedPacienteId}
+              alteradoPor={patientName}
+              authorRole="utente"
+              canEdit={true}
+              title="Meu Questionário de Saúde"
+            />
+          ) : (
+            <Card className="border-amber-200 bg-amber-50/40">
+              <CardContent className="py-6 text-center space-y-3">
+                <div className="h-12 w-12 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
+                  <FileEdit className="h-6 w-6 text-amber-600" />
+                </div>
+                <h3 className="font-semibold">Questionário em curso</h3>
+                <p className="text-sm text-muted-foreground">
+                  O seu questionário de saúde ainda não está completo. Pode continuar de onde parou e o progresso é guardado automaticamente.
+                </p>
+                <Button
+                  onClick={() => navigate("/portal/onboarding")}
+                  className="gap-1.5"
+                >
+                  <FileEdit className="h-4 w-4" />
+                  Continuar preenchimento
+                </Button>
+              </CardContent>
+            </Card>
+          )
         ) : (
           <>
-            {/* Legacy "Atualizar dados de saúde" button — only when no dynamic template */}
-            {hasQuestionnaire && !hasDynamicTemplate && !showForm && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowHealthEdit(true)}
-                className="gap-1.5 text-xs text-muted-foreground hover:text-primary w-full justify-center"
-              >
-                <HeartPulse className="h-3.5 w-3.5" />
-                📝 Atualizar dados de saúde
-              </Button>
-            )}
             {showForm ? (
               <DiaryNewEntryForm
                 perfilTipo={perfilTipo}
@@ -415,16 +429,6 @@ export default function PatientPortal() {
           </>
         )}
       </main>
-
-      {selectedPacienteId && (
-        <EditHealthProfileModal
-          open={showHealthEdit}
-          onOpenChange={setShowHealthEdit}
-          pacienteId={selectedPacienteId}
-          patientName={patientName}
-          perfilTipo={perfilTipo}
-        />
-      )}
     </div>
   );
 }
