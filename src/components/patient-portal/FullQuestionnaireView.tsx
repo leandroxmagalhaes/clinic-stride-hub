@@ -15,6 +15,7 @@ import {
   QuestionnaireTemplateService,
   logQuestionnaireChanges,
   buildTemplateLabelMap,
+  mergeLegacyIntoRespostas,
   type QuestionnaireTemplate,
   type TemplateField,
 } from "@/services/QuestionnaireTemplateService";
