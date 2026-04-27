@@ -258,7 +258,14 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
       {template.schema.sections.map((section) => (
         <Card key={section.id}>
           <CardContent className="pt-6 space-y-4">
-            <h3 className="text-base font-semibold">{section.title}</h3>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold">{section.title}</h3>
+              {section.description && (
+                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
+                  {section.description}
+                </p>
+              )}
+            </div>
             {section.fields.map((field) => (
               <div key={field.key} className="space-y-1.5">
                 {field.type !== "checkbox" && (
