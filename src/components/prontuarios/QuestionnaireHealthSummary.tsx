@@ -12,6 +12,7 @@ import { FileText, Pencil, Save, X, Plus, History, ChevronDown, ChevronUp } from
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
+import { FullQuestionnaireView } from "@/components/patient-portal/FullQuestionnaireView";
 
 interface Props {
   pacienteId: string;
@@ -205,6 +206,7 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
   const [editExpectativas, setEditExpectativas] = useState<Record<string, string>>({});
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
   const [professionalName, setProfessionalName] = useState("Profissional");
+  const [canEditDynamic, setCanEditDynamic] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -214,7 +216,6 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
           .from("portal_questionario")
           .select("*")
           .eq("paciente_id", pacienteId)
-          .eq("completo", true)
           .maybeSingle();
         setData(q);
       } catch {
@@ -225,17 +226,44 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
     })();
   }, [pacienteId]);
 
-  // Get professional name for history logging
+  // Get professional name + RBAC check (admin OR assigned professional)
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle()
-      .then(({ data: p }) => { if (p?.full_name) setProfessionalName(p.full_name); });
-  }, [user]);
+    (async () => {
+      const { data: p } = await supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle();
+      if (p?.full_name) setProfessionalName(p.full_name);
+      const { data: allowed } = await (supabase as any).rpc("professional_can_access_patient", {
+        p_user_id: user.id,
+        p_patient_id: pacienteId,
+      });
+      // Secretaries are read-only: rule is "Admin OR assigned professional".
+      const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
+      const roleSet = new Set((roles || []).map((r: any) => r.role));
+      const isAdmin = roleSet.has("admin");
+      // professional_can_access_patient also returns true for admins/secretaries.
+      // We must exclude secretaries explicitly.
+      const isSecretary = roleSet.has("secretary");
+      setCanEditDynamic((!!allowed && !isSecretary) || isAdmin);
+    })();
+  }, [user, pacienteId]);
 
   if (loading) return <Skeleton className="h-24 w-full" />;
 
+  // Dynamic-template path: render the full questionnaire (all sections, full audit)
+  if (data?.template_id) {
+    return (
+      <FullQuestionnaireView
+        pacienteId={pacienteId}
+        alteradoPor={professionalName}
+        authorRole="profissional"
+        canEdit={canEditDynamic}
+        title="Resumo de Saúde"
+      />
+    );
+  }
+
   // No data — show "fill manually" option
-  if (!data && !creating) {
+  if ((!data || !data.completo) && !creating) {
     return (
       <Card className="border-dashed border-muted-foreground/30">
         <CardContent className="py-6 text-center space-y-3">
