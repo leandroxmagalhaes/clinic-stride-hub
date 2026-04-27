@@ -176,6 +176,16 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
 
   const labelMap = useMemo(() => buildTemplateLabelMap(template), [template]);
 
+  const guidanceSections = useMemo(
+    () => template?.schema.sections.filter((section) => (section.fields?.length || 0) === 0 && (section.intro || section.description)) || [],
+    [template]
+  );
+
+  const questionSections = useMemo(
+    () => template?.schema.sections.filter((section) => (section.fields?.length || 0) > 0) || [],
+    [template]
+  );
+
   const startEdit = () => {
     setDraft(JSON.parse(JSON.stringify(respostas)));
     setEditing(true);
@@ -409,7 +419,23 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
         )}
       </CardHeader>
       <CardContent className="space-y-4">
-        {template.schema.sections.map((section) => (
+        {guidanceSections.map((section) => (
+          <div key={section.id} className="rounded-lg border-t-4 border-t-primary bg-background p-4 space-y-3">
+            <h2 className="text-2xl font-semibold tracking-normal text-foreground">{section.title}</h2>
+            {section.intro && (
+              <p className="text-base text-foreground leading-relaxed whitespace-pre-line">
+                {section.intro}
+              </p>
+            )}
+            {section.description && (
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                {section.description}
+              </p>
+            )}
+          </div>
+        ))}
+
+        {questionSections.map((section) => (
           <div key={section.id} className="rounded-lg border bg-background/60 p-3 space-y-3">
             <div className="space-y-1">
               <h3 className="text-sm font-semibold">{section.title}</h3>
