@@ -15,6 +15,7 @@ import {
   QuestionnaireTemplateService,
   logQuestionnaireChanges,
   buildTemplateLabelMap,
+  mergeLegacyIntoRespostas,
   type QuestionnaireTemplate,
   type TemplateField,
 } from "@/services/QuestionnaireTemplateService";
@@ -119,12 +120,44 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
         .select("*")
         .eq("paciente_id", pacienteId)
         .maybeSingle();
-      setQuestionario(q || null);
-      if (q?.template_id) {
-        const t = await QuestionnaireTemplateService.getById(q.template_id);
-        setTemplate(t);
+
+      // Resolve template (questionnaire.template_id → invite → perfil/age fallback)
+      let resolvedTemplate: QuestionnaireTemplate | null = null;
+      try {
+        // Pull birth_date for fallback resolution
+        const { data: pat } = await supabase
+          .from("pacientes")
+          .select("birth_date")
+          .eq("id", pacienteId)
+          .maybeSingle();
+
+        resolvedTemplate = await QuestionnaireTemplateService.resolveForPatient({
+          pacienteId,
+          perfilTipo: q?.perfil_tipo || null,
+          birthDate: pat?.birth_date || null,
+        });
+      } catch (e) {
+        console.warn("Template resolve failed in FullQuestionnaireView", e);
+      }
+      setTemplate(resolvedTemplate);
+
+      // If we have legacy answers (dados_pessoais/perfil_saude/expectativas)
+      // and a resolved template, merge them into respostas so the integral view
+      // shows the existing data without losing anything.
+      if (q && resolvedTemplate) {
+        const baseRespostas = (q.respostas && typeof q.respostas === "object") ? q.respostas : {};
+        const merged = mergeLegacyIntoRespostas({
+          template: resolvedTemplate,
+          respostas: baseRespostas,
+          legacy: {
+            dados_pessoais: q.dados_pessoais || null,
+            perfil_saude: q.perfil_saude || null,
+            expectativas: q.expectativas || null,
+          },
+        });
+        setQuestionario({ ...q, respostas: merged });
       } else {
-        setTemplate(null);
+        setQuestionario(q || null);
       }
     } catch (err) {
       console.error("Error loading full questionnaire:", err);
@@ -167,13 +200,17 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
     }
     setSaving(true);
     try {
-      // Persist new respostas
+      // Persist new respostas; also link template_id when missing (legacy records)
+      const updatePayload: Record<string, any> = {
+        respostas: draft,
+        updated_at: new Date().toISOString(),
+      };
+      if (!questionario.template_id && template?.id) {
+        updatePayload.template_id = template.id;
+      }
       const { error } = await (supabase as any)
         .from("portal_questionario")
-        .update({
-          respostas: draft,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", questionario.id);
       if (error) throw error;
 
@@ -217,9 +254,9 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
         <CardContent className="py-6 text-center space-y-2">
           <FileText className="h-8 w-8 mx-auto text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            {!questionario
-              ? "Ainda não foi preenchido nenhum questionário no portal."
-              : "Este questionário foi preenchido num formato antigo (sem template) e não pode ser apresentado integralmente aqui."}
+            {!template
+              ? "Não foi possível carregar o modelo de questionário para este utente."
+              : "O utente ainda não preencheu o questionário através do portal."}
           </p>
         </CardContent>
       </Card>

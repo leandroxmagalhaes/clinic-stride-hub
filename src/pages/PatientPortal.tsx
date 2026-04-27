@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, BookOpen, ArrowLeftRight, LogOut, HeartPulse } from "lucide-react";
+import { Plus, BookOpen, ArrowLeftRight, LogOut, HeartPulse, FileEdit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,12 +9,12 @@ import { DiaryNewEntryForm } from "@/components/patient-portal/DiaryNewEntryForm
 import { DiaryEntryCard, type DiaryEntry } from "@/components/patient-portal/DiaryEntryCard";
 import type { DiaryReply } from "@/components/patient-portal/DiaryReplyThread";
 import { ProfileSelector } from "@/components/patient-portal/ProfileSelector";
-import { EditHealthProfileModal } from "@/components/patient-portal/EditHealthProfileModal";
 import { FullQuestionnaireView } from "@/components/patient-portal/FullQuestionnaireView";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { PortalAccountService } from "@/services/PortalAccountService";
+import { QuestionnaireTemplateService } from "@/services/QuestionnaireTemplateService";
 
 type ProfileType = "baby" | "child" | "adult" | "elderly";
 
@@ -40,9 +40,8 @@ export default function PatientPortal() {
   const [perfilTipo, setPerfilTipo] = useState<ProfileType>("adult");
   const [patientName, setPatientName] = useState("Paciente");
   const [resolving, setResolving] = useState(true);
-  const [showHealthEdit, setShowHealthEdit] = useState(false);
-  const [hasQuestionnaire, setHasQuestionnaire] = useState(false);
-  const [hasDynamicTemplate, setHasDynamicTemplate] = useState(false);
+  const [questionnaireComplete, setQuestionnaireComplete] = useState(false);
+  const [questionnaireResolvable, setQuestionnaireResolvable] = useState(false);
   const [view, setView] = useState<"diary" | "questionnaire">("diary");
 
   // Resolve conta e utentes ligados via serviço único (com filtragem de órfãos)
@@ -123,23 +122,34 @@ export default function PatientPortal() {
   useEffect(() => {
     if (!selectedPacienteId) return;
     (async () => {
-      // Load profile type
+      // Load patient (name + birth_date for template fallback)
+      const { data: paciente } = await supabase
+        .from("pacientes")
+        .select("full_name, birth_date")
+        .eq("id", selectedPacienteId)
+        .maybeSingle();
+      if (paciente?.full_name) setPatientName(paciente.full_name);
+
+      // Load questionnaire status
       const { data: questionario } = await (supabase as any)
         .from("portal_questionario")
         .select("perfil_tipo, completo, template_id")
         .eq("paciente_id", selectedPacienteId)
         .maybeSingle();
       if (questionario?.perfil_tipo) setPerfilTipo(questionario.perfil_tipo);
-      setHasQuestionnaire(!!questionario?.completo);
-      setHasDynamicTemplate(!!questionario?.template_id);
+      setQuestionnaireComplete(!!questionario?.completo);
 
-      // Load patient name
-      const { data: paciente } = await supabase
-        .from("pacientes")
-        .select("full_name")
-        .eq("id", selectedPacienteId)
-        .maybeSingle();
-      if (paciente) setPatientName(paciente.full_name);
+      // Resolve template availability — even for legacy records without template_id
+      try {
+        const tpl = await QuestionnaireTemplateService.resolveForPatient({
+          pacienteId: selectedPacienteId,
+          perfilTipo: questionario?.perfil_tipo || null,
+          birthDate: paciente?.birth_date || null,
+        });
+        setQuestionnaireResolvable(!!tpl);
+      } catch {
+        setQuestionnaireResolvable(false);
+      }
 
       await loadEntries(selectedPacienteId);
     })();
@@ -303,8 +313,8 @@ export default function PatientPortal() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
-        {/* Tabs: Diário / Questionário (only shown if dynamic template exists) */}
-        {hasDynamicTemplate && selectedPacienteId && (
+        {/* Tabs: Diário / Questionário (visível sempre que existe template resolvível) */}
+        {questionnaireResolvable && selectedPacienteId && (
           <div className="flex gap-2 border-b">
             <button
               type="button"
@@ -329,32 +339,46 @@ export default function PatientPortal() {
             >
               <HeartPulse className="inline h-4 w-4 mr-1" />
               Questionário de Saúde
+              {!questionnaireComplete && (
+                <span className="ml-1.5 inline-flex items-center justify-center text-[10px] font-semibold bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">
+                  incompleto
+                </span>
+              )}
             </button>
           </div>
         )}
 
-        {view === "questionnaire" && hasDynamicTemplate && selectedPacienteId ? (
-          <FullQuestionnaireView
-            pacienteId={selectedPacienteId}
-            alteradoPor={patientName}
-            authorRole="utente"
-            canEdit={true}
-            title="Meu Questionário de Saúde"
-          />
+        {view === "questionnaire" && questionnaireResolvable && selectedPacienteId ? (
+          questionnaireComplete ? (
+            <FullQuestionnaireView
+              pacienteId={selectedPacienteId}
+              alteradoPor={patientName}
+              authorRole="utente"
+              canEdit={true}
+              title="Meu Questionário de Saúde"
+            />
+          ) : (
+            <Card className="border-amber-200 bg-amber-50/40">
+              <CardContent className="py-6 text-center space-y-3">
+                <div className="h-12 w-12 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
+                  <FileEdit className="h-6 w-6 text-amber-600" />
+                </div>
+                <h3 className="font-semibold">Questionário em curso</h3>
+                <p className="text-sm text-muted-foreground">
+                  O seu questionário de saúde ainda não está completo. Pode continuar de onde parou e o progresso é guardado automaticamente.
+                </p>
+                <Button
+                  onClick={() => navigate("/portal/onboarding")}
+                  className="gap-1.5"
+                >
+                  <FileEdit className="h-4 w-4" />
+                  Continuar preenchimento
+                </Button>
+              </CardContent>
+            </Card>
+          )
         ) : (
           <>
-            {/* Legacy "Atualizar dados de saúde" button — only when no dynamic template */}
-            {hasQuestionnaire && !hasDynamicTemplate && !showForm && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowHealthEdit(true)}
-                className="gap-1.5 text-xs text-muted-foreground hover:text-primary w-full justify-center"
-              >
-                <HeartPulse className="h-3.5 w-3.5" />
-                📝 Atualizar dados de saúde
-              </Button>
-            )}
             {showForm ? (
               <DiaryNewEntryForm
                 perfilTipo={perfilTipo}
@@ -405,16 +429,6 @@ export default function PatientPortal() {
           </>
         )}
       </main>
-
-      {selectedPacienteId && (
-        <EditHealthProfileModal
-          open={showHealthEdit}
-          onOpenChange={setShowHealthEdit}
-          pacienteId={selectedPacienteId}
-          patientName={patientName}
-          perfilTipo={perfilTipo}
-        />
-      )}
     </div>
   );
 }

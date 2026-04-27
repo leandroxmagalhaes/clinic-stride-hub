@@ -249,8 +249,10 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
 
   if (loading) return <Skeleton className="h-24 w-full" />;
 
-  // Dynamic-template path: render the full questionnaire (all sections, full audit)
-  if (data?.template_id) {
+  // Dynamic-template path: render the full questionnaire (all sections, full audit).
+  // We always try to render integrally — FullQuestionnaireView resolves the template
+  // even for legacy records (without template_id) using perfil_tipo / birth_date.
+  if (data) {
     return (
       <FullQuestionnaireView
         pacienteId={pacienteId}
