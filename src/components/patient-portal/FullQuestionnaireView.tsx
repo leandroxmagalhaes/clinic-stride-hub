@@ -108,7 +108,15 @@ function ChangeHistorySection({ pacienteId, labelMap }: { pacienteId: string; la
   );
 }
 
-export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, canEdit, title }: Props) {
+export function FullQuestionnaireView({
+  pacienteId,
+  alteradoPor,
+  authorRole,
+  canEdit,
+  title,
+  startInEditMode,
+  onCompletedChange,
+}: Props) {
   const [loading, setLoading] = useState(true);
   const [questionario, setQuestionario] = useState<any>(null);
   const [template, setTemplate] = useState<QuestionnaireTemplate | null>(null);
@@ -163,6 +171,24 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
       } else {
         setQuestionario(q || null);
       }
+
+      // Auto-enter edit mode if requested and the questionnaire is not yet completed.
+      if (canEdit && startInEditMode && !q?.completo && resolvedTemplate) {
+        const baseRespostas = (q?.respostas && typeof q.respostas === "object") ? q.respostas : {};
+        const seed = q
+          ? mergeLegacyIntoRespostas({
+              template: resolvedTemplate,
+              respostas: baseRespostas,
+              legacy: {
+                dados_pessoais: q.dados_pessoais || null,
+                perfil_saude: q.perfil_saude || null,
+                expectativas: q.expectativas || null,
+              },
+            })
+          : {};
+        setDraft(JSON.parse(JSON.stringify(seed)));
+        setEditing(true);
+      }
     } catch (err) {
       console.error("Error loading full questionnaire:", err);
     } finally {
@@ -170,7 +196,7 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
     }
   };
 
-  useEffect(() => { void load(); }, [pacienteId]);
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [pacienteId]);
 
   const respostas: Record<string, Record<string, any>> = useMemo(() => {
     const r = questionario?.respostas;
