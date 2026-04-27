@@ -95,22 +95,13 @@ export default function PortalOnboarding() {
       if (pid) {
         supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session?.user) {
-            const { data: upserted } = await (supabase as any).from("portal_contas").upsert({
-              paciente_id: pid,
-              auth_user_id: session.user.id,
-              email: session.user.email,
+            // Idempotente: cria conta se não existe + garante associação ao utente
+            await PortalAccountService.ensureAccountAndLink({
+              authUserId: session.user.id,
+              pacienteId: pid,
+              email: session.user.email ?? null,
               provider: "google",
-            }, { onConflict: "paciente_id" }).select("id").single();
-
-            // Link in portal_conta_pacientes
-            if (upserted?.id) {
-              await (supabase as any).from("portal_conta_pacientes").insert({
-                conta_id: upserted.id,
-                paciente_id: pid,
-                relacao: "responsavel",
-                is_primary: true,
-              });
-            }
+            });
 
             // Check dual-role
             const { data: existingProfile } = await supabase
