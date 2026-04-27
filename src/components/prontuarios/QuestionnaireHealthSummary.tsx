@@ -248,6 +248,19 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
 
   if (loading) return <Skeleton className="h-24 w-full" />;
 
+  // Dynamic-template path: render the full questionnaire (all sections, full audit)
+  if (data?.template_id) {
+    return (
+      <FullQuestionnaireView
+        pacienteId={pacienteId}
+        alteradoPor={professionalName}
+        authorRole="profissional"
+        canEdit={canEditDynamic}
+        title="Resumo de Saúde"
+      />
+    );
+  }
+
   // No data — show "fill manually" option
   if (!data && !creating) {
     return (
