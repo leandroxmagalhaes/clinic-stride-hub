@@ -89,11 +89,37 @@ export default function PortalLogin() {
     setIsLoading(false);
   };
 
+  // If a recovery link accidentally lands on /portal/login, forward it
+  // to /portal/reset-password preserving hash + query so tokens survive.
+  useEffect(() => {
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    const looksLikeRecovery =
+      hash.includes("type=recovery") ||
+      hash.includes("access_token=") ||
+      search.includes("type=recovery") ||
+      search.includes("code=") ||
+      search.includes("token_hash=");
+    if (looksLikeRecovery) {
+      navigate(`/portal/reset-password${search}${hash}`, { replace: true });
+    }
+  }, [navigate]);
+
   // Handle OAuth redirect
   useEffect(() => {
+    // If URL hints at recovery, do NOT auto-process SIGNED_IN here.
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    const isRecoveryReturn =
+      hash.includes("type=recovery") ||
+      hash.includes("access_token=") ||
+      search.includes("type=recovery") ||
+      search.includes("code=") ||
+      search.includes("token_hash=");
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Never auto-redirect during password recovery — that flow lives at /portal/reset-password
       if (event === "PASSWORD_RECOVERY") return;
+      if (isRecoveryReturn) return;
       if (event === "SIGNED_IN" && session?.user) {
         await checkPortalAccount(session.user.id);
       }
@@ -112,7 +138,13 @@ export default function PortalLogin() {
     });
     setIsLoading(false);
     if (error) {
-      toast.error("Erro ao enviar email de recuperação");
+      const isRate = (error as any)?.status === 429 || /rate/i.test(error.message);
+      toast.error(
+        isRate
+          ? "Muitas tentativas. Aguarde alguns minutos antes de pedir um novo email."
+          : "Erro ao enviar email de recuperação",
+        { description: error.message },
+      );
     } else {
       setResetSent(true);
       toast.success("Email enviado! Verifique a sua caixa de entrada.");

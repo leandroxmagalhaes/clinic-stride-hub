@@ -10,43 +10,142 @@ import { Loader2, KeyRound, CheckCircle2, AlertTriangle } from "lucide-react";
 
 type Stage = "checking" | "ready" | "no-token" | "done";
 
+/**
+ * Handles password recovery links from Supabase.
+ * Supports all return formats:
+ *  - Hash with access_token + refresh_token + type=recovery (implicit flow)
+ *  - Query string with code= (PKCE flow)
+ *  - Query string with token_hash + type=recovery
+ *  - Existing session (event PASSWORD_RECOVERY)
+ *  - Error in hash/query (expired/invalid link)
+ */
 export default function PortalResetPassword() {
   const navigate = useNavigate();
   const [stage, setStage] = useState<Stage>("checking");
+  const [errorMsg, setErrorMsg] = useState<string>("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // Supabase password recovery: when the user clicks the email link,
-    // the SDK fires PASSWORD_RECOVERY with a temporary session attached.
-    // We listen for it, and also check if a session is already present.
-    let resolved = false;
+    let cancelled = false;
 
-    const finish = (ok: boolean) => {
-      if (resolved) return;
-      resolved = true;
-      setStage(ok ? "ready" : "no-token");
+    const finishOk = () => {
+      if (cancelled) return;
+      setStage("ready");
     };
 
+    const finishFail = (msg?: string) => {
+      if (cancelled) return;
+      if (msg) setErrorMsg(msg);
+      setStage("no-token");
+    };
+
+    // Listen for PASSWORD_RECOVERY event (Supabase fires this when it detects the link)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
-        finish(true);
+      if (cancelled) return;
+      if (event === "PASSWORD_RECOVERY") {
+        finishOk();
+      } else if (event === "SIGNED_IN" && session) {
+        finishOk();
       }
     });
 
-    // Fallback: check session immediately (link may already have been processed)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) finish(true);
-    });
+    const processLink = async () => {
+      try {
+        // 1) Read URL parts
+        const rawHash = window.location.hash?.startsWith("#")
+          ? window.location.hash.slice(1)
+          : window.location.hash || "";
+        const hashParams = new URLSearchParams(rawHash);
+        const queryParams = new URLSearchParams(window.location.search);
 
-    // Hard timeout — if no recovery event arrives in 4s assume invalid/expired link
-    const timeout = setTimeout(() => finish(false), 4000);
+        const hashError =
+          hashParams.get("error_description") ||
+          hashParams.get("error_code") ||
+          hashParams.get("error");
+        const queryError =
+          queryParams.get("error_description") ||
+          queryParams.get("error_code") ||
+          queryParams.get("error");
+
+        if (hashError || queryError) {
+          finishFail(decodeURIComponent(hashError || queryError || ""));
+          return;
+        }
+
+        // 2) Implicit flow — tokens in hash
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          // Clean hash from URL so refresh doesn't reuse tokens
+          window.history.replaceState(null, "", window.location.pathname);
+          if (error) {
+            finishFail(error.message);
+            return;
+          }
+          finishOk();
+          return;
+        }
+
+        // 3) PKCE flow — code in query string
+        const code = queryParams.get("code");
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          window.history.replaceState(null, "", window.location.pathname);
+          if (error) {
+            finishFail(error.message);
+            return;
+          }
+          finishOk();
+          return;
+        }
+
+        // 4) OTP token_hash flow
+        const tokenHash = queryParams.get("token_hash") || hashParams.get("token_hash");
+        const type = queryParams.get("type") || hashParams.get("type");
+        if (tokenHash && type === "recovery") {
+          const { error } = await supabase.auth.verifyOtp({
+            type: "recovery",
+            token_hash: tokenHash,
+          });
+          window.history.replaceState(null, "", window.location.pathname);
+          if (error) {
+            finishFail(error.message);
+            return;
+          }
+          finishOk();
+          return;
+        }
+
+        // 5) Maybe a session is already there (link processed by SDK before mount)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          finishOk();
+          return;
+        }
+
+        // 6) Last resort — wait briefly for PASSWORD_RECOVERY event from listener
+        setTimeout(() => {
+          if (cancelled) return;
+          if (stage === "checking") finishFail("Link inválido ou expirado.");
+        }, 3500);
+      } catch (e: any) {
+        finishFail(e?.message || "Não foi possível validar o link.");
+      }
+    };
+
+    processLink();
 
     return () => {
+      cancelled = true;
       subscription.unsubscribe();
-      clearTimeout(timeout);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -98,7 +197,9 @@ export default function PortalResetPassword() {
             <div className="text-center space-y-4 py-4">
               <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
               <p className="text-sm text-muted-foreground">
-                O link de recuperação é inválido ou expirou. Peça um novo link na página de login.
+                {errorMsg
+                  ? `O link de recuperação é inválido ou expirou. (${errorMsg})`
+                  : "O link de recuperação é inválido ou expirou. Peça um novo link na página de login."}
               </p>
               <Button onClick={() => navigate("/portal/login")} className="w-full">
                 Voltar ao login
