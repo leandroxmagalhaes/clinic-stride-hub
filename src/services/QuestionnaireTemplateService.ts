@@ -161,12 +161,47 @@ export class QuestionnaireTemplateService {
   }): Promise<QuestionnaireTemplate | null> {
     const { pacienteId, perfilTipo, birthDate } = params;
 
-    // 1+2) Existing questionnaire wins — by template_id, otherwise by perfil_tipo
+    // 1+2) Existing questionnaire wins — by template_id, otherwise by perfil_tipo.
+    // EXCEPTION: if the questionnaire is still empty (no answers in any of the
+    // legacy or dynamic buckets), a newer invite is allowed to set a different
+    // template, so a clinician resending a different model actually takes effect.
     const { data: q } = await (supabase as any)
       .from("portal_questionario")
-      .select("template_id, perfil_tipo")
+      .select("template_id, perfil_tipo, respostas, dados_pessoais, perfil_saude, expectativas, updated_at")
       .eq("paciente_id", pacienteId)
       .maybeSingle();
+
+    const hasAnswers = (() => {
+      const buckets = [q?.respostas, q?.dados_pessoais, q?.perfil_saude, q?.expectativas];
+      return buckets.some((b) => {
+        if (!b || typeof b !== "object") return false;
+        if (Array.isArray(b)) return b.length > 0;
+        // For respostas (sectionId -> {fieldKey:value}) and legacy flat objects
+        const values = Object.values(b as Record<string, any>);
+        return values.some((v) => {
+          if (v === null || v === undefined || v === "") return false;
+          if (Array.isArray(v)) return v.length > 0;
+          if (typeof v === "object") return Object.values(v).some((x) => x !== null && x !== undefined && x !== "");
+          return true;
+        });
+      });
+    })();
+
+    // Most recent invite with template_id (used as override only when no answers)
+    const { data: inv } = await (supabase as any)
+      .from("portal_convites")
+      .select("template_id, created_at")
+      .eq("paciente_id", pacienteId)
+      .not("template_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (q && !hasAnswers && inv?.template_id) {
+      // Empty questionnaire shell — let the latest invite's template win
+      const t = await this.getById(inv.template_id);
+      if (t) return t;
+    }
 
     if (q?.template_id) {
       const t = await this.getById(q.template_id);
@@ -178,23 +213,12 @@ export class QuestionnaireTemplateService {
       if (t) return t;
     }
 
-    // 3) No questionnaire yet — use the most recent invite that ships a template
-    if (!q) {
-      const { data: inv } = await (supabase as any)
-        .from("portal_convites")
-        .select("template_id")
-        .eq("paciente_id", pacienteId)
-        .not("template_id", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (inv?.template_id) {
-        const t = await this.getById(inv.template_id);
-        if (t) return t;
-      }
+    if (!q && inv?.template_id) {
+      const t = await this.getById(inv.template_id);
+      if (t) return t;
     }
 
-    // 4) Last resort: caller-provided perfil_tipo / age
+    // Last resort: caller-provided perfil_tipo / age
     const fallbackIdentifier = perfilTipo
       ? this.identifierForPerfil(perfilTipo)
       : this.suggestIdentifierByAge(birthDate);
