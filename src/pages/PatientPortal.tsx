@@ -122,23 +122,34 @@ export default function PatientPortal() {
   useEffect(() => {
     if (!selectedPacienteId) return;
     (async () => {
-      // Load profile type
+      // Load patient (name + birth_date for template fallback)
+      const { data: paciente } = await supabase
+        .from("pacientes")
+        .select("full_name, birth_date")
+        .eq("id", selectedPacienteId)
+        .maybeSingle();
+      if (paciente?.full_name) setPatientName(paciente.full_name);
+
+      // Load questionnaire status
       const { data: questionario } = await (supabase as any)
         .from("portal_questionario")
         .select("perfil_tipo, completo, template_id")
         .eq("paciente_id", selectedPacienteId)
         .maybeSingle();
       if (questionario?.perfil_tipo) setPerfilTipo(questionario.perfil_tipo);
-      setHasQuestionnaire(!!questionario?.completo);
-      setHasDynamicTemplate(!!questionario?.template_id);
+      setQuestionnaireComplete(!!questionario?.completo);
 
-      // Load patient name
-      const { data: paciente } = await supabase
-        .from("pacientes")
-        .select("full_name")
-        .eq("id", selectedPacienteId)
-        .maybeSingle();
-      if (paciente) setPatientName(paciente.full_name);
+      // Resolve template availability — even for legacy records without template_id
+      try {
+        const tpl = await QuestionnaireTemplateService.resolveForPatient({
+          pacienteId: selectedPacienteId,
+          perfilTipo: questionario?.perfil_tipo || null,
+          birthDate: paciente?.birth_date || null,
+        });
+        setQuestionnaireResolvable(!!tpl);
+      } catch {
+        setQuestionnaireResolvable(false);
+      }
 
       await loadEntries(selectedPacienteId);
     })();
