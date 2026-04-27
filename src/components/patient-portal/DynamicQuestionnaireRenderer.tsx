@@ -30,10 +30,42 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const dirtyRef = useRef(false);
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
 
   const setVal = (sectionId: string, key: string, value: any) => {
     dirtyRef.current = true;
     setAnswers((prev) => ({ ...prev, [sectionId]: { ...(prev[sectionId] || {}), [key]: value } }));
+  };
+
+  // Flush helper — used by debounce, exit button, and background/pagehide events
+  const flushSave = async () => {
+    if (!pacienteId) return;
+    const current = answersRef.current;
+    if (!current || Object.keys(current).length === 0) return;
+    setSaveStatus("saving");
+    try {
+      const { error } = await (supabase as any)
+        .from("portal_questionario")
+        .upsert(
+          {
+            paciente_id: pacienteId,
+            perfil_tipo: template.identifier,
+            template_id: template.id,
+            respostas: current,
+            completo: false,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "paciente_id" }
+        );
+      if (error) throw error;
+      setLastSaved(new Date());
+      setSaveStatus("saved");
+      dirtyRef.current = false;
+    } catch (err) {
+      console.error("Erro ao guardar progresso:", err);
+      setSaveStatus("error");
+    }
   };
 
   // Autosave with 1500ms debounce — only when there is a paciente_id and dirty changes
