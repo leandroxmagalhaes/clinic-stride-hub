@@ -307,64 +307,106 @@ export default function PatientPortal() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
-        {/* Health data update button */}
-        {hasQuestionnaire && !showForm && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowHealthEdit(true)}
-            className="gap-1.5 text-xs text-muted-foreground hover:text-primary w-full justify-center"
-          >
-            <HeartPulse className="h-3.5 w-3.5" />
-            📝 Atualizar dados de saúde
-          </Button>
-        )}
-        {showForm ? (
-          <DiaryNewEntryForm
-            perfilTipo={perfilTipo}
-            patientName={patientName}
-            onSubmit={handleSubmit}
-            isSubmitting={isSubmitting}
-            onCancel={() => setShowForm(false)}
-          />
-        ) : (
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-dashed border-primary/30 hover:border-primary/50"
-            onClick={() => setShowForm(true)}
-          >
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                <Plus className="h-8 w-8 text-primary" />
-              </div>
-              <h2 className="text-xl font-semibold mb-2">Nova Entrada no Diário</h2>
-              <p className="text-muted-foreground">Partilhe como está o seu dia</p>
-            </CardContent>
-          </Card>
+        {/* Tabs: Diário / Questionário (only shown if dynamic template exists) */}
+        {hasDynamicTemplate && selectedPacienteId && (
+          <div className="flex gap-2 border-b">
+            <button
+              type="button"
+              onClick={() => setView("diary")}
+              className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                view === "diary"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <BookOpen className="inline h-4 w-4 mr-1" />
+              Meu Diário
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("questionnaire")}
+              className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                view === "questionnaire"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <HeartPulse className="inline h-4 w-4 mr-1" />
+              Questionário de Saúde
+            </button>
+          </div>
         )}
 
-        {isLoadingEntries ? (
-          <div className="space-y-3">
-            <Skeleton className="h-32 w-full rounded-xl" />
-            <Skeleton className="h-32 w-full rounded-xl" />
-          </div>
-        ) : entries.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Nenhuma entrada ainda.</p>
-            <p className="text-xs mt-1">Comece por partilhar como se sente hoje!</p>
-          </div>
+        {view === "questionnaire" && hasDynamicTemplate && selectedPacienteId ? (
+          <FullQuestionnaireView
+            pacienteId={selectedPacienteId}
+            alteradoPor={patientName}
+            authorRole="utente"
+            canEdit={true}
+            title="Meu Questionário de Saúde"
+          />
         ) : (
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-muted-foreground">Entradas anteriores</h3>
-            {entries.map((entry) => (
-              <DiaryEntryCard
-                key={entry.id}
-                entry={entry}
-                onReply={handleReply}
-                autorTipo="patient"
+          <>
+            {/* Legacy "Atualizar dados de saúde" button — only when no dynamic template */}
+            {hasQuestionnaire && !hasDynamicTemplate && !showForm && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowHealthEdit(true)}
+                className="gap-1.5 text-xs text-muted-foreground hover:text-primary w-full justify-center"
+              >
+                <HeartPulse className="h-3.5 w-3.5" />
+                📝 Atualizar dados de saúde
+              </Button>
+            )}
+            {showForm ? (
+              <DiaryNewEntryForm
+                perfilTipo={perfilTipo}
+                patientName={patientName}
+                onSubmit={handleSubmit}
+                isSubmitting={isSubmitting}
+                onCancel={() => setShowForm(false)}
               />
-            ))}
-          </div>
+            ) : (
+              <Card
+                className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-dashed border-primary/30 hover:border-primary/50"
+                onClick={() => setShowForm(true)}
+              >
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Plus className="h-8 w-8 text-primary" />
+                  </div>
+                  <h2 className="text-xl font-semibold mb-2">Nova Entrada no Diário</h2>
+                  <p className="text-muted-foreground">Partilhe como está o seu dia</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {isLoadingEntries ? (
+              <div className="space-y-3">
+                <Skeleton className="h-32 w-full rounded-xl" />
+                <Skeleton className="h-32 w-full rounded-xl" />
+              </div>
+            ) : entries.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Nenhuma entrada ainda.</p>
+                <p className="text-xs mt-1">Comece por partilhar como se sente hoje!</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground">Entradas anteriores</h3>
+                {entries.map((entry) => (
+                  <DiaryEntryCard
+                    key={entry.id}
+                    entry={entry}
+                    onReply={handleReply}
+                    autorTipo="patient"
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </main>
 
