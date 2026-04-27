@@ -349,34 +349,15 @@ export default function PatientPortal() {
         )}
 
         {view === "questionnaire" && questionnaireResolvable && selectedPacienteId ? (
-          questionnaireComplete ? (
-            <FullQuestionnaireView
-              pacienteId={selectedPacienteId}
-              alteradoPor={patientName}
-              authorRole="utente"
-              canEdit={true}
-              title="Meu Questionário de Saúde"
-            />
-          ) : (
-            <Card className="border-amber-200 bg-amber-50/40">
-              <CardContent className="py-6 text-center space-y-3">
-                <div className="h-12 w-12 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
-                  <FileEdit className="h-6 w-6 text-amber-600" />
-                </div>
-                <h3 className="font-semibold">Questionário em curso</h3>
-                <p className="text-sm text-muted-foreground">
-                  O seu questionário de saúde ainda não está completo. Pode continuar de onde parou e o progresso é guardado automaticamente.
-                </p>
-                <Button
-                  onClick={() => navigate("/portal/onboarding")}
-                  className="gap-1.5"
-                >
-                  <FileEdit className="h-4 w-4" />
-                  Continuar preenchimento
-                </Button>
-              </CardContent>
-            </Card>
-          )
+          <FullQuestionnaireView
+            pacienteId={selectedPacienteId}
+            alteradoPor={patientName}
+            authorRole="utente"
+            canEdit={true}
+            title="Meu Questionário de Saúde"
+            startInEditMode={!questionnaireComplete}
+            onCompletedChange={(c) => setQuestionnaireComplete(c)}
+          />
         ) : (
           <>
             {showForm ? (
