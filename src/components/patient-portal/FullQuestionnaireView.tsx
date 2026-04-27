@@ -477,15 +477,19 @@ export function FullQuestionnaireView({
           <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">
             {template.name}
           </Badge>
-          <div className="ml-auto flex gap-1">
+          <div className="ml-auto flex flex-wrap gap-1">
             {editing ? (
               <>
                 <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>
                   <X className="h-4 w-4 mr-1" /> Cancelar
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
+                <Button variant="outline" size="sm" onClick={handleSaveProgress} disabled={saving}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
-                  Guardar
+                  Guardar progresso
+                </Button>
+                <Button size="sm" onClick={handleConclude} disabled={saving}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                  {questionario?.completo ? "Guardar" : "Concluir"}
                 </Button>
               </>
             ) : canEdit ? (
