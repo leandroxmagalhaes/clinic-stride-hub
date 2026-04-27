@@ -138,7 +138,13 @@ export default function PortalLogin() {
     });
     setIsLoading(false);
     if (error) {
-      toast.error("Erro ao enviar email de recuperação");
+      const isRate = (error as any)?.status === 429 || /rate/i.test(error.message);
+      toast.error(
+        isRate
+          ? "Muitas tentativas. Aguarde alguns minutos antes de pedir um novo email."
+          : "Erro ao enviar email de recuperação",
+        { description: error.message },
+      );
     } else {
       setResetSent(true);
       toast.success("Email enviado! Verifique a sua caixa de entrada.");
