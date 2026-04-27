@@ -89,11 +89,37 @@ export default function PortalLogin() {
     setIsLoading(false);
   };
 
+  // If a recovery link accidentally lands on /portal/login, forward it
+  // to /portal/reset-password preserving hash + query so tokens survive.
+  useEffect(() => {
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    const looksLikeRecovery =
+      hash.includes("type=recovery") ||
+      hash.includes("access_token=") ||
+      search.includes("type=recovery") ||
+      search.includes("code=") ||
+      search.includes("token_hash=");
+    if (looksLikeRecovery) {
+      navigate(`/portal/reset-password${search}${hash}`, { replace: true });
+    }
+  }, [navigate]);
+
   // Handle OAuth redirect
   useEffect(() => {
+    // If URL hints at recovery, do NOT auto-process SIGNED_IN here.
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    const isRecoveryReturn =
+      hash.includes("type=recovery") ||
+      hash.includes("access_token=") ||
+      search.includes("type=recovery") ||
+      search.includes("code=") ||
+      search.includes("token_hash=");
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Never auto-redirect during password recovery — that flow lives at /portal/reset-password
       if (event === "PASSWORD_RECOVERY") return;
+      if (isRecoveryReturn) return;
       if (event === "SIGNED_IN" && session?.user) {
         await checkPortalAccount(session.user.id);
       }
