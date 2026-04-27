@@ -165,44 +165,56 @@ export default function PortalOnboarding() {
         if (data.birth_date) setProfileType(detectProfile(data.birth_date));
       }
 
-      // Check the most recent invite for a template_id (dynamic flow)
-      const { data: inviteData } = await (supabase as any)
-        .from("portal_convites")
-        .select("template_id")
-        .eq("paciente_id", pid)
-        .not("template_id", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // Resolve the best template for this patient (questionnaire → invite → perfil/age fallback)
+      try {
+        const tpl = await QuestionnaireTemplateService.resolveForPatient({
+          pacienteId: pid,
+          perfilTipo: data?.birth_date ? detectProfile(data.birth_date) : null,
+          birthDate: data?.birth_date || null,
+        });
 
-      if (inviteData?.template_id) {
-        try {
-          const tpl = await QuestionnaireTemplateService.getById(inviteData.template_id);
-          if (tpl) {
-            setDynamicTemplate(tpl);
+        if (tpl) {
+          setDynamicTemplate(tpl);
 
-            // Check for in-progress questionnaire (resume flow)
-            const { data: existingQ } = await (supabase as any)
-              .from("portal_questionario")
-              .select("respostas, completo, updated_at")
-              .eq("paciente_id", pid)
-              .maybeSingle();
+          // Load existing questionnaire (if any) to detect resume / completion
+          const { data: existingQ } = await (supabase as any)
+            .from("portal_questionario")
+            .select("respostas, completo, updated_at, dados_pessoais, perfil_saude, expectativas, template_id")
+            .eq("paciente_id", pid)
+            .maybeSingle();
 
-            if (existingQ && existingQ.completo === true) {
-              // Already completed — show completion screen directly
-              setDynamicCompleted(true);
-            } else if (existingQ && existingQ.respostas && Object.keys(existingQ.respostas || {}).length > 0) {
-              // Has in-progress answers — offer resume
-              setResumeData({ respostas: existingQ.respostas, updatedAt: existingQ.updated_at });
+          if (existingQ?.completo === true) {
+            setDynamicCompleted(true);
+          } else {
+            // Merge legacy fields into respostas (without overwriting existing ones)
+            const baseRespostas = (existingQ?.respostas && typeof existingQ.respostas === "object") ? existingQ.respostas : {};
+            const merged = mergeLegacyIntoRespostas({
+              template: tpl,
+              respostas: baseRespostas,
+              legacy: {
+                dados_pessoais: existingQ?.dados_pessoais || null,
+                perfil_saude: existingQ?.perfil_saude || null,
+                expectativas: existingQ?.expectativas || null,
+              },
+            });
+
+            const hasAnyAnswers = Object.values(merged).some(
+              (s: any) => s && typeof s === "object" && Object.values(s).some((v) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0))
+            );
+
+            if (hasAnyAnswers) {
+              setResumeData({
+                respostas: merged,
+                updatedAt: existingQ?.updated_at || new Date().toISOString(),
+              });
               setShowResumeDialog(true);
             } else {
-              // No prior progress
               setShowQuestionnaire(true);
             }
           }
-        } catch (e) {
-          console.warn("Failed to load template, falling back to legacy flow", e);
         }
+      } catch (e) {
+        console.warn("Failed to resolve template, falling back to legacy flow", e);
       }
 
       setLoading(false);
