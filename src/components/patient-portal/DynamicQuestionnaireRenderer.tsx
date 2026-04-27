@@ -33,6 +33,16 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
   const answersRef = useRef(answers);
   answersRef.current = answers;
 
+  const guidanceSections = useMemo(
+    () => template.schema.sections.filter((section) => (section.fields?.length || 0) === 0 && (section.intro || section.description)),
+    [template.schema.sections]
+  );
+
+  const questionSections = useMemo(
+    () => template.schema.sections.filter((section) => (section.fields?.length || 0) > 0),
+    [template.schema.sections]
+  );
+
   const setVal = (sectionId: string, key: string, value: any) => {
     dirtyRef.current = true;
     setAnswers((prev) => ({ ...prev, [sectionId]: { ...(prev[sectionId] || {}), [key]: value } }));
@@ -97,12 +107,12 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pacienteId, template.id, template.identifier]);
 
-  // Progress: section is "filled" when at least one field has a non-empty value
+  // Progress: only question sections count; guidance-only sections must not block completion.
   const { filledSections, totalSections, percent, currentSectionIdx } = useMemo(() => {
-    const total = template.schema.sections.length;
+    const total = questionSections.length;
     let filled = 0;
     let firstUnfilled = total;
-    template.schema.sections.forEach((section, idx) => {
+    questionSections.forEach((section, idx) => {
       const sectionAns = answers[section.id] || {};
       const hasAny = Object.values(sectionAns).some(
         (v) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)
@@ -117,12 +127,12 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
       filledSections: filled,
       totalSections: total,
       percent: total > 0 ? Math.round((filled / total) * 100) : 0,
-      currentSectionIdx: Math.min(firstUnfilled + 1, total),
+      currentSectionIdx: total > 0 ? Math.min(firstUnfilled + 1, total) : 0,
     };
-  }, [answers, template.schema.sections]);
+  }, [answers, questionSections]);
 
   const validate = (): boolean => {
-    for (const section of template.schema.sections) {
+    for (const section of questionSections) {
       for (const field of section.fields) {
         if (field.required) {
           const v = answers[section.id]?.[field.key];
@@ -227,6 +237,24 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
 
   return (
     <div className="space-y-4">
+      {guidanceSections.map((section) => (
+        <Card key={section.id} className="border-t-4 border-t-primary">
+          <CardContent className="pt-6 space-y-4">
+            <h2 className="text-2xl font-semibold tracking-normal text-foreground">{section.title}</h2>
+            {section.intro && (
+              <p className="text-base leading-relaxed text-foreground whitespace-pre-line">
+                {section.intro}
+              </p>
+            )}
+            {section.description && (
+              <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                {section.description}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+
       {/* Top bar: progress + autosave indicator */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-3">
@@ -255,7 +283,7 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
         <Progress value={percent} className="h-1" />
       </div>
 
-      {template.schema.sections.map((section) => (
+      {questionSections.map((section) => (
         <Card key={section.id}>
           <CardContent className="pt-6 space-y-4">
             <div className="space-y-1">
