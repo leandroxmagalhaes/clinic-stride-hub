@@ -92,6 +92,8 @@ export default function PortalLogin() {
   // Handle OAuth redirect
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Never auto-redirect during password recovery — that flow lives at /portal/reset-password
+      if (event === "PASSWORD_RECOVERY") return;
       if (event === "SIGNED_IN" && session?.user) {
         await checkPortalAccount(session.user.id);
       }
