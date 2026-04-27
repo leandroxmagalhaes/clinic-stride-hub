@@ -1,67 +1,71 @@
-## Autosave e Retomar Preenchimento do Questionário
+Plano cirúrgico para corrigir o Portal do Paciente
 
-### Problema
-Quando o paciente sai a meio do questionário, perde todo o progresso. Precisa de poder continuar de onde parou.
+Consigo resolver diretamente aqui, sem precisar criar solução no Claude. O problema é uma combinação de 3 pontos: falta uma tela real de redefinição de senha, o portal redireciona para o local errado quando a sessão expira, e o questionário em andamento não é priorizado ao voltar ao portal.
 
-### Solução (apenas frontend — sem alterações de schema)
+1. Corrigir recuperação de senha do Portal
+- Criar a rota pública `/portal/reset-password`.
+- Alterar o botão “Esqueci a password” em `PortalLogin.tsx` para enviar o link de recuperação para `/portal/reset-password`, não para `/portal/login`.
+- Criar uma página de redefinição com:
+  - leitura do token enviado no link de email;
+  - formulário “Nova senha” + “Confirmar senha”;
+  - validação mínima de senha;
+  - chamada segura para atualizar a senha;
+  - redirecionamento final para `/portal/login` com mensagem clara.
+- Evitar que o utilizador volte à tela de login sem concluir a redefinição.
 
-Usar a coluna `respostas` (jsonb) já existente em `portal_questionario`, gravando parcialmente com `completo = false` enquanto preenche.
+2. Corrigir redirecionamentos do Portal do Paciente
+- Em `PatientPortal.tsx`, se não houver sessão, redirecionar para `/portal/login` em vez de `/login`.
+- Manter o portal separado do login profissional.
+- Se o paciente estiver autenticado e existir questionário incompleto, mostrar chamada clara para continuar o questionário.
 
----
+3. Garantir retomada automática do questionário incompleto
+- No login do portal (`PortalLogin.tsx`), depois de autenticar:
+  - buscar o paciente vinculado à conta;
+  - verificar `portal_questionario`;
+  - se `completo = false` ou `onboarding_completo = false`, enviar para `/portal/onboarding`;
+  - guardar novamente o `portal_paciente_id` localmente para o onboarding conseguir carregar o progresso.
+- Em `PortalOnboarding.tsx`, reforçar o carregamento para funcionar mesmo se o `localStorage` tiver sido limpo:
+  - se `portal_paciente_id` não existir, recuperar o paciente a partir da conta autenticada;
+  - carregar o convite/template mais recente;
+  - carregar respostas parciais já guardadas;
+  - abrir o diálogo “Continuar de onde parei” quando houver progresso.
 
-### 1. `DynamicQuestionnaireRenderer.tsx` — autosave + UI
+4. Melhorar autosave para resistir a sair do navegador no celular
+- Manter o autosave já existente por debounce.
+- Adicionar salvamento também em eventos de saída/pausa:
+  - `visibilitychange` quando o navegador/app fica em segundo plano;
+  - `pagehide` antes da página ser suspensa/fechada;
+  - `beforeunload` como fallback.
+- Usar sempre `upsert` parcial em `portal_questionario.respostas`, sem alterar schema e sem apagar dados.
+- Preservar questionários já completos: autosave parcial nunca deve sobrescrever `completo=true` durante edição normal.
 
-Adicionar suporte a:
-- `pacienteId` como prop (necessário para autosave)
-- `initialAnswers` carregadas ao retomar
-- `onAutosave` callback (debounced 1500ms) — guarda `respostas` parciais via upsert no `portal_questionario` com `completo: false`
-- Indicador no canto superior direito: "💾 A guardar…" / "✓ Guardado às HH:MM" / "⚠️ Erro ao guardar" (12px, discreto)
-- Barra de progresso no topo: cálculo = secções com pelo menos 1 campo preenchido / total de secções; texto "Secção X de Y · NN%"
-- Botão "Sair e continuar depois" (variant ghost com ícone Bookmark) ao lado do "Concluir" — força flush do autosave e chama `onExit` callback
+5. Ajustar o fluxo do Google no portal
+- Rever a lógica pós-OAuth em `PortalLogin.tsx` para não depender apenas do evento `SIGNED_IN`.
+- Ao retornar do Google, chamar uma rotina única de resolução da conta e encaminhar corretamente:
+  - questionário incompleto -> `/portal/onboarding`;
+  - questionário completo -> `/patient-portal`;
+  - conta não vinculada -> mensagem clara e logout.
 
-### 2. `PortalOnboarding.tsx` — detecção e retomada
+6. QA e validação
+- Rodar typecheck/build após as alterações.
+- Validar os cenários críticos:
+  - pedir recuperação de senha e cair em `/portal/reset-password`;
+  - definir nova senha e conseguir entrar;
+  - fechar/suspender navegador durante questionário e voltar depois;
+  - login por email/senha retoma questionário incompleto;
+  - login Google retoma questionário incompleto;
+  - questionário completo continua indo para o portal/diário.
 
-Ao carregar (apenas no fluxo dinâmico com `template_id`):
-- Após carregar o template, fazer query a `portal_questionario` filtrando por `paciente_id`
-- Se `completo === false` E `respostas` tem chaves → mostrar diálogo "Continuar ou Recomeçar"
-- Se `completo === true` → ir direto para o portal (já completou — não reabrir)
-- Caso contrário → começar do zero
+Arquivos previstos
+- `src/pages/PortalLogin.tsx`
+- `src/pages/PortalResetPassword.tsx` novo
+- `src/pages/PatientPortal.tsx`
+- `src/pages/PortalOnboarding.tsx`
+- `src/components/patient-portal/DynamicQuestionnaireRenderer.tsx`
+- `src/App.tsx`
 
-Diálogo "Continuar ou Recomeçar" (componente `Dialog` existente):
-- Ícone documento + título "Tem um questionário em curso"
-- Mostra "Já preencheu X de Y secções" e "Última atualização: [data formatada pt-PT]"
-- Botão primário **"Continuar de onde parei"** → carrega `respostas` no estado e abre o renderer
-- Botão secundário **"Começar de novo"** → confirmação inline ("Tem a certeza? Vai perder o progresso anterior.") → limpa `respostas` no DB (update setando `respostas: {}`) e abre o renderer vazio
-
-Implementar callback `onExit` do renderer (botão "Sair e continuar depois"):
-- Toast "Progresso guardado. Pode voltar a qualquer momento."
-- `navigate("/patient-portal")` ou voltar para a página inicial do portal
-
-### 3. Compatibilidade
-
-- Fluxo legado (sem `template_id`) **não é alterado** — autosave é apenas no renderer dinâmico
-- Pacientes com `completo === true` mantêm comportamento atual (não veem retomada)
-- O upsert usa `onConflict: 'paciente_id'` para preservar o registo único existente
-
-### Detalhes técnicos
-
-- Debounce 1500ms via `useEffect` + `setTimeout` cleanup
-- Upsert no autosave preserva `template_id`, `perfil_tipo`, define `completo: false`, atualiza `respostas` e `updated_at`
-- Submissão final ("Concluir") mantém o fluxo atual (`saveDynamicAnswers`) que define `completo: true`
-- Usar `(supabase as any).from("portal_questionario")` (padrão do projeto para tabelas do portal)
-- Formato data: `toLocaleString("pt-PT", { hour: "2-digit", minute: "2-digit" })`
-
-### Ficheiros alterados
-
-| Acção | Ficheiro |
-|---|---|
-| Modificado | `src/components/patient-portal/DynamicQuestionnaireRenderer.tsx` |
-| Modificado | `src/pages/PortalOnboarding.tsx` |
-
-### O que NÃO muda
-
-- Nenhuma migração SQL
-- Nenhum DROP / ALTER / TRUNCATE / DELETE
-- Schema `portal_questionario` intacto (usa colunas existentes `respostas`, `completo`, `template_id`, `updated_at`)
-- Fluxo legado de questionário (steps 0-3) preservado
-- Visual do portal e dos cards inalterado
+Sem alterações destrutivas
+- Não vou usar `DROP`, `TRUNCATE`, nem `DELETE` em massa.
+- Não vou alterar schema.
+- Não vou apagar respostas existentes.
+- A solução usa apenas frontend + leituras/upserts parciais nas tabelas já existentes.
