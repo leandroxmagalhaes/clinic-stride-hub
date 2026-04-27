@@ -272,6 +272,11 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
     return (
       <div key={field.key} className="space-y-0.5">
         <p className="text-xs text-muted-foreground">{field.label}</p>
+        {field.helpText && (
+          <p className="text-[11px] text-muted-foreground/80 italic leading-relaxed whitespace-pre-line">
+            {field.helpText}
+          </p>
+        )}
         <p className="text-sm font-medium whitespace-pre-line">{formatValue(value)}</p>
       </div>
     );
@@ -358,6 +363,11 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
         {field.type !== "checkbox" && (
           <label className="text-xs font-medium block">{field.label}</label>
         )}
+        {field.helpText && (
+          <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-line">
+            {field.helpText}
+          </p>
+        )}
         {control}
       </div>
     );
@@ -406,6 +416,11 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
               {section.description && (
                 <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-line">
                   {section.description}
+                </p>
+              )}
+              {section.intro && (
+                <p className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-line pt-1 border-l-2 border-primary/30 pl-2">
+                  {section.intro}
                 </p>
               )}
             </div>

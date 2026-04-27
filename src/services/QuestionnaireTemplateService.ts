@@ -18,12 +18,16 @@ export interface TemplateField {
   min?: number;
   max?: number;
   placeholder?: string;
+  /** Long explanatory text shown under the field label (legacy Google Forms parity). */
+  helpText?: string;
 }
 
 export interface TemplateSection {
   id: string;
   title: string;
   description?: string;
+  /** Long-form intro paragraph shown at the top of the section, in addition to `description`. */
+  intro?: string;
   fields: TemplateField[];
 }
 
