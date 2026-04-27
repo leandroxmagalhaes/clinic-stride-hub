@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from "sonner";
 import { Loader2, Mail } from "lucide-react";
 import { lovable } from "@/integrations/lovable/index";
+import { PortalAccountService } from "@/services/PortalAccountService";
 
 export default function PortalLogin() {
   const [email, setEmail] = useState("");
@@ -19,33 +20,30 @@ export default function PortalLogin() {
   const navigate = useNavigate();
 
   const checkPortalAccount = async (userId: string) => {
-    // Get portal account — now we store conta_id, not paciente_id
-    const { data: conta } = await (supabase as any)
-      .from("portal_contas")
-      .select("id, onboarding_completo")
-      .eq("auth_user_id", userId)
-      .maybeSingle();
+    const result = await PortalAccountService.resolveForUser(userId);
 
-    if (!conta) {
+    if (result.status === "no_account") {
       toast.error("Conta não associada", {
-        description: "Esta conta não está associada a nenhum paciente. Contacte a clínica.",
+        description: "Esta conta ainda não foi configurada. Contacte a clínica para receber o convite.",
       });
       await supabase.auth.signOut();
       return;
     }
 
-    // Check linked patients via portal_conta_pacientes
-    const { data: links } = await (supabase as any)
-      .from("portal_conta_pacientes")
-      .select("paciente_id")
-      .eq("conta_id", conta.id);
-
-    // Store first paciente_id for onboarding compatibility
-    if (links && links.length > 0) {
-      localStorage.setItem("portal_paciente_id", links[0].paciente_id);
+    if (result.status === "no_valid_patient") {
+      toast.error("Associação inválida", {
+        description: "A sua conta existe mas o utente associado já não está disponível. Contacte a clínica.",
+      });
+      await supabase.auth.signOut();
+      return;
     }
 
-    if (!conta.onboarding_completo) {
+    // Guardar primeiro paciente_id válido para compatibilidade com onboarding
+    if (result.primaryPacienteId) {
+      localStorage.setItem("portal_paciente_id", result.primaryPacienteId);
+    }
+
+    if (result.status === "needs_onboarding") {
       navigate("/portal/onboarding");
     } else {
       navigate("/patient-portal");
