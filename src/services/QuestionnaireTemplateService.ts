@@ -90,14 +90,33 @@ export class QuestionnaireTemplateService {
   }
 
   /**
-   * Map a legacy `perfil_tipo` (baby/child/adult/elderly) to a template identifier.
+   * Map a legacy `perfil_tipo` (baby/child/adult/elderly) — or already a
+   * template identifier (template_baby_complete/template_child/...) — to a
+   * canonical template identifier. Accepts both formats so older records keep
+   * resolving to the same template after upgrades.
    */
   static identifierForPerfil(perfilTipo?: string | null): string {
-    switch ((perfilTipo || "").toLowerCase()) {
-      case "baby": return "template_baby_complete";
-      case "child": return "template_child";
-      case "elderly": return "template_elderly";
-      default: return "template_adult";
+    const raw = (perfilTipo || "").toLowerCase().trim();
+    if (!raw) return "template_adult";
+    // Already a template identifier — return as-is
+    if (raw.startsWith("template_")) return raw;
+    switch (raw) {
+      case "baby":
+      case "bebe":
+      case "bebé":
+        return "template_baby_complete";
+      case "child":
+      case "crianca":
+      case "criança":
+        return "template_child";
+      case "elderly":
+      case "idoso":
+      case "senior":
+        return "template_elderly";
+      case "adult":
+      case "adulto":
+      default:
+        return "template_adult";
     }
   }
 
