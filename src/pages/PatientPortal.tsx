@@ -267,7 +267,7 @@ export default function PatientPortal() {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/portal/login" replace />;
   if (!isPatient) return <Navigate to="/" replace />;
 
   // Profile selector for multi-patient accounts
