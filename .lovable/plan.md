@@ -1,73 +1,55 @@
+Vou ajustar o fluxo para que o questionário completo fique sempre disponível no Portal do Utente para continuar, editar e rever, incluindo os parágrafos explicativos do modelo original.
 
-## Objetivo
+Problema identificado
+- O template Bebé já está na base de dados com 93 perguntas, 16 secções e parágrafos (`intro`/`description`/`helpText`).
+- Porém, no Portal do Utente (`/patient-portal`) o ecrã só mostra a vista completa (`FullQuestionnaireView`) quando `completo = true`.
+- Quando `completo = false`, o portal mostra apenas um cartão com botão “Continuar preenchimento”, em vez de mostrar o questionário na íntegra ali mesmo.
+- Além disso, se a conta estiver marcada como onboarding incompleto, o portal redireciona para `/portal/onboarding`, criando uma experiência fragmentada e dando a impressão de que o questionário completo não está disponível no portal.
 
-Reescrever por completo o template **`template_baby_complete`** para que fique **idêntico ao questionário original** anexado, **sem remover nenhuma pergunta**, e adicionar os **parágrafos explicativos** (boas‑vindas, cabeçalhos de secção e instruções por pergunta) que aparecem no Google Forms original. O questionário disponível para edição no Portal do Utente passará a mostrar o conteúdo na íntegra, com esses textos.
+Plano de ajuste
+1. Tornar o questionário integral sempre renderizável no Portal do Utente
+   - Alterar `PatientPortal.tsx` para remover a bifurcação que esconde o questionário quando está incompleto.
+   - Sempre que existir modelo resolvível, abrir a aba “Questionário de Saúde” com `FullQuestionnaireView`, independentemente de `completo` estar true ou false.
+   - Manter o indicador “incompleto”, mas sem bloquear a visualização/edição integral.
 
-## Diagnóstico
+2. Permitir criação/continuação mesmo sem registo completo ainda
+   - Ajustar `FullQuestionnaireView.tsx` para suportar o caso em que existe template, mas ainda não existe linha em `portal_questionario`.
+   - Nesse cenário, o componente deve abrir em modo editável/criável e fazer `upsert` por `paciente_id`, vinculando `template_id`, `perfil_tipo`, `respostas` e `completo` conforme a ação.
+   - Para respostas já guardadas parcialmente, continuará a carregar `respostas` e fundir dados legados sem perder nada.
 
-O template atual no banco (`identifier = template_baby_complete`, 15 secções) já tem todas as perguntas estruturais, mas:
+3. Separar “Guardar progresso” de “Concluir”
+   - No modo de edição do questionário integral, adicionar/ajustar ações para:
+     - “Guardar progresso”: guarda `respostas` com `completo = false`.
+     - “Concluir questionário”: guarda `respostas` com `completo = true`.
+   - Isso permite editar e/ou terminar o preenchimento sem obrigar o utente a sair para outro fluxo.
 
-1. Não tem o **texto de boas‑vindas** ("Esse formulário é o primeiro passo… 20 a 30 minutos…").
-2. Os **cabeçalhos de secção** estão curtos — faltam os parágrafos explicativos do original (ex.: "Nesse item vamos descrever toda a história do seu bebê…", "O parto - nasce um bebé e uma nova mãe…", "Quase acabando, descreva hábitos intestinais…").
-3. Algumas **perguntas longas perderam o texto auxiliar** (ex.: "Em qual etapa se encontra o bebé? Marque as janelas que ele já faz lembrando que as aquisições estão em ordem…").
-4. O renderizador (`DynamicQuestionnaireRenderer` e `FullQuestionnaireView`) **já mostra** `section.description`, mas **não mostra** texto explicativo por campo (`field.helpText`).
+4. Garantir parágrafos explicativos em todos os modos
+   - Confirmar no renderer integral que:
+     - secções sem perguntas aparecem como cartões de orientação;
+     - `section.intro` e `section.description` aparecem no topo de cada secção;
+     - `field.helpText` aparece junto da pergunta, tanto na leitura como na edição.
+   - Preservar a ordem original do template.
 
-## Plano
+5. Ajustar o fluxo `/portal/onboarding`
+   - Quando o utente clica “Sair e continuar depois”, redirecionar para o Portal do Utente com a aba do questionário, não para um estado que pareça esconder o formulário.
+   - Manter o autosave existente no `DynamicQuestionnaireRenderer`, mas deixar o portal ser o ponto único para continuar/editar depois.
 
-### 1. Estender o schema do template (sem quebrar dados existentes)
+6. Atualizar a aba do portal no lado profissional
+   - Em `PatientPortalTab.tsx`, substituir a pré-visualização antiga que mostra apenas `dados_pessoais/perfil_saude/expectativas` por `FullQuestionnaireView` em modo apropriado, para que a clínica também veja o questionário integral ali.
+   - Manter a vista do Prontuário já baseada em `FullQuestionnaireView`.
 
-Adicionar dois campos opcionais ao tipo `TemplateField` em `src/services/QuestionnaireTemplateService.ts`:
+Detalhes técnicos
+- Ficheiros principais:
+  - `src/pages/PatientPortal.tsx`
+  - `src/components/patient-portal/FullQuestionnaireView.tsx`
+  - `src/pages/PortalOnboarding.tsx`
+  - `src/components/patients/PatientPortalTab.tsx`
+- Não é necessária alteração estrutural de base de dados.
+- Se for preciso atualizar dados do template, será uma atualização de dados no `portal_questionario_templates`, não uma migration de schema.
+- A auditoria em `portal_questionario_historico` continuará a registar alterações campo a campo quando o questionário já existir; para primeira criação, o foco será guardar integralmente sem perda de dados.
 
-- `helpText?: string` — parágrafo explicativo mostrado por baixo do label da pergunta.
-- `placeholder?: string` — já existe; manter.
-
-E ao `TemplateSection`:
-- `intro?: string` — parágrafo longo de abertura da secção (além do `description` curto), opcional.
-
-Estes campos são opcionais e não afetam respostas guardadas nem migrações anteriores.
-
-### 2. Renderizar os textos explicativos no Portal e no Prontuário
-
-Atualizar **`FullQuestionnaireView.tsx`** e **`DynamicQuestionnaireRenderer.tsx`**:
-
-- Mostrar `section.description` + `section.intro` (parágrafo longo) no topo da secção.
-- Mostrar `field.helpText` em texto pequeno (`text-xs text-muted-foreground`) por baixo do label de cada pergunta que tenha esse texto.
-- Aplicar tanto no modo de preenchimento como no modo de visualização do profissional.
-
-### 3. Migração: reescrever o `schema` do `template_baby_complete`
-
-Migração SQL que faz `UPDATE` no registo existente (mesmo `id`, mesmo `identifier`) para substituir o `schema` por uma versão completa contendo:
-
-- **Secção 0 (nova): "Boas‑vindas"** apenas com `description`/`intro` (sem campos), com o texto:
-  > "Este formulário é o primeiro passo para iniciarmos a avaliação e aproveitarmos ao máximo o seu horário de sessão. Vai levar entre 20 e 30 minutos para completar. Quanto mais completo, melhor o perfil analisado."
-- Para cada secção do questionário original, manter **todas as perguntas atuais** e adicionar `intro` com o texto explicativo do Google Forms (ex.: "Nesse item vamos descrever toda a história do seu bebé…", "O parto — nasce um bebé e uma nova mamãe…", "Primeiros dias do bebé — vamos começar a conhecer a história do bebé, suas dificuldades…", "Desenvolvimento do bebé — vamos analisar as funções básicas…", "Quase acabando, descreva hábitos intestinais…").
-- Para perguntas que tinham instruções longas no original, preencher `helpText` (ex.: "Em qual etapa se encontra o bebé? — Marque as janelas que ele já faz lembrando que as aquisições estão em ordem; se o bebé é muito pequeno, pode parar quando as respostas começarem a não encaixar…").
-- Manter **exatamente** os mesmos `key`s já gravados nas respostas, para que o que já foi preenchido **não se perca**.
-- Manter a ordem das 15 secções existentes (apenas adicionando "Boas‑vindas" como secção 1 informativa, sem campos obrigatórios).
-
-A migração será **idempotente** (só atualiza o registo `identifier = 'template_baby_complete'`).
-
-### 4. Validar que nada se perde
-
-- O renderizador continua a usar `respostas[sectionId][fieldKey]`. Como nenhum `key` é alterado, todas as respostas existentes continuam a aparecer.
-- A lógica de auditoria (`logQuestionnaireChanges`) e de merge de legados (`mergeLegacyIntoRespostas`) não muda.
-- Secções sem campos (apenas informativas, como "Boas‑vindas") são suportadas pelo renderizador (já itera fields, vazio = só mostra cabeçalho/intro).
-
-### 5. RBAC e fluxo (sem alterações)
-
-- Portal do Utente: aba "Questionário de Saúde" mostra a versão integral, com textos.
-- Prontuário/Anamnese: profissionais autorizados veem e editam tudo; secretárias só visualizam.
-- "Sair e continuar depois" continua a funcionar via `PortalAccountService` + retomada por `PortalOnboarding`.
-
-## Ficheiros a alterar
-
-- `src/services/QuestionnaireTemplateService.ts` — adicionar `helpText` e `intro` aos tipos.
-- `src/components/patient-portal/FullQuestionnaireView.tsx` — render de `intro` e `helpText`.
-- `src/components/patient-portal/DynamicQuestionnaireRenderer.tsx` — render de `intro` e `helpText`.
-- Nova migração SQL — `UPDATE portal_questionario_templates SET schema = … WHERE identifier = 'template_baby_complete'`.
-
-## Resultado esperado
-
-- O utente vê o questionário **idêntico ao Google Forms original**, com os parágrafos de "Boas‑vindas", os textos explicativos por secção (Ficha Clínica, Histórico Pré‑Natal, Parto, Primeiros dias, Desenvolvimento, etc.) e as instruções longas em perguntas específicas.
-- **Nenhuma pergunta é removida**; todas as respostas já gravadas continuam visíveis.
-- Disponível para preencher, continuar mais tarde e editar a partir do Portal e do Prontuário.
+Resultado esperado
+- O Portal do Utente terá o questionário completo disponível na íntegra, esteja ele incompleto ou concluído.
+- O utente poderá continuar, editar e finalizar no próprio portal.
+- Os parágrafos explicativos do modelo original aparecerão junto das secções e perguntas.
+- Profissionais verão o mesmo conteúdo integral, sem recortes por campos legados.
