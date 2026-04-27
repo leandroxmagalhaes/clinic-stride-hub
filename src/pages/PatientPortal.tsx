@@ -45,51 +45,46 @@ export default function PatientPortal() {
   const [hasDynamicTemplate, setHasDynamicTemplate] = useState(false);
   const [view, setView] = useState<"diary" | "questionnaire">("diary");
 
-  // Resolve conta and linked patients
+  // Resolve conta e utentes ligados via serviço único (com filtragem de órfãos)
   useEffect(() => {
     if (!user) return;
     (async () => {
       setResolving(true);
 
-      // Get portal account
-      const { data: conta } = await (supabase as any)
-        .from("portal_contas")
-        .select("id, paciente_id")
-        .eq("auth_user_id", user.id)
-        .maybeSingle();
+      const result = await PortalAccountService.resolveForUser(user.id);
 
-      if (!conta) {
+      if (result.status === "no_account" || result.status === "no_valid_patient") {
+        // Conta inválida — mandar para login com mensagem
         setResolving(false);
+        toast.error("Sessão sem utente associado", {
+          description: "Por favor, contacte a clínica para reativar o seu acesso.",
+        });
+        await supabase.auth.signOut();
+        navigate("/portal/login");
         return;
       }
 
-      setContaId(conta.id);
-
-      // Get linked patients from portal_conta_pacientes
-      const { data: links } = await (supabase as any)
-        .from("portal_conta_pacientes")
-        .select("paciente_id")
-        .eq("conta_id", conta.id);
-
-      const patientIds = (links || []).map((l: any) => l.paciente_id);
-
-      // Fallback: if no links exist yet, use legacy paciente_id
-      if (patientIds.length === 0 && conta.paciente_id) {
-        patientIds.push(conta.paciente_id);
+      if (result.status === "needs_onboarding" && result.primaryPacienteId) {
+        // Onboarding ainda a meio — retomar
+        localStorage.setItem("portal_paciente_id", result.primaryPacienteId);
+        setResolving(false);
+        navigate("/portal/onboarding");
+        return;
       }
 
-      setLinkedPatients(patientIds);
+      setContaId(result.contaId);
+      setLinkedPatients(result.pacienteIds);
 
-      if (patientIds.length === 1) {
-        setSelectedPacienteId(patientIds[0]);
+      if (result.pacienteIds.length === 1) {
+        setSelectedPacienteId(result.pacienteIds[0]);
         setShowProfileSelector(false);
-      } else if (patientIds.length > 1) {
+      } else if (result.pacienteIds.length > 1) {
         setShowProfileSelector(true);
       }
 
       setResolving(false);
     })();
-  }, [user]);
+  }, [user, navigate]);
 
   // Load diary when patient selected
   const loadEntries = useCallback(async (pid: string) => {
