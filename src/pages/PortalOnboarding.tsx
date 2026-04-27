@@ -131,11 +131,41 @@ export default function PortalOnboarding() {
   }, []);
 
   useEffect(() => {
-    const pid = localStorage.getItem("portal_paciente_id");
-    if (!pid) { navigate("/login"); return; }
-    setPacienteId(pid);
-
     (async () => {
+      let pid = localStorage.getItem("portal_paciente_id");
+
+      // Fallback: if localStorage was cleared (e.g. mobile browser killed the tab),
+      // recover the paciente_id from the authenticated portal account.
+      if (!pid) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
+          navigate("/portal/login");
+          return;
+        }
+        const { data: conta } = await (supabase as any)
+          .from("portal_contas")
+          .select("id, paciente_id")
+          .eq("auth_user_id", session.user.id)
+          .maybeSingle();
+        let recovered: string | null = conta?.paciente_id ?? null;
+        if (conta?.id && !recovered) {
+          const { data: link } = await (supabase as any)
+            .from("portal_conta_pacientes")
+            .select("paciente_id")
+            .eq("conta_id", conta.id)
+            .limit(1)
+            .maybeSingle();
+          recovered = link?.paciente_id ?? null;
+        }
+        if (!recovered) {
+          navigate("/portal/login");
+          return;
+        }
+        pid = recovered;
+        localStorage.setItem("portal_paciente_id", pid);
+      }
+      setPacienteId(pid);
+
       // Load patient data
       const { data } = await supabase
         .from("pacientes")
