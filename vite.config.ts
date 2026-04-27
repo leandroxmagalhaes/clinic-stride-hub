@@ -16,16 +16,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "d3-array": path.resolve(__dirname, "node_modules/d3-array/src/index.js"),
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
-  },
-  optimizeDeps: {
-    include: ["d3-array"],
-  },
-  build: {
-    commonjsOptions: {
-      include: [/d3-array/, /node_modules/],
-    },
   },
 }));
