@@ -23,6 +23,7 @@ export interface TemplateField {
 export interface TemplateSection {
   id: string;
   title: string;
+  description?: string;
   fields: TemplateField[];
 }
 
