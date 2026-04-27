@@ -263,7 +263,7 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
   }
 
   // No data — show "fill manually" option
-  if (!data && !creating) {
+  if ((!data || !data.completo) && !creating) {
     return (
       <Card className="border-dashed border-muted-foreground/30">
         <CardContent className="py-6 text-center space-y-3">
