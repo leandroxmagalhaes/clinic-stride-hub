@@ -120,12 +120,44 @@ export function FullQuestionnaireView({ pacienteId, alteradoPor, authorRole, can
         .select("*")
         .eq("paciente_id", pacienteId)
         .maybeSingle();
-      setQuestionario(q || null);
-      if (q?.template_id) {
-        const t = await QuestionnaireTemplateService.getById(q.template_id);
-        setTemplate(t);
+
+      // Resolve template (questionnaire.template_id → invite → perfil/age fallback)
+      let resolvedTemplate: QuestionnaireTemplate | null = null;
+      try {
+        // Pull birth_date for fallback resolution
+        const { data: pat } = await supabase
+          .from("pacientes")
+          .select("birth_date")
+          .eq("id", pacienteId)
+          .maybeSingle();
+
+        resolvedTemplate = await QuestionnaireTemplateService.resolveForPatient({
+          pacienteId,
+          perfilTipo: q?.perfil_tipo || null,
+          birthDate: pat?.birth_date || null,
+        });
+      } catch (e) {
+        console.warn("Template resolve failed in FullQuestionnaireView", e);
+      }
+      setTemplate(resolvedTemplate);
+
+      // If we have legacy answers (dados_pessoais/perfil_saude/expectativas)
+      // and a resolved template, merge them into respostas so the integral view
+      // shows the existing data without losing anything.
+      if (q && resolvedTemplate) {
+        const baseRespostas = (q.respostas && typeof q.respostas === "object") ? q.respostas : {};
+        const merged = mergeLegacyIntoRespostas({
+          template: resolvedTemplate,
+          respostas: baseRespostas,
+          legacy: {
+            dados_pessoais: q.dados_pessoais || null,
+            perfil_saude: q.perfil_saude || null,
+            expectativas: q.expectativas || null,
+          },
+        });
+        setQuestionario({ ...q, respostas: merged });
       } else {
-        setTemplate(null);
+        setQuestionario(q || null);
       }
     } catch (err) {
       console.error("Error loading full questionnaire:", err);
