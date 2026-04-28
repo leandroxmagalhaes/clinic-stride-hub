@@ -683,7 +683,26 @@ export function FullQuestionnaireView({
   }
 
   const handlePrint = () => {
-    window.print();
+    // Mark <html> as anamnese print mode so CSS can hide app chrome and
+    // remove ancestor height/overflow constraints. This lets the printable
+    // content stay in the natural document flow and paginate over multiple
+    // pages instead of being clipped to the first page (the bug we're fixing).
+    const root = document.documentElement;
+    root.classList.add("printing-anamnese");
+
+    const cleanup = () => {
+      root.classList.remove("printing-anamnese");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+
+    // Wait for the next paint so the new layout is committed before the
+    // browser snapshots the page for printing.
+    requestAnimationFrame(() => {
+      window.print();
+      // Safety net: some browsers (notably older Safari) don't fire afterprint.
+      setTimeout(cleanup, 1000);
+    });
   };
 
   return (
