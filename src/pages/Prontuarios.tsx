@@ -525,7 +525,19 @@ export default function Prontuarios() {
         </div>
 
         {/* Detalhe */}
-        <div className="lg:col-span-8">
+        <div className={cn("transition-all duration-300", patientsCollapsed ? "lg:col-span-12" : "lg:col-span-8")}>
+          {patientsCollapsed && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden lg:inline-flex gap-2 mb-3 text-muted-foreground hover:text-primary"
+              onClick={() => setPatientsCollapsed(false)}
+              title="Mostrar lista de utentes (Ctrl+\\)"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+              Mostrar utentes
+            </Button>
+          )}
           {selectedProntuario ? (
             <div className="space-y-4">
               <Button
