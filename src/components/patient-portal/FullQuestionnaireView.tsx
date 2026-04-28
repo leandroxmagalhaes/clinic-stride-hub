@@ -257,20 +257,27 @@ export function FullQuestionnaireView({
         .eq("paciente_id", pacienteId)
         .maybeSingle();
 
+      // Pull patient fields used both for fallback resolution AND identification autofill.
+      let patient: any = null;
+      try {
+        const { data: pat } = await (supabase as any)
+          .from("pacientes")
+          .select("full_name, birth_date, gender, phone, email, cpf, address, emergency_contact, emergency_phone, billing_name, billing_nif, billing_address")
+          .eq("id", pacienteId)
+          .maybeSingle();
+        patient = pat || null;
+        setPatientRecord(patient);
+      } catch (e) {
+        console.warn("Patient fetch failed in FullQuestionnaireView", e);
+      }
+
       // Resolve template (questionnaire.template_id → invite → perfil/age fallback)
       let resolvedTemplate: QuestionnaireTemplate | null = null;
       try {
-        // Pull birth_date for fallback resolution
-        const { data: pat } = await supabase
-          .from("pacientes")
-          .select("birth_date")
-          .eq("id", pacienteId)
-          .maybeSingle();
-
         resolvedTemplate = await QuestionnaireTemplateService.resolveForPatient({
           pacienteId,
           perfilTipo: q?.perfil_tipo || null,
-          birthDate: pat?.birth_date || null,
+          birthDate: patient?.birth_date || null,
         });
       } catch (e) {
         console.warn("Template resolve failed in FullQuestionnaireView", e);
