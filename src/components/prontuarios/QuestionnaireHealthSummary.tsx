@@ -226,24 +226,22 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
     })();
   }, [pacienteId]);
 
-  // Get professional name + RBAC check (admin OR assigned professional)
+  // Get professional name + RBAC check
+  // Rule: any clinical professional (admin OR professional) in the clinic can edit
+  // the Anamnese. Secretaries and patients are read-only / blocked.
   useEffect(() => {
     if (!user) return;
     (async () => {
       const { data: p } = await supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle();
       if (p?.full_name) setProfessionalName(p.full_name);
-      const { data: allowed } = await (supabase as any).rpc("professional_can_access_patient", {
-        p_user_id: user.id,
-        p_patient_id: pacienteId,
-      });
-      // Secretaries are read-only: rule is "Admin OR assigned professional".
       const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
       const roleSet = new Set((roles || []).map((r: any) => r.role));
       const isAdmin = roleSet.has("admin");
-      // professional_can_access_patient also returns true for admins/secretaries.
-      // We must exclude secretaries explicitly.
+      const isProfessional = roleSet.has("professional");
       const isSecretary = roleSet.has("secretary");
-      setCanEditDynamic((!!allowed && !isSecretary) || isAdmin);
+      // Allow admins and professionals (any clinic member who treats patients).
+      // Explicitly exclude secretaries (read-only) and patients.
+      setCanEditDynamic((isAdmin || isProfessional) && !isSecretary);
     })();
   }, [user, pacienteId]);
 
