@@ -1,69 +1,51 @@
+## Recuperação do Questionário do Tomás Marques — Passo (a)
 
-# Correção do Questionário Errado no Portal
+### Objetivo
+Re-associar o questionário `9c63cb7e-ef0d-4b29-86ab-ca8bcf1a0026` ao Tomás Marques real (`b922fa2d-55c7-49d8-ad20-99d071ee59c1`), preservando 100% dos dados clínicos já preenchidos pela mãe.
 
-## Causa-raiz (já diagnosticada)
+### Estado atual confirmado por SELECT
 
-`QuestionnaireTemplateService.resolveForPatient` considera `dados_pessoais` (bucket legacy de identificação) como "respostas". Como o Bernardo tem morada/telefone/encarregado preenchidos lá, a função classifica o questionário como "preenchido" e ignora os 3 convites recentes que apontam para `template_baby_complete`. Devolve então o `template_id` antigo (`template_child`) gravado em 2026-03-31.
-
-## Passo 1 — Ajustar deteção de "respostas" em `resolveForPatient`
-
-Em `src/services/QuestionnaireTemplateService.ts`, substituir a função interna `hasAnswers` por `hasClinicalAnswers` que **olha apenas para o bucket `respostas`** (sectionId → fieldKey → valor), ignorando `dados_pessoais`, `perfil_saude` e `expectativas`. Estes três últimos são identificação/onboarding legacy e nunca devem trancar o template.
-
-## Passo 2 — Reforçar override por convite recente
-
-Sempre que exista questionário sem respostas clínicas e um convite com `template_id`, o convite ganha se:
-- foi criado **depois** de `portal_questionario.updated_at`, OU
-- aponta para um `template_id` **diferente** do gravado.
-
-Isto é o que permite ao profissional corrigir um modelo errado simplesmente reenviando o convite com o template certo.
-
-## Passo 3 — Sincronizar registo (best-effort)
-
-Adicionar helper `syncResolvedTemplate(tpl)` que faz `UPDATE portal_questionario SET template_id, perfil_tipo` quando a função resolve um template diferente do gravado. Encapsulado em try/catch — se falhar, a UI continua a receber o template correto na mesma. Aplicado:
-- após override por convite (passo 2)
-- após resolução por `perfil_tipo` legacy
-
-Não toca em `respostas`, `dados_pessoais`, `perfil_saude`, `expectativas`, `completo`, `created_at`.
-
-## Passo 4 — Backfill SQL APENAS para o Bernardo
-
-**Estado atual confirmado** (registo `2dab93bf-486c-47ad-90a1-68f96aec2b80`):
-
-| Campo | Atual | Após backfill |
+| Campo | Valor atual | Após UPDATE |
 |---|---|---|
-| `template_id` | `fc710d04…` (child) | `f6833e55-c2e9-4220-b5eb-94d15342f2c4` (baby_complete) |
-| `perfil_tipo` | `child` | `template_baby_complete` |
-| `respostas` | `{}` | **inalterado** |
-| `dados_pessoais` | morada/telefone/encarregado preenchidos | **inalterado** |
-| `perfil_saude`, `expectativas` | — | **inalterado** |
-| `completo` | `true` | **inalterado** |
-| `created_at` | 2026-03-31 22:21 | **inalterado** |
+| `id` | `9c63cb7e-ef0d-4b29-86ab-ca8bcf1a0026` | inalterado |
+| `paciente_id` | `a2916d80-2cb0-43c6-8440-151e5b4c4a6e` (fantasma) | `b922fa2d-55c7-49d8-ad20-99d071ee59c1` (Tomás real) |
+| `template_id` | `f6833e55…` (baby_complete) | inalterado |
+| `perfil_tipo` | `template_baby_complete` | inalterado |
+| `respostas` | secções `parto` + `desenvolvimento` preenchidas | inalterado |
+| `dados_pessoais`, `perfil_saude`, `expectativas` | — | inalterados |
+| `completo` | `false` (rascunho) | inalterado |
+| `created_at` | 2026-04-27 23:41:59 | inalterado |
+| `updated_at` | 2026-04-27 23:42:08 | `now()` |
 
-SQL exato (via insert-tool de migração de dados, com filtro duplo por `id` + `paciente_id` para evitar acidentes):
+Confirmado também que o Tomás real **não tem** ainda nenhum questionário próprio, portanto o UPDATE não colide com nada.
+
+### Execução — UPDATE único e seletivo
 
 ```sql
 UPDATE public.portal_questionario
-SET 
-  template_id = 'f6833e55-c2e9-4220-b5eb-94d15342f2c4',
-  perfil_tipo = 'template_baby_complete',
-  updated_at  = now()
-WHERE id = '2dab93bf-486c-47ad-90a1-68f96aec2b80'
-  AND paciente_id = 'addc7d95-5226-42f1-9a09-b222225d69c7';
+SET paciente_id = 'b922fa2d-55c7-49d8-ad20-99d071ee59c1',
+    updated_at  = now()
+WHERE id = '9c63cb7e-ef0d-4b29-86ab-ca8bcf1a0026'
+  AND paciente_id = 'a2916d80-2cb0-43c6-8440-151e5b4c4a6e';
 ```
 
-Sem `DELETE`, sem `TRUNCATE`, sem `ALTER`, sem alterações a outros pacientes. A Luiza Te Magalhães (`8e0bf437…`, 7 anos) **não é tocada** — `child` está correto para ela.
+Filtro duplo (`id` + `paciente_id` antigo) garante que só toca neste registo. Sem `DELETE`, sem `TRUNCATE`, sem `ALTER`, sem alterações a `auth.*`, sem alterações a outros pacientes nem ao paciente fantasma.
 
-## Validação pós-execução
+### O que NÃO vai ser feito neste passo
 
-Após aplicar tudo, reporto ponto a ponto:
-- [ ] Bernardo passa a mostrar "Avaliação Bebé (0-2 anos)" no portal.
-- [ ] `dados_pessoais` do Bernardo intactos (morada Rua Fernandes Coelho, telefone, encarregado, email, birthDate).
-- [ ] Luiza e restantes pacientes não afetados (query de verificação).
-- [ ] Trace simulado de `resolveForPatient` para o Bernardo agora devolve `template_baby_complete` mesmo antes do backfill (graças aos passos 1 e 2), e o backfill apenas torna a decisão persistente.
+- **(b) Convite portal:** não é gerado pelo agente. Vais gerá-lo manualmente pela ficha do Tomás real depois de validar (a). O Smart Invite Binding já está no código e fará a associação quando a mãe abrir o link com `sheilaclaudine@hotmail.com`.
+- **(c) Paciente fantasma `a2916d80`:** confirmado que **NÃO existe** na tabela `pacientes` (já é órfão puro — só vivia através do questionário e da conta portal). Logo não há `is_active` para marcar — fica como está. A vulnerabilidade que permitiu criar convite/conta para um `paciente_id` inexistente fica anotada para corrigir num prompt seguinte.
+- Não toco no registo duplicado "Tomas Guedes Marques" (`b96124f8…`) — é outro paciente, fora deste âmbito.
 
-## Ficheiros tocados
+### Validação pós-execução (vou reportar ponto a ponto)
 
-- `src/services/QuestionnaireTemplateService.ts` — função `resolveForPatient` (passos 1, 2, 3).
-- Migração de dados (passo 4) — `UPDATE` único e seletivo no registo do Bernardo.
+- [ ] `SELECT` ao questionário mostra `paciente_id = b922fa2d…` e todos os outros campos intactos.
+- [ ] Tomás real (`b922fa2d…`) passa a ter o questionário associado na Anamnese.
+- [ ] `respostas.parto` e `respostas.desenvolvimento` continuam visíveis.
+- [ ] Paciente fantasma `a2916d80…` deixa de ter qualquer questionário associado.
+- [ ] Outros pacientes (Bernardo, Luiza, Tomas Guedes Marques) não foram tocados — query de verificação.
 
-Nenhum outro ficheiro é alterado. Nenhuma tabela tem o esquema modificado.
+### Ficheiros tocados
+
+- Nenhum ficheiro de código.
+- Apenas 1 UPDATE seletivo em `public.portal_questionario` (1 linha afetada).
