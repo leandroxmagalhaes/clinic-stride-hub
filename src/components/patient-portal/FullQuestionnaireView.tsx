@@ -317,7 +317,8 @@ export function FullQuestionnaireView({
               },
             })
           : {};
-        setDraft(JSON.parse(JSON.stringify(seed)));
+        const seedWithAutofill = applyPatientAutofill(seed, resolvedTemplate.identifier, patient);
+        setDraft(JSON.parse(JSON.stringify(seedWithAutofill)));
         setEditing(true);
       }
     } catch (err) {
