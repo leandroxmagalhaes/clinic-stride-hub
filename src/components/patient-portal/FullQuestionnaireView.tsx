@@ -801,7 +801,7 @@ export function FullQuestionnaireView({
         })}
 
         {!editing && (
-          <div className="border-t border-blue-200 pt-3">
+          <div className="border-t border-blue-200 pt-3 anamnese-print-hide">
             <ChangeHistorySection pacienteId={pacienteId} labelMap={labelMap} />
           </div>
         )}
