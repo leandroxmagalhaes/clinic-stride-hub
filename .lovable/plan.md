@@ -1,51 +1,124 @@
-## Recuperação do Questionário do Tomás Marques — Passo (a)
+## Objetivo
 
-### Objetivo
-Re-associar o questionário `9c63cb7e-ef0d-4b29-86ab-ca8bcf1a0026` ao Tomás Marques real (`b922fa2d-55c7-49d8-ad20-99d071ee59c1`), preservando 100% dos dados clínicos já preenchidos pela mãe.
+Tornar a coluna de pacientes (lista do meio) na página `Prontuários` recolhível, libertando espaço para a área principal (ficha/anamnese), com persistência em localStorage. Apenas frontend, apenas em `Prontuarios.tsx`.
 
-### Estado atual confirmado por SELECT
+## Estrutura atual (resumo)
 
-| Campo | Valor atual | Após UPDATE |
-|---|---|---|
-| `id` | `9c63cb7e-ef0d-4b29-86ab-ca8bcf1a0026` | inalterado |
-| `paciente_id` | `a2916d80-2cb0-43c6-8440-151e5b4c4a6e` (fantasma) | `b922fa2d-55c7-49d8-ad20-99d071ee59c1` (Tomás real) |
-| `template_id` | `f6833e55…` (baby_complete) | inalterado |
-| `perfil_tipo` | `template_baby_complete` | inalterado |
-| `respostas` | secções `parto` + `desenvolvimento` preenchidas | inalterado |
-| `dados_pessoais`, `perfil_saude`, `expectativas` | — | inalterados |
-| `completo` | `false` (rascunho) | inalterado |
-| `created_at` | 2026-04-27 23:41:59 | inalterado |
-| `updated_at` | 2026-04-27 23:42:08 | `now()` |
+`src/pages/Prontuarios.tsx` usa um grid responsivo:
 
-Confirmado também que o Tomás real **não tem** ainda nenhum questionário próprio, portanto o UPDATE não colide com nada.
-
-### Execução — UPDATE único e seletivo
-
-```sql
-UPDATE public.portal_questionario
-SET paciente_id = 'b922fa2d-55c7-49d8-ad20-99d071ee59c1',
-    updated_at  = now()
-WHERE id = '9c63cb7e-ef0d-4b29-86ab-ca8bcf1a0026'
-  AND paciente_id = 'a2916d80-2cb0-43c6-8440-151e5b4c4a6e';
+```text
+<div class="grid lg:grid-cols-12 gap-6">
+  <div class="lg:col-span-4">  ← lista de pacientes
+  <div class="lg:col-span-8">  ← área principal (ficha)
+</div>
 ```
 
-Filtro duplo (`id` + `paciente_id` antigo) garante que só toca neste registo. Sem `DELETE`, sem `TRUNCATE`, sem `ALTER`, sem alterações a `auth.*`, sem alterações a outros pacientes nem ao paciente fantasma.
+Em mobile, já existe lógica de esconder a lista quando há paciente seleccionado (`hidden lg:block`). Vamos preservar isso — o toggle só actua em `lg:` e acima.
 
-### O que NÃO vai ser feito neste passo
+## Alterações (ficheiro único: `src/pages/Prontuarios.tsx`)
 
-- **(b) Convite portal:** não é gerado pelo agente. Vais gerá-lo manualmente pela ficha do Tomás real depois de validar (a). O Smart Invite Binding já está no código e fará a associação quando a mãe abrir o link com `sheilaclaudine@hotmail.com`.
-- **(c) Paciente fantasma `a2916d80`:** confirmado que **NÃO existe** na tabela `pacientes` (já é órfão puro — só vivia através do questionário e da conta portal). Logo não há `is_active` para marcar — fica como está. A vulnerabilidade que permitiu criar convite/conta para um `paciente_id` inexistente fica anotada para corrigir num prompt seguinte.
-- Não toco no registo duplicado "Tomas Guedes Marques" (`b96124f8…`) — é outro paciente, fora deste âmbito.
+### 1. Estado persistente
 
-### Validação pós-execução (vou reportar ponto a ponto)
+Adicionar:
 
-- [ ] `SELECT` ao questionário mostra `paciente_id = b922fa2d…` e todos os outros campos intactos.
-- [ ] Tomás real (`b922fa2d…`) passa a ter o questionário associado na Anamnese.
-- [ ] `respostas.parto` e `respostas.desenvolvimento` continuam visíveis.
-- [ ] Paciente fantasma `a2916d80…` deixa de ter qualquer questionário associado.
-- [ ] Outros pacientes (Bernardo, Luiza, Tomas Guedes Marques) não foram tocados — query de verificação.
+```ts
+const [patientsCollapsed, setPatientsCollapsed] = useState<boolean>(() => {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem("prontuarios-patients-collapsed") === "true";
+});
 
-### Ficheiros tocados
+useEffect(() => {
+  localStorage.setItem("prontuarios-patients-collapsed", String(patientsCollapsed));
+}, [patientsCollapsed]);
+```
 
-- Nenhum ficheiro de código.
-- Apenas 1 UPDATE seletivo em `public.portal_questionario` (1 linha afetada).
+### 2. Importar ícones
+
+Adicionar `PanelLeftClose` e `PanelLeftOpen` ao import do `lucide-react`.
+
+### 3. Tornar o grid dinâmico
+
+Trocar as classes fixas pelas condicionais:
+
+- Wrapper grid: manter `grid grid-cols-1 lg:grid-cols-12 gap-6`.
+- Lista (col esquerda):
+  - Quando expandida: `lg:col-span-4` (atual).
+  - Quando recolhida: `hidden` em todos os breakpoints onde `lg:` aplica (i.e. `lg:hidden`), mas mantendo o comportamento mobile actual (`hidden lg:block` quando há paciente).
+  - Combinação: `selectedProntuario && "hidden lg:block"` + `patientsCollapsed && "lg:hidden"`.
+- Área principal (col direita):
+  - Quando expandida: `lg:col-span-8` (atual).
+  - Quando recolhida: `lg:col-span-12`.
+- Adicionar `transition-all duration-300` na coluna principal para a expansão ser suave.
+
+### 4. Botão de recolher (dentro da lista)
+
+No topo do `Card` de pesquisa (à direita do `Input`), adicionar um botão pequeno e discreto:
+
+```tsx
+<Button
+  variant="ghost"
+  size="icon"
+  className="hidden lg:inline-flex h-8 w-8 text-muted-foreground hover:text-primary"
+  onClick={() => setPatientsCollapsed(true)}
+  title="Recolher lista de utentes"
+  aria-label="Recolher lista de utentes"
+>
+  <PanelLeftClose className="h-4 w-4" />
+</Button>
+```
+
+Layout: envolver o `Search`+`Input` e o botão num `flex items-center gap-2`.
+
+### 5. Botão de expandir (dentro da área principal)
+
+Quando `patientsCollapsed === true`, mostrar um botão flutuante no canto superior esquerdo da área principal — acima do header do paciente — visível apenas em `lg:`:
+
+```tsx
+{patientsCollapsed && (
+  <Button
+    variant="outline"
+    size="sm"
+    className="hidden lg:inline-flex gap-2 mb-2 text-muted-foreground hover:text-primary"
+    onClick={() => setPatientsCollapsed(false)}
+    title="Mostrar lista de utentes"
+  >
+    <PanelLeftOpen className="h-4 w-4" />
+    Mostrar utentes
+  </Button>
+)}
+```
+
+Posição: dentro da `div` da coluna direita, antes do `Card` de header do paciente; também aparece quando não há paciente seleccionado (estado vazio), para que o utilizador possa sempre re-expandir.
+
+### 6. Atalho de teclado (opcional, trivial)
+
+`Ctrl/Cmd + \` para alternar — só activo na rota `Prontuarios`:
+
+```ts
+useEffect(() => {
+  const onKey = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+      e.preventDefault();
+      setPatientsCollapsed((v) => !v);
+    }
+  };
+  window.addEventListener("keydown", onKey);
+  return () => window.removeEventListener("keydown", onKey);
+}, []);
+```
+
+## Garantias de não regressão
+
+- Nenhuma query, serviço, contexto ou tabela é tocada.
+- Nenhuma outra página partilha este layout — alteração isolada a `src/pages/Prontuarios.tsx`.
+- Mobile (`< lg`): comportamento idêntico ao actual (lista esconde quando há paciente; botão "Voltar à lista" continua a funcionar). O botão de recolher tem `hidden lg:inline-flex`, logo nunca aparece em mobile.
+- Sidebar global do Physione: não tocada.
+
+## Validação
+
+- Em desktop, botão `PanelLeftClose` aparece no topo da lista; clicar recolhe e a ficha expande para 100%.
+- Botão `PanelLeftOpen` aparece no canto superior esquerdo da ficha; clicar restaura a lista.
+- Transição animada (300ms) entre estados.
+- Refresh da página mantém o estado (localStorage).
+- Em mobile, nada muda visualmente vs hoje.
+- Outras páginas inalteradas.
