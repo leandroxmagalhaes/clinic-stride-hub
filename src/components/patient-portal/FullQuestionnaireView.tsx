@@ -536,15 +536,31 @@ export function FullQuestionnaireView({
 
   const renderFieldRead = (sectionId: string, field: TemplateField) => {
     const value = respostas[sectionId]?.[field.key];
+    const empty = isEmptyValue(value);
+    const tag = !empty ? getFieldTag(field.key) : null;
     return (
       <div key={field.key} className="space-y-0.5">
-        <p className="text-xs text-muted-foreground">{field.label}</p>
+        <p className="text-xs font-semibold text-slate-800">{field.label}</p>
         {field.helpText && (
-          <p className="text-[11px] text-muted-foreground/80 italic leading-relaxed whitespace-pre-line">
+          <p className="text-[11px] text-slate-400 italic leading-relaxed whitespace-pre-line">
             {field.helpText}
           </p>
         )}
-        <p className="text-sm font-medium whitespace-pre-line">{formatValue(value)}</p>
+        <div className="flex items-start gap-2 flex-wrap">
+          {empty ? (
+            <p className="text-sm italic text-slate-300">— não preenchido</p>
+          ) : (
+            <p className="text-sm font-semibold text-blue-600 whitespace-pre-line">{formatValue(value)}</p>
+          )}
+          {tag && (
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
+              style={{ backgroundColor: tag.bg, color: tag.color }}
+            >
+              {tag.label}
+            </span>
+          )}
+        </div>
       </div>
     );
   };
