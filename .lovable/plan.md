@@ -1,70 +1,33 @@
-## Problema
+# Correção — Escala de Dor (EVA) inicia em 0
 
-Na página `Pacientes`, os 6 botões de acção são passados via `AppLayout actions` → renderizados na `PersistentHeader` (header global, sticky, h-14). A header também contém: SidebarTrigger, título "Pacientes" + contador, campo global "Buscar..." (w-64) e o sino de notificações. Em 1560px largo, o conjunto de botões não cabe e sobrepõe-se visualmente ao título, ao input de busca e ao sino.
+## Contexto
 
-## Solução
+Após pesquisa no código (`escala_dor`, `EVA`, `escalaDor`), os únicos formulários clínicos onde o profissional regista a Escala de Dor (EVA, 0–10) com slider são:
 
-Mover a barra de acções da página `Pacientes` para **fora** da header global, transformando-a numa **toolbar dedicada no topo do conteúdo da página** (Linha 2). A header global passa a mostrar apenas título + subtítulo + busca global + sino (Linha 1, sem sobreposição).
+- `src/components/prontuarios/NewEvolutionModal.tsx` — Nova Evolução Clínica
+- `src/components/prontuarios/EditEvolutionModal.tsx` — Editar Evolução
 
-Alteração isolada a `src/pages/Pacientes.tsx`. Nenhum outro ficheiro tocado. Funcionalidade dos botões preservada — só muda onde são renderizados.
+Não existe um modal separado de "Nova Avaliação" com EVA — as avaliações usam o mesmo fluxo de evolução com templates dinâmicos (`SpecialtyService` / `DynamicFormRenderer`). Os templates de especialidade têm campos próprios definidos por schema JSON (sem default fixo de 5 no código).
 
-## Alterações em `src/pages/Pacientes.tsx`
+Os campos `nivel_dor` do diário do utente (portal) são separados (`DiaryNewEntryForm` já usa `null`, e `DiaryEntryForm` é o diário do paciente, fora do âmbito desta correção clínica/EVA do profissional).
 
-### 1. Remover `actions` do `AppLayout`
+## Alterações
 
-Tanto no estado de `isLoading` (linhas ~347-364) como no return principal (linhas ~368-429), retirar a prop `actions` do `<AppLayout>`. Manter `title` e `subtitle`.
+### 1. `src/components/prontuarios/NewEvolutionModal.tsx`
 
-### 2. Extrair os botões para um JSX local
+- Linha 70: `useState(5)` → `useState(0)`
+- Linha 175 (dentro de `resetForm`): `setEscalaDor(5)` → `setEscalaDor(0)`
 
-Definir um bloco `actionsBar` (ou inline no JSX) com os mesmos 6 botões e a mesma lógica `onClick` actual — copiar tal e qual de dentro de `actions={...}`:
+### 2. `src/components/prontuarios/EditEvolutionModal.tsx`
 
-- Verificar Duplicados
-- Relatório
-- Link Genérico (com estado `genericLinkCopied`)
-- Enviar Link
-- Importar Planilha
-- + Novo Paciente
+- Linha 81: `useState(5)` → `useState(0)` (apenas fallback inicial antes de carregar o registo)
+- Linha 110: **manter** `setEscalaDor(evolution.escala_dor ?? 5)` mas alterar fallback para `?? 0` — para que registos antigos sem valor não apareçam falsamente como 5
+- Linha 177 (dentro de `resetForm`): `setEscalaDor(5)` → `setEscalaDor(0)`
 
-Sem alterar handlers, ícones, labels ou estados.
+## Garantias
 
-### 3. Render no topo do `children`
-
-Dentro do return, renderizar a toolbar como primeiro filho do conteúdo, antes do `Card` de pesquisa:
-
-```tsx
-<AppLayout title="Pacientes" subtitle={`${patients.length} pacientes cadastrados`}>
-  <div className="space-y-4 animate-fade-in">
-    {/* Linha 2: toolbar de acções da página */}
-    <div className="flex items-center gap-2 flex-wrap">
-      {/* botões aqui */}
-    </div>
-
-    <Card className="shadow-card">
-      {/* campo de pesquisa local existente */}
-      ...
-    </Card>
-    ...
-  </div>
-</AppLayout>
-```
-
-Classes da toolbar: `flex items-center gap-2 flex-wrap` — em ecrãs estreitos, os botões quebram naturalmente para a linha seguinte. Mantém a aparência visual (mesmos `variant="outline"` / default, mesmos ícones), só muda o contentor.
-
-### 4. Estado `isLoading`
-
-No ramo de `isLoading`, fazer o mesmo: remover `actions` do `AppLayout` e renderizar uma versão `disabled` resumida da toolbar (Importar + Novo Paciente, como hoje) acima do `<TableSkeleton />`.
-
-## Garantias de não regressão
-
-- Lógica, queries, handlers, modais e estados (`genericLinkCopied`, `isModalOpen`, etc.) mantêm-se idênticos.
-- Outras páginas (Agenda, Prontuários, Dashboard, etc.) continuam a usar `AppLayout actions` normalmente — não são tocadas.
-- A `PersistentHeader` global e o `AppLayout` não são alterados — apenas a página `Pacientes` deixa de usar a slot `actions`.
-- Mobile: o `flex-wrap` garante que os botões quebram para várias linhas; classes `sm:hidden`/`hidden sm:inline` dos labels já existentes continuam a encurtar os botões em mobile.
-
-## Validação visual
-
-- [ ] Header global em `/pacientes` mostra apenas: trigger sidebar, "Pacientes" + "242 pacientes cadastrados", campo busca global, sino — sem sobreposição.
-- [ ] Logo abaixo do header surge a fila com os 6 botões de acção, alinhada à esquerda, com `gap` consistente.
-- [ ] Em viewports < 1024px os botões quebram para múltiplas linhas (`flex-wrap`).
-- [ ] Cada botão mantém comportamento (abrir modal correspondente, copiar link, etc.).
-- [ ] Outras páginas inalteradas — header continua a mostrar acções dessas páginas.
+- Range continua 0–10 (slider `max={10}`, `step={1}`)
+- Lógica de validação inalterada (`EvolutionService.validate` continua a aceitar 0–10)
+- Registos guardados não são modificados — apenas os defaults de UI mudam
+- Em "Editar Evolução", o valor real guardado continua a ser carregado da BD; apenas o fallback (caso `escala_dor` seja `null`) muda de 5 para 0
+- Texto descritivo (`"Sem dor"` à esquerda) já existe nos dois modais e refletirá o valor 0/10 automaticamente
