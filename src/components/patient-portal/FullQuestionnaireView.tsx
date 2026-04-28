@@ -349,7 +349,8 @@ export function FullQuestionnaireView({
   );
 
   const startEdit = () => {
-    setDraft(JSON.parse(JSON.stringify(respostas)));
+    const seeded = applyPatientAutofill(respostas, template?.identifier, patientRecord);
+    setDraft(JSON.parse(JSON.stringify(seeded)));
     setEditing(true);
   };
 
