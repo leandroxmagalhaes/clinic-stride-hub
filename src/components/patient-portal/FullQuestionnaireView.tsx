@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { FileText, Pencil, Save, X, History, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { FileText, Pencil, Save, X, History, ChevronDown, ChevronUp, Loader2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -50,6 +50,40 @@ function formatValue(val: unknown): string {
   if (Array.isArray(val)) return val.length > 0 ? val.join(", ") : "—";
   if (typeof val === "boolean") return val ? "Sim" : "Não";
   return String(val);
+}
+
+function isEmptyValue(val: unknown): boolean {
+  if (val === null || val === undefined || val === "") return true;
+  if (Array.isArray(val) && val.length === 0) return true;
+  return false;
+}
+
+/** Cycle palette for section side bands. Sections are coloured by index in order. */
+const SECTION_COLORS = [
+  "#6366f1", "#3b82f6", "#06b6d4", "#f59e0b", "#ec4899",
+  "#d946ef", "#a855f7", "#8b5cf6", "#f97316", "#84cc16",
+  "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6", "#ef4444",
+];
+
+/** Field-key → tag map. Tags appear inline next to the answer in read mode. */
+type TagStyle = { label: string; bg: string; color: string };
+const ORANGE: TagStyle = { label: "Atenção", bg: "#ffedd5", color: "#c2410c" };
+const MEDICATION: TagStyle = { label: "Medicação", bg: "#ffedd5", color: "#c2410c" };
+const YELLOW: TagStyle = { label: "Diagnóstico", bg: "#fef3c7", color: "#92400e" };
+const BLUE_MAIN: TagStyle = { label: "Principal", bg: "#dbeafe", color: "#1e40af" };
+const BLUE_OBJ: TagStyle = { label: "Objectivo", bg: "#dbeafe", color: "#1e40af" };
+const BLUE_CONCERN: TagStyle = { label: "Preocupação", bg: "#dbeafe", color: "#1e40af" };
+
+function getFieldTag(fieldKey: string): TagStyle | null {
+  const k = fieldKey.toLowerCase();
+  if (k.includes("medicac") || k.includes("medication")) return MEDICATION;
+  if (k.includes("alerg") || k.includes("allerg")) return ORANGE;
+  if (k.includes("cronic") || k.includes("chronic") || k.includes("hipertens")) return ORANGE;
+  if (k.includes("diagnost")) return YELLOW;
+  if (k === "reason" || k.includes("queixa") || k.includes("motivo")) return BLUE_MAIN;
+  if (k.includes("expect") || k === "objective" || k.includes("objectiv")) return BLUE_OBJ;
+  if (k.includes("concern") || k.includes("preocup")) return BLUE_CONCERN;
+  return null;
 }
 
 function ChangeHistorySection({ pacienteId, labelMap }: { pacienteId: string; labelMap: Record<string, string> }) {
@@ -502,15 +536,31 @@ export function FullQuestionnaireView({
 
   const renderFieldRead = (sectionId: string, field: TemplateField) => {
     const value = respostas[sectionId]?.[field.key];
+    const empty = isEmptyValue(value);
+    const tag = !empty ? getFieldTag(field.key) : null;
     return (
       <div key={field.key} className="space-y-0.5">
-        <p className="text-xs text-muted-foreground">{field.label}</p>
+        <p className="text-xs font-semibold text-slate-800">{field.label}</p>
         {field.helpText && (
-          <p className="text-[11px] text-muted-foreground/80 italic leading-relaxed whitespace-pre-line">
+          <p className="text-[11px] text-slate-400 italic leading-relaxed whitespace-pre-line">
             {field.helpText}
           </p>
         )}
-        <p className="text-sm font-medium whitespace-pre-line">{formatValue(value)}</p>
+        <div className="flex items-start gap-2 flex-wrap">
+          {empty ? (
+            <p className="text-sm italic text-slate-300">— não preenchido</p>
+          ) : (
+            <p className="text-sm font-semibold text-blue-600 whitespace-pre-line">{formatValue(value)}</p>
+          )}
+          {tag && (
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
+              style={{ backgroundColor: tag.bg, color: tag.color }}
+            >
+              {tag.label}
+            </span>
+          )}
+        </div>
       </div>
     );
   };
@@ -606,9 +656,39 @@ export function FullQuestionnaireView({
     );
   };
 
+  // Build top-of-page alert pills from filled critical fields.
+  // Read-only scan — never mutates respostas. Excluded in print via .anamnese-print-hide.
+  const alertBadges: Array<{ key: string; label: string; value: string; bg: string; color: string }> = [];
+  if (!editing) {
+    for (const section of questionSections) {
+      for (const field of section.fields) {
+        const v = respostas[section.id]?.[field.key];
+        if (isEmptyValue(v)) continue;
+        const k = field.key.toLowerCase();
+        const valStr = Array.isArray(v) ? v.join(", ") : String(v);
+        if (k.includes("medicac") || k.includes("medication")) {
+          alertBadges.push({ key: `${section.id}.${field.key}`, label: "Medicação", value: valStr, bg: "#ffedd5", color: "#c2410c" });
+        } else if (k.includes("diagnost")) {
+          alertBadges.push({ key: `${section.id}.${field.key}`, label: "Diagnóstico", value: valStr, bg: "#fef3c7", color: "#92400e" });
+        } else if (k.includes("alerg") || k.includes("allerg")) {
+          // Only flag as critical when the answer is not a clear "no/none/nenhuma" response.
+          const lower = valStr.toLowerCase().trim();
+          const negatives = ["nao", "não", "nenhum", "nenhuma", "sem", "n/a", "na", "—", "-", "no", "none"];
+          if (!negatives.includes(lower)) {
+            alertBadges.push({ key: `${section.id}.${field.key}`, label: "Alergia", value: valStr, bg: "#fee2e2", color: "#b91c1c" });
+          }
+        }
+      }
+    }
+  }
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
-    <Card className="border-blue-200 bg-blue-50/40">
-      <CardHeader className="pb-3">
+    <Card className="border-blue-200 bg-blue-50/40 anamnese-print-area">
+      <CardHeader className="pb-3 anamnese-print-hide">
         <div className="flex items-center gap-2 flex-wrap">
           <FileText className="h-5 w-5 text-blue-600" />
           <CardTitle className="font-display text-lg text-blue-900">
@@ -632,11 +712,18 @@ export function FullQuestionnaireView({
                   {questionario?.completo ? "Guardar" : "Concluir"}
                 </Button>
               </>
-            ) : canEdit ? (
-              <Button variant="ghost" size="sm" onClick={startEdit}>
-                <Pencil className="h-4 w-4 mr-1" /> Editar
-              </Button>
-            ) : null}
+            ) : (
+              <>
+                <Button variant="outline" size="sm" onClick={handlePrint}>
+                  <Printer className="h-4 w-4 mr-1" /> Imprimir / PDF
+                </Button>
+                {canEdit && (
+                  <Button variant="ghost" size="sm" onClick={startEdit}>
+                    <Pencil className="h-4 w-4 mr-1" /> Editar
+                  </Button>
+                )}
+              </>
+            )}
           </div>
         </div>
         {lastUpdate && !editing && (
@@ -646,47 +733,75 @@ export function FullQuestionnaireView({
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Alert badges banner — hidden during edit and in print to keep the printout focused on content. */}
+        {!editing && alertBadges.length > 0 && (
+          <div className="anamnese-print-hide flex flex-wrap gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
+            {alertBadges.map((b) => (
+              <span
+                key={b.key}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+                style={{ backgroundColor: b.bg, color: b.color }}
+                title={b.value}
+              >
+                <strong>{b.label}:</strong>
+                <span className="truncate max-w-[220px]">{b.value}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
         {guidanceSections.map((section) => (
-          <div key={section.id} className="rounded-lg border-t-4 border-t-primary bg-background p-4 space-y-3">
-            <h2 className="text-2xl font-semibold tracking-normal text-foreground">{section.title}</h2>
+          <div
+            key={section.id}
+            className="anamnese-section rounded-xl bg-white p-4 space-y-2 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-shadow"
+            style={{ borderLeft: "4px solid #2563eb", background: editing ? "white" : "linear-gradient(135deg, #eff6ff, #f0f9ff)" }}
+          >
+            <h2 className="text-lg font-bold text-blue-900">{section.title}</h2>
             {section.intro && (
-              <p className="text-base text-foreground leading-relaxed whitespace-pre-line">
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
                 {section.intro}
               </p>
             )}
             {section.description && (
-              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+              <p className="text-xs text-slate-500 leading-relaxed whitespace-pre-line">
                 {section.description}
               </p>
             )}
           </div>
         ))}
 
-        {questionSections.map((section) => (
-          <div key={section.id} className="rounded-lg border bg-background/60 p-3 space-y-3">
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold">{section.title}</h3>
-              {section.description && (
-                <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {section.description}
-                </p>
-              )}
-              {section.intro && (
-                <p className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-line pt-1 border-l-2 border-primary/30 pl-2">
-                  {section.intro}
-                </p>
-              )}
+        {questionSections.map((section, idx) => {
+          const bandColor = SECTION_COLORS[idx % SECTION_COLORS.length];
+          return (
+            <div
+              key={section.id}
+              className="anamnese-section rounded-xl bg-white p-4 space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-shadow"
+              style={{ borderLeft: `4px solid ${bandColor}` }}
+            >
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-800">{section.title}</h3>
+                {section.description && (
+                  <p className="text-xs text-slate-500 leading-relaxed whitespace-pre-line">
+                    {section.description}
+                  </p>
+                )}
+                {section.intro && (
+                  <div className="text-xs text-slate-600 italic leading-relaxed whitespace-pre-line bg-slate-50 rounded-md px-3 py-2 mt-1">
+                    {section.intro}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                {section.fields.map((field) => editing
+                  ? renderFieldEdit(section.id, field)
+                  : renderFieldRead(section.id, field))}
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-              {section.fields.map((field) => editing
-                ? renderFieldEdit(section.id, field)
-                : renderFieldRead(section.id, field))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {!editing && (
-          <div className="border-t border-blue-200 pt-3">
+          <div className="border-t border-blue-200 pt-3 anamnese-print-hide">
             <ChangeHistorySection pacienteId={pacienteId} labelMap={labelMap} />
           </div>
         )}
