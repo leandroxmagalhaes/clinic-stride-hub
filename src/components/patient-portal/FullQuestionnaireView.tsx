@@ -770,28 +770,35 @@ export function FullQuestionnaireView({
           </div>
         ))}
 
-        {questionSections.map((section) => (
-          <div key={section.id} className="rounded-lg border bg-background/60 p-3 space-y-3">
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold">{section.title}</h3>
-              {section.description && (
-                <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {section.description}
-                </p>
-              )}
-              {section.intro && (
-                <p className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-line pt-1 border-l-2 border-primary/30 pl-2">
-                  {section.intro}
-                </p>
-              )}
+        {questionSections.map((section, idx) => {
+          const bandColor = SECTION_COLORS[idx % SECTION_COLORS.length];
+          return (
+            <div
+              key={section.id}
+              className="anamnese-section rounded-xl bg-white p-4 space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-shadow"
+              style={{ borderLeft: `4px solid ${bandColor}` }}
+            >
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-800">{section.title}</h3>
+                {section.description && (
+                  <p className="text-xs text-slate-500 leading-relaxed whitespace-pre-line">
+                    {section.description}
+                  </p>
+                )}
+                {section.intro && (
+                  <div className="text-xs text-slate-600 italic leading-relaxed whitespace-pre-line bg-slate-50 rounded-md px-3 py-2 mt-1">
+                    {section.intro}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                {section.fields.map((field) => editing
+                  ? renderFieldEdit(section.id, field)
+                  : renderFieldRead(section.id, field))}
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-              {section.fields.map((field) => editing
-                ? renderFieldEdit(section.id, field)
-                : renderFieldRead(section.id, field))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {!editing && (
           <div className="border-t border-blue-200 pt-3">
