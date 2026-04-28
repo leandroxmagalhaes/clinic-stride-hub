@@ -78,7 +78,7 @@ export function EditEvolutionModal({
   const [evolutionDate, setEvolutionDate] = useState<string>("");
   const [evolutionTime, setEvolutionTime] = useState<string>("");
   const [descricao, setDescricao] = useState("");
-  const [escalaDor, setEscalaDor] = useState(5);
+  const [escalaDor, setEscalaDor] = useState(0);
   const [structuredData, setStructuredData] = useState<StructuredData>({});
 
   // Carrega templates e pré-preenche com dados da evolução existente
@@ -107,7 +107,7 @@ export function EditEvolutionModal({
 
       // Pré-preenche com dados existentes
       setDescricao(evolution.descricao || "");
-      setEscalaDor(evolution.escala_dor ?? 5);
+      setEscalaDor(evolution.escala_dor ?? 0);
 
       // Data e hora a partir do created_at existente
       const { date, time } = splitDateTime(evolution.created_at);
@@ -174,7 +174,7 @@ export function EditEvolutionModal({
 
   const handleClose = () => {
     setDescricao("");
-    setEscalaDor(5);
+    setEscalaDor(0);
     setStructuredData({});
     setSelectedTemplateId("");
     setEvolutionDate("");
