@@ -441,17 +441,35 @@ export default function Prontuarios() {
     <AppLayout title="Prontuários" subtitle="Histórico clínico dos pacientes">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
         {/* Lista de pacientes */}
-        <div className={cn("lg:col-span-4 space-y-4", selectedProntuario && "hidden lg:block")}>
+        <div
+          className={cn(
+            "lg:col-span-4 space-y-4 transition-all duration-300",
+            selectedProntuario && "hidden lg:block",
+            patientsCollapsed && "lg:hidden",
+          )}
+        >
           <Card className="shadow-card">
             <CardContent className="p-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar utente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar utente..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden lg:inline-flex h-9 w-9 text-muted-foreground hover:text-primary shrink-0"
+                  onClick={() => setPatientsCollapsed(true)}
+                  title="Recolher lista de utentes (Ctrl+\\)"
+                  aria-label="Recolher lista de utentes"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
