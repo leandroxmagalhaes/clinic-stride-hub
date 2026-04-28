@@ -215,31 +215,84 @@
 
 /* ===== Anamnese Print Styles =====
    Used by FullQuestionnaireView when the user clicks "Imprimir / PDF".
-   Hides app chrome and renders only the .anamnese-print-area cleanly. */
+   The handler adds `printing-anamnese` to <html> so we can hide app chrome
+   without using `position: absolute` (which breaks multi-page pagination). */
 @media print {
-  @page { margin: 12mm; }
-  body { background: white !important; }
-  /* Hide everything by default... */
-  body * { visibility: hidden !important; }
-  /* ...then reveal only the print area and its descendants. */
-  .anamnese-print-area, .anamnese-print-area * { visibility: visible !important; }
-  .anamnese-print-area {
-    position: absolute !important;
-    left: 0; top: 0; right: 0;
-    width: 100% !important;
-    padding: 0 !important;
+  @page { size: A4; margin: 12mm; }
+
+  html, body {
+    background: white !important;
     margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Force colors (badges, side bands, tags) to print accurately. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Always-hidden elements during print. */
+  .anamnese-print-hide {
+    display: none !important;
+  }
+
+  /* When in anamnese print mode: hide every top-level node that does NOT
+     contain the print area. The print area itself stays in the natural
+     document flow so the browser paginates it correctly across pages. */
+  html.printing-anamnese body > *:not(:has(.anamnese-print-area)) {
+    display: none !important;
+  }
+
+  /* Remove height/overflow constraints from every ancestor so the printable
+     content can flow over multiple pages instead of being clipped. */
+  html.printing-anamnese,
+  html.printing-anamnese body,
+  html.printing-anamnese :has(.anamnese-print-area) {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Hide common app chrome that may sit inside the same subtree as the
+     print area (sidebars, floating buttons, sticky headers, FABs). */
+  html.printing-anamnese [data-sidebar],
+  html.printing-anamnese aside,
+  html.printing-anamnese nav,
+  html.printing-anamnese .fixed,
+  html.printing-anamnese [role="toolbar"],
+  html.printing-anamnese button[aria-label*="Copilot" i] {
+    display: none !important;
+  }
+
+  .anamnese-print-area {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: white !important;
     color: #1e293b !important;
+    box-shadow: none !important;
+    border: none !important;
+    display: block !important;
+    overflow: visible !important;
   }
-  .anamnese-print-hide { display: none !important; }
+
   .anamnese-section {
     box-shadow: none !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
     background: white !important;
     border: 1px solid #e2e8f0 !important;
     margin-bottom: 10px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .anamnese-section:hover { box-shadow: none !important; }
+
+  /* Inline gradients (welcome cards) don't print reliably — flatten to white. */
+  .anamnese-section[style*="gradient"] {
+    background: white !important;
+  }
 }
