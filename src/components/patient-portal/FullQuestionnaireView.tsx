@@ -52,6 +52,40 @@ function formatValue(val: unknown): string {
   return String(val);
 }
 
+function isEmptyValue(val: unknown): boolean {
+  if (val === null || val === undefined || val === "") return true;
+  if (Array.isArray(val) && val.length === 0) return true;
+  return false;
+}
+
+/** Cycle palette for section side bands. Sections are coloured by index in order. */
+const SECTION_COLORS = [
+  "#6366f1", "#3b82f6", "#06b6d4", "#f59e0b", "#ec4899",
+  "#d946ef", "#a855f7", "#8b5cf6", "#f97316", "#84cc16",
+  "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6", "#ef4444",
+];
+
+/** Field-key → tag map. Tags appear inline next to the answer in read mode. */
+type TagStyle = { label: string; bg: string; color: string };
+const ORANGE: TagStyle = { label: "Atenção", bg: "#ffedd5", color: "#c2410c" };
+const MEDICATION: TagStyle = { label: "Medicação", bg: "#ffedd5", color: "#c2410c" };
+const YELLOW: TagStyle = { label: "Diagnóstico", bg: "#fef3c7", color: "#92400e" };
+const BLUE_MAIN: TagStyle = { label: "Principal", bg: "#dbeafe", color: "#1e40af" };
+const BLUE_OBJ: TagStyle = { label: "Objectivo", bg: "#dbeafe", color: "#1e40af" };
+const BLUE_CONCERN: TagStyle = { label: "Preocupação", bg: "#dbeafe", color: "#1e40af" };
+
+function getFieldTag(fieldKey: string): TagStyle | null {
+  const k = fieldKey.toLowerCase();
+  if (k.includes("medicac") || k.includes("medication")) return MEDICATION;
+  if (k.includes("alerg") || k.includes("allerg")) return ORANGE;
+  if (k.includes("cronic") || k.includes("chronic") || k.includes("hipertens")) return ORANGE;
+  if (k.includes("diagnost")) return YELLOW;
+  if (k === "reason" || k.includes("queixa") || k.includes("motivo")) return BLUE_MAIN;
+  if (k.includes("expect") || k === "objective" || k.includes("objectiv")) return BLUE_OBJ;
+  if (k.includes("concern") || k.includes("preocup")) return BLUE_CONCERN;
+  return null;
+}
+
 function ChangeHistorySection({ pacienteId, labelMap }: { pacienteId: string; labelMap: Record<string, string> }) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
