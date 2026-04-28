@@ -167,27 +167,29 @@ export class QuestionnaireTemplateService {
     // template, so a clinician resending a different model actually takes effect.
     const { data: q } = await (supabase as any)
       .from("portal_questionario")
-      .select("template_id, perfil_tipo, respostas, dados_pessoais, perfil_saude, expectativas, updated_at")
+      .select("id, template_id, perfil_tipo, respostas, updated_at, created_at")
       .eq("paciente_id", pacienteId)
       .maybeSingle();
 
-    const hasAnswers = (() => {
-      const buckets = [q?.respostas, q?.dados_pessoais, q?.perfil_saude, q?.expectativas];
-      return buckets.some((b) => {
-        if (!b || typeof b !== "object") return false;
-        if (Array.isArray(b)) return b.length > 0;
-        // For respostas (sectionId -> {fieldKey:value}) and legacy flat objects
-        const values = Object.values(b as Record<string, any>);
-        return values.some((v) => {
+    // Only count *clinical* answers (the dynamic `respostas` bucket).
+    // Legacy `dados_pessoais` / `perfil_saude` / `expectativas` are identification
+    // buckets populated by onboarding flows — they must NOT lock the template,
+    // otherwise a clinician can never correct a wrong model by resending the invite.
+    const hasClinicalAnswers = (() => {
+      const r = q?.respostas;
+      if (!r || typeof r !== "object" || Array.isArray(r)) return false;
+      // Shape: { sectionId: { fieldKey: value } }
+      return Object.values(r as Record<string, any>).some((section) => {
+        if (!section || typeof section !== "object") return false;
+        return Object.values(section as Record<string, any>).some((v) => {
           if (v === null || v === undefined || v === "") return false;
           if (Array.isArray(v)) return v.length > 0;
-          if (typeof v === "object") return Object.values(v).some((x) => x !== null && x !== undefined && x !== "");
           return true;
         });
       });
     })();
 
-    // Most recent invite with template_id (used as override only when no answers)
+    // Most recent invite with template_id
     const { data: inv } = await (supabase as any)
       .from("portal_convites")
       .select("template_id, created_at")
@@ -197,10 +199,38 @@ export class QuestionnaireTemplateService {
       .limit(1)
       .maybeSingle();
 
-    if (q && !hasAnswers && inv?.template_id) {
-      // Empty questionnaire shell — let the latest invite's template win
-      const t = await this.getById(inv.template_id);
-      if (t) return t;
+    // Best-effort sync: persist the resolved template back onto the questionnaire
+    // so subsequent reads are stable and the badge in the portal matches what the
+    // patient is actually filling. Never throws — UI always gets the right template.
+    const syncResolvedTemplate = async (tpl: QuestionnaireTemplate) => {
+      try {
+        if (!q?.id) return;
+        if (q.template_id === tpl.id && q.perfil_tipo === tpl.identifier) return;
+        await (supabase as any)
+          .from("portal_questionario")
+          .update({ template_id: tpl.id, perfil_tipo: tpl.identifier })
+          .eq("id", q.id);
+      } catch {
+        // ignore
+      }
+    };
+
+    // Override rule: a clinician-issued invite that is NEWER than the
+    // questionnaire's last update wins, as long as the patient hasn't filled any
+    // clinical answers yet. Lets professionals fix a wrong model by reissuing
+    // the invite with the right template.
+    if (q && inv?.template_id && !hasClinicalAnswers) {
+      const inviteIsNewer = inv.created_at && q.updated_at
+        ? new Date(inv.created_at).getTime() > new Date(q.updated_at).getTime()
+        : true;
+      const inviteTemplateDiffers = inv.template_id !== q.template_id;
+      if (inviteIsNewer || inviteTemplateDiffers) {
+        const t = await this.getById(inv.template_id);
+        if (t) {
+          await syncResolvedTemplate(t);
+          return t;
+        }
+      }
     }
 
     if (q?.template_id) {
@@ -210,7 +240,10 @@ export class QuestionnaireTemplateService {
     if (q?.perfil_tipo) {
       const identifier = this.identifierForPerfil(q.perfil_tipo);
       const t = await this.getByIdentifier(identifier);
-      if (t) return t;
+      if (t) {
+        await syncResolvedTemplate(t);
+        return t;
+      }
     }
 
     if (!q && inv?.template_id) {
