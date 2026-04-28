@@ -67,7 +67,7 @@ export function NewEvolutionModal({
   const hasPatientSpecialty = !!patientSpecialtyId;
 
   const [descricao, setDescricao] = useState("");
-  const [escalaDor, setEscalaDor] = useState(5);
+  const [escalaDor, setEscalaDor] = useState(0);
   const [structuredData, setStructuredData] = useState<StructuredData>({});
   const [evolutionDate, setEvolutionDate] = useState<string>(prefilledDate || todayDateString());
   const [evolutionTime, setEvolutionTime] = useState<string>(nowTimeString());
@@ -172,7 +172,7 @@ export function NewEvolutionModal({
 
   const resetForm = () => {
     setDescricao("");
-    setEscalaDor(5);
+    setEscalaDor(0);
     setStructuredData({});
     setSoapSuggestion(null);
     setRawTranscription(null);
