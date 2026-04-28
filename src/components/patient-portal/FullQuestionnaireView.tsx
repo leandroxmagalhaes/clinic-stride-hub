@@ -123,6 +123,130 @@ export function FullQuestionnaireView({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Record<string, Record<string, any>>>({});
+  const [patientRecord, setPatientRecord] = useState<any>(null);
+
+  /**
+   * Map DB gender ('M'/'F'/'O') to template option labels ('Masculino'/'Feminino'/'Outro').
+   * Returns null if the DB value can't be mapped — caller skips autofill in that case.
+   */
+  const mapGenderToOption = (g?: string | null): string | null => {
+    if (!g) return null;
+    const v = String(g).trim().toUpperCase();
+    if (v === "M" || v === "MASCULINO") return "Masculino";
+    if (v === "F" || v === "FEMININO") return "Feminino";
+    if (v === "O" || v === "OUTRO") return "Outro";
+    return null;
+  };
+
+  /**
+   * Per-template autofill map: section_id → { field_key → patient_value }.
+   * Only fields that exist in the actual template schemas (verified against DB).
+   * Caller applies these ONLY to empty fields — never overwrites existing answers.
+   */
+  const buildAutofillMap = (
+    identifier: string | undefined,
+    p: any
+  ): Record<string, Record<string, any>> => {
+    if (!identifier || !p) return {};
+    const nif = p.billing_nif || p.cpf || null;
+    const gender = mapGenderToOption(p.gender);
+    // Try to split address "Street, Locality, Postal Code" if billing_address JSONB is missing
+    const billing = p.billing_address && typeof p.billing_address === "object" ? p.billing_address : {};
+
+    switch (identifier) {
+      case "template_adult":
+        return {
+          identification: {
+            full_name: p.full_name,
+            birth_date: p.birth_date,
+            gender,
+            phone: p.phone,
+            email: p.email,
+            nif,
+            address: billing.street || p.address,
+            locality: billing.locality || billing.city,
+            postal_code: billing.postal_code,
+          },
+        };
+      case "template_child":
+        return {
+          identification: {
+            full_name: p.full_name,
+            birth_date: p.birth_date,
+            gender,
+            address: billing.street || p.address,
+            locality: billing.locality || billing.city,
+            postal_code: billing.postal_code,
+            guardian_name: p.emergency_contact,
+            guardian_phone: p.emergency_phone || p.phone,
+            guardian_email: p.email,
+            guardian_nif: nif,
+          },
+        };
+      case "template_elderly":
+        return {
+          identification: {
+            full_name: p.full_name,
+            birth_date: p.birth_date,
+            gender,
+            phone: p.phone,
+            email: p.email,
+            nif,
+            address: billing.street || p.address,
+            locality: billing.locality || billing.city,
+            postal_code: billing.postal_code,
+            caregiver_name: p.emergency_contact,
+            caregiver_phone: p.emergency_phone,
+          },
+        };
+      case "template_baby_complete":
+        return {
+          identificacao_menor: {
+            nome_completo: p.full_name,
+            data_nascimento: p.birth_date,
+            sexo: gender,
+            morada: billing.street || p.address,
+            localidade: billing.locality || billing.city,
+            codigo_postal: billing.postal_code,
+          },
+          filiacao: {
+            filiacao_telemovel: p.emergency_phone || p.phone,
+            filiacao_email: p.email,
+            responsavel_financeiro_nome: p.billing_name || p.emergency_contact,
+            responsavel_financeiro_nif: nif,
+          },
+        };
+      default:
+        return {};
+    }
+  };
+
+  /**
+   * Merge patient autofill into `answers`, ONLY filling empty/missing fields.
+   * Never overwrites values already present (filled by patient or professional).
+   * Returns a new object — does not mutate the input.
+   */
+  const applyPatientAutofill = (
+    answers: Record<string, Record<string, any>>,
+    identifier: string | undefined,
+    p: any
+  ): Record<string, Record<string, any>> => {
+    const autofill = buildAutofillMap(identifier, p);
+    if (Object.keys(autofill).length === 0) return answers;
+    const next: Record<string, Record<string, any>> = JSON.parse(JSON.stringify(answers || {}));
+    for (const [sectionId, fields] of Object.entries(autofill)) {
+      const existing = next[sectionId] || {};
+      for (const [key, value] of Object.entries(fields)) {
+        if (value === null || value === undefined || value === "") continue;
+        const cur = existing[key];
+        const isEmpty = cur === undefined || cur === null || cur === "" ||
+          (Array.isArray(cur) && cur.length === 0);
+        if (isEmpty) existing[key] = value;
+      }
+      next[sectionId] = existing;
+    }
+    return next;
+  };
 
   const load = async () => {
     setLoading(true);
