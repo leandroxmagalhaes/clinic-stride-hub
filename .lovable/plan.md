@@ -1,124 +1,70 @@
-## Objetivo
+## Problema
 
-Tornar a coluna de pacientes (lista do meio) na página `Prontuários` recolhível, libertando espaço para a área principal (ficha/anamnese), com persistência em localStorage. Apenas frontend, apenas em `Prontuarios.tsx`.
+Na página `Pacientes`, os 6 botões de acção são passados via `AppLayout actions` → renderizados na `PersistentHeader` (header global, sticky, h-14). A header também contém: SidebarTrigger, título "Pacientes" + contador, campo global "Buscar..." (w-64) e o sino de notificações. Em 1560px largo, o conjunto de botões não cabe e sobrepõe-se visualmente ao título, ao input de busca e ao sino.
 
-## Estrutura atual (resumo)
+## Solução
 
-`src/pages/Prontuarios.tsx` usa um grid responsivo:
+Mover a barra de acções da página `Pacientes` para **fora** da header global, transformando-a numa **toolbar dedicada no topo do conteúdo da página** (Linha 2). A header global passa a mostrar apenas título + subtítulo + busca global + sino (Linha 1, sem sobreposição).
 
-```text
-<div class="grid lg:grid-cols-12 gap-6">
-  <div class="lg:col-span-4">  ← lista de pacientes
-  <div class="lg:col-span-8">  ← área principal (ficha)
-</div>
-```
+Alteração isolada a `src/pages/Pacientes.tsx`. Nenhum outro ficheiro tocado. Funcionalidade dos botões preservada — só muda onde são renderizados.
 
-Em mobile, já existe lógica de esconder a lista quando há paciente seleccionado (`hidden lg:block`). Vamos preservar isso — o toggle só actua em `lg:` e acima.
+## Alterações em `src/pages/Pacientes.tsx`
 
-## Alterações (ficheiro único: `src/pages/Prontuarios.tsx`)
+### 1. Remover `actions` do `AppLayout`
 
-### 1. Estado persistente
+Tanto no estado de `isLoading` (linhas ~347-364) como no return principal (linhas ~368-429), retirar a prop `actions` do `<AppLayout>`. Manter `title` e `subtitle`.
 
-Adicionar:
+### 2. Extrair os botões para um JSX local
 
-```ts
-const [patientsCollapsed, setPatientsCollapsed] = useState<boolean>(() => {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem("prontuarios-patients-collapsed") === "true";
-});
+Definir um bloco `actionsBar` (ou inline no JSX) com os mesmos 6 botões e a mesma lógica `onClick` actual — copiar tal e qual de dentro de `actions={...}`:
 
-useEffect(() => {
-  localStorage.setItem("prontuarios-patients-collapsed", String(patientsCollapsed));
-}, [patientsCollapsed]);
-```
+- Verificar Duplicados
+- Relatório
+- Link Genérico (com estado `genericLinkCopied`)
+- Enviar Link
+- Importar Planilha
+- + Novo Paciente
 
-### 2. Importar ícones
+Sem alterar handlers, ícones, labels ou estados.
 
-Adicionar `PanelLeftClose` e `PanelLeftOpen` ao import do `lucide-react`.
+### 3. Render no topo do `children`
 
-### 3. Tornar o grid dinâmico
-
-Trocar as classes fixas pelas condicionais:
-
-- Wrapper grid: manter `grid grid-cols-1 lg:grid-cols-12 gap-6`.
-- Lista (col esquerda):
-  - Quando expandida: `lg:col-span-4` (atual).
-  - Quando recolhida: `hidden` em todos os breakpoints onde `lg:` aplica (i.e. `lg:hidden`), mas mantendo o comportamento mobile actual (`hidden lg:block` quando há paciente).
-  - Combinação: `selectedProntuario && "hidden lg:block"` + `patientsCollapsed && "lg:hidden"`.
-- Área principal (col direita):
-  - Quando expandida: `lg:col-span-8` (atual).
-  - Quando recolhida: `lg:col-span-12`.
-- Adicionar `transition-all duration-300` na coluna principal para a expansão ser suave.
-
-### 4. Botão de recolher (dentro da lista)
-
-No topo do `Card` de pesquisa (à direita do `Input`), adicionar um botão pequeno e discreto:
+Dentro do return, renderizar a toolbar como primeiro filho do conteúdo, antes do `Card` de pesquisa:
 
 ```tsx
-<Button
-  variant="ghost"
-  size="icon"
-  className="hidden lg:inline-flex h-8 w-8 text-muted-foreground hover:text-primary"
-  onClick={() => setPatientsCollapsed(true)}
-  title="Recolher lista de utentes"
-  aria-label="Recolher lista de utentes"
->
-  <PanelLeftClose className="h-4 w-4" />
-</Button>
+<AppLayout title="Pacientes" subtitle={`${patients.length} pacientes cadastrados`}>
+  <div className="space-y-4 animate-fade-in">
+    {/* Linha 2: toolbar de acções da página */}
+    <div className="flex items-center gap-2 flex-wrap">
+      {/* botões aqui */}
+    </div>
+
+    <Card className="shadow-card">
+      {/* campo de pesquisa local existente */}
+      ...
+    </Card>
+    ...
+  </div>
+</AppLayout>
 ```
 
-Layout: envolver o `Search`+`Input` e o botão num `flex items-center gap-2`.
+Classes da toolbar: `flex items-center gap-2 flex-wrap` — em ecrãs estreitos, os botões quebram naturalmente para a linha seguinte. Mantém a aparência visual (mesmos `variant="outline"` / default, mesmos ícones), só muda o contentor.
 
-### 5. Botão de expandir (dentro da área principal)
+### 4. Estado `isLoading`
 
-Quando `patientsCollapsed === true`, mostrar um botão flutuante no canto superior esquerdo da área principal — acima do header do paciente — visível apenas em `lg:`:
-
-```tsx
-{patientsCollapsed && (
-  <Button
-    variant="outline"
-    size="sm"
-    className="hidden lg:inline-flex gap-2 mb-2 text-muted-foreground hover:text-primary"
-    onClick={() => setPatientsCollapsed(false)}
-    title="Mostrar lista de utentes"
-  >
-    <PanelLeftOpen className="h-4 w-4" />
-    Mostrar utentes
-  </Button>
-)}
-```
-
-Posição: dentro da `div` da coluna direita, antes do `Card` de header do paciente; também aparece quando não há paciente seleccionado (estado vazio), para que o utilizador possa sempre re-expandir.
-
-### 6. Atalho de teclado (opcional, trivial)
-
-`Ctrl/Cmd + \` para alternar — só activo na rota `Prontuarios`:
-
-```ts
-useEffect(() => {
-  const onKey = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
-      e.preventDefault();
-      setPatientsCollapsed((v) => !v);
-    }
-  };
-  window.addEventListener("keydown", onKey);
-  return () => window.removeEventListener("keydown", onKey);
-}, []);
-```
+No ramo de `isLoading`, fazer o mesmo: remover `actions` do `AppLayout` e renderizar uma versão `disabled` resumida da toolbar (Importar + Novo Paciente, como hoje) acima do `<TableSkeleton />`.
 
 ## Garantias de não regressão
 
-- Nenhuma query, serviço, contexto ou tabela é tocada.
-- Nenhuma outra página partilha este layout — alteração isolada a `src/pages/Prontuarios.tsx`.
-- Mobile (`< lg`): comportamento idêntico ao actual (lista esconde quando há paciente; botão "Voltar à lista" continua a funcionar). O botão de recolher tem `hidden lg:inline-flex`, logo nunca aparece em mobile.
-- Sidebar global do Physione: não tocada.
+- Lógica, queries, handlers, modais e estados (`genericLinkCopied`, `isModalOpen`, etc.) mantêm-se idênticos.
+- Outras páginas (Agenda, Prontuários, Dashboard, etc.) continuam a usar `AppLayout actions` normalmente — não são tocadas.
+- A `PersistentHeader` global e o `AppLayout` não são alterados — apenas a página `Pacientes` deixa de usar a slot `actions`.
+- Mobile: o `flex-wrap` garante que os botões quebram para várias linhas; classes `sm:hidden`/`hidden sm:inline` dos labels já existentes continuam a encurtar os botões em mobile.
 
-## Validação
+## Validação visual
 
-- Em desktop, botão `PanelLeftClose` aparece no topo da lista; clicar recolhe e a ficha expande para 100%.
-- Botão `PanelLeftOpen` aparece no canto superior esquerdo da ficha; clicar restaura a lista.
-- Transição animada (300ms) entre estados.
-- Refresh da página mantém o estado (localStorage).
-- Em mobile, nada muda visualmente vs hoje.
-- Outras páginas inalteradas.
+- [ ] Header global em `/pacientes` mostra apenas: trigger sidebar, "Pacientes" + "242 pacientes cadastrados", campo busca global, sino — sem sobreposição.
+- [ ] Logo abaixo do header surge a fila com os 6 botões de acção, alinhada à esquerda, com `gap` consistente.
+- [ ] Em viewports < 1024px os botões quebram para múltiplas linhas (`flex-wrap`).
+- [ ] Cada botão mantém comportamento (abrir modal correspondente, copiar link, etc.).
+- [ ] Outras páginas inalteradas — header continua a mostrar acções dessas páginas.

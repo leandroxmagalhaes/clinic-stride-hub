@@ -344,22 +344,17 @@ export default function Pacientes() {
 
   if (isLoading) {
     return (
-      <AppLayout
-        title="Pacientes"
-        subtitle="Carregando..."
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline" disabled className="gap-2">
-              <FileUp className="h-4 w-4" />
-              <span className="hidden sm:inline">Importar Planilha</span>
-            </Button>
-            <Button disabled className="gap-2">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Novo Paciente</span>
-            </Button>
-          </div>
-        }
-      >
+      <AppLayout title="Pacientes" subtitle="Carregando...">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" disabled className="gap-2">
+            <FileUp className="h-4 w-4" />
+            <span className="hidden sm:inline">Importar Planilha</span>
+          </Button>
+          <Button disabled className="gap-2">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Novo Paciente</span>
+          </Button>
+        </div>
         <TableSkeleton rows={6} />
       </AppLayout>
     );
@@ -369,8 +364,10 @@ export default function Pacientes() {
     <AppLayout
       title="Pacientes"
       subtitle={`${patients.length} pacientes cadastrados`}
-      actions={
-        <div className="flex gap-2 flex-wrap">
+    >
+      <div className="space-y-4 animate-fade-in">
+        {/* Toolbar de acções da página (Linha 2 — fora do header global) */}
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" onClick={() => setIsDuplicateModalOpen(true)} className="gap-2 min-h-[44px]">
             <Users className="h-4 w-4" />
             <span className="hidden sm:inline">Verificar Duplicados</span>
@@ -425,9 +422,7 @@ export default function Pacientes() {
             <span className="sm:hidden">Novo</span>
           </Button>
         </div>
-      }
-    >
-      <div className="space-y-4 animate-fade-in">
+
         <Card className="shadow-card">
           <CardContent className="p-4">
             <div className="relative">
