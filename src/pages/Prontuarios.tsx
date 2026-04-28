@@ -87,6 +87,25 @@ export default function Prontuarios() {
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
   const [aiSummary, setAiSummary] = useState<AIClinicalSummary | null>(null);
   const [upcomingSession, setUpcomingSession] = useState<{ id: string; patientId: string } | null>(null);
+  const [patientsCollapsed, setPatientsCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("prontuarios-patients-collapsed") === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("prontuarios-patients-collapsed", String(patientsCollapsed));
+  }, [patientsCollapsed]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        setPatientsCollapsed((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     SpecialtyService.getTemplates().then(setTemplates).catch(console.error);
