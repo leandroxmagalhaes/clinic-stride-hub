@@ -24,6 +24,8 @@ import {
   ArrowUp,
   Paperclip,
   BookOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -85,6 +87,25 @@ export default function Prontuarios() {
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
   const [aiSummary, setAiSummary] = useState<AIClinicalSummary | null>(null);
   const [upcomingSession, setUpcomingSession] = useState<{ id: string; patientId: string } | null>(null);
+  const [patientsCollapsed, setPatientsCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("prontuarios-patients-collapsed") === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("prontuarios-patients-collapsed", String(patientsCollapsed));
+  }, [patientsCollapsed]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        setPatientsCollapsed((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     SpecialtyService.getTemplates().then(setTemplates).catch(console.error);
@@ -420,17 +441,35 @@ export default function Prontuarios() {
     <AppLayout title="Prontuários" subtitle="Histórico clínico dos pacientes">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
         {/* Lista de pacientes */}
-        <div className={cn("lg:col-span-4 space-y-4", selectedProntuario && "hidden lg:block")}>
+        <div
+          className={cn(
+            "lg:col-span-4 space-y-4 transition-all duration-300",
+            selectedProntuario && "hidden lg:block",
+            patientsCollapsed && "lg:hidden",
+          )}
+        >
           <Card className="shadow-card">
             <CardContent className="p-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar utente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar utente..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden lg:inline-flex h-9 w-9 text-muted-foreground hover:text-primary shrink-0"
+                  onClick={() => setPatientsCollapsed(true)}
+                  title="Recolher lista de utentes (Ctrl+\\)"
+                  aria-label="Recolher lista de utentes"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -486,7 +525,19 @@ export default function Prontuarios() {
         </div>
 
         {/* Detalhe */}
-        <div className="lg:col-span-8">
+        <div className={cn("transition-all duration-300", patientsCollapsed ? "lg:col-span-12" : "lg:col-span-8")}>
+          {patientsCollapsed && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden lg:inline-flex gap-2 mb-3 text-muted-foreground hover:text-primary"
+              onClick={() => setPatientsCollapsed(false)}
+              title="Mostrar lista de utentes (Ctrl+\\)"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+              Mostrar utentes
+            </Button>
+          )}
           {selectedProntuario ? (
             <div className="space-y-4">
               <Button
