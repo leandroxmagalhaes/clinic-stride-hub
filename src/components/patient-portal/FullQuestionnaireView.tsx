@@ -656,9 +656,39 @@ export function FullQuestionnaireView({
     );
   };
 
+  // Build top-of-page alert pills from filled critical fields.
+  // Read-only scan — never mutates respostas. Excluded in print via .anamnese-print-hide.
+  const alertBadges: Array<{ key: string; label: string; value: string; bg: string; color: string }> = [];
+  if (!editing) {
+    for (const section of questionSections) {
+      for (const field of section.fields) {
+        const v = respostas[section.id]?.[field.key];
+        if (isEmptyValue(v)) continue;
+        const k = field.key.toLowerCase();
+        const valStr = Array.isArray(v) ? v.join(", ") : String(v);
+        if (k.includes("medicac") || k.includes("medication")) {
+          alertBadges.push({ key: `${section.id}.${field.key}`, label: "Medicação", value: valStr, bg: "#ffedd5", color: "#c2410c" });
+        } else if (k.includes("diagnost")) {
+          alertBadges.push({ key: `${section.id}.${field.key}`, label: "Diagnóstico", value: valStr, bg: "#fef3c7", color: "#92400e" });
+        } else if (k.includes("alerg") || k.includes("allerg")) {
+          // Only flag as critical when the answer is not a clear "no/none/nenhuma" response.
+          const lower = valStr.toLowerCase().trim();
+          const negatives = ["nao", "não", "nenhum", "nenhuma", "sem", "n/a", "na", "—", "-", "no", "none"];
+          if (!negatives.includes(lower)) {
+            alertBadges.push({ key: `${section.id}.${field.key}`, label: "Alergia", value: valStr, bg: "#fee2e2", color: "#b91c1c" });
+          }
+        }
+      }
+    }
+  }
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
-    <Card className="border-blue-200 bg-blue-50/40">
-      <CardHeader className="pb-3">
+    <Card className="border-blue-200 bg-blue-50/40 anamnese-print-area">
+      <CardHeader className="pb-3 anamnese-print-hide">
         <div className="flex items-center gap-2 flex-wrap">
           <FileText className="h-5 w-5 text-blue-600" />
           <CardTitle className="font-display text-lg text-blue-900">
@@ -682,11 +712,18 @@ export function FullQuestionnaireView({
                   {questionario?.completo ? "Guardar" : "Concluir"}
                 </Button>
               </>
-            ) : canEdit ? (
-              <Button variant="ghost" size="sm" onClick={startEdit}>
-                <Pencil className="h-4 w-4 mr-1" /> Editar
-              </Button>
-            ) : null}
+            ) : (
+              <>
+                <Button variant="outline" size="sm" onClick={handlePrint}>
+                  <Printer className="h-4 w-4 mr-1" /> Imprimir / PDF
+                </Button>
+                {canEdit && (
+                  <Button variant="ghost" size="sm" onClick={startEdit}>
+                    <Pencil className="h-4 w-4 mr-1" /> Editar
+                  </Button>
+                )}
+              </>
+            )}
           </div>
         </div>
         {lastUpdate && !editing && (
@@ -696,16 +733,37 @@ export function FullQuestionnaireView({
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Alert badges banner — hidden during edit and in print to keep the printout focused on content. */}
+        {!editing && alertBadges.length > 0 && (
+          <div className="anamnese-print-hide flex flex-wrap gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
+            {alertBadges.map((b) => (
+              <span
+                key={b.key}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+                style={{ backgroundColor: b.bg, color: b.color }}
+                title={b.value}
+              >
+                <strong>{b.label}:</strong>
+                <span className="truncate max-w-[220px]">{b.value}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
         {guidanceSections.map((section) => (
-          <div key={section.id} className="rounded-lg border-t-4 border-t-primary bg-background p-4 space-y-3">
-            <h2 className="text-2xl font-semibold tracking-normal text-foreground">{section.title}</h2>
+          <div
+            key={section.id}
+            className="anamnese-section rounded-xl bg-white p-4 space-y-2 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-shadow"
+            style={{ borderLeft: "4px solid #2563eb", background: editing ? "white" : "linear-gradient(135deg, #eff6ff, #f0f9ff)" }}
+          >
+            <h2 className="text-lg font-bold text-blue-900">{section.title}</h2>
             {section.intro && (
-              <p className="text-base text-foreground leading-relaxed whitespace-pre-line">
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
                 {section.intro}
               </p>
             )}
             {section.description && (
-              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+              <p className="text-xs text-slate-500 leading-relaxed whitespace-pre-line">
                 {section.description}
               </p>
             )}
