@@ -480,7 +480,14 @@ export function FullQuestionnaireView({
             Ainda não começou a preencher o questionário. Pode iniciar agora — o progresso é guardado automaticamente.
           </p>
           {canEdit && (
-            <Button onClick={() => { setDraft({}); setEditing(true); }} className="gap-1.5">
+            <Button
+              onClick={() => {
+                const seeded = applyPatientAutofill({}, template?.identifier, patientRecord);
+                setDraft(seeded);
+                setEditing(true);
+              }}
+              className="gap-1.5"
+            >
               <Pencil className="h-4 w-4" /> Começar a preencher
             </Button>
           )}
