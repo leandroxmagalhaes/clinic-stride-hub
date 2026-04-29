@@ -317,18 +317,15 @@ export default function PortalOnboarding() {
     if (!pacienteId || !dynamicTemplate) return;
     setSaving(true);
     try {
-      await (supabase as any).from("portal_questionario").upsert({
-        paciente_id: pacienteId,
-        perfil_tipo: dynamicTemplate.identifier,
-        template_id: dynamicTemplate.id,
-        respostas,
-        completo: true,
-      }, { onConflict: "paciente_id" });
-
-      await (supabase as any).from("portal_contas").update({
-        onboarding_completo: true,
-        updated_at: new Date().toISOString(),
-      }).eq("paciente_id", pacienteId);
+      const { error } = await (supabase as any).rpc("upsert_portal_questionnaire", {
+        p_paciente_id: pacienteId,
+        p_template_id: dynamicTemplate.id,
+        p_perfil_tipo: dynamicTemplate.identifier,
+        p_respostas: respostas,
+        p_completo: true,
+        p_link_token: inviteToken || localStorage.getItem("portal_invite_token") || null,
+      });
+      if (error) throw error;
 
       // Auto-send portal link email
       if (email) {
@@ -347,6 +344,8 @@ export default function PortalOnboarding() {
       }
 
       setDynamicCompleted(true);
+      localStorage.removeItem("portal_invite_token");
+      setInviteToken(null);
     } catch (e) {
       console.error(e);
       toast.error("Erro ao guardar questionário.");
@@ -404,6 +403,7 @@ export default function PortalOnboarding() {
                 template={dynamicTemplate}
                 pacienteId={pacienteId}
                 initialAnswers={dynamicInitialAnswers || undefined}
+                inviteToken={inviteToken}
                 saving={saving}
                 onSubmit={saveDynamicAnswers}
                 onExit={() => { localStorage.removeItem("portal_paciente_id"); navigate("/patient-portal"); }}
