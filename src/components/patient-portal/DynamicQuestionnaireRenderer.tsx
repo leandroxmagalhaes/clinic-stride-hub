@@ -27,7 +27,17 @@ interface Props {
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, inviteToken, saving, onSubmit, onExit }: Props) {
-  const [answers, setAnswers] = useState<Record<string, Record<string, any>>>(initialAnswers || {});
+  const localDraftKey = pacienteId ? `portal_questionario_draft:${pacienteId}:${template.id}` : null;
+  const [answers, setAnswers] = useState<Record<string, Record<string, any>>>(() => {
+    if (initialAnswers && Object.keys(initialAnswers).length > 0) return initialAnswers;
+    if (!localDraftKey) return {};
+    try {
+      const cached = localStorage.getItem(localDraftKey);
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const dirtyRef = useRef(false);
@@ -48,6 +58,11 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
     dirtyRef.current = true;
     setAnswers((prev) => ({ ...prev, [sectionId]: { ...(prev[sectionId] || {}), [key]: value } }));
   };
+
+  useEffect(() => {
+    if (!localDraftKey || Object.keys(answers).length === 0) return;
+    localStorage.setItem(localDraftKey, JSON.stringify(answers));
+  }, [answers, localDraftKey]);
 
   // Flush helper — used by debounce, exit button, and background/pagehide events
   const flushSave = async () => {
