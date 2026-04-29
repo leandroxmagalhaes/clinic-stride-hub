@@ -8,11 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Pencil, Save, X, Plus, History, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, Pencil, Save, X, Plus, History, ChevronDown, ChevronUp, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { FullQuestionnaireView } from "@/components/patient-portal/FullQuestionnaireView";
+import { QuestionnaireTemplateService, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
 
 interface Props {
   pacienteId: string;
