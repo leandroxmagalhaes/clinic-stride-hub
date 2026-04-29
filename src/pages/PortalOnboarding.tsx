@@ -2,46 +2,16 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ChevronLeft, PartyPopper, ArrowRight, FileEdit } from "lucide-react";
+import { Loader2, PartyPopper, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
 import { DynamicQuestionnaireRenderer } from "@/components/patient-portal/DynamicQuestionnaireRenderer";
 import { DraftDetectionBanner } from "@/components/patient-portal/DraftDetectionBanner";
 import { QuestionnaireTemplateService, mergeLegacyIntoRespostas, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
 import { PortalAccountService } from "@/services/PortalAccountService";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 type ProfileType = "baby" | "child" | "adult" | "elderly";
-
-// Clickable option card
-function OptionCard({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
-        selected
-          ? "border-primary bg-primary/10 text-primary ring-1 ring-primary"
-          : "border-border bg-background text-foreground hover:border-primary/50"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-sm font-semibold text-foreground mt-4 mb-2">{children}</h3>;
-}
-
-const STEP_LABELS = ["Dados Pessoais", "Perfil de Saúde", "Expectativas", "Pronto!"];
-const STEP_TIMES = ["~2 min", "~3 min", "~1 min", ""];
 
 function detectProfile(birthDate: string): ProfileType {
   if (!birthDate) return "adult";
@@ -54,39 +24,17 @@ function detectProfile(birthDate: string): ProfileType {
 
 export default function PortalOnboarding() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pacienteId, setPacienteId] = useState<string | null>(null);
-  const [profileType, setProfileType] = useState<ProfileType>("adult");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [dynamicTemplate, setDynamicTemplate] = useState<QuestionnaireTemplate | null>(null);
   const [dynamicCompleted, setDynamicCompleted] = useState(false);
   const [dynamicInitialAnswers, setDynamicInitialAnswers] = useState<Record<string, Record<string, any>> | null>(null);
   const [resumeData, setResumeData] = useState<{ respostas: Record<string, Record<string, any>>; updatedAt: string } | null>(null);
-  const [showResumeDialog, setShowResumeDialog] = useState(false);
-  const [confirmRestart, setConfirmRestart] = useState(false);
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(() => localStorage.getItem("portal_invite_token"));
-
-  // Step 1 fields
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [nif, setNif] = useState("");
-  const [address, setAddress] = useState("");
-  const [guardianName, setGuardianName] = useState("");
-  const [guardianRelation, setGuardianRelation] = useState("");
-  const [guardianPhone, setGuardianPhone] = useState("");
-
-  // Step 2 — all profiles use jsonb
-  const [healthData, setHealthData] = useState<Record<string, any>>({});
-
-  // Step 3
-  const [expectations, setExpectations] = useState("");
-  const [concerns, setConcerns] = useState("");
-
-  const setHealth = (key: string, value: any) => setHealthData((prev) => ({ ...prev, [key]: value }));
 
   // Check for Google OAuth callback — also insert into portal_conta_pacientes
   useEffect(() => {
@@ -94,21 +42,19 @@ export default function PortalOnboarding() {
     if (pending) {
       localStorage.removeItem("portal_google_pending");
       const pid = localStorage.getItem("portal_paciente_id");
-      const inviteToken = localStorage.getItem("portal_invite_token");
+      const token = localStorage.getItem("portal_invite_token");
       if (pid) {
         supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session?.user) {
-            // Idempotente: cria conta se não existe + garante associação ao utente
             const linked = await PortalAccountService.ensureAccountAndLink({
               authUserId: session.user.id,
               pacienteId: pid,
               email: session.user.email ?? null,
               provider: "google",
-              inviteToken,
+              inviteToken: token,
             });
-            if (linked) setInviteToken(inviteToken);
+            if (linked) setInviteToken(token);
 
-            // Check dual-role
             const { data: existingProfile } = await supabase
               .from("profiles")
               .select("id, role")
@@ -150,7 +96,6 @@ export default function PortalOnboarding() {
         }
       }
 
-      // Fallback: se localStorage foi limpo, recuperar via PortalAccountService
       if (!pid) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) {
@@ -159,7 +104,6 @@ export default function PortalOnboarding() {
         }
         const resolved = await PortalAccountService.resolveForUser(session.user.id);
         if (resolved.status === "ok" && resolved.onboardingCompleto) {
-          // Já completou — vai direto para o portal
           navigate("/patient-portal");
           return;
         }
@@ -172,24 +116,17 @@ export default function PortalOnboarding() {
       }
       setPacienteId(pid);
 
-      // Load patient data
       const { data } = await supabase
         .from("pacientes")
-        .select("full_name, phone, email, birth_date, cpf, address")
+        .select("full_name, email, birth_date")
         .eq("id", pid)
         .single();
 
       if (data) {
         setFullName(data.full_name || "");
-        setPhone(data.phone || "");
         setEmail(data.email || "");
-        setBirthDate(data.birth_date || "");
-        setNif(data.cpf || "");
-        setAddress(data.address || "");
-        if (data.birth_date) setProfileType(detectProfile(data.birth_date));
       }
 
-      // Resolve the best template for this patient (questionnaire → invite → perfil/age fallback)
       try {
         const tpl = await QuestionnaireTemplateService.resolveForPatient({
           pacienteId: pid,
@@ -200,7 +137,6 @@ export default function PortalOnboarding() {
         if (tpl) {
           setDynamicTemplate(tpl);
 
-          // Load existing questionnaire (if any) to detect resume / completion
           const { data: existingQ } = await (supabase as any)
             .from("portal_questionario")
             .select("respostas, completo, updated_at, dados_pessoais, perfil_saude, expectativas, template_id")
@@ -210,7 +146,6 @@ export default function PortalOnboarding() {
           if (existingQ?.completo === true) {
             setDynamicCompleted(true);
           } else {
-            // Merge legacy fields into respostas (without overwriting existing ones)
             const baseRespostas = (existingQ?.respostas && typeof existingQ.respostas === "object") ? existingQ.respostas : {};
             const merged = mergeLegacyIntoRespostas({
               template: tpl,
@@ -231,102 +166,16 @@ export default function PortalOnboarding() {
                 respostas: merged,
                 updatedAt: existingQ?.updated_at || new Date().toISOString(),
               });
-              // Don't auto-open dialog — banner in welcome step handles it
             }
-            // Always start at welcome step (showQuestionnaire stays false until user clicks Start)
           }
         }
       } catch (e) {
-        console.warn("Failed to resolve template, falling back to legacy flow", e);
+        console.warn("Failed to resolve template", e);
       }
 
       setLoading(false);
     })();
   }, [navigate]);
-
-  const showGuardian = birthDate ? differenceInYears(new Date(), new Date(birthDate)) < 12 : false;
-
-  const handleBirthDateChange = (val: string) => {
-    setBirthDate(val);
-    setProfileType(detectProfile(val));
-  };
-
-  const saveStep1 = async () => {
-    if (!pacienteId) return;
-    setSaving(true);
-    try {
-      // Update patient record
-      await supabase.from("pacientes").update({
-        full_name: fullName,
-        phone: phone || null,
-        email: email || null,
-        birth_date: birthDate || null,
-        cpf: nif || null,
-        address: address || null,
-      }).eq("id", pacienteId);
-
-      const dadosPessoais: Record<string, any> = { fullName, phone, email, birthDate, nif, address };
-      if (showGuardian) {
-        dadosPessoais.guardian = { name: guardianName, relation: guardianRelation, phone: guardianPhone };
-      }
-
-      await (supabase as any).from("portal_questionario").upsert({
-        paciente_id: pacienteId,
-        perfil_tipo: profileType,
-        dados_pessoais: dadosPessoais,
-      }, { onConflict: "paciente_id" });
-
-      setStep(1);
-    } catch { toast.error("Erro ao guardar dados."); }
-    finally { setSaving(false); }
-  };
-
-  const saveStep2 = async () => {
-    if (!pacienteId) return;
-    setSaving(true);
-    try {
-      await (supabase as any).from("portal_questionario").update({
-        perfil_saude: healthData,
-      }).eq("paciente_id", pacienteId);
-      setStep(2);
-    } catch { toast.error("Erro ao guardar."); }
-    finally { setSaving(false); }
-  };
-
-  const saveStep3 = async () => {
-    if (!pacienteId) return;
-    setSaving(true);
-    try {
-      await (supabase as any).from("portal_questionario").update({
-        expectativas: { expectations, concerns },
-        completo: true,
-      }).eq("paciente_id", pacienteId);
-
-      await (supabase as any).from("portal_contas").update({
-        onboarding_completo: true,
-        updated_at: new Date().toISOString(),
-      }).eq("paciente_id", pacienteId);
-
-      // Auto-send portal link email
-      if (email) {
-        try {
-          await supabase.functions.invoke("send-patient-portal-link", {
-            body: {
-              to: email,
-              patientName: fullName || "Paciente",
-              subject: "Physione — O seu Portal está pronto!",
-              type: "ready",
-            },
-          });
-        } catch (e) {
-          console.error("Failed to send portal ready email:", e);
-        }
-      }
-
-      setStep(3);
-    } catch { toast.error("Erro ao guardar."); }
-    finally { setSaving(false); }
-  };
 
   const saveDynamicAnswers = async (respostas: Record<string, Record<string, any>>) => {
     if (!pacienteId || !dynamicTemplate) return;
@@ -342,7 +191,6 @@ export default function PortalOnboarding() {
       });
       if (error) throw error;
 
-      // Auto-send portal link email
       if (email) {
         try {
           await supabase.functions.invoke("send-patient-portal-link", {
@@ -378,7 +226,6 @@ export default function PortalOnboarding() {
     );
   }
 
-  // Dynamic flow — when invite has a template_id
   if (dynamicTemplate) {
     return (
       <div className="min-h-screen bg-muted/30 py-8 px-4">
@@ -425,7 +272,7 @@ export default function PortalOnboarding() {
                 onExit={() => { localStorage.removeItem("portal_paciente_id"); navigate("/patient-portal"); }}
               />
             </>
-          ) : dynamicTemplate && pacienteId ? (
+          ) : pacienteId ? (
             <Card>
               <CardContent className="pt-6 space-y-4">
                 <div className="text-center space-y-1">
@@ -489,8 +336,7 @@ export default function PortalOnboarding() {
     );
   }
 
-  // Legacy step-based flow removed — all patients now use dynamic templates.
-  // If somehow no template resolves, show a fallback message.
+  // Fallback: no template could be resolved
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="max-w-md w-full">
@@ -499,130 +345,6 @@ export default function PortalOnboarding() {
           <p className="text-sm text-muted-foreground">Contacte a clínica para receber um novo link de acesso.</p>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-// ─── PROFILE-SPECIFIC COMPONENTS ─────────────────────────────────────
-
-interface ProfileProps {
-  healthData: Record<string, any>;
-  setHealth: (key: string, value: any) => void;
-}
-
-function MultiOption({ field, options, healthData, setHealth }: ProfileProps & { field: string; options: string[] }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <OptionCard key={opt} label={opt} selected={healthData[field] === opt} onClick={() => setHealth(field, opt)} />
-      ))}
-    </div>
-  );
-}
-
-function YesNoUnsure({ field, healthData, setHealth }: ProfileProps & { field: string }) {
-  return <MultiOption field={field} options={["Sim", "Não", "Não sei"]} healthData={healthData} setHealth={setHealth} />;
-}
-
-function BabyProfile({ healthData, setHealth }: ProfileProps) {
-  return (
-    <div className="space-y-3">
-      <SectionTitle>Nascimento</SectionTitle>
-      <div>
-        <label className="text-xs text-muted-foreground mb-1 block">Semanas de gestação: <strong>{healthData.gestation || 38}</strong></label>
-        <Slider min={24} max={42} step={1} value={[healthData.gestation || 38]} onValueChange={([v]) => setHealth("gestation", v)} />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-          <span>24 (prematuro extremo)</span><span>37+ (termo)</span><span>42</span>
-        </div>
-      </div>
-      <label className="text-xs font-medium block">Tipo de parto</label>
-      <MultiOption field="deliveryType" options={["Normal", "Cesariana", "Não sei"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Parto induzido</label>
-      <YesNoUnsure field="induced" healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Instrumentos (ventosa, fórceps)</label>
-      <YesNoUnsure field="instruments" healthData={healthData} setHealth={setHealth} />
-      <div className="grid grid-cols-2 gap-3">
-        <Input placeholder="Peso ao nascer (ex: 3.200g)" value={healthData.birthWeight || ""} onChange={(e) => setHealth("birthWeight", e.target.value)} />
-        <Input placeholder="Comprimento (ex: 49cm)" value={healthData.birthLength || ""} onChange={(e) => setHealth("birthLength", e.target.value)} />
-      </div>
-
-      <SectionTitle>Alimentação e Rotina</SectionTitle>
-      <label className="text-xs font-medium block">Amamentação</label>
-      <MultiOption field="breastfeeding" options={["Leite materno exclusivo", "Misto", "Fórmula", "Já não mama"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Refluxo</label>
-      <MultiOption field="reflux" options={["Sim", "Não", "Às vezes", "Já passou"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Cólicas</label>
-      <MultiOption field="colic" options={["Sim, frequentes", "Às vezes", "Não", "Já passaram"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Sono</label>
-      <MultiOption field="sleep" options={["Dorme bem", "Acorda muito", "Dificuldade em adormecer", "Irregular"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Eliminação intestinal</label>
-      <MultiOption field="bowel" options={["Regular", "Irregular", "Com dificuldade"]} healthData={healthData} setHealth={setHealth} />
-
-      <SectionTitle>Saúde</SectionTitle>
-      <label className="text-xs font-medium block">Infecções respiratórias frequentes</label>
-      <MultiOption field="respiratoryInfections" options={["Sim", "Não", "Já teve mas resolveu"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Preferência postural</label>
-      <MultiOption field="posturalPreference" options={["Sim", "Não", "Não notei"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Vacinas em dia</label>
-      <YesNoUnsure field="vaccines" healthData={healthData} setHealth={setHealth} />
-      <Input placeholder="Alergias conhecidas (opcional)" value={healthData.allergies || ""} onChange={(e) => setHealth("allergies", e.target.value)} />
-      <Input placeholder="Medicação atual (opcional)" value={healthData.medication || ""} onChange={(e) => setHealth("medication", e.target.value)} />
-      <Input placeholder="Diagnóstico médico (ex: torcicolo congénito)" value={healthData.diagnosis || ""} onChange={(e) => setHealth("diagnosis", e.target.value)} />
-      <Textarea placeholder="Algo mais que queira partilhar? (opcional)" rows={2} value={healthData.otherNotes || ""} onChange={(e) => setHealth("otherNotes", e.target.value)} />
-    </div>
-  );
-}
-
-function ChildProfile({ healthData, setHealth }: ProfileProps) {
-  return (
-    <div className="space-y-3">
-      <label className="text-xs font-medium block">Motivo da consulta</label>
-      <Textarea placeholder="Descreva o motivo..." rows={2} value={healthData.reason || ""} onChange={(e) => setHealth("reason", e.target.value)} />
-      <label className="text-xs font-medium block">Atividade física</label>
-      <MultiOption field="activity" options={["Nenhuma", "Educação física escolar", "Desporto organizado", "Muito activa"]} healthData={healthData} setHealth={setHealth} />
-      <Input placeholder="Dificuldades escolares (opcional)" value={healthData.schoolDifficulties || ""} onChange={(e) => setHealth("schoolDifficulties", e.target.value)} />
-      <Input placeholder="Cirurgias ou internamentos (opcional)" value={healthData.surgeries || ""} onChange={(e) => setHealth("surgeries", e.target.value)} />
-      <Input placeholder="Alergias (opcional)" value={healthData.allergies || ""} onChange={(e) => setHealth("allergies", e.target.value)} />
-      <Input placeholder="Medicação (opcional)" value={healthData.medication || ""} onChange={(e) => setHealth("medication", e.target.value)} />
-      <label className="text-xs font-medium block">Vacinas em dia</label>
-      <YesNoUnsure field="vaccines" healthData={healthData} setHealth={setHealth} />
-      <Input placeholder="Diagnóstico médico (opcional)" value={healthData.diagnosis || ""} onChange={(e) => setHealth("diagnosis", e.target.value)} />
-    </div>
-  );
-}
-
-function AdultProfile({ healthData, setHealth }: ProfileProps) {
-  return (
-    <div className="space-y-3">
-      <label className="text-xs font-medium block">Motivo principal da consulta</label>
-      <Textarea placeholder="Descreva o motivo..." rows={2} value={healthData.reason || ""} onChange={(e) => setHealth("reason", e.target.value)} />
-      <label className="text-xs font-medium block">Atividade física</label>
-      <MultiOption field="activity" options={["Sedentário", "Leve (caminhada)", "Moderada (ginásio)", "Intensa (desporto)"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Objectivo do tratamento</label>
-      <MultiOption field="objective" options={["Reduzir dor", "Ganhar mobilidade", "Reab. pós-cirúrgica", "Performance desportiva", "Outro"]} healthData={healthData} setHealth={setHealth} />
-      <Input placeholder="Lesões anteriores (opcional)" value={healthData.previousInjuries || ""} onChange={(e) => setHealth("previousInjuries", e.target.value)} />
-      <Input placeholder="Cirurgias (opcional)" value={healthData.surgeries || ""} onChange={(e) => setHealth("surgeries", e.target.value)} />
-      <Input placeholder="Medicação atual (opcional)" value={healthData.medication || ""} onChange={(e) => setHealth("medication", e.target.value)} />
-      <Input placeholder="Alergias (opcional)" value={healthData.allergies || ""} onChange={(e) => setHealth("allergies", e.target.value)} />
-      <Input placeholder="Condições crónicas (opcional)" value={healthData.chronicConditions || ""} onChange={(e) => setHealth("chronicConditions", e.target.value)} />
-    </div>
-  );
-}
-
-function ElderlyProfile({ healthData, setHealth }: ProfileProps) {
-  return (
-    <div className="space-y-3">
-      <Input placeholder="Condições crónicas" value={healthData.chronicConditions || ""} onChange={(e) => setHealth("chronicConditions", e.target.value)} />
-      <Input placeholder="Medicação atual" value={healthData.medication || ""} onChange={(e) => setHealth("medication", e.target.value)} />
-      <Input placeholder="Alergias (opcional)" value={healthData.allergies || ""} onChange={(e) => setHealth("allergies", e.target.value)} />
-      <label className="text-xs font-medium block">Histórico de quedas</label>
-      <MultiOption field="fallHistory" options={["Nunca caiu", "Caiu 1-2 vezes", "Cai com frequência", "Tem medo de cair"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Auxílio de marcha</label>
-      <MultiOption field="walkingAid" options={["Não usa", "Bengala", "Andarilho", "Cadeira de rodas"]} healthData={healthData} setHealth={setHealth} />
-      <label className="text-xs font-medium block">Autonomia nas atividades diárias</label>
-      <MultiOption field="autonomy" options={["Totalmente autónomo", "Precisa de alguma ajuda", "Muito dependente"]} healthData={healthData} setHealth={setHealth} />
-      <Input placeholder="Nome do cuidador (opcional)" value={healthData.caregiverName || ""} onChange={(e) => setHealth("caregiverName", e.target.value)} />
-      <Input placeholder="Telefone do cuidador (opcional)" value={healthData.caregiverPhone || ""} onChange={(e) => setHealth("caregiverPhone", e.target.value)} />
     </div>
   );
 }
