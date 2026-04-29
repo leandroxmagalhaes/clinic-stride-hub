@@ -246,9 +246,32 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={handleGenerateInvite} disabled={generating} className="gap-1.5">
+        <Button
+          size="sm"
+          onClick={async () => {
+            if (!patientEmail) { toast.error("Utente sem email registado. Adicione um email antes de gerar o magic link."); return; }
+            setGenerating(true);
+            try {
+              const { error } = await supabase.functions.invoke("generate-portal-magic-link", {
+                body: { paciente_id: patientId, email: patientEmail, template_id: selectedTemplateId || null },
+              });
+              if (error) throw error;
+              toast.success("Magic link enviado por email (válido 24h, uso único).");
+              await loadData();
+            } catch (e: any) {
+              toast.error(e.message || "Erro a gerar magic link");
+            } finally { setGenerating(false); }
+          }}
+          disabled={generating || !patientEmail}
+          className="gap-1.5"
+        >
           {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          {lastInvite ? "Gerar novo convite" : "Gerar convite"}
+          {account ? "Reenviar magic link" : "Ativar portal (magic link)"}
+        </Button>
+
+        <Button size="sm" variant="outline" onClick={handleGenerateInvite} disabled={generating} className="gap-1.5">
+          {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          {lastInvite ? "Gerar convite OTP (legado)" : "Gerar convite OTP"}
         </Button>
 
         {patientEmail && (

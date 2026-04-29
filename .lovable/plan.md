@@ -1,121 +1,131 @@
-## Objetivo
 
-Garantir que o problema do questionário "perdido" (Francisco Chante Vasco) nunca mais acontece em silêncio: detector de rascunho **antes** do utente começar, painel de diagnóstico para a equipa, e mensagem WhatsApp pronta a copiar.
+# Validação de Acesso por Magic Link + Chat Iniciado pelo Profissional
 
----
+Sim, é totalmente possível. Vamos refazer o fluxo de ativação do portal e remover a limitação de o utente ter de iniciar a conversa.
 
-## Medida 1 — Detector de rascunho ANTES do início do preenchimento
-
-**Onde:** `src/pages/PortalOnboarding.tsx` (fluxo do utente no portal) e `src/components/patient-portal/DynamicQuestionnaireRenderer.tsx`.
-
-**Comportamento:**
-
-1. Quando o utente abre `/portal/onboarding` e há um `pacienteId`, antes de mostrar qualquer questionário, fazer **uma única consulta** a duas fontes:
-   - `localStorage.getItem("portal_questionario_draft:{pacienteId}:{templateId}")` — rascunho local não sincronizado
-   - `portal_questionario` no servidor — `respostas`, `updated_at`, `completo`
-2. Determinar o estado:
-   - **Rascunho servidor** existe e `completo=false` → mostrar banner azul
-   - **Apenas rascunho local** (servidor vazio) → mostrar banner amarelo (ainda não foi sincronizado)
-   - **Já completo no servidor** → mostrar banner verde "Questionário já submetido em DD/MM/AAAA"
-   - **Nada** → seguir fluxo normal
-3. Banner aparece **antes** do botão "Começar questionário", com:
-   - Ícone + título ("Continuar onde parou" / "Rascunho local detetado" / "Já submetido")
-   - Texto "Último guardado: há X minutos / horas / dias" (usar `formatDistanceToNow` do `date-fns/locale/pt`)
-   - Botões: **Continuar** (carrega respostas e abre o renderer) e **Começar do zero** (com confirmação dupla)
-
-**Componente novo:** `src/components/patient-portal/DraftDetectionBanner.tsx` — recebe `pacienteId`, `templateId`, callback `onResume(answers)` e `onStartFresh()`.
-
-**Aproveitar:** o `PortalOnboarding.tsx` já tem `resumeData` e `showResumeDialog` para o fluxo de retomar — mas o diálogo aparece **dentro** do questionário. Mover essa lógica para o ecrã inicial, antes de o utente clicar em "Começar".
+## Decisões já confirmadas
+- Magic link válido **24h**, **uso único**
+- **Email obrigatório** para gerar o magic link
+- Profissional pode iniciar conversa **1-para-1 e em broadcast**
+- Notificação por email **apenas na 1ª mensagem da conversa por dia** (anti-spam)
 
 ---
 
-## Medida 2 — Painel de diagnóstico do Portal na ficha do utente
+## Parte 1 — Magic Link de Ativação (substitui o convite código + link genérico)
 
-**Onde:** `src/components/patients/PatientPortalTab.tsx` (já existe e está montado no `PatientDetailModal`).
+### Fluxo novo
+1. Na ficha do utente → aba **Portal**, o profissional clica **"Ativar portal"**.
+2. Sistema valida que o utente tem email registado (obrigatório).
+3. É gerado um magic link único (`portal_convites.link_token`) com:
+   - `expira_em` = agora + 24h
+   - `utilizado = false`
+   - `max_tentativas = 1` (uso único — após criar password, fica inválido)
+4. É enviado **email automático** com botão "Ativar a minha conta" → `/portal/ativar/<token>`.
+5. O profissional vê na ficha: estado do link (válido / expirado / usado), botão **"Reenviar"** (gera novo) e **"Copiar link"** / **"WhatsApp"**.
 
-**Visibilidade:** Mostrar apenas se `useUserRole()` indicar `isAdmin` (admin/admin_master) **ou** `isProfessional`. Esconder para roles `secretary` (já não vê outras coisas sensíveis) e `patient`.
+### Página `/portal/ativar/<token>` (substitui a verificação por código de 6 dígitos)
+- Mostra o nome do utente e a clínica.
+- Pede ao cliente para **definir uma password nova** (mínimo 8 chars, com confirmação).
+- Ao submeter:
+  - Cria conta `auth.users` com email + password
+  - Liga em `portal_contas` + `portal_conta_pacientes`
+  - Marca `portal_convites.utilizado = true`
+  - Faz login automático e redireciona para o questionário / portal
+- Se o link estiver expirado/usado → mensagem clara "Contacte a clínica para novo link".
 
-**Conteúdo do painel "Diagnóstico técnico" (Collapsible fechado por defeito):**
-
-1. **Estado do questionário no servidor:**
-   - `portal_questionario` row: existe? `completo`? `updated_at`?
-   - Tamanho do `respostas` (`Object.keys(respostas).length` secções com conteúdo)
-   - Aviso vermelho se `respostas = {}` E existe convite usado: "Atenção — convite foi usado mas nenhuma resposta chegou ao servidor."
-
-2. **Histórico de convites (todos, não só o último):**
-   - Tabela compacta: data | enviado para | status (pendente / utilizado / expirado) | tentativas
-   - Lê `portal_convites` por `paciente_id`, ordenado por `created_at desc`, limite 10
-
-3. **Histórico de alterações (`portal_questionario_historico`):**
-   - Última 5 entradas: campo alterado, valor anterior → novo, alterado por, quando
-
-4. **Conta portal:**
-   - `auth_user_id`, `email`, `provider`, `ultimo_acesso`, `onboarding_completo`
-   - Lista de utentes associados a esta conta (`portal_conta_pacientes`) — útil quando pais/mães usam a mesma conta para vários filhos
-
-5. **Ação de recuperação manual:**
-   - Botão "Importar respostas de rascunho local" — explica que só funciona se feito no mesmo dispositivo e abre prompt para colar JSON do localStorage. Permite gravar via `upsert_portal_questionnaire`.
-
-**Lógica de role check:**
-```ts
-const { isAdmin, isProfessional } = useUserRole();
-const showDiagnostics = isAdmin || isProfessional;
-```
+### Compatibilidade
+- A rota antiga `/portal/verificacao/<token>` (código 6 dígitos) continua a funcionar para convites antigos já enviados, mas deixa de ser oferecida no UI.
+- `PortalDiagnosticsPanel` continua a mostrar histórico de convites (códigos antigos + novos magic links).
 
 ---
 
-## Medida 3 — Mensagem WhatsApp pronta a copiar
+## Parte 2 — Chat iniciado pelo profissional
 
-**Onde:** Botão dentro do `PatientPortalTab.tsx`, perto de "Copiar link" e "Enviar Link do Portal".
+Hoje o `portal_diario` só é alimentado pelo utente, e o profissional só responde via `portal_respostas`. Vamos permitir que o **profissional crie a primeira entrada de conversa**.
 
-**Comportamento:**
+### Backend
+- Nova tabela `portal_mensagens` (chat dedicado, separado do diário clínico):
+  - `id`, `paciente_id`, `autor_tipo` ('professional' | 'patient'), `autor_id`, `autor_nome`, `texto`, `lida_em`, `created_at`
+  - RLS: utente vê as suas; profissionais da clínica gerem todas
+- Trigger ao inserir mensagem do profissional → cria `portal_notificacoes` para o utente.
+- Edge function `notify-portal-message`:
+  - Verifica se já foi enviado email para esta conversa **hoje** (consulta `automation_logs` com `flow_type='portal_chat_email'` e `paciente_id` no dia atual).
+  - Se não, envia email "Tem uma nova mensagem da clínica" com link para `/portal/mensagens`.
+  - Regista em `automation_logs`.
 
-1. Botão "Mensagem WhatsApp" abre um diálogo simples com:
-   - Textarea pré-preenchida (read-only ou editável) com o template:
-     ```
-     Olá {primeiroNome},
+### UI Profissional
+Nova página **"Mensagens"** no menu lateral com:
+- **Aba "Conversas"**: lista todos os utentes com conta de portal ativa, ordenados por última mensagem; barra de pesquisa; abrir conversa = vista de chat 1-para-1.
+- **Aba "Broadcast"**: 
+  - Compõe mensagem
+  - Filtros: especialidade, faixa etária, tags de saúde, "todos com portal ativo"
+  - Pré-visualiza nº de destinatários e confirma envio
+  - Cria N mensagens individuais (um envio por utente — para que cada conversa fique isolada)
 
-     Aqui está o seu acesso ao Portal Physione para preencher o questionário do/a {nomeUtente}:
-
-     🔗 {link}
-     🔢 Código: {codigo}
-
-     ⚠️ Importante: o link expira em 48h e tem 3 tentativas.
-     Se já tinha começado a preencher noutro dispositivo, o sistema vai detetar e oferecer continuar.
-
-     Qualquer dúvida, responda a esta mensagem.
-     ```
-   - Botão grande "Copiar mensagem" (usa `navigator.clipboard.writeText`)
-   - Botão secundário "Abrir WhatsApp" — gera `https://wa.me/{telefone}?text={encodeURIComponent(mensagem)}` (usa o telefone do utente já com prefixo 351)
-
-2. Substituições dinâmicas:
-   - `{primeiroNome}` — primeiro nome do destinatário (do convite ou do utente)
-   - `{nomeUtente}` — nome completo do utente
-   - `{link}` — `getPublicBaseUrl() + "/portal/" + lastInvite.link_token`
-   - `{codigo}` — `lastInvite.codigo`
-
-3. Se não houver convite válido, o botão fica desabilitado com tooltip "Gere primeiro um convite".
+### UI Utente (Portal)
+- Novo separador **"Mensagens"** no portal — mostra a conversa com a clínica.
+- Badge com contador de mensagens não lidas no menu do portal.
+- Notificação realtime (já temos `portal_notificacoes` com canal Supabase).
 
 ---
 
-## Resumo dos ficheiros tocados
+## Parte 3 — Email de notificação (regra "1ª por dia")
 
-**Novos:**
-- `src/components/patient-portal/DraftDetectionBanner.tsx`
-- `src/components/patients/PortalDiagnosticsPanel.tsx`
-- `src/components/patients/WhatsAppMessageDialog.tsx`
-
-**Modificados:**
-- `src/pages/PortalOnboarding.tsx` — integrar `DraftDetectionBanner` antes do `DynamicQuestionnaireRenderer`
-- `src/components/patients/PatientPortalTab.tsx` — adicionar `PortalDiagnosticsPanel` (gated por role) e botão "Mensagem WhatsApp"
-
-**Sem migrations de DB.** Tudo usa tabelas que já existem (`portal_questionario`, `portal_convites`, `portal_questionario_historico`, `portal_contas`, `portal_conta_pacientes`).
-
-**Sem alterações ao questionário do Francisco Cação Costa** — está completo, fica intacto.
+- Edge function partilha a infra de email atual (Lovable Emails).
+- Lógica:
+  ```
+  se NÃO existe automation_logs(paciente_id, flow_type='portal_chat_email', date=hoje):
+      enviar email
+      registar log
+  senão:
+      apenas criar portal_notificacoes (in-app)
+  ```
+- O email tem link directo `/portal/mensagens` e mostra a clínica + nome do profissional (sem revelar o conteúdo, por privacidade).
 
 ---
 
-## Riscos e limitações honestas
+## Detalhes técnicos
 
-- O detector de rascunho local **só funciona no mesmo dispositivo + mesmo browser** onde o utente preencheu. Se o pai começou no telemóvel e abre noutro lado, o `localStorage` está vazio nesse novo dispositivo. O painel de diagnóstico ajuda a equipa a perceber isto rapidamente.
-- A "importação manual de rascunho" no painel de diagnóstico exige que o utente envie o JSON do `localStorage` (instruções claras serão dadas) — é uma rede de segurança, não a solução principal. A solução principal é o autosave já ativo.
+### Migrações DB
+1. `portal_mensagens` (nova tabela + RLS + índices em `paciente_id`, `created_at`).
+2. Trigger `on_portal_mensagem_insert` → insere `portal_notificacoes` se autor for professional.
+3. ALTER `portal_convites`: adicionar coluna `tipo` ('codigo_otp' | 'magic_link') default 'codigo_otp' para distinguir os 2 fluxos sem partir convites antigos.
+4. Realtime habilitado em `portal_mensagens`.
+
+### Edge Functions
+- **`generate-portal-magic-link`** (nova): valida email, cria `portal_convites` tipo magic_link, dispara email com template "Active a sua conta no Portal".
+- **`notify-portal-message`** (nova): chamada após insert de mensagem do profissional; aplica regra "1ª por dia".
+- Refazer template auth-email para incluir o template "Activação do Portal" (transactional, não auth — vai por `send-transactional-email`).
+
+### Frontend
+- Nova rota `/portal/ativar/:token` → componente `PortalAtivacao.tsx` (form de password).
+- `PatientPortalTab.tsx`: trocar botão "Gerar convite" por "Ativar portal (magic link)"; manter "Reenviar" e "Copiar".
+- Nova página `/mensagens` (profissional) → `MensagensPage.tsx` com sub-abas Conversas / Broadcast.
+- Novo separador no portal do utente → `PortalMensagens.tsx`.
+- Hook `usePortalMessages(pacienteId)` com subscription realtime.
+
+### Ficheiros a criar/editar (estimativa)
+- **Novos**: `PortalAtivacao.tsx`, `MensagensPage.tsx` (+ subcomponentes `ConversaView`, `BroadcastComposer`, `ConversasList`), `PortalMensagens.tsx`, edge functions `generate-portal-magic-link` e `notify-portal-message`, migração SQL.
+- **Editados**: `PatientPortalTab.tsx`, `App.tsx` (rotas), `Layout.tsx` (item de menu "Mensagens"), `PatientPortal.tsx` (separador Mensagens).
+
+### Não tocar
+- Convites OTP existentes continuam a funcionar (compatibilidade).
+- `portal_diario` e `portal_respostas` continuam para o diário clínico (dor, humor, fotos) — separado do chat.
+- RLS existente do portal mantém-se intacto.
+
+---
+
+## O que o cliente experimenta
+1. Recebe email "Active o seu acesso ao Portal" → clica botão.
+2. Define password (única vez) → entra no portal.
+3. Preenche questionário.
+4. Recebe email "Tem uma nova mensagem" quando o profissional escreve (no máx. 1x/dia por conversa).
+5. Pode responder no separador Mensagens.
+
+## O que o profissional experimenta
+1. Ficha do utente → aba Portal → **"Ativar portal"** (1 clique se email estiver presente).
+2. Vê estado: link enviado / conta criada / questionário preenchido.
+3. Menu lateral → **Mensagens** → escolhe utente ou faz broadcast.
+4. Diagnostic panel continua disponível para troubleshooting.
+
+Aprovas para implementar?
