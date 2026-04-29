@@ -425,115 +425,67 @@ export default function PortalOnboarding() {
                 onExit={() => { localStorage.removeItem("portal_paciente_id"); navigate("/patient-portal"); }}
               />
             </>
+          ) : dynamicTemplate && pacienteId ? (
+            <Card>
+              <CardContent className="pt-6 space-y-4">
+                <div className="text-center space-y-1">
+                  <h1 className="text-xl font-bold">{dynamicTemplate.name}</h1>
+                  {dynamicTemplate.description && (
+                    <p className="text-sm text-muted-foreground">{dynamicTemplate.description}</p>
+                  )}
+                  {dynamicTemplate.estimated_minutes && (
+                    <p className="text-xs text-muted-foreground">Tempo estimado: {dynamicTemplate.estimated_minutes}</p>
+                  )}
+                </div>
+
+                <DraftDetectionBanner
+                  pacienteId={pacienteId}
+                  templateId={dynamicTemplate.id}
+                  onResume={(answers) => {
+                    setDynamicInitialAnswers(answers);
+                    setShowQuestionnaire(true);
+                  }}
+                  onStartFresh={async () => {
+                    if (!pacienteId) return;
+                    try {
+                      await (supabase as any)
+                        .from("portal_questionario")
+                        .update({ respostas: {}, updated_at: new Date().toISOString() })
+                        .eq("paciente_id", pacienteId);
+                    } catch (e) {
+                      console.warn("Failed to clear progress", e);
+                    }
+                    setDynamicInitialAnswers({});
+                    setResumeData(null);
+                    setShowQuestionnaire(true);
+                  }}
+                  onAlreadyCompleted={() => {
+                    localStorage.removeItem("portal_paciente_id");
+                    navigate("/patient-portal");
+                  }}
+                />
+
+                <div className="flex justify-center pt-2">
+                  <Button
+                    size="lg"
+                    onClick={() => {
+                      if (resumeData) setDynamicInitialAnswers(resumeData.respostas);
+                      setShowQuestionnaire(true);
+                    }}
+                    className="gap-2"
+                  >
+                    Começar questionário <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
-            // Loading placeholder while resume dialog is open or before showing
             <div className="flex justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
           )}
         </div>
-
-        {/* Resume dialog */}
-        <Dialog open={showResumeDialog} onOpenChange={(open) => { if (!open) return; }}>
-          <DialogContent className="max-w-[440px]">
-            <DialogHeader>
-              <div className="flex justify-center mb-2">
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <FileEdit className="h-6 w-6 text-primary" />
-                </div>
-              </div>
-              <DialogTitle className="text-center">Tem um questionário em curso</DialogTitle>
-              <DialogDescription className="text-center">
-                Encontrámos um questionário que começou a preencher. Pode continuar de onde parou ou começar de novo.
-              </DialogDescription>
-            </DialogHeader>
-
-            {resumeData && dynamicTemplate && (() => {
-              const total = dynamicTemplate.schema.sections.length;
-              const filled = dynamicTemplate.schema.sections.filter((s) => {
-                const sa = (resumeData.respostas as any)[s.id] || {};
-                return Object.values(sa).some((v) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0));
-              }).length;
-              const dt = new Date(resumeData.updatedAt);
-              return (
-                <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1 text-center">
-                  <p>Já preencheu <strong>{filled}</strong> de <strong>{total}</strong> secções</p>
-                  <p className="text-xs text-muted-foreground">
-                    Última atualização: {dt.toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-              );
-            })()}
-
-            {confirmRestart ? (
-              <div className="space-y-2">
-                <p className="text-sm text-center text-destructive">Tem a certeza? Vai perder o progresso anterior.</p>
-                <DialogFooter className="flex-col sm:flex-row gap-2">
-                  <Button variant="outline" onClick={() => setConfirmRestart(false)} className="w-full sm:w-auto">Cancelar</Button>
-                  <Button
-                    variant="destructive"
-                    className="w-full sm:w-auto"
-                    onClick={async () => {
-                      if (!pacienteId) return;
-                      try {
-                        await (supabase as any)
-                          .from("portal_questionario")
-                          .update({ respostas: {}, updated_at: new Date().toISOString() })
-                          .eq("paciente_id", pacienteId);
-                      } catch (e) {
-                        console.warn("Failed to clear progress", e);
-                      }
-                      setDynamicInitialAnswers({});
-                      setResumeData(null);
-                      setShowResumeDialog(false);
-                      setConfirmRestart(false);
-                      setShowQuestionnaire(true);
-                    }}
-                  >
-                    Sim, começar de novo
-                  </Button>
-                </DialogFooter>
-              </div>
-            ) : (
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={() => setConfirmRestart(true)}
-                >
-                  Começar de novo
-                </Button>
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => {
-                    if (resumeData) setDynamicInitialAnswers(resumeData.respostas);
-                    setShowResumeDialog(false);
-                    setShowQuestionnaire(true);
-                  }}
-                >
-                  Continuar de onde parei
-                </Button>
-              </DialogFooter>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
-    );
-  }
-
-  const progressValue = ((step + 1) / 4) * 100;
-
-  return (
-    <div className="min-h-screen bg-muted/30 py-8 px-4">
-      <div className="max-w-[600px] mx-auto space-y-6">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-[#1e40af] flex items-center justify-center text-white font-bold text-lg">P</div>
-          <div>
-            <p className="font-bold text-foreground">Physione</p>
-            <p className="text-[10px] text-muted-foreground">Portal do Paciente</p>
-          </div>
-        </div>
 
         {/* Progress */}
         <div className="space-y-2">
