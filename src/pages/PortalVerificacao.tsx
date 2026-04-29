@@ -157,11 +157,17 @@ export default function PortalVerificacao() {
 
     setIsCreating(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      let { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: { emailRedirectTo: window.location.origin + "/portal/onboarding" },
       });
+      if (authError && /already|registered|exists|existente|regist/i.test(authError.message)) {
+        const loginResult = await supabase.auth.signInWithPassword({ email, password });
+        if (loginResult.error) throw loginResult.error;
+        authData = loginResult.data;
+        authError = null;
+      }
       if (authError) throw authError;
 
       // Criar/associar conta de forma idempotente (evita duplicados)
@@ -193,7 +199,7 @@ export default function PortalVerificacao() {
       localStorage.setItem("portal_paciente_id", invite.paciente_id);
       if (token) localStorage.setItem("portal_invite_token", token);
 
-      toast.success("Conta criada! Verifique o seu email para confirmar.");
+      toast.success(authData.session ? "Conta associada com sucesso!" : "Conta criada! Verifique o seu email para confirmar.");
       navigate("/portal/onboarding");
     } catch (err: any) {
       toast.error(err.message || "Erro ao criar conta.");
