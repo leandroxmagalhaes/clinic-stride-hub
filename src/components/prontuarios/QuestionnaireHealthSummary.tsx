@@ -267,25 +267,142 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
     );
   }
 
-  // No data — show "fill manually" option
+  // No data — show template picker so the professional fills the SAME questionnaire
+  // model the patient would have used (instead of the legacy minimal form).
   if ((!data || !data.completo) && !creating) {
+    const loadTemplates = async () => {
+      if (templates.length > 0) return;
+      setTemplatesLoading(true);
+      try {
+        const list = await QuestionnaireTemplateService.list();
+        setTemplates(list);
+        // Pre-select the most recent invite's template, otherwise age-suggested.
+        try {
+          const { data: inv } = await (supabase as any)
+            .from("portal_convites")
+            .select("template_id")
+            .eq("paciente_id", pacienteId)
+            .not("template_id", "is", null)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (inv?.template_id && list.some((t) => t.id === inv.template_id)) {
+            setChosenTemplateId(inv.template_id);
+            return;
+          }
+        } catch { /* ignore */ }
+        const suggested = QuestionnaireTemplateService.suggestIdentifierByAge(birthDate);
+        const match = list.find((t) => t.identifier === suggested) || list[0];
+        if (match) setChosenTemplateId(match.id);
+      } catch (e) {
+        console.warn("Failed to load templates", e);
+        toast.error("Erro ao carregar modelos de questionário");
+      } finally {
+        setTemplatesLoading(false);
+      }
+    };
+
+    const startManualFromTemplate = async () => {
+      if (!chosenTemplateId) {
+        toast.error("Selecione um modelo de questionário");
+        return;
+      }
+      const tpl = templates.find((t) => t.id === chosenTemplateId);
+      if (!tpl) return;
+      setCreatingFromTemplate(true);
+      try {
+        // Create empty questionnaire row pinned to the chosen template.
+        // FullQuestionnaireView will then render it dynamically and let the
+        // professional fill every section (with full audit on save).
+        const { error } = await (supabase as any)
+          .from("portal_questionario")
+          .insert({
+            paciente_id: pacienteId,
+            template_id: tpl.id,
+            perfil_tipo: tpl.identifier,
+            respostas: {},
+            completo: false,
+          });
+        if (error) throw error;
+        // Reload — next render hits the FullQuestionnaireView path.
+        const { data: q } = await (supabase as any)
+          .from("portal_questionario")
+          .select("*")
+          .eq("paciente_id", pacienteId)
+          .maybeSingle();
+        setData(q);
+      } catch (e: any) {
+        console.error(e);
+        toast.error("Erro ao iniciar questionário: " + (e?.message || "desconhecido"));
+      } finally {
+        setCreatingFromTemplate(false);
+      }
+    };
+
     return (
       <Card className="border-dashed border-muted-foreground/30">
-        <CardContent className="py-6 text-center space-y-3">
-          <FileText className="h-8 w-8 mx-auto text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">
-            O utente ainda não preencheu o questionário de saúde no portal.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => {
-            const detected = detectProfile(birthDate);
-            setSelectedProfile(detected);
-            setEditValues({});
-            setEditExpectativas({});
-            setCreating(true);
-          }}>
-            <Plus className="h-4 w-4 mr-1" />
-            Preencher manualmente
-          </Button>
+        <CardContent className="py-6 space-y-4">
+          <div className="text-center space-y-2">
+            <FileText className="h-8 w-8 mx-auto text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">
+              O utente ainda não preencheu o questionário de saúde no portal.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Selecione qual modelo pretende preencher manualmente:
+            </p>
+          </div>
+
+          <div className="max-w-md mx-auto space-y-2">
+            <Select
+              value={chosenTemplateId || "__none__"}
+              onValueChange={(v) => setChosenTemplateId(v === "__none__" ? "" : v)}
+              onOpenChange={(open) => { if (open) loadTemplates(); }}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder={templatesLoading ? "A carregar modelos..." : "Escolher modelo de questionário"} />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.length === 0 && !templatesLoading && (
+                  <SelectItem value="__none__" disabled>
+                    Sem modelos disponíveis
+                  </SelectItem>
+                )}
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    <span className="flex items-center gap-2">
+                      <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
+                      {t.name}
+                      {t.is_system && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">sistema</Badge>
+                      )}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {chosenTemplateId && (() => {
+              const tpl = templates.find((t) => t.id === chosenTemplateId);
+              if (!tpl) return null;
+              return (
+                <p className="text-xs text-muted-foreground">
+                  {tpl.description || "Modelo dinâmico"}
+                  {tpl.estimated_minutes ? ` · ~${tpl.estimated_minutes} min` : ""}
+                </p>
+              );
+            })()}
+
+            <div className="flex justify-center pt-1">
+              <Button
+                size="sm"
+                onClick={startManualFromTemplate}
+                disabled={!chosenTemplateId || creatingFromTemplate || !canEditDynamic}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                {creatingFromTemplate ? "A iniciar..." : "Preencher manualmente"}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     );
