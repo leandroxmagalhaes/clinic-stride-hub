@@ -359,6 +359,7 @@ export default function PortalOnboarding() {
       }
 
       setDynamicCompleted(true);
+      localStorage.removeItem(`portal_questionario_draft:${pacienteId}:${dynamicTemplate.id}`);
       localStorage.removeItem("portal_invite_token");
       setInviteToken(null);
     } catch (e) {
