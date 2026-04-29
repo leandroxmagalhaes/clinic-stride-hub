@@ -12,6 +12,7 @@ import { Loader2, ChevronLeft, PartyPopper, ArrowRight, FileEdit } from "lucide-
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
 import { DynamicQuestionnaireRenderer } from "@/components/patient-portal/DynamicQuestionnaireRenderer";
+import { DraftDetectionBanner } from "@/components/patient-portal/DraftDetectionBanner";
 import { QuestionnaireTemplateService, mergeLegacyIntoRespostas, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
 import { PortalAccountService } from "@/services/PortalAccountService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
