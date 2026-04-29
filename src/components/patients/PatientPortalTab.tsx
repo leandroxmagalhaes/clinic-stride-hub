@@ -2,13 +2,16 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye, Mail } from "lucide-react";
+import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye, Mail, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getPublicBaseUrl } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QuestionnaireTemplateService, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
+import { useUserRole } from "@/hooks/useUserRole";
+import { PortalDiagnosticsPanel } from "./PortalDiagnosticsPanel";
+import { WhatsAppMessageDialog } from "./WhatsAppMessageDialog";
 
 interface PortalTabProps {
   patientId: string;
