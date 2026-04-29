@@ -12,6 +12,7 @@ import { Loader2, ChevronLeft, PartyPopper, ArrowRight, FileEdit } from "lucide-
 import { toast } from "sonner";
 import { differenceInYears } from "date-fns";
 import { DynamicQuestionnaireRenderer } from "@/components/patient-portal/DynamicQuestionnaireRenderer";
+import { DraftDetectionBanner } from "@/components/patient-portal/DraftDetectionBanner";
 import { QuestionnaireTemplateService, mergeLegacyIntoRespostas, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
 import { PortalAccountService } from "@/services/PortalAccountService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -230,10 +231,9 @@ export default function PortalOnboarding() {
                 respostas: merged,
                 updatedAt: existingQ?.updated_at || new Date().toISOString(),
               });
-              setShowResumeDialog(true);
-            } else {
-              setShowQuestionnaire(true);
+              // Don't auto-open dialog — banner in welcome step handles it
             }
+            // Always start at welcome step (showQuestionnaire stays false until user clicks Start)
           }
         }
       } catch (e) {
@@ -425,236 +425,80 @@ export default function PortalOnboarding() {
                 onExit={() => { localStorage.removeItem("portal_paciente_id"); navigate("/patient-portal"); }}
               />
             </>
+          ) : dynamicTemplate && pacienteId ? (
+            <Card>
+              <CardContent className="pt-6 space-y-4">
+                <div className="text-center space-y-1">
+                  <h1 className="text-xl font-bold">{dynamicTemplate.name}</h1>
+                  {dynamicTemplate.description && (
+                    <p className="text-sm text-muted-foreground">{dynamicTemplate.description}</p>
+                  )}
+                  {dynamicTemplate.estimated_minutes && (
+                    <p className="text-xs text-muted-foreground">Tempo estimado: {dynamicTemplate.estimated_minutes}</p>
+                  )}
+                </div>
+
+                <DraftDetectionBanner
+                  pacienteId={pacienteId}
+                  templateId={dynamicTemplate.id}
+                  onResume={(answers) => {
+                    setDynamicInitialAnswers(answers);
+                    setShowQuestionnaire(true);
+                  }}
+                  onStartFresh={async () => {
+                    if (!pacienteId) return;
+                    try {
+                      await (supabase as any)
+                        .from("portal_questionario")
+                        .update({ respostas: {}, updated_at: new Date().toISOString() })
+                        .eq("paciente_id", pacienteId);
+                    } catch (e) {
+                      console.warn("Failed to clear progress", e);
+                    }
+                    setDynamicInitialAnswers({});
+                    setResumeData(null);
+                    setShowQuestionnaire(true);
+                  }}
+                  onAlreadyCompleted={() => {
+                    localStorage.removeItem("portal_paciente_id");
+                    navigate("/patient-portal");
+                  }}
+                />
+
+                <div className="flex justify-center pt-2">
+                  <Button
+                    size="lg"
+                    onClick={() => {
+                      if (resumeData) setDynamicInitialAnswers(resumeData.respostas);
+                      setShowQuestionnaire(true);
+                    }}
+                    className="gap-2"
+                  >
+                    Começar questionário <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
-            // Loading placeholder while resume dialog is open or before showing
             <div className="flex justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
           )}
         </div>
-
-        {/* Resume dialog */}
-        <Dialog open={showResumeDialog} onOpenChange={(open) => { if (!open) return; }}>
-          <DialogContent className="max-w-[440px]">
-            <DialogHeader>
-              <div className="flex justify-center mb-2">
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <FileEdit className="h-6 w-6 text-primary" />
-                </div>
-              </div>
-              <DialogTitle className="text-center">Tem um questionário em curso</DialogTitle>
-              <DialogDescription className="text-center">
-                Encontrámos um questionário que começou a preencher. Pode continuar de onde parou ou começar de novo.
-              </DialogDescription>
-            </DialogHeader>
-
-            {resumeData && dynamicTemplate && (() => {
-              const total = dynamicTemplate.schema.sections.length;
-              const filled = dynamicTemplate.schema.sections.filter((s) => {
-                const sa = (resumeData.respostas as any)[s.id] || {};
-                return Object.values(sa).some((v) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0));
-              }).length;
-              const dt = new Date(resumeData.updatedAt);
-              return (
-                <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1 text-center">
-                  <p>Já preencheu <strong>{filled}</strong> de <strong>{total}</strong> secções</p>
-                  <p className="text-xs text-muted-foreground">
-                    Última atualização: {dt.toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-              );
-            })()}
-
-            {confirmRestart ? (
-              <div className="space-y-2">
-                <p className="text-sm text-center text-destructive">Tem a certeza? Vai perder o progresso anterior.</p>
-                <DialogFooter className="flex-col sm:flex-row gap-2">
-                  <Button variant="outline" onClick={() => setConfirmRestart(false)} className="w-full sm:w-auto">Cancelar</Button>
-                  <Button
-                    variant="destructive"
-                    className="w-full sm:w-auto"
-                    onClick={async () => {
-                      if (!pacienteId) return;
-                      try {
-                        await (supabase as any)
-                          .from("portal_questionario")
-                          .update({ respostas: {}, updated_at: new Date().toISOString() })
-                          .eq("paciente_id", pacienteId);
-                      } catch (e) {
-                        console.warn("Failed to clear progress", e);
-                      }
-                      setDynamicInitialAnswers({});
-                      setResumeData(null);
-                      setShowResumeDialog(false);
-                      setConfirmRestart(false);
-                      setShowQuestionnaire(true);
-                    }}
-                  >
-                    Sim, começar de novo
-                  </Button>
-                </DialogFooter>
-              </div>
-            ) : (
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={() => setConfirmRestart(true)}
-                >
-                  Começar de novo
-                </Button>
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => {
-                    if (resumeData) setDynamicInitialAnswers(resumeData.respostas);
-                    setShowResumeDialog(false);
-                    setShowQuestionnaire(true);
-                  }}
-                >
-                  Continuar de onde parei
-                </Button>
-              </DialogFooter>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
     );
   }
 
-  const progressValue = ((step + 1) / 4) * 100;
-
+  // Legacy step-based flow removed — all patients now use dynamic templates.
+  // If somehow no template resolves, show a fallback message.
   return (
-    <div className="min-h-screen bg-muted/30 py-8 px-4">
-      <div className="max-w-[600px] mx-auto space-y-6">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-[#1e40af] flex items-center justify-center text-white font-bold text-lg">P</div>
-          <div>
-            <p className="font-bold text-foreground">Physione</p>
-            <p className="text-[10px] text-muted-foreground">Portal do Paciente</p>
-          </div>
-        </div>
-
-        {/* Progress */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            {STEP_LABELS.map((label, i) => (
-              <span key={i} className={i === step ? "text-primary font-medium" : ""}>
-                {label} {STEP_TIMES[i] && <span className="text-[10px]">({STEP_TIMES[i]})</span>}
-              </span>
-            ))}
-          </div>
-          <Progress value={progressValue} className="h-2" />
-        </div>
-
-        {/* Step 0 — Dados Pessoais */}
-        {step === 0 && (
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <h2 className="text-lg font-semibold">Dados Pessoais</h2>
-              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nome completo" />
-              <div className="grid grid-cols-2 gap-3">
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefone" />
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Data de Nascimento</label>
-                  <Input type="date" value={birthDate} onChange={(e) => handleBirthDateChange(e.target.value)} />
-                </div>
-                <Input value={nif} onChange={(e) => setNif(e.target.value)} placeholder="NIF / CPF" />
-              </div>
-              <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Morada" />
-
-              {showGuardian && (
-                <div className="border-t pt-4 space-y-3">
-                  <h3 className="text-sm font-semibold">Dados do Responsável</h3>
-                  <Input value={guardianName} onChange={(e) => setGuardianName(e.target.value)} placeholder="Nome do responsável" />
-                  <div className="flex flex-wrap gap-2">
-                    {["Mãe", "Pai", "Avó/Avô", "Outro"].map((r) => (
-                      <OptionCard key={r} label={r} selected={guardianRelation === r} onClick={() => setGuardianRelation(r)} />
-                    ))}
-                  </div>
-                  <Input value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} placeholder="Telefone do responsável" />
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <Button onClick={saveStep1} disabled={saving || !fullName}>
-                  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Próximo
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step 1 — Perfil de Saúde */}
-        {step === 1 && (
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <h2 className="text-lg font-semibold">Perfil de Saúde</h2>
-              <p className="text-xs text-muted-foreground">Não se preocupe se não souber alguma resposta — pode selecionar "Não sei".</p>
-
-              {profileType === "baby" && <BabyProfile healthData={healthData} setHealth={setHealth} />}
-              {profileType === "child" && <ChildProfile healthData={healthData} setHealth={setHealth} />}
-              {profileType === "adult" && <AdultProfile healthData={healthData} setHealth={setHealth} />}
-              {profileType === "elderly" && <ElderlyProfile healthData={healthData} setHealth={setHealth} />}
-
-              <div className="flex justify-between pt-2">
-                <Button variant="ghost" onClick={() => setStep(0)}><ChevronLeft className="h-4 w-4 mr-1" /> Voltar</Button>
-                <Button onClick={saveStep2} disabled={saving}>
-                  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Próximo
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step 2 — Expectativas */}
-        {step === 2 && (
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <h2 className="text-lg font-semibold">Expectativas</h2>
-              <div>
-                <label className="text-sm font-medium mb-1 block">O que espera alcançar com o tratamento?</label>
-                <Textarea rows={4} value={expectations} onChange={(e) => setExpectations(e.target.value)} placeholder="Descreva os seus objetivos..." />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Tem alguma preocupação ou dúvida antes da primeira sessão? <span className="text-muted-foreground">(opcional)</span></label>
-                <Textarea rows={3} value={concerns} onChange={(e) => setConcerns(e.target.value)} placeholder="Partilhe as suas preocupações..." />
-              </div>
-              <div className="flex justify-between pt-2">
-                <Button variant="ghost" onClick={() => setStep(1)}><ChevronLeft className="h-4 w-4 mr-1" /> Voltar</Button>
-                <Button onClick={saveStep3} disabled={saving}>
-                  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Concluir
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step 3 — Conclusão */}
-        {step === 3 && (
-          <Card>
-            <CardContent className="pt-8 text-center space-y-4">
-              <PartyPopper className="h-16 w-16 text-primary mx-auto" />
-              <h2 className="text-xl font-bold">Perfil completo!</h2>
-              <p className="text-sm text-muted-foreground">
-                Obrigado por completar o seu perfil. A fisioterapeuta vai rever as suas informações antes da primeira sessão.
-              </p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-                <strong>O Diário está disponível!</strong> A partir de agora, pode partilhar como está o dia a dia.
-              </div>
-              <Button onClick={() => { localStorage.removeItem("portal_paciente_id"); navigate("/patient-portal"); }} className="gap-2">
-                Ir para o Diário <ArrowRight className="h-4 w-4" />
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+      <Card className="max-w-md w-full">
+        <CardContent className="pt-6 text-center space-y-3">
+          <h2 className="text-lg font-semibold">Não foi possível carregar o questionário</h2>
+          <p className="text-sm text-muted-foreground">Contacte a clínica para receber um novo link de acesso.</p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

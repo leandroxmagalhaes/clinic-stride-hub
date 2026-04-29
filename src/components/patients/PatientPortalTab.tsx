@@ -2,13 +2,16 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye, Mail } from "lucide-react";
+import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye, Mail, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getPublicBaseUrl } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QuestionnaireTemplateService, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
+import { useUserRole } from "@/hooks/useUserRole";
+import { PortalDiagnosticsPanel } from "./PortalDiagnosticsPanel";
+import { WhatsAppMessageDialog } from "./WhatsAppMessageDialog";
 
 interface PortalTabProps {
   patientId: string;
@@ -59,6 +62,9 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
   const [sendingLink, setSendingLink] = useState(false);
   const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [waOpen, setWaOpen] = useState(false);
+  const { isAdmin, isProfessional } = useUserRole();
+  const showDiagnostics = isAdmin || isProfessional;
 
   useEffect(() => {
     loadData();
@@ -253,9 +259,14 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
         )}
 
         {lastInvite && !lastInvite.utilizado && new Date(lastInvite.expira_em) > new Date() && (
-          <Button size="sm" variant="outline" onClick={handleCopyLink} className="gap-1.5">
-            <Copy className="h-3.5 w-3.5" /> Copiar link
-          </Button>
+          <>
+            <Button size="sm" variant="outline" onClick={handleCopyLink} className="gap-1.5">
+              <Copy className="h-3.5 w-3.5" /> Copiar link
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setWaOpen(true)} className="gap-1.5">
+              <MessageCircle className="h-3.5 w-3.5" /> Mensagem WhatsApp
+            </Button>
+          </>
         )}
 
         {account && (
@@ -338,6 +349,23 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
             </DialogContent>
           </Dialog>
         </div>
+      )}
+
+      {/* Diagnóstico técnico — só Admin / Profissional */}
+      {showDiagnostics && (
+        <PortalDiagnosticsPanel patientId={patientId} patientName={patientName} />
+      )}
+
+      {/* WhatsApp message dialog */}
+      {lastInvite && (
+        <WhatsAppMessageDialog
+          open={waOpen}
+          onOpenChange={setWaOpen}
+          patientName={patientName}
+          link={`${getPublicBaseUrl()}/portal/${lastInvite.link_token}`}
+          codigo={lastInvite.codigo}
+          phone={patientPhone}
+        />
       )}
     </div>
   );
