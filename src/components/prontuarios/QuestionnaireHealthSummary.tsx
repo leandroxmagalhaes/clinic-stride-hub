@@ -208,6 +208,10 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
   const [professionalName, setProfessionalName] = useState("Profissional");
   const [canEditDynamic, setCanEditDynamic] = useState(false);
+  const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [chosenTemplateId, setChosenTemplateId] = useState<string>("");
+  const [creatingFromTemplate, setCreatingFromTemplate] = useState(false);
 
   useEffect(() => {
     (async () => {
