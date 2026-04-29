@@ -101,12 +101,7 @@ export default function PortalVerificacao() {
     setIsVerifying(true);
 
     if (code === invite.codigo) {
-      // Mark as used
-      await (supabase as any)
-        .from("portal_convites")
-        .update({ utilizado: true })
-        .eq("id", invite.id);
-
+      if (token) localStorage.setItem("portal_invite_token", token);
       setStage("create-account");
       toast.success("Código verificado com sucesso!");
     } else {
