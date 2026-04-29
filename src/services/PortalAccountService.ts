@@ -116,10 +116,26 @@ export class PortalAccountService {
     pacienteId: string;
     email: string | null;
     provider: "email" | "google";
+    inviteToken?: string | null;
   }): Promise<string | null> {
-    const { authUserId, pacienteId, email, provider } = params;
+    const { authUserId, pacienteId, email, provider, inviteToken } = params;
 
     try {
+      // Preferred path: server-side linking validates the authenticated user and
+      // the invite token, bypassing client RLS races immediately after OAuth.
+      const { data: linkedContaId, error: rpcError } = await (supabase as any).rpc(
+        "ensure_portal_account_link",
+        {
+          p_paciente_id: pacienteId,
+          p_email: email,
+          p_provider: provider,
+          p_link_token: inviteToken || null,
+        }
+      );
+
+      if (!rpcError && linkedContaId) return linkedContaId;
+      if (rpcError) console.warn("ensure_portal_account_link fallback:", rpcError);
+
       // 1) Procurar conta existente para este auth_user_id
       const { data: existing } = await (supabase as any)
         .from("portal_contas")
