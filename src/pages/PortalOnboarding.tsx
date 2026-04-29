@@ -486,6 +486,8 @@ export default function PortalOnboarding() {
           )}
         </div>
       </div>
+    );
+  }
 
         {/* Progress */}
         <div className="space-y-2">
