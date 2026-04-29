@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
@@ -10,7 +10,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Send, Search, Users, MessageCircle, User } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Loader2,
+  Send,
+  Search,
+  Users,
+  MessageCircle,
+  User,
+  Plus,
+  AlertTriangle,
+  Link2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -23,6 +40,7 @@ interface Conversation {
   ultima_mensagem_em: string | null;
   ultima_autor_tipo: string | null;
   nao_lidas: number;
+  portal_ativo?: boolean;
 }
 
 interface Mensagem {
@@ -33,6 +51,13 @@ interface Mensagem {
   texto: string;
   lida_em: string | null;
   created_at: string;
+}
+
+interface PatientLite {
+  id: string;
+  full_name: string;
+  email: string | null;
+  portal_ativo: boolean;
 }
 
 export default function Mensagens() {
@@ -62,10 +87,39 @@ export default function Mensagens() {
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Patient directory (todos os utentes da clínica)
+  const [allPatients, setAllPatients] = useState<PatientLite[]>([]);
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [newChatSearch, setNewChatSearch] = useState("");
+  const [sendingMagicLink, setSendingMagicLink] = useState(false);
+
   // Broadcast
   const [bcMessage, setBcMessage] = useState("");
   const [bcSelectedIds, setBcSelectedIds] = useState<string[]>([]);
   const [bcSending, setBcSending] = useState(false);
+  const [bcIncludeAll, setBcIncludeAll] = useState(false);
+
+  const loadAllPatients = useCallback(async () => {
+    if (!clinicId) return;
+    const { data: pacs } = await (supabase as any)
+      .from("pacientes")
+      .select("id, full_name, email")
+      .eq("clinic_id", clinicId)
+      .eq("is_active", true)
+      .order("full_name");
+    const { data: contas } = await (supabase as any)
+      .from("portal_contas")
+      .select("paciente_id");
+    const ativos = new Set<string>((contas || []).map((c: any) => c.paciente_id));
+    setAllPatients(
+      (pacs || []).map((p: any) => ({
+        id: p.id,
+        full_name: p.full_name,
+        email: p.email,
+        portal_ativo: ativos.has(p.id),
+      })),
+    );
+  }, [clinicId]);
 
   const loadConversations = useCallback(async () => {
     if (!clinicId) return;
@@ -76,15 +130,24 @@ export default function Mensagens() {
     if (error) {
       console.error(error);
       toast.error("Erro a carregar conversas");
-    } else {
-      setConversations(data || []);
+      setLoading(false);
+      return;
     }
+    // marca portal_ativo cruzando com allPatients (ou refaz quick lookup)
+    const { data: contas } = await (supabase as any)
+      .from("portal_contas")
+      .select("paciente_id");
+    const ativos = new Set<string>((contas || []).map((c: any) => c.paciente_id));
+    setConversations(
+      (data || []).map((c: any) => ({ ...c, portal_ativo: ativos.has(c.paciente_id) })),
+    );
     setLoading(false);
   }, [clinicId]);
 
   useEffect(() => {
     loadConversations();
-  }, [loadConversations]);
+    loadAllPatients();
+  }, [loadConversations, loadAllPatients]);
 
   // Realtime: refresh on new messages
   useEffect(() => {
@@ -103,6 +166,7 @@ export default function Mensagens() {
     return () => {
       supabase.removeChannel(ch);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clinicId, selected, loadConversations]);
 
   const loadMessages = async (pacienteId: string) => {
@@ -112,7 +176,6 @@ export default function Mensagens() {
       .eq("paciente_id", pacienteId)
       .order("created_at", { ascending: true });
     setMessages(data || []);
-    // Mark patient messages as read
     await (supabase as any)
       .from("portal_mensagens")
       .update({ lida_em: new Date().toISOString() })
@@ -127,6 +190,28 @@ export default function Mensagens() {
     loadMessages(c.paciente_id);
   };
 
+  const handleStartChatWith = (p: PatientLite) => {
+    // Verifica se já existe na lista de conversas
+    const existing = conversations.find((c) => c.paciente_id === p.id);
+    const conv: Conversation = existing || {
+      paciente_id: p.id,
+      paciente_nome: p.full_name,
+      paciente_email: p.email,
+      ultima_mensagem: null,
+      ultima_mensagem_em: null,
+      ultima_autor_tipo: null,
+      nao_lidas: 0,
+      portal_ativo: p.portal_ativo,
+    };
+    if (!existing) {
+      setConversations((prev) => [conv, ...prev]);
+    }
+    setSelected(conv);
+    loadMessages(p.id);
+    setShowNewChat(false);
+    setNewChatSearch("");
+  };
+
   const sendMessage = async (pacienteId: string, texto: string) => {
     const { error } = await (supabase as any).from("portal_mensagens").insert({
       paciente_id: pacienteId,
@@ -137,7 +222,6 @@ export default function Mensagens() {
     });
     if (error) throw error;
 
-    // Trigger email notification (best-effort, silent)
     supabase.functions
       .invoke("notify-portal-message", {
         body: { paciente_id: pacienteId, autor_nome: authorName },
@@ -157,6 +241,24 @@ export default function Mensagens() {
       toast.error(e.message || "Erro ao enviar");
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleSendMagicLink = async () => {
+    if (!selected) return;
+    setSendingMagicLink(true);
+    try {
+      const { error } = await supabase.functions.invoke("generate-portal-magic-link", {
+        body: { paciente_id: selected.paciente_id },
+      });
+      if (error) throw error;
+      toast.success("Magic link enviado por email.");
+      await loadAllPatients();
+      await loadConversations();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao enviar magic link");
+    } finally {
+      setSendingMagicLink(false);
     }
   };
 
@@ -189,6 +291,23 @@ export default function Mensagens() {
     c.paciente_nome.toLowerCase().includes(search.toLowerCase()),
   );
 
+  const newChatFiltered = useMemo(() => {
+    const q = newChatSearch.toLowerCase().trim();
+    const list = q
+      ? allPatients.filter(
+          (p) =>
+            p.full_name.toLowerCase().includes(q) ||
+            (p.email || "").toLowerCase().includes(q),
+        )
+      : allPatients;
+    return list.slice(0, 100);
+  }, [allPatients, newChatSearch]);
+
+  const broadcastTargets = useMemo(() => {
+    if (bcIncludeAll) return allPatients;
+    return allPatients.filter((p) => p.portal_ativo);
+  }, [bcIncludeAll, allPatients]);
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <header className="mb-6">
@@ -196,7 +315,7 @@ export default function Mensagens() {
           <MessageCircle className="h-7 w-7 text-primary" />
           Mensagens
         </h1>
-        <p className="text-muted-foreground">Converse com utentes que têm o portal ativado.</p>
+        <p className="text-muted-foreground">Converse com qualquer utente da clínica.</p>
       </header>
 
       <Tabs defaultValue="conversas">
@@ -215,7 +334,14 @@ export default function Mensagens() {
           <div className="grid grid-cols-12 gap-4 h-[70vh]">
             {/* List */}
             <Card className="col-span-4 flex flex-col">
-              <div className="p-3 border-b">
+              <div className="p-3 border-b space-y-2">
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setShowNewChat(true)}
+                >
+                  <Plus className="h-4 w-4 mr-1.5" /> Nova conversa
+                </Button>
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -233,7 +359,7 @@ export default function Mensagens() {
                   </div>
                 ) : filtered.length === 0 ? (
                   <p className="p-6 text-sm text-muted-foreground text-center">
-                    Sem utentes com portal ativo.
+                    Sem conversas. Clica em <strong>Nova conversa</strong> para começar.
                   </p>
                 ) : (
                   filtered.map((c) => (
@@ -246,11 +372,16 @@ export default function Mensagens() {
                     >
                       <div className="flex justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-medium truncate">{c.paciente_nome}</p>
                             {c.nao_lidas > 0 && (
                               <Badge variant="destructive" className="h-5 px-1.5 text-xs">
                                 {c.nao_lidas}
+                              </Badge>
+                            )}
+                            {!c.portal_ativo && (
+                              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                                Sem portal
                               </Badge>
                             )}
                           </div>
@@ -277,14 +408,56 @@ export default function Mensagens() {
             <Card className="col-span-8 flex flex-col">
               {!selected ? (
                 <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                  Selecione uma conversa
+                  Selecione uma conversa ou inicie uma nova
                 </div>
               ) : (
                 <>
                   <div className="p-3 border-b">
-                    <p className="font-semibold">{selected.paciente_nome}</p>
-                    <p className="text-xs text-muted-foreground">{selected.paciente_email}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="font-semibold">{selected.paciente_nome}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {selected.paciente_email || "Sem email"}
+                        </p>
+                      </div>
+                      {selected.portal_ativo ? (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Portal ativo
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px]">
+                          Sem portal
+                        </Badge>
+                      )}
+                    </div>
                   </div>
+
+                  {!selected.portal_ativo && (
+                    <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 text-xs text-amber-900">
+                        Este utente ainda não ativou o portal. As mensagens ficarão guardadas
+                        e ele poderá lê-las assim que ativar o acesso.
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleSendMagicLink}
+                        disabled={sendingMagicLink || !selected.paciente_email}
+                        title={
+                          !selected.paciente_email ? "Utente sem email registado" : ""
+                        }
+                      >
+                        {sendingMagicLink ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Link2 className="h-3 w-3 mr-1" />
+                        )}
+                        Enviar magic link
+                      </Button>
+                    </div>
+                  )}
+
                   <ScrollArea className="flex-1 p-4" ref={scrollRef as any}>
                     <div className="space-y-3">
                       {messages.map((m) => (
@@ -333,7 +506,11 @@ export default function Mensagens() {
                       }}
                     />
                     <Button onClick={handleSend} disabled={sending || !draft.trim()}>
-                      {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      {sending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 </>
@@ -354,14 +531,32 @@ export default function Mensagens() {
                 className="mt-1.5"
               />
             </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="bc-include-all"
+                checked={bcIncludeAll}
+                onCheckedChange={(v) => {
+                  setBcIncludeAll(!!v);
+                  setBcSelectedIds([]);
+                }}
+              />
+              <Label htmlFor="bc-include-all" className="text-sm cursor-pointer">
+                Incluir utentes sem portal ativado
+              </Label>
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>Destinatários ({bcSelectedIds.length} selecionados)</Label>
+                <Label>
+                  Destinatários ({bcSelectedIds.length} de {broadcastTargets.length}{" "}
+                  selecionados)
+                </Label>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setBcSelectedIds(conversations.map((c) => c.paciente_id))}
+                    onClick={() => setBcSelectedIds(broadcastTargets.map((p) => p.id))}
                   >
                     Todos
                   </Button>
@@ -371,26 +566,31 @@ export default function Mensagens() {
                 </div>
               </div>
               <ScrollArea className="h-64 border rounded-md p-2">
-                {conversations.map((c) => (
+                {broadcastTargets.map((p) => (
                   <label
-                    key={c.paciente_id}
+                    key={p.id}
                     className="flex items-center gap-2 p-2 hover:bg-muted/50 rounded cursor-pointer"
                   >
                     <Checkbox
-                      checked={bcSelectedIds.includes(c.paciente_id)}
+                      checked={bcSelectedIds.includes(p.id)}
                       onCheckedChange={(v) => {
                         setBcSelectedIds((prev) =>
-                          v ? [...prev, c.paciente_id] : prev.filter((id) => id !== c.paciente_id),
+                          v ? [...prev, p.id] : prev.filter((id) => id !== p.id),
                         );
                       }}
                     />
-                    <span className="text-sm">{c.paciente_nome}</span>
-                    <span className="text-xs text-muted-foreground ml-auto">{c.paciente_email}</span>
+                    <span className="text-sm">{p.full_name}</span>
+                    {!p.portal_ativo && (
+                      <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                        Sem portal
+                      </Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground ml-auto">{p.email}</span>
                   </label>
                 ))}
-                {conversations.length === 0 && (
+                {broadcastTargets.length === 0 && (
                   <p className="text-center text-sm text-muted-foreground py-8">
-                    Nenhum utente com portal ativo.
+                    Nenhum utente disponível.
                   </p>
                 )}
               </ScrollArea>
@@ -406,13 +606,67 @@ export default function Mensagens() {
                 </>
               ) : (
                 <>
-                  <Send className="h-4 w-4 mr-2" /> Enviar a {bcSelectedIds.length} utente(s)
+                  <Send className="h-4 w-4 mr-2" /> Enviar a {bcSelectedIds.length}{" "}
+                  utente(s)
                 </>
               )}
             </Button>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Modal Nova conversa */}
+      <Dialog open={showNewChat} onOpenChange={setShowNewChat}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nova conversa</DialogTitle>
+            <DialogDescription>
+              Escolha qualquer utente da clínica para iniciar uma conversa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              autoFocus
+              placeholder="Procurar por nome ou email..."
+              value={newChatSearch}
+              onChange={(e) => setNewChatSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <ScrollArea className="h-80 border rounded-md">
+            {newChatFiltered.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground py-8">
+                Nenhum utente encontrado.
+              </p>
+            ) : (
+              newChatFiltered.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => handleStartChatWith(p)}
+                  className="w-full text-left p-3 border-b hover:bg-muted/50 transition flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{p.full_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {p.email || "Sem email"}
+                    </p>
+                  </div>
+                  {p.portal_ativo ? (
+                    <Badge variant="secondary" className="text-[10px] shrink-0">
+                      Portal ativo
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] shrink-0">
+                      Sem portal
+                    </Badge>
+                  )}
+                </button>
+              ))
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
