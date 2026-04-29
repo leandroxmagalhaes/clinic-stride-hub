@@ -196,6 +196,7 @@ export default function PortalVerificacao() {
 
       // Store paciente_id for onboarding
       localStorage.setItem("portal_paciente_id", invite.paciente_id);
+      if (token) localStorage.setItem("portal_invite_token", token);
 
       toast.success("Conta criada! Verifique o seu email para confirmar.");
       navigate("/portal/onboarding");
