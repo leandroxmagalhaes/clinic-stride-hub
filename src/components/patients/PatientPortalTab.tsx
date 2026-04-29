@@ -259,9 +259,14 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
         )}
 
         {lastInvite && !lastInvite.utilizado && new Date(lastInvite.expira_em) > new Date() && (
-          <Button size="sm" variant="outline" onClick={handleCopyLink} className="gap-1.5">
-            <Copy className="h-3.5 w-3.5" /> Copiar link
-          </Button>
+          <>
+            <Button size="sm" variant="outline" onClick={handleCopyLink} className="gap-1.5">
+              <Copy className="h-3.5 w-3.5" /> Copiar link
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setWaOpen(true)} className="gap-1.5">
+              <MessageCircle className="h-3.5 w-3.5" /> Mensagem WhatsApp
+            </Button>
+          </>
         )}
 
         {account && (
