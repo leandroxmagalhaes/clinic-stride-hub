@@ -176,6 +176,7 @@ export default function PortalVerificacao() {
           pacienteId: invite.paciente_id,
           email,
           provider: "email",
+          inviteToken: token || null,
         });
 
         // Check if email exists in profiles (professional) — set portal_role to 'both'
@@ -195,6 +196,7 @@ export default function PortalVerificacao() {
 
       // Store paciente_id for onboarding
       localStorage.setItem("portal_paciente_id", invite.paciente_id);
+      if (token) localStorage.setItem("portal_invite_token", token);
 
       toast.success("Conta criada! Verifique o seu email para confirmar.");
       navigate("/portal/onboarding");
@@ -209,6 +211,7 @@ export default function PortalVerificacao() {
     if (!invite) return;
     localStorage.setItem("portal_paciente_id", invite.paciente_id);
     localStorage.setItem("portal_google_pending", "true");
+    if (token) localStorage.setItem("portal_invite_token", token);
 
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin + "/portal/onboarding",
