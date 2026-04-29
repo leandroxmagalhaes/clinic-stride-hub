@@ -63,10 +63,8 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
   const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [waOpen, setWaOpen] = useState(false);
-  const { roleChecks } = useUserRole() as any;
-  // useUserRole exports flat checks; safely fall back
-  const userRole = useUserRole();
-  const showDiagnostics = Boolean((userRole as any)?.isAdmin || (userRole as any)?.isProfessional || (userRole as any)?.isAdminMaster);
+  const { isAdmin, isProfessional } = useUserRole();
+  const showDiagnostics = isAdmin || isProfessional;
 
   useEffect(() => {
     loadData();
