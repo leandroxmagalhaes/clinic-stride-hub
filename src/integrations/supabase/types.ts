@@ -1436,6 +1436,7 @@ export type Database = {
           paciente_id: string
           template_id: string | null
           tentativas: number | null
+          tipo: string
           utilizado: boolean | null
         }
         Insert: {
@@ -1450,6 +1451,7 @@ export type Database = {
           paciente_id: string
           template_id?: string | null
           tentativas?: number | null
+          tipo?: string
           utilizado?: boolean | null
         }
         Update: {
@@ -1464,6 +1466,7 @@ export type Database = {
           paciente_id?: string
           template_id?: string | null
           tentativas?: number | null
+          tipo?: string
           utilizado?: boolean | null
         }
         Relationships: [
@@ -1511,6 +1514,42 @@ export type Database = {
           nivel_dor?: number | null
           paciente_id?: string
           tem_foto?: boolean | null
+          texto?: string
+        }
+        Relationships: []
+      }
+      portal_mensagens: {
+        Row: {
+          autor_id: string | null
+          autor_nome: string
+          autor_tipo: string
+          broadcast_id: string | null
+          created_at: string
+          id: string
+          lida_em: string | null
+          paciente_id: string
+          texto: string
+        }
+        Insert: {
+          autor_id?: string | null
+          autor_nome: string
+          autor_tipo: string
+          broadcast_id?: string | null
+          created_at?: string
+          id?: string
+          lida_em?: string | null
+          paciente_id: string
+          texto: string
+        }
+        Update: {
+          autor_id?: string | null
+          autor_nome?: string
+          autor_tipo?: string
+          broadcast_id?: string | null
+          created_at?: string
+          id?: string
+          lida_em?: string | null
+          paciente_id?: string
           texto?: string
         }
         Relationships: []
@@ -2954,6 +2993,18 @@ export type Database = {
         Returns: boolean
       }
       is_professional: { Args: { p_user_id: string }; Returns: boolean }
+      list_portal_conversations: {
+        Args: { p_clinic_id: string }
+        Returns: {
+          nao_lidas: number
+          paciente_email: string
+          paciente_id: string
+          paciente_nome: string
+          ultima_autor_tipo: string
+          ultima_mensagem: string
+          ultima_mensagem_em: string
+        }[]
+      }
       portal_resolve_account: {
         Args: { p_user_id: string }
         Returns: {
