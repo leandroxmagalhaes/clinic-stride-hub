@@ -2973,6 +2973,17 @@ export type Database = {
         Args: { p_session_id: string; p_user_id: string }
         Returns: boolean
       }
+      upsert_portal_questionnaire: {
+        Args: {
+          p_completo?: boolean
+          p_link_token?: string
+          p_paciente_id: string
+          p_perfil_tipo: string
+          p_respostas: Json
+          p_template_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "professional" | "patient" | "secretary"
