@@ -2929,6 +2929,15 @@ export type Database = {
           titulo: string
         }[]
       }
+      ensure_portal_account_link: {
+        Args: {
+          p_email?: string
+          p_link_token?: string
+          p_paciente_id: string
+          p_provider?: string
+        }
+        Returns: string
+      }
       get_invite_details: { Args: { invite_token: string }; Returns: Json }
       get_patient_balance: { Args: { p_patient_id: string }; Returns: number }
       get_patient_credit_balance: {
