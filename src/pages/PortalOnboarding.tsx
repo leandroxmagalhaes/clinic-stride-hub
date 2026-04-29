@@ -133,6 +133,21 @@ export default function PortalOnboarding() {
   useEffect(() => {
     (async () => {
       let pid = localStorage.getItem("portal_paciente_id");
+      const currentInviteToken = localStorage.getItem("portal_invite_token");
+      if (currentInviteToken) setInviteToken(currentInviteToken);
+
+      if (pid && currentInviteToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await PortalAccountService.ensureAccountAndLink({
+            authUserId: session.user.id,
+            pacienteId: pid,
+            email: session.user.email ?? null,
+            provider: "email",
+            inviteToken: currentInviteToken,
+          });
+        }
+      }
 
       // Fallback: se localStorage foi limpo, recuperar via PortalAccountService
       if (!pid) {
