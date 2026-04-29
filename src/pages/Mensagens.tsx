@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,8 +36,22 @@ interface Mensagem {
 }
 
 export default function Mensagens() {
-  const { user, profile } = useAuth();
-  const clinicId = profile?.clinic_id;
+  const { user } = useAuth();
+  const [clinicId, setClinicId] = useState<string | null>(null);
+  const [authorName, setAuthorName] = useState<string>("");
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("profiles")
+        .select("clinic_id, full_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setClinicId(data?.clinic_id || null);
+      setAuthorName(data?.full_name || user.email || "Profissional");
+    })();
+  }, [user]);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,12 +128,11 @@ export default function Mensagens() {
   };
 
   const sendMessage = async (pacienteId: string, texto: string) => {
-    const autorNome = profile?.full_name || user?.email || "Profissional";
     const { error } = await (supabase as any).from("portal_mensagens").insert({
       paciente_id: pacienteId,
       autor_tipo: "professional",
       autor_id: user?.id,
-      autor_nome: autorNome,
+      autor_nome: authorName,
       texto: texto.trim(),
     });
     if (error) throw error;
@@ -127,7 +140,7 @@ export default function Mensagens() {
     // Trigger email notification (best-effort, silent)
     supabase.functions
       .invoke("notify-portal-message", {
-        body: { paciente_id: pacienteId, autor_nome: autorNome },
+        body: { paciente_id: pacienteId, autor_nome: authorName },
       })
       .catch((e) => console.warn("notify failed", e));
   };
