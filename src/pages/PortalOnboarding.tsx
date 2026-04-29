@@ -230,10 +230,9 @@ export default function PortalOnboarding() {
                 respostas: merged,
                 updatedAt: existingQ?.updated_at || new Date().toISOString(),
               });
-              setShowResumeDialog(true);
-            } else {
-              setShowQuestionnaire(true);
+              // Don't auto-open dialog — banner in welcome step handles it
             }
+            // Always start at welcome step (showQuestionnaire stays false until user clicks Start)
           }
         }
       } catch (e) {
