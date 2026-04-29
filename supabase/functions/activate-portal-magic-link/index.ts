@@ -62,13 +62,23 @@ Deno.serve(async (req) => {
     if (!userId) throw new Error("Falha a criar utilizador");
 
     // 4. Ensure portal_contas + portal_conta_pacientes
+    // Look up by auth_user_id OR paciente_id (paciente_id has a unique constraint)
     let { data: conta } = await admin
       .from("portal_contas")
-      .select("id")
-      .eq("auth_user_id", userId)
+      .select("id, auth_user_id")
+      .or(`auth_user_id.eq.${userId},paciente_id.eq.${invite.paciente_id}`)
       .maybeSingle();
 
-    if (!conta) {
+    if (conta) {
+      // If existing conta has different/null auth_user_id, update it to current
+      if (conta.auth_user_id !== userId) {
+        const { error: updErr } = await admin
+          .from("portal_contas")
+          .update({ auth_user_id: userId, email, status: "active" })
+          .eq("id", conta.id);
+        if (updErr) throw updErr;
+      }
+    } else {
       const { data: novaConta, error: contaErr } = await admin
         .from("portal_contas")
         .insert({
