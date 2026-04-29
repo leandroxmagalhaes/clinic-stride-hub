@@ -350,6 +350,23 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
           </Dialog>
         </div>
       )}
+
+      {/* Diagnóstico técnico — só Admin / Profissional */}
+      {showDiagnostics && (
+        <PortalDiagnosticsPanel patientId={patientId} patientName={patientName} />
+      )}
+
+      {/* WhatsApp message dialog */}
+      {lastInvite && (
+        <WhatsAppMessageDialog
+          open={waOpen}
+          onOpenChange={setWaOpen}
+          patientName={patientName}
+          link={`${getPublicBaseUrl()}/portal/${lastInvite.link_token}`}
+          codigo={lastInvite.codigo}
+          phone={patientPhone}
+        />
+      )}
     </div>
   );
 }
