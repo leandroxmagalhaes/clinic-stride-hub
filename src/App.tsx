@@ -51,9 +51,12 @@ const PatientPortal = lazyWithRetry(() => import("./pages/PatientPortal"));
 const PreRegisto = lazyWithRetry(() => import("./pages/PreRegisto"));
 const RelatorioResp = lazyWithRetry(() => import("./pages/RelatorioRespiratorio"));
 const PortalVerificacao = lazyWithRetry(() => import("./pages/PortalVerificacao"));
+const PortalAtivacao = lazyWithRetry(() => import("./pages/PortalAtivacao"));
 const PortalOnboarding = lazyWithRetry(() => import("./pages/PortalOnboarding"));
 const PortalLogin = lazyWithRetry(() => import("./pages/PortalLogin"));
 const PortalResetPassword = lazyWithRetry(() => import("./pages/PortalResetPassword"));
+const PortalMensagens = lazyWithRetry(() => import("./pages/PortalMensagens"));
+const Mensagens = lazyWithRetry(() => import("./pages/Mensagens"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -119,6 +122,14 @@ const App = () => (
                     element={
                       <Suspense fallback={<PageLoadingFallback />}>
                         <PreRegisto />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/portal/ativar/:token"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <PortalAtivacao />
                       </Suspense>
                     }
                   />
@@ -264,6 +275,24 @@ const App = () => (
                           <PatientPortal />
                         </Suspense>
                       </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/portal/mensagens"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<PageLoadingFallback />}>
+                          <PortalMensagens />
+                        </Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/mensagens"
+                    element={
+                      <ProtectedPage>
+                        <Mensagens />
+                      </ProtectedPage>
                     }
                   />
 
