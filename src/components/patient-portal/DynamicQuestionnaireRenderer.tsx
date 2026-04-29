@@ -18,6 +18,7 @@ interface Props {
   template: QuestionnaireTemplate;
   pacienteId?: string | null;
   initialAnswers?: Record<string, Record<string, any>>;
+  inviteToken?: string | null;
   saving?: boolean;
   onSubmit: (answers: Record<string, Record<string, any>>) => void;
   onExit?: () => void;
@@ -25,7 +26,7 @@ interface Props {
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, saving, onSubmit, onExit }: Props) {
+export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, inviteToken, saving, onSubmit, onExit }: Props) {
   const [answers, setAnswers] = useState<Record<string, Record<string, any>>>(initialAnswers || {});
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -55,19 +56,14 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
     if (!current || Object.keys(current).length === 0) return;
     setSaveStatus("saving");
     try {
-      const { error } = await (supabase as any)
-        .from("portal_questionario")
-        .upsert(
-          {
-            paciente_id: pacienteId,
-            perfil_tipo: template.identifier,
-            template_id: template.id,
-            respostas: current,
-            completo: false,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "paciente_id" }
-        );
+      const { error } = await (supabase as any).rpc("upsert_portal_questionnaire", {
+        p_paciente_id: pacienteId,
+        p_template_id: template.id,
+        p_perfil_tipo: template.identifier,
+        p_respostas: current,
+        p_completo: false,
+        p_link_token: inviteToken || localStorage.getItem("portal_invite_token") || null,
+      });
       if (error) throw error;
       setLastSaved(new Date());
       setSaveStatus("saved");
