@@ -65,6 +65,7 @@ export default function PortalOnboarding() {
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(() => localStorage.getItem("portal_invite_token"));
 
   // Step 1 fields
   const [fullName, setFullName] = useState("");
@@ -97,14 +98,14 @@ export default function PortalOnboarding() {
         supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session?.user) {
             // Idempotente: cria conta se não existe + garante associação ao utente
-            await PortalAccountService.ensureAccountAndLink({
+            const linked = await PortalAccountService.ensureAccountAndLink({
               authUserId: session.user.id,
               pacienteId: pid,
               email: session.user.email ?? null,
               provider: "google",
               inviteToken,
             });
-            localStorage.removeItem("portal_invite_token");
+            if (linked) setInviteToken(inviteToken);
 
             // Check dual-role
             const { data: existingProfile } = await supabase
@@ -122,7 +123,10 @@ export default function PortalOnboarding() {
           }
         });
       }
-      if (!pid) localStorage.removeItem("portal_invite_token");
+      if (!pid) {
+        localStorage.removeItem("portal_invite_token");
+        setInviteToken(null);
+      }
     }
   }, []);
 
