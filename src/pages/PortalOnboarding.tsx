@@ -92,6 +92,7 @@ export default function PortalOnboarding() {
     if (pending) {
       localStorage.removeItem("portal_google_pending");
       const pid = localStorage.getItem("portal_paciente_id");
+      const inviteToken = localStorage.getItem("portal_invite_token");
       if (pid) {
         supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session?.user) {
@@ -101,7 +102,9 @@ export default function PortalOnboarding() {
               pacienteId: pid,
               email: session.user.email ?? null,
               provider: "google",
+              inviteToken,
             });
+            localStorage.removeItem("portal_invite_token");
 
             // Check dual-role
             const { data: existingProfile } = await supabase
@@ -119,6 +122,7 @@ export default function PortalOnboarding() {
           }
         });
       }
+      if (!pid) localStorage.removeItem("portal_invite_token");
     }
   }, []);
 
