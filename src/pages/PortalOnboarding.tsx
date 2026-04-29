@@ -65,6 +65,7 @@ export default function PortalOnboarding() {
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(() => localStorage.getItem("portal_invite_token"));
 
   // Step 1 fields
   const [fullName, setFullName] = useState("");
@@ -97,14 +98,14 @@ export default function PortalOnboarding() {
         supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session?.user) {
             // Idempotente: cria conta se não existe + garante associação ao utente
-            await PortalAccountService.ensureAccountAndLink({
+            const linked = await PortalAccountService.ensureAccountAndLink({
               authUserId: session.user.id,
               pacienteId: pid,
               email: session.user.email ?? null,
               provider: "google",
               inviteToken,
             });
-            localStorage.removeItem("portal_invite_token");
+            if (linked) setInviteToken(inviteToken);
 
             // Check dual-role
             const { data: existingProfile } = await supabase
@@ -122,13 +123,31 @@ export default function PortalOnboarding() {
           }
         });
       }
-      if (!pid) localStorage.removeItem("portal_invite_token");
+      if (!pid) {
+        localStorage.removeItem("portal_invite_token");
+        setInviteToken(null);
+      }
     }
   }, []);
 
   useEffect(() => {
     (async () => {
       let pid = localStorage.getItem("portal_paciente_id");
+      const currentInviteToken = localStorage.getItem("portal_invite_token");
+      if (currentInviteToken) setInviteToken(currentInviteToken);
+
+      if (pid && currentInviteToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await PortalAccountService.ensureAccountAndLink({
+            authUserId: session.user.id,
+            pacienteId: pid,
+            email: session.user.email ?? null,
+            provider: "email",
+            inviteToken: currentInviteToken,
+          });
+        }
+      }
 
       // Fallback: se localStorage foi limpo, recuperar via PortalAccountService
       if (!pid) {
@@ -313,18 +332,15 @@ export default function PortalOnboarding() {
     if (!pacienteId || !dynamicTemplate) return;
     setSaving(true);
     try {
-      await (supabase as any).from("portal_questionario").upsert({
-        paciente_id: pacienteId,
-        perfil_tipo: dynamicTemplate.identifier,
-        template_id: dynamicTemplate.id,
-        respostas,
-        completo: true,
-      }, { onConflict: "paciente_id" });
-
-      await (supabase as any).from("portal_contas").update({
-        onboarding_completo: true,
-        updated_at: new Date().toISOString(),
-      }).eq("paciente_id", pacienteId);
+      const { error } = await (supabase as any).rpc("upsert_portal_questionnaire", {
+        p_paciente_id: pacienteId,
+        p_template_id: dynamicTemplate.id,
+        p_perfil_tipo: dynamicTemplate.identifier,
+        p_respostas: respostas,
+        p_completo: true,
+        p_link_token: inviteToken || localStorage.getItem("portal_invite_token") || null,
+      });
+      if (error) throw error;
 
       // Auto-send portal link email
       if (email) {
@@ -343,6 +359,9 @@ export default function PortalOnboarding() {
       }
 
       setDynamicCompleted(true);
+      localStorage.removeItem(`portal_questionario_draft:${pacienteId}:${dynamicTemplate.id}`);
+      localStorage.removeItem("portal_invite_token");
+      setInviteToken(null);
     } catch (e) {
       console.error(e);
       toast.error("Erro ao guardar questionário.");
@@ -400,6 +419,7 @@ export default function PortalOnboarding() {
                 template={dynamicTemplate}
                 pacienteId={pacienteId}
                 initialAnswers={dynamicInitialAnswers || undefined}
+                inviteToken={inviteToken}
                 saving={saving}
                 onSubmit={saveDynamicAnswers}
                 onExit={() => { localStorage.removeItem("portal_paciente_id"); navigate("/patient-portal"); }}

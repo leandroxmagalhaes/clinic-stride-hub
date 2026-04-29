@@ -101,11 +101,23 @@ export default function PortalVerificacao() {
     setIsVerifying(true);
 
     if (code === invite.codigo) {
-      // Mark as used
-      await (supabase as any)
-        .from("portal_convites")
-        .update({ utilizado: true })
-        .eq("id", invite.id);
+      if (token) localStorage.setItem("portal_invite_token", token);
+      localStorage.setItem("portal_paciente_id", invite.paciente_id);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await PortalAccountService.ensureAccountAndLink({
+          authUserId: session.user.id,
+          pacienteId: invite.paciente_id,
+          email: session.user.email ?? invite.enviado_para_email,
+          provider: "email",
+          inviteToken: token || null,
+        });
+        toast.success("Código verificado com sucesso!");
+        navigate("/portal/onboarding");
+        setIsVerifying(false);
+        return;
+      }
 
       setStage("create-account");
       toast.success("Código verificado com sucesso!");
@@ -162,11 +174,17 @@ export default function PortalVerificacao() {
 
     setIsCreating(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      let { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: { emailRedirectTo: window.location.origin + "/portal/onboarding" },
       });
+      if (authError && /already|registered|exists|existente|regist/i.test(authError.message)) {
+        const loginResult = await supabase.auth.signInWithPassword({ email, password });
+        if (loginResult.error) throw loginResult.error;
+        authData = loginResult.data;
+        authError = null;
+      }
       if (authError) throw authError;
 
       // Criar/associar conta de forma idempotente (evita duplicados)
@@ -198,7 +216,7 @@ export default function PortalVerificacao() {
       localStorage.setItem("portal_paciente_id", invite.paciente_id);
       if (token) localStorage.setItem("portal_invite_token", token);
 
-      toast.success("Conta criada! Verifique o seu email para confirmar.");
+      toast.success(authData.session ? "Conta associada com sucesso!" : "Conta criada! Verifique o seu email para confirmar.");
       navigate("/portal/onboarding");
     } catch (err: any) {
       toast.error(err.message || "Erro ao criar conta.");
