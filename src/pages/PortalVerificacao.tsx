@@ -102,6 +102,23 @@ export default function PortalVerificacao() {
 
     if (code === invite.codigo) {
       if (token) localStorage.setItem("portal_invite_token", token);
+      localStorage.setItem("portal_paciente_id", invite.paciente_id);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await PortalAccountService.ensureAccountAndLink({
+          authUserId: session.user.id,
+          pacienteId: invite.paciente_id,
+          email: session.user.email ?? invite.enviado_para_email,
+          provider: "email",
+          inviteToken: token || null,
+        });
+        toast.success("Código verificado com sucesso!");
+        navigate("/portal/onboarding");
+        setIsVerifying(false);
+        return;
+      }
+
       setStage("create-account");
       toast.success("Código verificado com sucesso!");
     } else {
