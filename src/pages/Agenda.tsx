@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, Lock, FileSpreadsheet } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Plus, Lock, FileSpreadsheet, Search } from "lucide-react";
 import { startOfWeek, addDays, addWeeks, subWeeks } from "date-fns";
 import { toast } from "sonner";
+import { useClinicInfo } from "@/hooks/useClinicInfo";
 
 import { useData } from "@/contexts/DataContext";
 import { SessionService, Session } from "@/services/SessionService";
