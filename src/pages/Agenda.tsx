@@ -390,6 +390,27 @@ export default function Agenda() {
           onSessionsCreated={refreshSessions}
         />
       )}
+
+      <AgendaSearchPanel
+        isOpen={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        initialQuery={searchQuery}
+        sessions={sessions}
+        professionals={professionals.map((p) => ({ id: p.id, full_name: p.full_name }))}
+        services={services.map((s) => ({ id: s.id, name: s.name, color: (s as any).color }))}
+        clinicName={clinicInfo?.name ?? "Agenda"}
+        onEditSession={(s) => { setSelectedSession(s); setIsSessionModalOpen(true); }}
+        onDuplicateSession={(s) => {
+          setSelectedSlot({ date: new Date(s.start_time), hour: new Date(s.start_time).getHours() });
+          setIsModalOpen(true);
+        }}
+        onDeleteSession={async (id) => { await deleteSession(id); }}
+        onUpdateStatus={async (id, status) => {
+          await updateSession(id, { status } as any);
+          toast.success("Status atualizado");
+        }}
+        onGoToDate={(d) => { setCurrentDate(d); }}
+      />
     </AppLayout>
 
       <QuickPanel
