@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, Lock, FileSpreadsheet } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Plus, Lock, FileSpreadsheet, Search } from "lucide-react";
 import { startOfWeek, addDays, addWeeks, subWeeks } from "date-fns";
 import { toast } from "sonner";
+import { useClinicInfo } from "@/hooks/useClinicInfo";
 
 import { useData } from "@/contexts/DataContext";
 import { SessionService, Session } from "@/services/SessionService";
@@ -22,6 +24,7 @@ import { NewReservedSlotModal } from "@/components/agenda/NewReservedSlotModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotManagementModal";
 import { BatchSchedulingModal } from "@/components/agenda/BatchSchedulingModal";
+import { AgendaSearchPanel } from "@/components/agenda/AgendaSearchPanel";
 
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
@@ -70,6 +73,9 @@ export default function Agenda() {
   const [clinicId, setClinicId] = useState<string | null>(null);
   const [isReservedSlotModalOpen, setIsReservedSlotModalOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const { data: clinicInfo } = useClinicInfo();
   const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
   const [localPatients, setLocalPatients] = useState(patients);
@@ -242,7 +248,20 @@ export default function Agenda() {
       title="Agenda"
       subtitle="Gerencie os agendamentos da clínica"
       actions={
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <div className="relative hidden md:block">
+            <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchOpen(true)}
+              placeholder="Pesquisar..."
+              className="pl-8 h-10 w-[200px] lg:w-[240px]"
+            />
+          </div>
+          <Button variant="outline" size="icon" className="md:hidden h-10 w-10" onClick={() => setSearchOpen(true)}>
+            <Search className="h-4 w-4" />
+          </Button>
           <Button variant="outline" onClick={() => setIsBatchModalOpen(true)} className="gap-2 min-h-[44px]">
             <FileSpreadsheet className="h-4 w-4" />
             <span className="hidden sm:inline">Lote</span>
@@ -371,6 +390,27 @@ export default function Agenda() {
           onSessionsCreated={refreshSessions}
         />
       )}
+
+      <AgendaSearchPanel
+        isOpen={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        initialQuery={searchQuery}
+        sessions={sessions}
+        professionals={professionals.map((p) => ({ id: p.id, full_name: p.full_name }))}
+        services={services.map((s) => ({ id: s.id, name: s.name, color: (s as any).color }))}
+        clinicName={clinicInfo?.name ?? "Agenda"}
+        onEditSession={(s) => { setSelectedSession(s); setIsSessionModalOpen(true); }}
+        onDuplicateSession={(s) => {
+          setSelectedSlot({ date: new Date(s.start_time), hour: new Date(s.start_time).getHours() });
+          setIsModalOpen(true);
+        }}
+        onDeleteSession={async (id) => { await deleteSession(id); }}
+        onUpdateStatus={async (id, status) => {
+          await updateSession(id, { status } as any);
+          toast.success("Status atualizado");
+        }}
+        onGoToDate={(d) => { setCurrentDate(d); }}
+      />
     </AppLayout>
 
       <QuickPanel
