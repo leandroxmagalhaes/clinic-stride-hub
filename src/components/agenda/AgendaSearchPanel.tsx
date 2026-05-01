@@ -388,8 +388,8 @@ export function AgendaSearchPanel({
       </Sheet>
 
       <DeleteConfirmationDialog
-        open={!!deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
         title="Excluir sessão"
         description={
@@ -397,6 +397,7 @@ export function AgendaSearchPanel({
             ? `Excluir a sessão de ${deleteTarget.paciente?.full_name} em ${format(new Date(deleteTarget.start_time), "dd/MM/yyyy HH:mm")}?`
             : ""
         }
+        entityName="sessão"
       />
     </>
   );
