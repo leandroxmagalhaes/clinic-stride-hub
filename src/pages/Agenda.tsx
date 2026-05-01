@@ -73,6 +73,9 @@ export default function Agenda() {
   const [clinicId, setClinicId] = useState<string | null>(null);
   const [isReservedSlotModalOpen, setIsReservedSlotModalOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const { data: clinicInfo } = useClinicInfo();
   const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
   const [localPatients, setLocalPatients] = useState(patients);
