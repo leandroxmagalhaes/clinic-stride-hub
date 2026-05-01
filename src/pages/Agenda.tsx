@@ -248,7 +248,20 @@ export default function Agenda() {
       title="Agenda"
       subtitle="Gerencie os agendamentos da clínica"
       actions={
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <div className="relative hidden md:block">
+            <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchOpen(true)}
+              placeholder="Pesquisar..."
+              className="pl-8 h-10 w-[200px] lg:w-[240px]"
+            />
+          </div>
+          <Button variant="outline" size="icon" className="md:hidden h-10 w-10" onClick={() => setSearchOpen(true)}>
+            <Search className="h-4 w-4" />
+          </Button>
           <Button variant="outline" onClick={() => setIsBatchModalOpen(true)} className="gap-2 min-h-[44px]">
             <FileSpreadsheet className="h-4 w-4" />
             <span className="hidden sm:inline">Lote</span>
