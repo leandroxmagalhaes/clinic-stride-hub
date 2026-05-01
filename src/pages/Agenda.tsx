@@ -24,6 +24,7 @@ import { NewReservedSlotModal } from "@/components/agenda/NewReservedSlotModal";
 import { SessionManagementModal } from "@/components/agenda/SessionManagementModal";
 import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotManagementModal";
 import { BatchSchedulingModal } from "@/components/agenda/BatchSchedulingModal";
+import { AgendaSearchPanel } from "@/components/agenda/AgendaSearchPanel";
 
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
