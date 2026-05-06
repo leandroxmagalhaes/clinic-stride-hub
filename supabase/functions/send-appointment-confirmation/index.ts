@@ -97,7 +97,7 @@ serve(async (req) => {
           <tr>
             <td style="padding: 30px 0 20px;">
               <p style="margin: 0; color: #3f3f46; font-size: 16px;">
-                Olá <strong>${patientName}</strong>,
+                Olá <strong>${escapeHtml(patientName)}</strong>,
               </p>
               <p style="margin: 16px 0 0; color: #71717a; font-size: 14px;">
                 O seu agendamento foi confirmado com sucesso. Seguem os detalhes:
