@@ -50,7 +50,7 @@ export class ClinicService {
 
     if (error) {
       console.error('Error updating clinic:', error);
-      throw new Error(`Erro ao atualizar: ${error.message}`);
+      throw new Error('Não foi possível atualizar os dados da clínica.');
     }
 
     return data as Clinic;
