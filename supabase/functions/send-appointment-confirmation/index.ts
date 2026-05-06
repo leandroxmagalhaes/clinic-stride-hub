@@ -158,9 +158,9 @@ serve(async (req) => {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr>
             <td style="padding-top: 30px; border-top: 1px solid #e4e4e7; text-align: center;">
-              <p style="margin: 0 0 8px; color: #18181b; font-size: 16px; font-weight: 600;">${clinicName || "Clínica"}</p>
-              ${clinicPhone ? `<p style="margin: 0 0 4px; color: #71717a; font-size: 14px;">📞 ${clinicPhone}</p>` : ""}
-              ${clinicEmail ? `<p style="margin: 0; color: #71717a; font-size: 14px;">✉️ ${clinicEmail}</p>` : ""}
+              <p style="margin: 0 0 8px; color: #18181b; font-size: 16px; font-weight: 600;">${escapeHtml(clinicName || "Clínica")}</p>
+              ${clinicPhone ? `<p style="margin: 0 0 4px; color: #71717a; font-size: 14px;">📞 ${escapeHtml(clinicPhone)}</p>` : ""}
+              ${clinicEmail ? `<p style="margin: 0; color: #71717a; font-size: 14px;">✉️ ${escapeHtml(clinicEmail)}</p>` : ""}
             </td>
           </tr>
         </table>
