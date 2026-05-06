@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Public access portal_questionario" ON public.portal_questionario;

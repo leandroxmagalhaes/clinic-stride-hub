@@ -266,7 +266,8 @@ export default function Pacientes() {
   const handleUpdatePatient = async (patientId: string, data: Partial<Patient>) => {
     const { error } = await supabase.from("pacientes").update(data).eq("id", patientId);
     if (error) {
-      toast.error(`Erro ao atualizar paciente: ${error.message}`);
+      console.error("Erro ao atualizar paciente:", error);
+      toast.error("Não foi possível atualizar os dados do utente.");
       throw error;
     }
     updatePatient(patientId, data);
@@ -313,7 +314,8 @@ export default function Pacientes() {
       };
       const { error } = await supabase.from("pacientes").insert(payload);
       if (error) {
-        toast.error(`Erro ao cadastrar paciente: ${error.message}`);
+        console.error("Erro ao cadastrar paciente:", error);
+        toast.error("Não foi possível cadastrar o utente.");
         return;
       }
       await refreshPatients();
@@ -321,7 +323,8 @@ export default function Pacientes() {
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao cadastrar paciente");
+      console.error("Erro ao cadastrar paciente:", error);
+      toast.error("Não foi possível cadastrar o utente.");
     }
   };
 

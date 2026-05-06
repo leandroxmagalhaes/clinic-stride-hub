@@ -8,6 +8,15 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function escapeHtml(unsafe: string): string {
+  return String(unsafe ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 interface AppointmentConfirmationRequest {
   patientEmail: string;
   patientName: string;
@@ -30,6 +39,27 @@ serve(async (req) => {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (!resendApiKey) {
       throw new Error("RESEND_API_KEY not configured");
+    }
+
+    // Authenticate caller — only logged-in clinic staff can trigger this
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     const resend = new Resend(resendApiKey);
@@ -88,7 +118,7 @@ serve(async (req) => {
           <tr>
             <td style="padding: 30px 0 20px;">
               <p style="margin: 0; color: #3f3f46; font-size: 16px;">
-                Olá <strong>${patientName}</strong>,
+                Olá <strong>${escapeHtml(patientName)}</strong>,
               </p>
               <p style="margin: 16px 0 0; color: #71717a; font-size: 14px;">
                 O seu agendamento foi confirmado com sucesso. Seguem os detalhes:
@@ -117,13 +147,13 @@ serve(async (req) => {
                 <tr>
                   <td style="padding-bottom: 12px;">
                     <span style="color: #71717a; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Profissional</span>
-                    <p style="margin: 4px 0 0; color: #18181b; font-size: 16px; font-weight: 600;">${professionalName || "A confirmar"}</p>
+                    <p style="margin: 4px 0 0; color: #18181b; font-size: 16px; font-weight: 600;">${escapeHtml(professionalName || "A confirmar")}</p>
                   </td>
                 </tr>
                 <tr>
                   <td>
                     <span style="color: #71717a; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Serviço</span>
-                    <p style="margin: 4px 0 0; color: #18181b; font-size: 16px; font-weight: 600;">${serviceName || "Consulta"}</p>
+                    <p style="margin: 4px 0 0; color: #18181b; font-size: 16px; font-weight: 600;">${escapeHtml(serviceName || "Consulta")}</p>
                   </td>
                 </tr>
               </table>
@@ -149,9 +179,9 @@ serve(async (req) => {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr>
             <td style="padding-top: 30px; border-top: 1px solid #e4e4e7; text-align: center;">
-              <p style="margin: 0 0 8px; color: #18181b; font-size: 16px; font-weight: 600;">${clinicName || "Clínica"}</p>
-              ${clinicPhone ? `<p style="margin: 0 0 4px; color: #71717a; font-size: 14px;">📞 ${clinicPhone}</p>` : ""}
-              ${clinicEmail ? `<p style="margin: 0; color: #71717a; font-size: 14px;">✉️ ${clinicEmail}</p>` : ""}
+              <p style="margin: 0 0 8px; color: #18181b; font-size: 16px; font-weight: 600;">${escapeHtml(clinicName || "Clínica")}</p>
+              ${clinicPhone ? `<p style="margin: 0 0 4px; color: #71717a; font-size: 14px;">📞 ${escapeHtml(clinicPhone)}</p>` : ""}
+              ${clinicEmail ? `<p style="margin: 0; color: #71717a; font-size: 14px;">✉️ ${escapeHtml(clinicEmail)}</p>` : ""}
             </td>
           </tr>
         </table>
