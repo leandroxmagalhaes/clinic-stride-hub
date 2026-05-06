@@ -119,7 +119,7 @@ const managementNavItems: NavItem[] = [
   { title: "Comercial", url: "/comercial", icon: TrendingUp, module: "comercial" },
   { title: "Financeiro", url: "/financeiro", icon: DollarSign, module: "financeiro" },
   { title: "Engajamento", url: "/engajamento", icon: Heart, module: "engajamento" },
-  { title: "Mensagens", url: "/mensagens", icon: MessageCircle },
+  // Mensagens removido do menu — agora dentro do prontuário e via atalho flutuante
 ];
 
 const clinicNavItems: NavItem[] = [
