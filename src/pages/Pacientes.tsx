@@ -266,7 +266,8 @@ export default function Pacientes() {
   const handleUpdatePatient = async (patientId: string, data: Partial<Patient>) => {
     const { error } = await supabase.from("pacientes").update(data).eq("id", patientId);
     if (error) {
-      toast.error(`Erro ao atualizar paciente: ${error.message}`);
+      console.error("Erro ao atualizar paciente:", error);
+      toast.error("Não foi possível atualizar os dados do utente.");
       throw error;
     }
     updatePatient(patientId, data);
