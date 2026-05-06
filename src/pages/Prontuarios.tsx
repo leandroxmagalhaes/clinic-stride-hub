@@ -46,7 +46,7 @@ import { AIService, type AIClinicalSummary } from "@/services/AIService";
 import { AIAssistButton } from "@/components/ai/AIAssistButton";
 import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
-import { PatientDiaryTab } from "@/components/prontuarios/PatientDiaryTab";
+import { PatientMessagesTab } from "@/components/prontuarios/PatientMessagesTab";
 import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
 
 interface ProntuarioData {
