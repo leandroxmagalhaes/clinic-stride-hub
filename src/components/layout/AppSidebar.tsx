@@ -15,7 +15,6 @@ import {
   ChevronDown,
   Globe,
   Wind,
-  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
