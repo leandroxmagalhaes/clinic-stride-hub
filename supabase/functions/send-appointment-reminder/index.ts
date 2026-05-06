@@ -169,7 +169,7 @@ serve(async (req) => {
                 <tr>
                   <td style="padding-bottom: 12px;">
                     <span style="color: #92400e; font-size: 12px; text-transform: uppercase;">Profissional</span>
-                    <p style="margin: 4px 0 0; color: #78350f; font-size: 16px; font-weight: 600;">${professional?.full_name || "A confirmar"}</p>
+                    <p style="margin: 4px 0 0; color: #78350f; font-size: 16px; font-weight: 600;">${escapeHtml(professional?.full_name || "A confirmar")}</p>
                   </td>
                 </tr>
                 <tr>
