@@ -889,11 +889,12 @@ export default function Prontuarios() {
                   </div>
                 </TabsContent>
 
-                {/* Diário do Paciente */}
+                {/* Mensagens com o utente (timeline unificada) */}
                 <TabsContent value="diario">
-                  <PatientDiaryTab
+                  <PatientMessagesTab
                     pacienteId={selectedProntuario.paciente_id}
-                    patientName={selectedProntuario.paciente?.full_name || "Paciente"}
+                    patientName={selectedProntuario.paciente?.full_name || "Utente"}
+                    patientEmail={selectedProntuario.paciente?.email || null}
                   />
                 </TabsContent>
               </Tabs>
