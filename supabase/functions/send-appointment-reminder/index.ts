@@ -141,7 +141,7 @@ serve(async (req) => {
           <tr>
             <td style="padding: 30px 0 20px;">
               <p style="margin: 0; color: #3f3f46; font-size: 16px;">
-                Olá <strong>${patient.full_name}</strong>,
+                Olá <strong>${escapeHtml(patient.full_name)}</strong>,
               </p>
               <p style="margin: 16px 0 0; color: #71717a; font-size: 14px;">
                 Este é um lembrete de que tem uma sessão agendada para <strong>amanhã</strong>:
