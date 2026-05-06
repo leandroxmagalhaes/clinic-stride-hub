@@ -3030,6 +3030,17 @@ export type Database = {
           ultima_mensagem_em: string
         }[]
       }
+      listar_conversas_recentes: {
+        Args: never
+        Returns: {
+          nao_lidas: number
+          paciente_id: string
+          paciente_nome: string
+          ultima_data: string
+          ultima_mensagem: string
+          ultima_origem: string
+        }[]
+      }
       listar_thread_unificado: {
         Args: { p_paciente_id: string }
         Returns: {
