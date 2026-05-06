@@ -72,7 +72,7 @@ export class ClinicService {
 
     if (error) {
       console.error('Error updating logo:', error);
-      throw new Error(`Erro ao atualizar logo: ${error.message}`);
+      throw new Error('Não foi possível atualizar o logótipo.');
     }
   }
 }
