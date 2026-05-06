@@ -612,8 +612,8 @@ export default function Prontuarios() {
                     Anamnese
                   </TabsTrigger>
                   <TabsTrigger value="diario" className="gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    📖 Diário
+                    <MessageCircle className="h-4 w-4" />
+                    Mensagens
                   </TabsTrigger>
                 </TabsList>
 
