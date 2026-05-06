@@ -24,6 +24,7 @@ import {
   ArrowUp,
   Paperclip,
   BookOpen,
+  MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
