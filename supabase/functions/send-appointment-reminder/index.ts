@@ -29,9 +29,23 @@ serve(async (req) => {
       throw new Error("RESEND_API_KEY not configured");
     }
 
+    // Restrict to internal/scheduled invocations: must present service role key or CRON_SECRET
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const provided = authHeader.replace(/^Bearer\s+/i, "");
+    const isAuthorized =
+      provided === serviceKey ||
+      (!!cronSecret && provided === cronSecret);
+    if (!isAuthorized) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, serviceKey);
 
     const resend = new Resend(resendApiKey);
 
