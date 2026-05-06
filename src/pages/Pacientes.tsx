@@ -314,7 +314,8 @@ export default function Pacientes() {
       };
       const { error } = await supabase.from("pacientes").insert(payload);
       if (error) {
-        toast.error(`Erro ao cadastrar paciente: ${error.message}`);
+        console.error("Erro ao cadastrar paciente:", error);
+        toast.error("Não foi possível cadastrar o utente.");
         return;
       }
       await refreshPatients();
