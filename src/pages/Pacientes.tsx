@@ -323,7 +323,8 @@ export default function Pacientes() {
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao cadastrar paciente");
+      console.error("Erro ao cadastrar paciente:", error);
+      toast.error("Não foi possível cadastrar o utente.");
     }
   };
 
