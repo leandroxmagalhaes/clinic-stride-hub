@@ -1524,33 +1524,45 @@ export type Database = {
           autor_nome: string
           autor_tipo: string
           broadcast_id: string | null
+          categoria: string | null
           created_at: string
+          humor: string | null
           id: string
           lida_em: string | null
+          nivel_dor: number | null
           paciente_id: string
           texto: string
+          tipo: string
         }
         Insert: {
           autor_id?: string | null
           autor_nome: string
           autor_tipo: string
           broadcast_id?: string | null
+          categoria?: string | null
           created_at?: string
+          humor?: string | null
           id?: string
           lida_em?: string | null
+          nivel_dor?: number | null
           paciente_id: string
           texto: string
+          tipo?: string
         }
         Update: {
           autor_id?: string | null
           autor_nome?: string
           autor_tipo?: string
           broadcast_id?: string | null
+          categoria?: string | null
           created_at?: string
+          humor?: string | null
           id?: string
           lida_em?: string | null
+          nivel_dor?: number | null
           paciente_id?: string
           texto?: string
+          tipo?: string
         }
         Relationships: []
       }
@@ -2977,6 +2989,19 @@ export type Database = {
         }
         Returns: string
       }
+      enviar_mensagem_unificada: {
+        Args: {
+          p_autor_nome: string
+          p_autor_tipo: string
+          p_categoria?: string
+          p_humor?: string
+          p_nivel_dor?: number
+          p_paciente_id: string
+          p_texto: string
+          p_tipo?: string
+        }
+        Returns: string
+      }
       get_invite_details: { Args: { invite_token: string }; Returns: Json }
       get_patient_balance: { Args: { p_patient_id: string }; Returns: number }
       get_patient_credit_balance: {
@@ -3003,6 +3028,22 @@ export type Database = {
           ultima_autor_tipo: string
           ultima_mensagem: string
           ultima_mensagem_em: string
+        }[]
+      }
+      listar_thread_unificado: {
+        Args: { p_paciente_id: string }
+        Returns: {
+          autor_nome: string
+          autor_tipo: string
+          categoria: string
+          created_at: string
+          humor: string
+          id: string
+          nivel_dor: number
+          origem: string
+          paciente_id: string
+          texto: string
+          tipo: string
         }[]
       }
       portal_resolve_account: {
