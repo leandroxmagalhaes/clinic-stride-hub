@@ -1,3 +1,8 @@
+/**
+ * @deprecated Substituído por PatientMessagesTab que usa as RPCs unificadas
+ * (`listar_thread_unificado` + `enviar_mensagem_unificada`). Mantido apenas
+ * para referência histórica — não importar em código novo.
+ */
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

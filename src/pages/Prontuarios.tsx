@@ -24,6 +24,7 @@ import {
   ArrowUp,
   Paperclip,
   BookOpen,
+  MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -46,7 +47,7 @@ import { AIService, type AIClinicalSummary } from "@/services/AIService";
 import { AIAssistButton } from "@/components/ai/AIAssistButton";
 import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCard";
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
-import { PatientDiaryTab } from "@/components/prontuarios/PatientDiaryTab";
+import { PatientMessagesTab } from "@/components/prontuarios/PatientMessagesTab";
 import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
 
 interface ProntuarioData {
@@ -612,8 +613,8 @@ export default function Prontuarios() {
                     Anamnese
                   </TabsTrigger>
                   <TabsTrigger value="diario" className="gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    📖 Diário
+                    <MessageCircle className="h-4 w-4" />
+                    Mensagens
                   </TabsTrigger>
                 </TabsList>
 
@@ -888,11 +889,12 @@ export default function Prontuarios() {
                   </div>
                 </TabsContent>
 
-                {/* Diário do Paciente */}
+                {/* Mensagens com o utente (timeline unificada) */}
                 <TabsContent value="diario">
-                  <PatientDiaryTab
+                  <PatientMessagesTab
                     pacienteId={selectedProntuario.paciente_id}
-                    patientName={selectedProntuario.paciente?.full_name || "Paciente"}
+                    patientName={selectedProntuario.paciente?.full_name || "Utente"}
+                    patientEmail={selectedProntuario.paciente?.email || null}
                   />
                 </TabsContent>
               </Tabs>
