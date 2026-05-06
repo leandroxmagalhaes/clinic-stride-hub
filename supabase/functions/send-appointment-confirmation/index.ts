@@ -132,7 +132,7 @@ serve(async (req) => {
                 <tr>
                   <td>
                     <span style="color: #71717a; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Serviço</span>
-                    <p style="margin: 4px 0 0; color: #18181b; font-size: 16px; font-weight: 600;">${serviceName || "Consulta"}</p>
+                    <p style="margin: 4px 0 0; color: #18181b; font-size: 16px; font-weight: 600;">${escapeHtml(serviceName || "Consulta")}</p>
                   </td>
                 </tr>
               </table>
