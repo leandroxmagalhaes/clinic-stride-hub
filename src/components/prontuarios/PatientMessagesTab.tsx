@@ -178,7 +178,7 @@ export function PatientMessagesTab({ pacienteId, patientName, patientEmail }: Pr
             </Button>
             <Button onClick={handleActivate} disabled={activating || !welcomeText.trim()}>
               {activating && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              Ativar Portal e Enviar
+              Activar e Enviar
             </Button>
           </DialogFooter>
         </DialogContent>
