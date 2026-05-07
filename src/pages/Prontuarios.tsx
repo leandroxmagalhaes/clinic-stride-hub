@@ -145,18 +145,37 @@ export default function Prontuarios() {
     fetchProntuarios();
   }, []);
 
+  const pacienteIdFromUrl = searchParams.get("paciente");
+  const tabFromUrl = searchParams.get("tab") || "evolucoes";
+
   useEffect(() => {
-    const pacienteId = searchParams.get("paciente");
     const sessaoData = searchParams.get("sessao_data");
     const autoEvolucao = searchParams.get("auto_evolucao");
-    if (pacienteId && patients.length > 0 && !prontuariosLoading && !selectedProntuario) {
-      if (sessaoData) setPrefilledDate(sessaoData);
-      handleSelectPatient(pacienteId).then(() => {
-        if (autoEvolucao === "1") setTimeout(() => setIsNewEvolucaoOpen(true), 300);
-      });
-      setSearchParams({}, { replace: true });
+    if (pacienteIdFromUrl && patients.length > 0 && !prontuariosLoading) {
+      if (selectedProntuario?.paciente_id !== pacienteIdFromUrl) {
+        if (sessaoData) setPrefilledDate(sessaoData);
+        handleSelectPatient(pacienteIdFromUrl).then(() => {
+          if (autoEvolucao === "1") setTimeout(() => setIsNewEvolucaoOpen(true), 300);
+        });
+      }
+      if (sessaoData || autoEvolucao) {
+        const next = new URLSearchParams(searchParams);
+        next.delete("sessao_data");
+        next.delete("auto_evolucao");
+        setSearchParams(next, { replace: true });
+      }
+    } else if (!pacienteIdFromUrl && selectedProntuario) {
+      setSelectedProntuario(null);
     }
-  }, [searchParams, patients, prontuariosLoading]);
+  }, [pacienteIdFromUrl, patients, prontuariosLoading]);
+
+  const handleTabChange = (tab: string) => {
+    if (!pacienteIdFromUrl) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("paciente", pacienteIdFromUrl);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     if (!selectedProntuario?.paciente_id) {
@@ -493,7 +512,7 @@ export default function Prontuarios() {
                           "flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50 transition-colors",
                           isSelected && "bg-primary/5 border-l-2 border-l-primary",
                         )}
-                        onClick={() => handleSelectPatient(patient.id)}
+                        onClick={() => setSearchParams({ paciente: patient.id, tab: tabFromUrl }, { replace: false })}
                       >
                         <Avatar className="h-10 w-10">
                           <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
@@ -545,7 +564,7 @@ export default function Prontuarios() {
                 variant="ghost"
                 size="sm"
                 className="lg:hidden gap-2 mb-2"
-                onClick={() => setSelectedProntuario(null)}
+                onClick={() => { setSelectedProntuario(null); setSearchParams({}, { replace: false }); }}
               >
                 <ArrowLeft className="h-4 w-4" />
                 Voltar à lista
@@ -594,7 +613,7 @@ export default function Prontuarios() {
               </Card>
 
               {/* Tabs */}
-              <Tabs defaultValue="evolucoes" className="space-y-4">
+              <Tabs value={tabFromUrl} onValueChange={handleTabChange} className="space-y-4">
                 <TabsList className="bg-muted/50">
                   <TabsTrigger value="evolucoes" className="gap-2">
                     <Activity className="h-4 w-4" />

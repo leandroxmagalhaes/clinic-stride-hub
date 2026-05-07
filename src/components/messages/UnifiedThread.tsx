@@ -56,15 +56,18 @@ export function useUnifiedThread(pacienteId: string | null) {
     refresh();
   }, [refresh]);
 
-  // realtime
+  // realtime — unique channel per subscriber instance to evitar colisões
   useEffect(() => {
     if (!pacienteId) return;
+    const channelName = `unified_${pacienteId}_${Math.random().toString(36).slice(2, 9)}`;
     const ch = supabase
-      .channel(`unified_${pacienteId}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "portal_mensagens", filter: `paciente_id=eq.${pacienteId}` },
-        () => refresh(),
+        () => {
+          refresh();
+        },
       )
       .subscribe();
     return () => {
