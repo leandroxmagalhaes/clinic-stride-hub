@@ -564,7 +564,7 @@ export default function Prontuarios() {
                 variant="ghost"
                 size="sm"
                 className="lg:hidden gap-2 mb-2"
-                onClick={() => setSelectedProntuario(null)}
+                onClick={() => { setSelectedProntuario(null); setSearchParams({}, { replace: false }); }}
               >
                 <ArrowLeft className="h-4 w-4" />
                 Voltar à lista
