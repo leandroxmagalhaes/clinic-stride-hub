@@ -146,7 +146,9 @@ export default function Prontuarios() {
   }, []);
 
   const pacienteIdFromUrl = searchParams.get("paciente");
-  const tabFromUrl = searchParams.get("tab") || "evolucoes";
+  const rawTab = searchParams.get("tab") || "evolucoes";
+  // Retro-compat: slug antigo "diario"/"mensagens" → "acompanhamento"
+  const tabFromUrl = rawTab === "diario" || rawTab === "mensagens" ? "acompanhamento" : rawTab;
 
   useEffect(() => {
     const sessaoData = searchParams.get("sessao_data");
@@ -631,9 +633,9 @@ export default function Prontuarios() {
                     <ClipboardList className="h-4 w-4" />
                     Anamnese
                   </TabsTrigger>
-                  <TabsTrigger value="diario" className="gap-2">
+                  <TabsTrigger value="acompanhamento" className="gap-2">
                     <MessageCircle className="h-4 w-4" />
-                    Mensagens
+                    Acompanhamento
                   </TabsTrigger>
                 </TabsList>
 
@@ -908,8 +910,8 @@ export default function Prontuarios() {
                   </div>
                 </TabsContent>
 
-                {/* Mensagens com o utente (timeline unificada) */}
-                <TabsContent value="diario">
+                {/* Diário de Acompanhamento */}
+                <TabsContent value="acompanhamento">
                   <PatientMessagesTab
                     pacienteId={selectedProntuario.paciente_id}
                     patientName={selectedProntuario.paciente?.full_name || "Utente"}

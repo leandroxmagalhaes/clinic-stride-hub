@@ -144,9 +144,9 @@ export default function PortalMensagens() {
           <div className="flex-1">
             <h1 className="font-semibold flex items-center gap-2">
               <MessageCircle className="h-5 w-5 text-primary" />
-              Mensagens
+              O meu Diário de Acompanhamento
             </h1>
-            <p className="text-xs text-muted-foreground">Conversa com a clínica</p>
+            <p className="text-xs text-muted-foreground">Acompanhamento contínuo com a clínica</p>
           </div>
         </div>
       </header>
