@@ -512,7 +512,7 @@ export default function Prontuarios() {
                           "flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50 transition-colors",
                           isSelected && "bg-primary/5 border-l-2 border-l-primary",
                         )}
-                        onClick={() => handleSelectPatient(patient.id)}
+                        onClick={() => setSearchParams({ paciente: patient.id, tab: tabFromUrl }, { replace: false })}
                       >
                         <Avatar className="h-10 w-10">
                           <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
