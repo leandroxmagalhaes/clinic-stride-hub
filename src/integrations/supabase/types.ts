@@ -1070,6 +1070,49 @@ export type Database = {
           },
         ]
       }
+      pacientes_acessos_recentes: {
+        Row: {
+          acessado_em: string
+          id: string
+          paciente_id: string
+          user_id: string
+        }
+        Insert: {
+          acessado_em?: string
+          id?: string
+          paciente_id: string
+          user_id: string
+        }
+        Update: {
+          acessado_em?: string
+          id?: string
+          paciente_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pacientes_acessos_recentes_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_acessos_recentes_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "pacientes_acessos_recentes_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+        ]
+      }
       pacientes_excluidos: {
         Row: {
           clinic_id: string | null
@@ -3039,6 +3082,18 @@ export type Database = {
           ultima_data: string
           ultima_mensagem: string
           ultima_origem: string
+        }[]
+      }
+      listar_pacientes_para_atalho: {
+        Args: { p_limit?: number; p_query?: string }
+        Returns: {
+          acessado_em: string
+          nao_lidas: number
+          paciente_id: string
+          paciente_nome: string
+          portal_activo: boolean
+          ultima_data: string
+          ultima_mensagem: string
         }[]
       }
       listar_thread_unificado: {
