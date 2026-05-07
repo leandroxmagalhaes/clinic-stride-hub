@@ -145,18 +145,37 @@ export default function Prontuarios() {
     fetchProntuarios();
   }, []);
 
+  const pacienteIdFromUrl = searchParams.get("paciente");
+  const tabFromUrl = searchParams.get("tab") || "evolucoes";
+
   useEffect(() => {
-    const pacienteId = searchParams.get("paciente");
     const sessaoData = searchParams.get("sessao_data");
     const autoEvolucao = searchParams.get("auto_evolucao");
-    if (pacienteId && patients.length > 0 && !prontuariosLoading && !selectedProntuario) {
-      if (sessaoData) setPrefilledDate(sessaoData);
-      handleSelectPatient(pacienteId).then(() => {
-        if (autoEvolucao === "1") setTimeout(() => setIsNewEvolucaoOpen(true), 300);
-      });
-      setSearchParams({}, { replace: true });
+    if (pacienteIdFromUrl && patients.length > 0 && !prontuariosLoading) {
+      if (selectedProntuario?.paciente_id !== pacienteIdFromUrl) {
+        if (sessaoData) setPrefilledDate(sessaoData);
+        handleSelectPatient(pacienteIdFromUrl).then(() => {
+          if (autoEvolucao === "1") setTimeout(() => setIsNewEvolucaoOpen(true), 300);
+        });
+      }
+      if (sessaoData || autoEvolucao) {
+        const next = new URLSearchParams(searchParams);
+        next.delete("sessao_data");
+        next.delete("auto_evolucao");
+        setSearchParams(next, { replace: true });
+      }
+    } else if (!pacienteIdFromUrl && selectedProntuario) {
+      setSelectedProntuario(null);
     }
-  }, [searchParams, patients, prontuariosLoading]);
+  }, [pacienteIdFromUrl, patients, prontuariosLoading]);
+
+  const handleTabChange = (tab: string) => {
+    if (!pacienteIdFromUrl) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("paciente", pacienteIdFromUrl);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     if (!selectedProntuario?.paciente_id) {
