@@ -184,6 +184,18 @@ export default function Prontuarios() {
       setUpcomingSession(null);
       return;
     }
+    // Register recent access for this professional/patient
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await (supabase as any)
+          .from("pacientes_acessos_recentes")
+          .upsert(
+            { paciente_id: selectedProntuario.paciente_id, user_id: user.id, acessado_em: new Date().toISOString() },
+            { onConflict: "paciente_id,user_id" },
+          );
+      }
+    })();
     const fetchUpcoming = async () => {
       const now = new Date().toISOString();
       const inHours = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
