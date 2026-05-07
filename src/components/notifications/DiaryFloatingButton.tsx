@@ -150,7 +150,8 @@ export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
           bounce && "animate-bounce"
         )}
         style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}
-        aria-label="Mensagens"
+        aria-label="Diário de Acompanhamento"
+        title="Diário de Acompanhamento"
       >
         <MessageCircle className="h-6 w-6" />
         {totalUnread > 0 && (
@@ -169,7 +170,7 @@ export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
             <>
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <div>
-                  <h3 className="font-semibold text-sm">💬 Mensagens</h3>
+                  <h3 className="font-semibold text-sm">📔 Diário de Acompanhamento</h3>
                   {totalUnread > 0 && (
                     <span className="text-xs text-muted-foreground">
                       {totalUnread} não lida{totalUnread !== 1 ? "s" : ""}
@@ -189,7 +190,7 @@ export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
                 ) : conversations.length === 0 ? (
                   <div className="p-8 text-center">
                     <MessageCircle className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
-                    <p className="text-sm text-muted-foreground">Sem conversas recentes</p>
+                    <p className="text-sm text-muted-foreground">Sem registos recentes</p>
                   </div>
                 ) : (
                   <div className="p-2 space-y-1">
@@ -247,7 +248,7 @@ export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
                       className="h-7 text-xs gap-1"
                       onClick={() => {
                         handleClose();
-                        navigate(`/prontuarios?paciente=${selectedPatient.id}&tab=diario`);
+                        navigate(`/prontuarios?paciente=${selectedPatient.id}&tab=acompanhamento`);
                       }}
                     >
                       <ExternalLink className="h-3 w-3" />
