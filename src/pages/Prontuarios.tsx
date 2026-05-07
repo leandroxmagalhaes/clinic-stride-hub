@@ -613,7 +613,7 @@ export default function Prontuarios() {
               </Card>
 
               {/* Tabs */}
-              <Tabs defaultValue="evolucoes" className="space-y-4">
+              <Tabs value={tabFromUrl} onValueChange={handleTabChange} className="space-y-4">
                 <TabsList className="bg-muted/50">
                   <TabsTrigger value="evolucoes" className="gap-2">
                     <Activity className="h-4 w-4" />
