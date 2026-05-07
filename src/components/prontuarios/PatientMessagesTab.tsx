@@ -73,7 +73,7 @@ export function PatientMessagesTab({ pacienteId, patientName, patientEmail }: Pr
 
   const openActivate = () => {
     setWelcomeText(
-      `Olá ${firstName}!\n\nBem-vindo ao Portal Physione. Aqui pode comunicar connosco a qualquer momento, ver o seu acompanhamento clínico e registar como se sente entre sessões.\n\nEstamos aqui para o ajudar. Qualquer dúvida, é só responder a esta mensagem.\n\n${clinicName}`
+      `Olá ${firstName}!\n\nBem-vindo ao seu Diário de Acompanhamento na Physione. Aqui pode comunicar connosco entre sessões, registar como se sente e partilhar o seu progresso.\n\nEstamos consigo a cada passo. Qualquer dúvida, é só responder a esta mensagem.\n\n${clinicName}`
     );
     setShowActivate(true);
   };
@@ -104,7 +104,7 @@ export function PatientMessagesTab({ pacienteId, patientName, patientEmail }: Pr
         tipo: "mensagem",
       });
 
-      toast.success("Portal ativado e mensagem de boas-vindas enviada");
+      toast.success("Diário de Acompanhamento activado e mensagem de boas-vindas enviada");
       setShowActivate(false);
       await refresh();
       await checkPortal();
@@ -121,15 +121,15 @@ export function PatientMessagesTab({ pacienteId, patientName, patientEmail }: Pr
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-primary" />
-            <CardTitle className="font-display text-lg">Mensagens com {patientName}</CardTitle>
+            <CardTitle className="font-display text-lg">Diário de Acompanhamento de {patientName}</CardTitle>
           </div>
           {portalAtivo === true ? (
             <Badge variant="secondary" className="gap-1">
-              <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Portal ativo
+              <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Portal activo
             </Badge>
           ) : portalAtivo === false ? (
             <Button size="sm" variant="outline" onClick={openActivate}>
-              <UserPlus className="h-4 w-4 mr-1.5" /> Ativar Portal
+              <UserPlus className="h-4 w-4 mr-1.5" /> Activar Portal de Acompanhamento
             </Button>
           ) : null}
         </div>
@@ -159,7 +159,7 @@ export function PatientMessagesTab({ pacienteId, patientName, patientEmail }: Pr
       <Dialog open={showActivate} onOpenChange={setShowActivate}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Ativar Portal de {firstName}</DialogTitle>
+            <DialogTitle>Activar Portal de Acompanhamento de {firstName}</DialogTitle>
             <DialogDescription>
               {patientEmail
                 ? `Vamos enviar um link de acesso para ${patientEmail} e registar a mensagem de boas-vindas.`
