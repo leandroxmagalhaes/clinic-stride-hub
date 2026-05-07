@@ -287,6 +287,7 @@ const App = () => (
                       </ProtectedRoute>
                     }
                   />
+                  <Route path="/portal/diario" element={<Navigate to="/portal/mensagens" replace />} />
                   <Route
                     path="/mensagens"
                     element={
