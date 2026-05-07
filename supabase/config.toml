@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.ai-copilot-agent]
 verify_jwt = false
+
+[functions.send-portal-welcome-with-message]
+verify_jwt = false
