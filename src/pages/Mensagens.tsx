@@ -12,7 +12,7 @@ import { toast } from "sonner";
 export default function Mensagens() {
   useEffect(() => {
     toast.info(
-      "A página de Mensagens foi movida para dentro do prontuário do utente.",
+      "O Diário de Acompanhamento agora vive dentro do prontuário do paciente.",
     );
   }, []);
   return <Navigate to="/" replace />;
