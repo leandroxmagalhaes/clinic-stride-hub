@@ -246,24 +246,26 @@ export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
 
   return (
     <>
-      <button
-        onClick={() => { if (open) handleClose(); else setOpen(true); }}
-        className={cn(
-          "fixed bottom-6 right-6 z-[90] flex h-[52px] w-[52px] items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105",
-          "bg-gradient-to-br from-blue-800 to-blue-500",
-          bounce && "animate-bounce"
-        )}
-        style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}
-        aria-label="Diário de Acompanhamento"
-        title="Diário de Acompanhamento"
-      >
-        <MessageCircle className="h-6 w-6" />
-        {totalUnread > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white bg-destructive">
-            {totalUnread > 9 ? "9+" : totalUnread}
-          </span>
-        )}
-      </button>
+      {!copilotOpen && (
+        <button
+          onClick={() => { if (open) handleClose(); else setOpen(true); }}
+          className={cn(
+            "fixed bottom-6 right-6 z-[90] flex h-[52px] w-[52px] items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105",
+            "bg-gradient-to-br from-blue-800 to-blue-500",
+            bounce && "animate-bounce"
+          )}
+          style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}
+          aria-label="Diário de Acompanhamento"
+          title="Diário de Acompanhamento"
+        >
+          <MessageCircle className="h-6 w-6" />
+          {totalUnread > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white bg-destructive">
+              {totalUnread > 9 ? "9+" : totalUnread}
+            </span>
+          )}
+        </button>
+      )}
 
       {open && (
         <div
