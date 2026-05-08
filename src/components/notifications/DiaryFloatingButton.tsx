@@ -269,7 +269,7 @@ export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
 
       {open && (
         <div
-          className="fixed bottom-[84px] right-6 z-[95] w-[400px] max-h-[600px] rounded-xl border bg-background shadow-xl flex flex-col animate-in slide-in-from-bottom-4 fade-in duration-200"
+          className="fixed bottom-[84px] right-6 z-[100] w-[400px] max-h-[600px] rounded-xl border bg-background shadow-xl flex flex-col animate-in slide-in-from-bottom-4 fade-in duration-200"
           style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}
         >
           {view === "list" ? (
