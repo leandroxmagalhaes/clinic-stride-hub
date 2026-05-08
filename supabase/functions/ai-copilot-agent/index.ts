@@ -276,58 +276,13 @@ async function executeTool(
         return JSON.stringify({ date, available_slots: slots.slice(0, 15) });
       }
 
-      case "propose_session": {
-        const { data: patient } = await supabaseAdmin
-          .from("pacientes")
-          .select("full_name")
-          .eq("id", args.patient_id as string)
-          .single();
-        const { data: prof } = await supabaseAdmin
-          .from("profissionais")
-          .select("full_name")
-          .eq("id", args.professional_id as string)
-          .single();
-
-        return JSON.stringify({
-          action: "propose_session",
-          proposal: {
-            patient_name: patient?.full_name || "Desconhecido",
-            professional_name: prof?.full_name || "Desconhecido",
-            start_time: args.start_time,
-            end_time: args.end_time,
-            service_id: args.service_id || null,
-            notes: args.notes || null,
-            patient_id: args.patient_id,
-            professional_id: args.professional_id,
-          },
-          message: "Aguardando confirmação do utilizador para criar esta sessão.",
-        });
-      }
-
-      case "create_session": {
-        const { data, error } = await supabaseAdmin.from("sessoes").insert({
-          clinic_id: clinicId,
-          paciente_id: args.patient_id as string,
-          profissional_id: args.professional_id as string,
-          servico_id: (args.service_id as string) || null,
-          start_time: args.start_time as string,
-          end_time: args.end_time as string,
-          notes: (args.notes as string) || null,
-          status: "agendado",
-          payment_status: "pendente",
-        }).select("id").single();
-        if (error) return JSON.stringify({ error: error.message });
-        return JSON.stringify({ success: true, session_id: data?.id, message: "Sessão criada com sucesso!" });
-      }
-
+      case "propose_session":
+      case "create_session":
       case "cancel_session": {
-        const { error } = await supabaseAdmin
-          .from("sessoes")
-          .update({ status: "cancelado" })
-          .eq("id", args.session_id as string)
-          .eq("clinic_id", clinicId);
-        if (error) return JSON.stringify({ error: error.message });
-        return JSON.stringify({ success: true, message: "Sessão cancelada." });
+        return JSON.stringify({
+          error: "ACTION_NOT_AVAILABLE",
+          message: "Nesta versão posso apenas consultar informação. Para criar, alterar ou cancelar sessões use a Agenda.",
+        });
       }
 
       case "get_pending_evolutions": {
