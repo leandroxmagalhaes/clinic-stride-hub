@@ -183,13 +183,29 @@ async function parseSpreadsheet(base64: string, mimeType: string): Promise<Recor
 }
 
 // ── Tool execution ─────────────────────────────────────────────────────────
+interface UserScope {
+  isAdmin: boolean;
+  isProfessional: boolean;
+  isSecretary: boolean;
+  professionalProfileId: string | null;
+}
+
+function scopeSessions(query: any, scope: UserScope) {
+  // Admin & secretary see all clinic data; professional (non-admin) sees only own
+  if (scope.isProfessional && !scope.isAdmin && scope.professionalProfileId) {
+    return query.eq("profissional_id", scope.professionalProfileId);
+  }
+  return query;
+}
+
 async function executeTool(
   toolName: string,
   args: Record<string, unknown>,
   supabaseAdmin: any,
   clinicId: string,
-  extraContext?: { fileUpload?: { name: string; base64: string; mime_type: string }; userId?: string; lovableApiKey?: string }
+  extraContext?: { fileUpload?: { name: string; base64: string; mime_type: string }; userId?: string; lovableApiKey?: string; scope?: UserScope }
 ): Promise<string> {
+  const scope: UserScope = extraContext?.scope || { isAdmin: true, isProfessional: false, isSecretary: false, professionalProfileId: null };
   try {
     switch (toolName) {
       case "search_patients": {
