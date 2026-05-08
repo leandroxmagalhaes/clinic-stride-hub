@@ -7,16 +7,16 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Tool definitions for function calling ──────────────────────────────────
+// ── Tool definitions for function calling (READ-ONLY — Phase 1) ───────────
 const toolDefinitions = [
   {
     type: "function",
     function: {
       name: "search_patients",
-      description: "Busca pacientes por nome aproximado na clínica do utilizador. Retorna lista de pacientes com id, nome, telefone e email.",
+      description: "Procura utentes por nome aproximado na clínica. Devolve id, nome, telefone e email.",
       parameters: {
         type: "object",
-        properties: { query: { type: "string", description: "Nome ou parte do nome do paciente" } },
+        properties: { query: { type: "string", description: "Nome ou parte do nome do utente" } },
         required: ["query"],
         additionalProperties: false,
       },
@@ -26,13 +26,13 @@ const toolDefinitions = [
     type: "function",
     function: {
       name: "check_availability",
-      description: "Verifica horários disponíveis para um profissional num determinado dia. Retorna lista de slots livres.",
+      description: "Verifica horários disponíveis para um profissional num determinado dia.",
       parameters: {
         type: "object",
         properties: {
-          professional_id: { type: "string", description: "UUID do profissional" },
-          date: { type: "string", description: "Data no formato YYYY-MM-DD" },
-          min_time: { type: "string", description: "Horário mínimo no formato HH:MM (opcional)" },
+          professional_id: { type: "string" },
+          date: { type: "string", description: "YYYY-MM-DD" },
+          min_time: { type: "string", description: "HH:MM (opcional)" },
         },
         required: ["date"],
         additionalProperties: false,
@@ -42,52 +42,23 @@ const toolDefinitions = [
   {
     type: "function",
     function: {
-      name: "propose_session",
-      description: "Prepara uma proposta de sessão para confirmação do utilizador. NÃO cria a sessão. Retorna os dados formatados para o utilizador confirmar.",
-      parameters: {
-        type: "object",
-        properties: {
-          patient_id: { type: "string" },
-          professional_id: { type: "string" },
-          service_id: { type: "string", description: "UUID do serviço (opcional)" },
-          start_time: { type: "string", description: "ISO 8601 datetime" },
-          end_time: { type: "string", description: "ISO 8601 datetime" },
-          notes: { type: "string" },
-        },
-        required: ["patient_id", "professional_id", "start_time", "end_time"],
-        additionalProperties: false,
-      },
+      name: "get_today_sessions",
+      description: "Lista as sessões agendadas para hoje (do utilizador actual ou de toda a clínica conforme permissões).",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
     },
   },
   {
     type: "function",
     function: {
-      name: "create_session",
-      description: "Cria uma sessão após confirmação explícita do utilizador. Só chamar depois de propose_session e confirmação.",
+      name: "get_sessions_by_date_range",
+      description: "Lista sessões num intervalo de datas. Use para 'amanhã', 'esta semana', 'próximos dias'.",
       parameters: {
         type: "object",
         properties: {
-          patient_id: { type: "string" },
-          professional_id: { type: "string" },
-          service_id: { type: "string" },
-          start_time: { type: "string" },
-          end_time: { type: "string" },
-          notes: { type: "string" },
+          start_date: { type: "string", description: "YYYY-MM-DD" },
+          end_date: { type: "string", description: "YYYY-MM-DD" },
         },
-        required: ["patient_id", "professional_id", "start_time", "end_time"],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "cancel_session",
-      description: "Cancela uma sessão existente mudando o status para 'cancelado'.",
-      parameters: {
-        type: "object",
-        properties: { session_id: { type: "string", description: "UUID da sessão" } },
-        required: ["session_id"],
+        required: ["start_date", "end_date"],
         additionalProperties: false,
       },
     },
@@ -96,15 +67,23 @@ const toolDefinitions = [
     type: "function",
     function: {
       name: "get_pending_evolutions",
-      description: "Lista sessões realizadas que ainda não têm evolução registada.",
-      parameters: { type: "object", properties: { limit: { type: "number", description: "Limite de resultados (default 10)" } }, additionalProperties: false },
+      description: "Lista sessões realizadas que ainda não têm evolução clínica registada.",
+      parameters: { type: "object", properties: { limit: { type: "number" } }, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_recent_evolutions",
+      description: "Últimas evoluções clínicas criadas (mais recentes primeiro).",
+      parameters: { type: "object", properties: { limit: { type: "number", description: "default 10" } }, additionalProperties: false },
     },
   },
   {
     type: "function",
     function: {
       name: "get_pending_payments",
-      description: "Lista sessões com pagamento pendente.",
+      description: "Sessões com pagamento pendente.",
       parameters: { type: "object", properties: { limit: { type: "number" } }, additionalProperties: false },
     },
   },
@@ -112,15 +91,15 @@ const toolDefinitions = [
     type: "function",
     function: {
       name: "get_expiring_packs",
-      description: "Lista pacotes/packs que vencem nos próximos N dias.",
-      parameters: { type: "object", properties: { days: { type: "number", description: "Dias para verificar (default 7)" } }, additionalProperties: false },
+      description: "Packs/pacotes que expiram nos próximos N dias.",
+      parameters: { type: "object", properties: { days: { type: "number" } }, additionalProperties: false },
     },
   },
   {
     type: "function",
     function: {
       name: "get_daily_summary",
-      description: "Consolida sessões de hoje, pendências e alertas num resumo diário.",
+      description: "Resumo do dia: sessões, pendências, alertas.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
     },
   },
@@ -128,19 +107,27 @@ const toolDefinitions = [
     type: "function",
     function: {
       name: "get_inactive_patients",
-      description: "Lista pacientes que não têm sessão há mais de N dias.",
-      parameters: { type: "object", properties: { days: { type: "number", description: "Dias de inatividade (default 14)" } }, additionalProperties: false },
+      description: "Utentes sem sessão há mais de N dias.",
+      parameters: { type: "object", properties: { days: { type: "number" } }, additionalProperties: false },
     },
   },
-  // ── File import tools ────────────────────────────────────────────────────
   {
     type: "function",
     function: {
-      name: "parse_import_file",
-      description: "Processa um ficheiro uploadado (Excel, CSV ou PDF) e extrai dados de agendamentos ou pacientes. Faz fuzzy matching contra a base existente e guarda na fila de importação. Usar quando file_upload estiver presente no contexto.",
+      name: "get_unread_messages_summary",
+      description: "Resumo das mensagens do diário de acompanhamento ainda não lidas (por utente).",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_professional_patient_count",
+      description: "Quantos utentes distintos um profissional acompanha (com base em sessões). Procura por nome.",
       parameters: {
         type: "object",
-        properties: {},
+        properties: { professional_name: { type: "string" } },
+        required: ["professional_name"],
         additionalProperties: false,
       },
     },
@@ -148,56 +135,9 @@ const toolDefinitions = [
   {
     type: "function",
     function: {
-      name: "get_import_queue",
-      description: "Lista itens pendentes na fila de importação para o utilizador revisar.",
-      parameters: {
-        type: "object",
-        properties: {
-          limit: { type: "number", description: "Máximo de itens (default 20)" },
-        },
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "confirm_import_rows",
-      description: "Confirma itens da fila de importação e cria as sessões correspondentes. Requer confirmação explícita do utilizador.",
-      parameters: {
-        type: "object",
-        properties: {
-          row_ids: { type: "array", items: { type: "string" }, description: "Lista de UUIDs dos itens a confirmar. Se vazio, confirma todos os pendentes." },
-        },
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "register_new_patients",
-      description: "Regista novos pacientes a partir de dados extraídos de ficheiro. Requer confirmação explícita.",
-      parameters: {
-        type: "object",
-        properties: {
-          patients: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                full_name: { type: "string" },
-                phone: { type: "string" },
-                email: { type: "string" },
-              },
-              required: ["full_name"],
-            },
-            description: "Lista de pacientes a registar",
-          },
-        },
-        required: ["patients"],
-        additionalProperties: false,
-      },
+      name: "get_active_patients",
+      description: "Lista utentes activos da clínica (com sessão nos últimos N dias, default 30).",
+      parameters: { type: "object", properties: { days: { type: "number" } }, additionalProperties: false },
     },
   },
 ];
@@ -243,13 +183,29 @@ async function parseSpreadsheet(base64: string, mimeType: string): Promise<Recor
 }
 
 // ── Tool execution ─────────────────────────────────────────────────────────
+interface UserScope {
+  isAdmin: boolean;
+  isProfessional: boolean;
+  isSecretary: boolean;
+  professionalProfileId: string | null;
+}
+
+function scopeSessions(query: any, scope: UserScope) {
+  // Admin & secretary see all clinic data; professional (non-admin) sees only own
+  if (scope.isProfessional && !scope.isAdmin && scope.professionalProfileId) {
+    return query.eq("profissional_id", scope.professionalProfileId);
+  }
+  return query;
+}
+
 async function executeTool(
   toolName: string,
   args: Record<string, unknown>,
   supabaseAdmin: any,
   clinicId: string,
-  extraContext?: { fileUpload?: { name: string; base64: string; mime_type: string }; userId?: string; lovableApiKey?: string }
+  extraContext?: { fileUpload?: { name: string; base64: string; mime_type: string }; userId?: string; lovableApiKey?: string; scope?: UserScope }
 ): Promise<string> {
+  const scope: UserScope = extraContext?.scope || { isAdmin: true, isProfessional: false, isSecretary: false, professionalProfileId: null };
   try {
     switch (toolName) {
       case "search_patients": {
@@ -320,63 +276,21 @@ async function executeTool(
         return JSON.stringify({ date, available_slots: slots.slice(0, 15) });
       }
 
-      case "propose_session": {
-        const { data: patient } = await supabaseAdmin
-          .from("pacientes")
-          .select("full_name")
-          .eq("id", args.patient_id as string)
-          .single();
-        const { data: prof } = await supabaseAdmin
-          .from("profissionais")
-          .select("full_name")
-          .eq("id", args.professional_id as string)
-          .single();
-
+      case "propose_session":
+      case "create_session":
+      case "cancel_session": {
         return JSON.stringify({
-          action: "propose_session",
-          proposal: {
-            patient_name: patient?.full_name || "Desconhecido",
-            professional_name: prof?.full_name || "Desconhecido",
-            start_time: args.start_time,
-            end_time: args.end_time,
-            service_id: args.service_id || null,
-            notes: args.notes || null,
-            patient_id: args.patient_id,
-            professional_id: args.professional_id,
-          },
-          message: "Aguardando confirmação do utilizador para criar esta sessão.",
+          error: "ACTION_NOT_AVAILABLE",
+          message: "Nesta versão posso apenas consultar informação. Para criar, alterar ou cancelar sessões use a Agenda.",
         });
       }
 
-      case "create_session": {
-        const { data, error } = await supabaseAdmin.from("sessoes").insert({
-          clinic_id: clinicId,
-          paciente_id: args.patient_id as string,
-          profissional_id: args.professional_id as string,
-          servico_id: (args.service_id as string) || null,
-          start_time: args.start_time as string,
-          end_time: args.end_time as string,
-          notes: (args.notes as string) || null,
-          status: "agendado",
-          payment_status: "pendente",
-        }).select("id").single();
-        if (error) return JSON.stringify({ error: error.message });
-        return JSON.stringify({ success: true, session_id: data?.id, message: "Sessão criada com sucesso!" });
-      }
-
-      case "cancel_session": {
-        const { error } = await supabaseAdmin
-          .from("sessoes")
-          .update({ status: "cancelado" })
-          .eq("id", args.session_id as string)
-          .eq("clinic_id", clinicId);
-        if (error) return JSON.stringify({ error: error.message });
-        return JSON.stringify({ success: true, message: "Sessão cancelada." });
-      }
-
       case "get_pending_evolutions": {
+        if (scope.isSecretary && !scope.isAdmin && !scope.isProfessional) {
+          return JSON.stringify({ error: "Acesso a evoluções clínicas não disponível para o seu perfil." });
+        }
         const limit = (args.limit as number) || 10;
-        const { data } = await supabaseAdmin
+        let q = supabaseAdmin
           .from("sessoes")
           .select("id, start_time, paciente_id, pacientes!sessoes_paciente_id_fkey(full_name), profissional_id")
           .eq("clinic_id", clinicId)
@@ -384,6 +298,8 @@ async function executeTool(
           .is("notes", null)
           .order("start_time", { ascending: false })
           .limit(limit);
+        q = scopeSessions(q, scope);
+        const { data } = await q;
 
         const sessionIds = (data || []).map((s: any) => s.id);
         if (sessionIds.length === 0) return JSON.stringify({ pending: [] });
@@ -403,7 +319,7 @@ async function executeTool(
 
       case "get_pending_payments": {
         const limit = (args.limit as number) || 10;
-        const { data } = await supabaseAdmin
+        let q = supabaseAdmin
           .from("sessoes")
           .select("id, start_time, price, pacientes!sessoes_paciente_id_fkey(full_name)")
           .eq("clinic_id", clinicId)
@@ -411,6 +327,8 @@ async function executeTool(
           .eq("status", "realizado")
           .order("start_time", { ascending: false })
           .limit(limit);
+        q = scopeSessions(q, scope);
+        const { data } = await q;
         const pending = (data || []).map((s: any) => ({
           session_id: s.id,
           date: s.start_time,
@@ -516,388 +434,174 @@ async function executeTool(
         return JSON.stringify({ inactive, days_threshold: days });
       }
 
-      // ── File import tools ────────────────────────────────────────────────
-      case "parse_import_file": {
-        const fileUpload = extraContext?.fileUpload;
-        if (!fileUpload) {
-          return JSON.stringify({ error: "Nenhum ficheiro foi enviado. Peça ao utilizador para anexar um ficheiro." });
-        }
-
-        const { name, base64, mime_type } = fileUpload;
-        const isSpreadsheet = mime_type.includes("spreadsheet") || mime_type.includes("excel") ||
-          mime_type === "text/csv" || name.endsWith(".csv") || name.endsWith(".xlsx") || name.endsWith(".xls");
-        const isPdf = mime_type === "application/pdf" || name.endsWith(".pdf");
-
-        if (!isSpreadsheet && !isPdf) {
-          return JSON.stringify({ error: `Tipo de ficheiro não suportado: ${mime_type}. Aceita: Excel (.xlsx/.xls), CSV (.csv) ou PDF (.pdf).` });
-        }
-
-        // Fetch existing patients and professionals for matching
-        const [patientsRes, professionalsRes, servicesRes] = await Promise.all([
-          supabaseAdmin.from("pacientes").select("id, full_name").eq("clinic_id", clinicId).eq("is_active", true),
-          supabaseAdmin.from("profissionais").select("id, full_name").eq("clinic_id", clinicId).eq("is_active", true),
-          supabaseAdmin.from("servicos").select("id, name").eq("clinic_id", clinicId).eq("is_active", true),
-        ]);
-
-        const existingPatients = patientsRes.data || [];
-        const existingProfessionals = professionalsRes.data || [];
-        const existingServices = servicesRes.data || [];
-
-        let extractedRows: Record<string, string>[] = [];
-
-        if (isSpreadsheet) {
-          try {
-            extractedRows = await parseSpreadsheet(base64, mime_type);
-          } catch (e) {
-            return JSON.stringify({ error: `Erro ao ler ficheiro: ${e instanceof Error ? e.message : "formato inválido"}` });
-          }
-        } else if (isPdf) {
-          // For PDF: decode, extract text via AI
-          try {
-            const binaryStr = atob(base64);
-            // Extract readable text (basic – works for text PDFs)
-            let textContent = "";
-            const textParts: string[] = [];
-            for (let i = 0; i < binaryStr.length - 4; i++) {
-              if (binaryStr[i] === "(" ) {
-                let j = i + 1;
-                let s = "";
-                while (j < binaryStr.length && binaryStr[j] !== ")") {
-                  s += binaryStr[j];
-                  j++;
-                }
-                if (s.length > 1 && /[a-zA-Z0-9]/.test(s)) textParts.push(s);
-                i = j;
-              }
-            }
-            textContent = textParts.join(" ").slice(0, 10000);
-
-            if (textContent.length < 20) {
-              return JSON.stringify({ error: "Não foi possível extrair texto do PDF. Tente converter para Excel/CSV antes de importar." });
-            }
-
-            // Use AI to extract structured data from PDF text
-            const lovableApiKey = extraContext?.lovableApiKey;
-            if (!lovableApiKey) {
-              return JSON.stringify({ error: "Chave de API não disponível para processar PDF." });
-            }
-
-            const pdfAiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${lovableApiKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                model: "google/gemini-2.5-flash",
-                messages: [
-                  {
-                    role: "system",
-                    content: `Extraia dados tabulares do texto a seguir. Retorne um JSON array onde cada objeto tem os campos: paciente, profissional, servico, data (YYYY-MM-DD), hora (HH:MM), observacoes. Se algum campo não existir, use string vazia. Retorne APENAS o JSON array, sem markdown.`,
-                  },
-                  { role: "user", content: textContent },
-                ],
-              }),
-            });
-
-            if (pdfAiResp.ok) {
-              const pdfAiData = await pdfAiResp.json();
-              const content = pdfAiData.choices?.[0]?.message?.content || "[]";
-              const cleaned = content.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
-              try {
-                extractedRows = JSON.parse(cleaned);
-              } catch {
-                return JSON.stringify({ error: "Não foi possível estruturar os dados do PDF. Tente um ficheiro Excel/CSV." });
-              }
-            } else {
-              return JSON.stringify({ error: "Erro ao processar PDF com IA." });
-            }
-          } catch (e) {
-            return JSON.stringify({ error: `Erro ao processar PDF: ${e instanceof Error ? e.message : "desconhecido"}` });
-          }
-        }
-
-        if (extractedRows.length === 0) {
-          return JSON.stringify({ error: "Nenhuma linha de dados encontrada no ficheiro." });
-        }
-
-        // Normalize column names
-        const normalizedRows = extractedRows.map((row) => {
-          const normalized: Record<string, string> = {};
-          for (const [key, val] of Object.entries(row)) {
-            const nk = normalizeText(key);
-            if (nk.includes("paciente") || nk.includes("cliente") || nk.includes("patient") || nk.includes("nome")) normalized.paciente = String(val);
-            else if (nk.includes("profissional") || nk.includes("terapeuta") || nk.includes("professional")) normalized.profissional = String(val);
-            else if (nk.includes("servico") || nk.includes("service") || nk.includes("tipo")) normalized.servico = String(val);
-            else if (nk.includes("data") || nk.includes("date") || nk.includes("dia")) normalized.data = String(val);
-            else if (nk.includes("hora") || nk.includes("time") || nk.includes("horario")) normalized.hora = String(val);
-            else if (nk.includes("obs") || nk.includes("nota") || nk.includes("note")) normalized.observacoes = String(val);
-            else if (nk.includes("telefone") || nk.includes("phone") || nk.includes("telemovel")) normalized.telefone = String(val);
-            else if (nk.includes("email") || nk.includes("mail")) normalized.email = String(val);
-            // Keep original key too
-            if (!normalized[nk]) normalized[nk] = String(val);
-          }
-          return normalized;
-        });
-
-        // Fuzzy match and insert into import_queue
-        let matchedCount = 0;
-        let needsReviewCount = 0;
-        let notFoundCount = 0;
-        let newPatientsFound: string[] = [];
-        const inserts: any[] = [];
-
-        for (const row of normalizedRows) {
-          const patientName = row.paciente || "";
-          let bestPatient: { id: string; full_name: string } | null = null;
-          let bestScore = 0;
-
-          if (patientName) {
-            for (const p of existingPatients) {
-              const score = fuzzyScore(patientName, p.full_name);
-              if (score > bestScore) {
-                bestScore = score;
-                bestPatient = p;
-              }
-            }
-          }
-
-          if (bestScore >= 0.8) matchedCount++;
-          else if (bestScore >= 0.5) needsReviewCount++;
-          else {
-            notFoundCount++;
-            if (patientName && !newPatientsFound.includes(patientName)) {
-              newPatientsFound.push(patientName);
-            }
-          }
-
-          // Match service
-          let bestService: { id: string; name: string } | null = null;
-          if (row.servico) {
-            let bestSvcScore = 0;
-            for (const s of existingServices) {
-              const score = fuzzyScore(row.servico, s.name);
-              if (score > bestSvcScore) {
-                bestSvcScore = score;
-                bestService = s;
-              }
-            }
-            if (bestSvcScore < 0.4) bestService = null;
-          }
-
-          inserts.push({
-            clinic_id: clinicId,
-            raw_data: row,
-            suggested_patient_id: bestScore >= 0.5 ? bestPatient?.id : null,
-            suggested_service_id: bestService?.id || null,
-            match_confidence: bestScore,
-            status: "pending",
-            created_by: extraContext?.userId || null,
-          });
-        }
-
-        // Batch insert into import_queue
-        const BATCH = 50;
-        let insertedTotal = 0;
-        for (let i = 0; i < inserts.length; i += BATCH) {
-          const batch = inserts.slice(i, i + BATCH);
-          const { error } = await supabaseAdmin.from("import_queue").insert(batch);
-          if (error) {
-            console.error("Import queue insert error:", error);
-            return JSON.stringify({ error: `Erro ao guardar dados: ${error.message}` });
-          }
-          insertedTotal += batch.length;
-        }
-
-        // Log
-        try {
-          await supabaseAdmin.from("ai_usage_logs").insert({
-            clinic_id: clinicId,
-            user_id: extraContext?.userId || "",
-            feature: "copilot",
-            action: "file_import",
-            model: "parse",
-          });
-        } catch { /* ignore */ }
-
+      // ── New read-only tools ──────────────────────────────────────────────
+      case "get_today_sessions": {
+        const today = new Date().toISOString().split("T")[0];
+        let q = supabaseAdmin
+          .from("sessoes")
+          .select("id, start_time, status, payment_status, profissional_id, pacientes!sessoes_paciente_id_fkey(full_name)")
+          .eq("clinic_id", clinicId)
+          .gte("start_time", `${today}T00:00:00`)
+          .lte("start_time", `${today}T23:59:59`)
+          .order("start_time");
+        q = scopeSessions(q, scope);
+        const { data } = await q;
         return JSON.stringify({
-          success: true,
-          file_name: name,
-          total_rows: normalizedRows.length,
-          matched_patients: matchedCount,
-          needs_review: needsReviewCount,
-          not_found: notFoundCount,
-          new_patients_detected: newPatientsFound.slice(0, 10),
-          message: `Extraí ${normalizedRows.length} linhas do ficheiro "${name}". ${matchedCount} pacientes identificados automaticamente, ${needsReviewCount} precisam de verificação e ${notFoundCount} não encontrados.`,
+          date: today,
+          total: (data || []).length,
+          sessions: (data || []).map((s: any) => ({
+            time: s.start_time,
+            patient: s.pacientes?.full_name || "N/A",
+            status: s.status,
+            payment_status: s.payment_status,
+          })),
         });
       }
 
-      case "get_import_queue": {
-        const limit = (args.limit as number) || 20;
-        const { data, error } = await supabaseAdmin
-          .from("import_queue")
-          .select("id, raw_data, suggested_patient_id, suggested_service_id, match_confidence, status, created_at")
+      case "get_sessions_by_date_range": {
+        const startDate = args.start_date as string;
+        const endDate = args.end_date as string;
+        let q = supabaseAdmin
+          .from("sessoes")
+          .select("id, start_time, status, profissional_id, pacientes!sessoes_paciente_id_fkey(full_name)")
           .eq("clinic_id", clinicId)
-          .eq("status", "pending")
-          .order("created_at", { ascending: true })
+          .gte("start_time", `${startDate}T00:00:00`)
+          .lte("start_time", `${endDate}T23:59:59`)
+          .order("start_time")
+          .limit(200);
+        q = scopeSessions(q, scope);
+        const { data } = await q;
+        return JSON.stringify({
+          start_date: startDate,
+          end_date: endDate,
+          total: (data || []).length,
+          sessions: (data || []).map((s: any) => ({
+            datetime: s.start_time,
+            patient: s.pacientes?.full_name || "N/A",
+            status: s.status,
+          })),
+        });
+      }
+
+      case "get_recent_evolutions": {
+        if (scope.isSecretary && !scope.isAdmin && !scope.isProfessional) {
+          return JSON.stringify({ error: "Acesso a evoluções clínicas não disponível para o seu perfil." });
+        }
+        const limit = (args.limit as number) || 10;
+        let q = supabaseAdmin
+          .from("evolucoes_clinicas")
+          .select("id, descricao, escala_dor, profissional_id, sessao_id, created_at, prontuario_id")
+          .eq("clinic_id", clinicId)
+          .order("created_at", { ascending: false })
           .limit(limit);
-
-        if (error) return JSON.stringify({ error: error.message });
-
-        // Enrich with patient names
-        const patientIds = [...new Set((data || []).map((d: any) => d.suggested_patient_id).filter(Boolean))];
-        let patientMap: Record<string, string> = {};
-        if (patientIds.length > 0) {
-          const { data: patients } = await supabaseAdmin
-            .from("pacientes")
-            .select("id, full_name")
-            .in("id", patientIds);
-          for (const p of patients || []) patientMap[p.id] = p.full_name;
+        if (scope.isProfessional && !scope.isAdmin && scope.professionalProfileId) {
+          q = q.eq("profissional_id", scope.professionalProfileId);
         }
-
-        const items = (data || []).map((d: any) => ({
-          id: d.id,
-          raw: d.raw_data,
-          matched_patient: d.suggested_patient_id ? patientMap[d.suggested_patient_id] || "ID: " + d.suggested_patient_id : null,
-          confidence: d.match_confidence,
-          status: d.status,
-        }));
-
-        return JSON.stringify({ queue_items: items, total: items.length });
-      }
-
-      case "confirm_import_rows": {
-        const rowIds = (args.row_ids as string[]) || [];
-
-        // If no IDs, confirm all pending
-        let query = supabaseAdmin
-          .from("import_queue")
-          .select("id, raw_data, suggested_patient_id, suggested_service_id")
-          .eq("clinic_id", clinicId)
-          .eq("status", "pending");
-
-        if (rowIds.length > 0) {
-          query = query.in("id", rowIds);
-        }
-
-        const { data: rows, error } = await query;
-        if (error) return JSON.stringify({ error: error.message });
-        if (!rows || rows.length === 0) return JSON.stringify({ error: "Nenhum item pendente encontrado." });
-
-        // Get first professional as fallback
-        const { data: defaultProf } = await supabaseAdmin
-          .from("profissionais")
-          .select("id")
-          .eq("clinic_id", clinicId)
-          .eq("is_active", true)
-          .limit(1)
-          .single();
-
-        let created = 0;
-        let errors: string[] = [];
-
-        for (const row of rows) {
-          const raw = row.raw_data as Record<string, string>;
-          const patientId = row.suggested_patient_id;
-          if (!patientId) {
-            errors.push(`Linha sem paciente: ${raw.paciente || "desconhecido"}`);
-            continue;
-          }
-
-          // Parse date and time
-          let dateStr = raw.data || "";
-          let timeStr = raw.hora || "09:00";
-
-          // Try to normalize date
-          if (dateStr && !dateStr.includes("-")) {
-            // Try DD/MM/YYYY
-            const parts = dateStr.split(/[\/\.]/);
-            if (parts.length === 3) {
-              const [d, m, y] = parts;
-              dateStr = `${y.length === 2 ? "20" + y : y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-            }
-          }
-
-          if (!dateStr) {
-            errors.push(`Linha sem data: ${raw.paciente || "desconhecido"}`);
-            continue;
-          }
-
-          // Normalize time
-          if (timeStr && !timeStr.includes(":")) {
-            timeStr = timeStr.padStart(4, "0");
-            timeStr = timeStr.slice(0, 2) + ":" + timeStr.slice(2);
-          }
-
-          const startTime = `${dateStr}T${timeStr}:00`;
-          const endDate = new Date(startTime);
-          endDate.setMinutes(endDate.getMinutes() + 60);
-          const endTime = endDate.toISOString();
-
-          const isPast = new Date(startTime) < new Date();
-
-          const { error: sessError } = await supabaseAdmin.from("sessoes").insert({
-            clinic_id: clinicId,
-            paciente_id: patientId,
-            profissional_id: defaultProf?.id || "",
-            servico_id: row.suggested_service_id || null,
-            start_time: startTime,
-            end_time: endTime,
-            notes: raw.observacoes || null,
-            status: isPast ? "realizado" : "agendado",
-            payment_status: "pendente",
-          });
-
-          if (sessError) {
-            errors.push(`Erro para ${raw.paciente || "?"}: ${sessError.message}`);
-          } else {
-            created++;
-            // Mark as confirmed
-            await supabaseAdmin.from("import_queue").update({ status: "confirmed" }).eq("id", row.id);
-          }
-        }
-
+        const { data } = await q;
         return JSON.stringify({
-          success: true,
-          sessions_created: created,
-          errors: errors.length > 0 ? errors : undefined,
-          message: `${created} sessões criadas com sucesso.${errors.length > 0 ? ` ${errors.length} erros.` : ""}`,
+          total: (data || []).length,
+          evolutions: (data || []).map((e: any) => ({
+            id: e.id,
+            created_at: e.created_at,
+            pain_scale: e.escala_dor,
+            preview: (e.descricao || "").slice(0, 120),
+          })),
         });
       }
 
-      case "register_new_patients": {
-        const patients = (args.patients as Array<{ full_name: string; phone?: string; email?: string }>) || [];
-        if (patients.length === 0) return JSON.stringify({ error: "Nenhum paciente para registar." });
+      case "get_unread_messages_summary": {
+        // Get patient ids in this clinic
+        const { data: clinicPatients } = await supabaseAdmin
+          .from("pacientes")
+          .select("id, full_name")
+          .eq("clinic_id", clinicId);
+        const map: Record<string, string> = {};
+        for (const p of clinicPatients || []) map[p.id] = p.full_name;
+        const ids = Object.keys(map);
+        if (ids.length === 0) return JSON.stringify({ total_unread: 0, patients: [] });
 
-        let created = 0;
-        const results: Array<{ name: string; id?: string; error?: string }> = [];
+        const { data } = await supabaseAdmin
+          .from("portal_mensagens")
+          .select("paciente_id, created_at")
+          .in("paciente_id", ids)
+          .eq("autor_tipo", "patient")
+          .is("lida_em", null)
+          .order("created_at", { ascending: false })
+          .limit(200);
 
-        for (const p of patients) {
-          if (!p.full_name || p.full_name.trim().length < 2) {
-            results.push({ name: p.full_name || "", error: "Nome inválido" });
-            continue;
-          }
-
-          const { data, error } = await supabaseAdmin.from("pacientes").insert({
-            clinic_id: clinicId,
-            full_name: p.full_name.trim(),
-            phone: p.phone || null,
-            email: p.email || null,
-          }).select("id").single();
-
-          if (error) {
-            results.push({ name: p.full_name, error: error.message });
-          } else {
-            results.push({ name: p.full_name, id: data?.id });
-            created++;
-          }
+        const byPatient: Record<string, { count: number; last: string }> = {};
+        for (const m of data || []) {
+          if (!byPatient[m.paciente_id]) byPatient[m.paciente_id] = { count: 0, last: m.created_at };
+          byPatient[m.paciente_id].count++;
         }
-
         return JSON.stringify({
-          success: true,
-          patients_created: created,
-          results,
-          message: `${created} pacientes registados com sucesso.`,
+          total_unread: (data || []).length,
+          patients: Object.entries(byPatient).map(([id, v]) => ({
+            patient: map[id] || "Utente", unread: v.count, last_at: v.last,
+          })),
+        });
+      }
+
+      case "get_active_patients": {
+        const days = (args.days as number) || 30;
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        let sq = supabaseAdmin
+          .from("sessoes")
+          .select("paciente_id")
+          .eq("clinic_id", clinicId)
+          .gte("start_time", cutoff.toISOString())
+          .not("status", "in", '("cancelado","falta")');
+        sq = scopeSessions(sq, scope);
+        const { data: sess } = await sq;
+        const ids = [...new Set((sess || []).map((s: any) => s.paciente_id).filter(Boolean))];
+        if (ids.length === 0) return JSON.stringify({ total: 0, patients: [] });
+        const { data: patients } = await supabaseAdmin
+          .from("pacientes")
+          .select("id, full_name, phone, email")
+          .in("id", ids)
+          .limit(100);
+        return JSON.stringify({
+          total: (patients || []).length,
+          days_window: days,
+          patients: (patients || []).map((p: any) => ({ id: p.id, name: p.full_name, phone: p.phone, email: p.email })),
+        });
+      }
+
+      case "get_professional_patient_count": {
+        const name = (args.professional_name as string) || "";
+        if (!name.trim()) return JSON.stringify({ error: "Nome do profissional em falta." });
+        const { data: profs } = await supabaseAdmin
+          .from("profiles")
+          .select("id, full_name")
+          .eq("clinic_id", clinicId)
+          .ilike("full_name", `%${name}%`)
+          .limit(5);
+        if (!profs || profs.length === 0) {
+          return JSON.stringify({ error: `Não encontrei profissional com o nome "${name}".` });
+        }
+        const results: any[] = [];
+        for (const p of profs) {
+          const { data: sess } = await supabaseAdmin
+            .from("sessoes")
+            .select("paciente_id")
+            .eq("clinic_id", clinicId)
+            .eq("profissional_id", p.id)
+            .not("status", "in", '("cancelado","falta")');
+          const ids = new Set((sess || []).map((s: any) => s.paciente_id).filter(Boolean));
+          results.push({ professional: p.full_name, distinct_patients: ids.size });
+        }
+        return JSON.stringify({ matches: results });
+      }
+
+      // ── Mutation tools — disabled (READ-ONLY phase) ──────────────────────
+      case "parse_import_file":
+      case "get_import_queue":
+      case "confirm_import_rows":
+      case "register_new_patients": {
+        return JSON.stringify({
+          error: "ACTION_NOT_AVAILABLE",
+          message: "Importações e criação de registos não estão disponíveis nesta versão. Use o menu Pacientes ou Agenda.",
         });
       }
 
