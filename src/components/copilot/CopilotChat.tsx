@@ -213,14 +213,14 @@ export function CopilotChat({
               </div>
               <h3 className="font-medium text-sm mb-1">Olá! Sou o seu Copiloto.</h3>
               <p className="text-xs text-muted-foreground max-w-[260px]">
-                Posso agendar sessões, verificar pendências, importar ficheiros e muito mais. Como posso ajudar?
+                Posso consultar a sua agenda, pacientes, pagamentos e evoluções. Como posso ajudar?
               </p>
               <div className="mt-4 flex flex-wrap gap-1.5 justify-center">
                 {[
-                  'Resumo do dia',
-                  'Evoluções pendentes',
-                  'Pagamentos em aberto',
-                  'Pacientes inativos',
+                  'Sessões de hoje',
+                  'Mensagens não lidas',
+                  'Pagamentos pendentes',
+                  'Pacientes inactivos',
                 ].map((suggestion) => (
                   <button
                     key={suggestion}
