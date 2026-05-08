@@ -48,7 +48,11 @@ export const DiaryFloatingButton = memo(function DiaryFloatingButton() {
   const { isPatient, isProfessional, isAdmin, isSecretary, isLoading: roleLoading } = useUserRole();
   const { user } = useAuth();
   const { data: clinic } = useClinicInfo();
+  const { copilotOpen, setDiaryOpen } = useFloatingPanels();
   const [open, setOpen] = useState(false);
+
+  // Sync local open state to floating-panels context
+  useEffect(() => { setDiaryOpen(open); }, [open, setDiaryOpen]);
   const [view, setView] = useState<"list" | "chat">("list");
   const [patients, setPatients] = useState<PatientItem[]>([]);
   const [totalUnread, setTotalUnread] = useState(0);
