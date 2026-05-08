@@ -286,8 +286,11 @@ async function executeTool(
       }
 
       case "get_pending_evolutions": {
+        if (scope.isSecretary && !scope.isAdmin && !scope.isProfessional) {
+          return JSON.stringify({ error: "Acesso a evoluções clínicas não disponível para o seu perfil." });
+        }
         const limit = (args.limit as number) || 10;
-        const { data } = await supabaseAdmin
+        let q = supabaseAdmin
           .from("sessoes")
           .select("id, start_time, paciente_id, pacientes!sessoes_paciente_id_fkey(full_name), profissional_id")
           .eq("clinic_id", clinicId)
@@ -295,6 +298,8 @@ async function executeTool(
           .is("notes", null)
           .order("start_time", { ascending: false })
           .limit(limit);
+        q = scopeSessions(q, scope);
+        const { data } = await q;
 
         const sessionIds = (data || []).map((s: any) => s.id);
         if (sessionIds.length === 0) return JSON.stringify({ pending: [] });
@@ -314,7 +319,7 @@ async function executeTool(
 
       case "get_pending_payments": {
         const limit = (args.limit as number) || 10;
-        const { data } = await supabaseAdmin
+        let q = supabaseAdmin
           .from("sessoes")
           .select("id, start_time, price, pacientes!sessoes_paciente_id_fkey(full_name)")
           .eq("clinic_id", clinicId)
@@ -322,6 +327,8 @@ async function executeTool(
           .eq("status", "realizado")
           .order("start_time", { ascending: false })
           .limit(limit);
+        q = scopeSessions(q, scope);
+        const { data } = await q;
         const pending = (data || []).map((s: any) => ({
           session_id: s.id,
           date: s.start_time,
