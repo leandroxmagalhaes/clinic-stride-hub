@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useClinicInfo } from "@/hooks/useClinicInfo";
+import { useFloatingPanels } from "@/contexts/FloatingPanelsContext";
 import {
   UnifiedThread,
   useUnifiedThread,
