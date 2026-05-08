@@ -7,16 +7,16 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Tool definitions for function calling ──────────────────────────────────
+// ── Tool definitions for function calling (READ-ONLY — Phase 1) ───────────
 const toolDefinitions = [
   {
     type: "function",
     function: {
       name: "search_patients",
-      description: "Busca pacientes por nome aproximado na clínica do utilizador. Retorna lista de pacientes com id, nome, telefone e email.",
+      description: "Procura utentes por nome aproximado na clínica. Devolve id, nome, telefone e email.",
       parameters: {
         type: "object",
-        properties: { query: { type: "string", description: "Nome ou parte do nome do paciente" } },
+        properties: { query: { type: "string", description: "Nome ou parte do nome do utente" } },
         required: ["query"],
         additionalProperties: false,
       },
@@ -26,13 +26,13 @@ const toolDefinitions = [
     type: "function",
     function: {
       name: "check_availability",
-      description: "Verifica horários disponíveis para um profissional num determinado dia. Retorna lista de slots livres.",
+      description: "Verifica horários disponíveis para um profissional num determinado dia.",
       parameters: {
         type: "object",
         properties: {
-          professional_id: { type: "string", description: "UUID do profissional" },
-          date: { type: "string", description: "Data no formato YYYY-MM-DD" },
-          min_time: { type: "string", description: "Horário mínimo no formato HH:MM (opcional)" },
+          professional_id: { type: "string" },
+          date: { type: "string", description: "YYYY-MM-DD" },
+          min_time: { type: "string", description: "HH:MM (opcional)" },
         },
         required: ["date"],
         additionalProperties: false,
@@ -42,52 +42,23 @@ const toolDefinitions = [
   {
     type: "function",
     function: {
-      name: "propose_session",
-      description: "Prepara uma proposta de sessão para confirmação do utilizador. NÃO cria a sessão. Retorna os dados formatados para o utilizador confirmar.",
-      parameters: {
-        type: "object",
-        properties: {
-          patient_id: { type: "string" },
-          professional_id: { type: "string" },
-          service_id: { type: "string", description: "UUID do serviço (opcional)" },
-          start_time: { type: "string", description: "ISO 8601 datetime" },
-          end_time: { type: "string", description: "ISO 8601 datetime" },
-          notes: { type: "string" },
-        },
-        required: ["patient_id", "professional_id", "start_time", "end_time"],
-        additionalProperties: false,
-      },
+      name: "get_today_sessions",
+      description: "Lista as sessões agendadas para hoje (do utilizador actual ou de toda a clínica conforme permissões).",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
     },
   },
   {
     type: "function",
     function: {
-      name: "create_session",
-      description: "Cria uma sessão após confirmação explícita do utilizador. Só chamar depois de propose_session e confirmação.",
+      name: "get_sessions_by_date_range",
+      description: "Lista sessões num intervalo de datas. Use para 'amanhã', 'esta semana', 'próximos dias'.",
       parameters: {
         type: "object",
         properties: {
-          patient_id: { type: "string" },
-          professional_id: { type: "string" },
-          service_id: { type: "string" },
-          start_time: { type: "string" },
-          end_time: { type: "string" },
-          notes: { type: "string" },
+          start_date: { type: "string", description: "YYYY-MM-DD" },
+          end_date: { type: "string", description: "YYYY-MM-DD" },
         },
-        required: ["patient_id", "professional_id", "start_time", "end_time"],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "cancel_session",
-      description: "Cancela uma sessão existente mudando o status para 'cancelado'.",
-      parameters: {
-        type: "object",
-        properties: { session_id: { type: "string", description: "UUID da sessão" } },
-        required: ["session_id"],
+        required: ["start_date", "end_date"],
         additionalProperties: false,
       },
     },
@@ -96,15 +67,23 @@ const toolDefinitions = [
     type: "function",
     function: {
       name: "get_pending_evolutions",
-      description: "Lista sessões realizadas que ainda não têm evolução registada.",
-      parameters: { type: "object", properties: { limit: { type: "number", description: "Limite de resultados (default 10)" } }, additionalProperties: false },
+      description: "Lista sessões realizadas que ainda não têm evolução clínica registada.",
+      parameters: { type: "object", properties: { limit: { type: "number" } }, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_recent_evolutions",
+      description: "Últimas evoluções clínicas criadas (mais recentes primeiro).",
+      parameters: { type: "object", properties: { limit: { type: "number", description: "default 10" } }, additionalProperties: false },
     },
   },
   {
     type: "function",
     function: {
       name: "get_pending_payments",
-      description: "Lista sessões com pagamento pendente.",
+      description: "Sessões com pagamento pendente.",
       parameters: { type: "object", properties: { limit: { type: "number" } }, additionalProperties: false },
     },
   },
@@ -112,15 +91,15 @@ const toolDefinitions = [
     type: "function",
     function: {
       name: "get_expiring_packs",
-      description: "Lista pacotes/packs que vencem nos próximos N dias.",
-      parameters: { type: "object", properties: { days: { type: "number", description: "Dias para verificar (default 7)" } }, additionalProperties: false },
+      description: "Packs/pacotes que expiram nos próximos N dias.",
+      parameters: { type: "object", properties: { days: { type: "number" } }, additionalProperties: false },
     },
   },
   {
     type: "function",
     function: {
       name: "get_daily_summary",
-      description: "Consolida sessões de hoje, pendências e alertas num resumo diário.",
+      description: "Resumo do dia: sessões, pendências, alertas.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
     },
   },
@@ -128,19 +107,27 @@ const toolDefinitions = [
     type: "function",
     function: {
       name: "get_inactive_patients",
-      description: "Lista pacientes que não têm sessão há mais de N dias.",
-      parameters: { type: "object", properties: { days: { type: "number", description: "Dias de inatividade (default 14)" } }, additionalProperties: false },
+      description: "Utentes sem sessão há mais de N dias.",
+      parameters: { type: "object", properties: { days: { type: "number" } }, additionalProperties: false },
     },
   },
-  // ── File import tools ────────────────────────────────────────────────────
   {
     type: "function",
     function: {
-      name: "parse_import_file",
-      description: "Processa um ficheiro uploadado (Excel, CSV ou PDF) e extrai dados de agendamentos ou pacientes. Faz fuzzy matching contra a base existente e guarda na fila de importação. Usar quando file_upload estiver presente no contexto.",
+      name: "get_unread_messages_summary",
+      description: "Resumo das mensagens do diário de acompanhamento ainda não lidas (por utente).",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_professional_patient_count",
+      description: "Quantos utentes distintos um profissional acompanha (com base em sessões). Procura por nome.",
       parameters: {
         type: "object",
-        properties: {},
+        properties: { professional_name: { type: "string" } },
+        required: ["professional_name"],
         additionalProperties: false,
       },
     },
@@ -148,56 +135,9 @@ const toolDefinitions = [
   {
     type: "function",
     function: {
-      name: "get_import_queue",
-      description: "Lista itens pendentes na fila de importação para o utilizador revisar.",
-      parameters: {
-        type: "object",
-        properties: {
-          limit: { type: "number", description: "Máximo de itens (default 20)" },
-        },
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "confirm_import_rows",
-      description: "Confirma itens da fila de importação e cria as sessões correspondentes. Requer confirmação explícita do utilizador.",
-      parameters: {
-        type: "object",
-        properties: {
-          row_ids: { type: "array", items: { type: "string" }, description: "Lista de UUIDs dos itens a confirmar. Se vazio, confirma todos os pendentes." },
-        },
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "register_new_patients",
-      description: "Regista novos pacientes a partir de dados extraídos de ficheiro. Requer confirmação explícita.",
-      parameters: {
-        type: "object",
-        properties: {
-          patients: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                full_name: { type: "string" },
-                phone: { type: "string" },
-                email: { type: "string" },
-              },
-              required: ["full_name"],
-            },
-            description: "Lista de pacientes a registar",
-          },
-        },
-        required: ["patients"],
-        additionalProperties: false,
-      },
+      name: "get_active_patients",
+      description: "Lista utentes activos da clínica (com sessão nos últimos N dias, default 30).",
+      parameters: { type: "object", properties: { days: { type: "number" } }, additionalProperties: false },
     },
   },
 ];
