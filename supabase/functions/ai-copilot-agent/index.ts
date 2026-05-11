@@ -739,6 +739,7 @@ serve(async (req) => {
       fileUpload: file_upload || undefined,
       userId,
       lovableApiKey,
+      scope: userScope,
     };
 
     // Call AI with tools — loop for tool calls
