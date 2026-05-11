@@ -366,21 +366,24 @@ async function executeTool(
         const startOfDay = `${today}T00:00:00`;
         const endOfDay = `${today}T23:59:59`;
 
-        const [sessionsRes, pendingPayRes] = await Promise.all([
-          supabaseAdmin
-            .from("sessoes")
-            .select("id, start_time, status, pacientes!sessoes_paciente_id_fkey(full_name)")
-            .eq("clinic_id", clinicId)
-            .gte("start_time", startOfDay)
-            .lte("start_time", endOfDay)
-            .order("start_time"),
-          supabaseAdmin
-            .from("sessoes")
-            .select("id", { count: "exact" })
-            .eq("clinic_id", clinicId)
-            .eq("payment_status", "pendente")
-            .eq("status", "realizado"),
-        ]);
+        let sessQ = supabaseAdmin
+          .from("sessoes")
+          .select("id, start_time, status, profissional_id, pacientes!sessoes_paciente_id_fkey(full_name)")
+          .eq("clinic_id", clinicId)
+          .gte("start_time", startOfDay)
+          .lte("start_time", endOfDay)
+          .order("start_time");
+        sessQ = scopeSessions(sessQ, scope);
+
+        let payQ = supabaseAdmin
+          .from("sessoes")
+          .select("id", { count: "exact" })
+          .eq("clinic_id", clinicId)
+          .eq("payment_status", "pendente")
+          .eq("status", "realizado");
+        payQ = scopeSessions(payQ, scope);
+
+        const [sessionsRes, pendingPayRes] = await Promise.all([sessQ, payQ]);
 
         const sessions = sessionsRes.data || [];
         const total = sessions.length;
