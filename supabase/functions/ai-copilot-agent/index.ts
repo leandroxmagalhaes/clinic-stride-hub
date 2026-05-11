@@ -366,21 +366,24 @@ async function executeTool(
         const startOfDay = `${today}T00:00:00`;
         const endOfDay = `${today}T23:59:59`;
 
-        const [sessionsRes, pendingPayRes] = await Promise.all([
-          supabaseAdmin
-            .from("sessoes")
-            .select("id, start_time, status, pacientes!sessoes_paciente_id_fkey(full_name)")
-            .eq("clinic_id", clinicId)
-            .gte("start_time", startOfDay)
-            .lte("start_time", endOfDay)
-            .order("start_time"),
-          supabaseAdmin
-            .from("sessoes")
-            .select("id", { count: "exact" })
-            .eq("clinic_id", clinicId)
-            .eq("payment_status", "pendente")
-            .eq("status", "realizado"),
-        ]);
+        let sessQ = supabaseAdmin
+          .from("sessoes")
+          .select("id, start_time, status, profissional_id, pacientes!sessoes_paciente_id_fkey(full_name)")
+          .eq("clinic_id", clinicId)
+          .gte("start_time", startOfDay)
+          .lte("start_time", endOfDay)
+          .order("start_time");
+        sessQ = scopeSessions(sessQ, scope);
+
+        let payQ = supabaseAdmin
+          .from("sessoes")
+          .select("id", { count: "exact" })
+          .eq("clinic_id", clinicId)
+          .eq("payment_status", "pendente")
+          .eq("status", "realizado");
+        payQ = scopeSessions(payQ, scope);
+
+        const [sessionsRes, pendingPayRes] = await Promise.all([sessQ, payQ]);
 
         const sessions = sessionsRes.data || [];
         const total = sessions.length;
@@ -615,39 +618,33 @@ async function executeTool(
 }
 
 // ── System prompt ──────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `Você é o Copiloto, um assistente inteligente integrado numa plataforma de gestão de clínicas de fisioterapia. Você tem acesso a ferramentas para consultar e agir sobre dados reais do sistema.
+const SYSTEM_PROMPT = `Você é o Copiloto, um assistente integrado numa plataforma de gestão de clínicas de fisioterapia. Nesta versão (Fase 1) você opera em modo **APENAS LEITURA**: pode consultar dados reais, mas NÃO pode criar, alterar ou apagar nada.
 
 REGRAS CRÍTICAS:
-1. NUNCA execute ações destrutivas sem confirmação. Para criar ou cancelar sessões, SEMPRE use propose_session primeiro e aguarde confirmação.
-2. Responda SEMPRE em português (pt-PT/pt-BR conforme o contexto do utilizador).
-3. Seja conciso e direto. Use formatação clara com listas quando apropriado.
-4. Quando o utilizador mencionar um nome de paciente, use search_patients para encontrar o paciente correto.
-5. Se houver ambiguidade (múltiplos pacientes com nomes semelhantes), pergunte qual.
-6. Para agendamentos, SEMPRE verifique disponibilidade com check_availability antes de propor.
-7. Use o contexto fornecido (página atual, paciente selecionado) para antecipar o que o utilizador precisa.
-8. Para ações de escrita (create_session, cancel_session), explique o que vai fazer e peça confirmação explícita.
-9. Formate datas e horas de forma legível (ex: "Quarta, 15 de março às 18:30").
-10. Se não conseguir encontrar dados, informe claramente e sugira alternativas.
+1. Você NÃO tem capacidade de escrita. Se o utilizador pedir para criar/alterar/cancelar sessões, agendar, registar pacientes, importar ficheiros ou enviar mensagens, recuse de forma clara e educada e indique a página correta da app (Agenda, Pacientes, Mensagens, etc.).
+2. Responda SEMPRE em português de Portugal (pt-PT). Use "utente" em vez de "paciente", "agendamento" em vez de "consulta", etc.
+3. Seja conciso, directo e usa formatação markdown (listas, tabelas) quando ajudar a leitura.
+4. Quando o utilizador mencionar um nome de utente, use search_patients para o localizar; se houver ambiguidade, peça para escolher.
+5. Para perguntas sobre sessões/agenda, escolhe a tool certa: get_today_sessions ("hoje"), get_sessions_by_date_range ("amanhã", "esta semana", intervalos), check_availability (slots livres).
+6. Respeite as permissões: profissionais (sem admin) só vêem os seus próprios dados; secretárias não acedem a evoluções clínicas — se a tool devolver erro de acesso, comunique de forma educada.
+7. Formate datas e horas de forma legível (ex.: "Quarta, 15 de Março às 18:30").
+8. Nunca invente dados. Se uma tool devolver vazio ou erro, diga-o claramente e sugira o que o utilizador pode fazer a seguir.
+9. Use o contexto fornecido (página actual, utente seleccionado) para antecipar a intenção.
 
-CAPACIDADES:
-- Buscar pacientes por nome
-- Verificar disponibilidade de horários
-- Propor e criar sessões (com confirmação)
-- Cancelar sessões (com confirmação)
-- Listar evoluções pendentes
-- Listar pagamentos pendentes
-- Verificar packs a vencer
-- Resumo diário completo
-- Listar pacientes inativos
+CAPACIDADES (apenas leitura):
+- Procurar utentes (search_patients)
+- Ver disponibilidade de horários (check_availability)
+- Sessões de hoje / por intervalo de datas
+- Evoluções pendentes / recentes
+- Pagamentos pendentes
+- Packs a expirar
+- Resumo diário
+- Utentes inactivos / activos
+- Mensagens não lidas no Diário de Acompanhamento
+- Contagem de utentes por profissional
 
-IMPORTAÇÃO DE FICHEIROS:
-- Quando o utilizador envia um ficheiro (Excel, CSV ou PDF), use parse_import_file para extrair e processar os dados.
-- SEMPRE apresente um resumo dos dados extraídos antes de qualquer ação (quantas linhas, quantos matches, quantos precisam revisão).
-- Use get_import_queue para mostrar os dados em formato de tabela quando o utilizador pedir para revisar.
-- Para confirmar a importação, use confirm_import_rows APENAS após confirmação explícita do utilizador.
-- Se houver pacientes não encontrados na base, pergunte se deve registar como novos usando register_new_patients.
-- Apresente os dados extraídos em tabela markdown simples para fácil leitura.
-- Se o ficheiro contiver dados de novos pacientes (com nome, telefone, email), proponha o cadastro antes de criar sessões.`;
+RECUSA DE MUTATIONS (exemplo de resposta):
+"Nesta versão posso apenas consultar informação. Para [criar sessão / cancelar / importar ficheiro], use a página [Agenda / Pacientes]."`;
 
 // ── Main handler ───────────────────────────────────────────────────────────
 serve(async (req) => {
@@ -700,6 +697,24 @@ serve(async (req) => {
     }
     const clinicId = profile.clinic_id;
 
+    // Build user scope (roles + professional profile id) for data filtering
+    const { data: rolesData } = await adminClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    const roles = (rolesData || []).map((r: any) => r.role);
+    const { data: profForScope } = await adminClient
+      .from("profiles")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    const userScope: UserScope = {
+      isAdmin: roles.includes("admin"),
+      isProfessional: roles.includes("professional"),
+      isSecretary: roles.includes("secretary"),
+      professionalProfileId: profForScope?.id || null,
+    };
+
     const { messages, context, file_upload } = await req.json();
 
     // Build context message
@@ -721,6 +736,7 @@ serve(async (req) => {
       fileUpload: file_upload || undefined,
       userId,
       lovableApiKey,
+      scope: userScope,
     };
 
     // Call AI with tools — loop for tool calls
