@@ -700,6 +700,24 @@ serve(async (req) => {
     }
     const clinicId = profile.clinic_id;
 
+    // Build user scope (roles + professional profile id) for data filtering
+    const { data: rolesData } = await adminClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    const roles = (rolesData || []).map((r: any) => r.role);
+    const { data: profForScope } = await adminClient
+      .from("profiles")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    const userScope: UserScope = {
+      isAdmin: roles.includes("admin"),
+      isProfessional: roles.includes("professional"),
+      isSecretary: roles.includes("secretary"),
+      professionalProfileId: profForScope?.id || null,
+    };
+
     const { messages, context, file_upload } = await req.json();
 
     // Build context message
