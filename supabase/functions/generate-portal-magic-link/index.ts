@@ -28,10 +28,10 @@ Deno.serve(async (req) => {
     const resendKey = Deno.env.get("RESEND_API_KEY");
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Generate magic link (24h, single-use)
+    // Generate magic link (7 days, single-use)
     const link_token = generateToken(32);
     const codigo = "000000"; // not used for magic_link, but column is NOT NULL
-    const expira_em = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expira_em = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const { error: insertError } = await supabase.from("portal_convites").insert({
       paciente_id,

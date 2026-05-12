@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
 
     const link_token = generateToken(16);
     const codigo = generateCode();
-    const expira_em = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+    const expira_em = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const { error: insertError } = await supabase.from("portal_convites").insert({
       paciente_id,
