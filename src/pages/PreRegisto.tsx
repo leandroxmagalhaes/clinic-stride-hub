@@ -134,18 +134,29 @@ export default function PreRegisto() {
   });
 
   useEffect(() => {
-    if (isSlugMode) {
-      fetchClinicBySlug();
-    } else if (isNewMode) {
-      if (!clinicIdParam) {
-        redirectToSlug();
-        return;
+    // Forçar logout de qualquer sessão guardada (profissional/admin) antes de
+    // processar links públicos. Garante que o paciente não vê dados errados.
+    const init = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) await supabase.auth.signOut();
+      } catch { /* ignore */ }
+
+      if (isSlugMode) {
+        fetchClinicBySlug();
+      } else if (isNewMode) {
+        if (!clinicIdParam) {
+          redirectToSlug();
+          return;
+        }
+        fetchClinicOnly();
+      } else {
+        if (!token) return;
+        fetchPatientData();
       }
-      fetchClinicOnly();
-    } else {
-      if (!token) return;
-      fetchPatientData();
-    }
+    };
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, slug, isSlugMode, isNewMode, clinicIdParam]);
 
   const redirectToSlug = async () => {
