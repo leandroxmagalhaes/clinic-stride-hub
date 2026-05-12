@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, ShieldCheck, AlertTriangle, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Loader2, ShieldCheck, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import PortalErrorScreen from "@/components/portal/PortalErrorScreen";
 import { toast } from "sonner";
 
 type Stage = "loading" | "error" | "form" | "creating" | "success";
