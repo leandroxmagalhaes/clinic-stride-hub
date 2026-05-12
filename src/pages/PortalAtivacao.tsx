@@ -36,6 +36,17 @@ export default function PortalAtivacao() {
       return;
     }
 
+    // Forçar logout de qualquer sessão guardada (profissional, admin, outro paciente)
+    // antes de processar o link de activação. Evita conflitos de sessão.
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await supabase.auth.signOut();
+      }
+    } catch {
+      /* ignore */
+    }
+
     const { data, error } = await (supabase as any)
       .from("portal_convites")
       .select("paciente_id, enviado_para_email, expira_em, template_id, utilizado, tipo")
@@ -43,7 +54,7 @@ export default function PortalAtivacao() {
       .maybeSingle();
 
     if (error || !data) {
-      setErrorMessage("Link inválido ou não encontrado. Contacte a clínica.");
+      setErrorMessage("not_found");
       setStage("error");
       return;
     }
@@ -55,13 +66,13 @@ export default function PortalAtivacao() {
     }
 
     if (data.utilizado) {
-      setErrorMessage("Este link já foi usado. Faça login com a sua password ou contacte a clínica.");
+      setErrorMessage("used");
       setStage("error");
       return;
     }
 
     if (new Date(data.expira_em) < new Date()) {
-      setErrorMessage("Este link expirou. Contacte a clínica para um novo link.");
+      setErrorMessage("expired");
       setStage("error");
       return;
     }
