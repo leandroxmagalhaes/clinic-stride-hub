@@ -37,9 +37,9 @@ Deno.serve(async (req) => {
     const resendKey = Deno.env.get("RESEND_API_KEY");
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Generate magic link (48h)
+    // Generate magic link (7d)
     const link_token = generateToken(32);
-    const expira_em = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+    const expira_em = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const { error: insertError } = await supabase.from("portal_convites").insert({
       paciente_id,
@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
               </a>
             </div>
 
-            <p style="font-size:12px;color:#94a3b8;">Este link é pessoal e expira em 48h. Se não foi você que solicitou, ignore este email.</p>
+            <p style="font-size:12px;color:#94a3b8;">Este link é pessoal e expira em 7 dias. Se não foi você que solicitou, ignore este email.</p>
             <p style="color:#3b82f6;font-size:12px;word-break:break-all;">${magicLink}</p>
 
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">

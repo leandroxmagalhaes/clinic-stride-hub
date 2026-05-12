@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
               </div>
               <p>Clique no botão abaixo para aceder:</p>
               <a href="${link}" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Aceder ao Portal</a>
-              <p style="color:#666;font-size:12px;margin-top:24px">Este código expira em 48 horas. Máximo 3 tentativas.</p>
+              <p style="color:#666;font-size:12px;margin-top:24px">Este código é válido durante 7 dias. Máximo 3 tentativas.</p>
             </div>
           `,
         }),
