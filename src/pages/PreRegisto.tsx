@@ -396,12 +396,20 @@ export default function PreRegisto() {
   if (error) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-6">
-        <div className="text-center space-y-4">
+        <div className="max-w-md w-full text-center space-y-4">
           <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
-            <ShieldCheck className="h-8 w-8 text-destructive" />
+            <AlertTriangle className="h-8 w-8 text-destructive" />
           </div>
-          <h1 className="text-xl font-semibold text-foreground">{error}</h1>
-          <p className="text-muted-foreground text-sm">Verifique se o link está correto ou contacte a clínica.</p>
+          <h1 className="text-xl font-semibold text-foreground">Não conseguimos abrir esta página</h1>
+          <ul className="text-sm text-muted-foreground text-left list-disc pl-5 space-y-1">
+            <li>O link pode estar incompleto ou ter caracteres a mais</li>
+            <li>Pode ter sido enviado um link mais recente — verifique o email</li>
+            <li>Se o problema continuar, contacte directamente a clínica</li>
+          </ul>
+          <p className="text-xs text-muted-foreground pt-2">{error}</p>
+          <Button variant="outline" className="w-full" onClick={() => window.location.reload()}>
+            Tentar novamente
+          </Button>
         </div>
       </div>
     );
