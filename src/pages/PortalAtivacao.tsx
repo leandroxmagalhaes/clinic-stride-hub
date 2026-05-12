@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, ShieldCheck, AlertTriangle, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Loader2, ShieldCheck, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import PortalErrorScreen from "@/components/portal/PortalErrorScreen";
 import { toast } from "sonner";
 
 type Stage = "loading" | "error" | "form" | "creating" | "success";
@@ -36,6 +37,17 @@ export default function PortalAtivacao() {
       return;
     }
 
+    // Forçar logout de qualquer sessão guardada (profissional, admin, outro paciente)
+    // antes de processar o link de activação. Evita conflitos de sessão.
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await supabase.auth.signOut();
+      }
+    } catch {
+      /* ignore */
+    }
+
     const { data, error } = await (supabase as any)
       .from("portal_convites")
       .select("paciente_id, enviado_para_email, expira_em, template_id, utilizado, tipo")
@@ -43,7 +55,7 @@ export default function PortalAtivacao() {
       .maybeSingle();
 
     if (error || !data) {
-      setErrorMessage("Link inválido ou não encontrado. Contacte a clínica.");
+      setErrorMessage("not_found");
       setStage("error");
       return;
     }
@@ -55,13 +67,13 @@ export default function PortalAtivacao() {
     }
 
     if (data.utilizado) {
-      setErrorMessage("Este link já foi usado. Faça login com a sua password ou contacte a clínica.");
+      setErrorMessage("used");
       setStage("error");
       return;
     }
 
     if (new Date(data.expira_em) < new Date()) {
-      setErrorMessage("Este link expirou. Contacte a clínica para um novo link.");
+      setErrorMessage("expired");
       setStage("error");
       return;
     }
@@ -135,24 +147,7 @@ export default function PortalAtivacao() {
   }
 
   if (stage === "error") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <Card className="max-w-md w-full">
-          <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-2">
-              <AlertTriangle className="h-6 w-6 text-destructive" />
-            </div>
-            <CardTitle>Não foi possível ativar</CardTitle>
-            <CardDescription>{errorMessage}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full" onClick={() => navigate("/portal/login")}>
-              Ir para Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <PortalErrorScreen reason={errorMessage} onLogin={() => navigate("/portal/login")} />;
   }
 
   if (stage === "success") {

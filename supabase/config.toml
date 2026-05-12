@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.send-portal-welcome-with-message]
 verify_jwt = false
+
+[functions.request-new-portal-link]
+verify_jwt = false

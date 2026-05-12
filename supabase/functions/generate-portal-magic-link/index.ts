@@ -28,10 +28,10 @@ Deno.serve(async (req) => {
     const resendKey = Deno.env.get("RESEND_API_KEY");
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Generate magic link (24h, single-use)
+    // Generate magic link (7 days, single-use)
     const link_token = generateToken(32);
     const codigo = "000000"; // not used for magic_link, but column is NOT NULL
-    const expira_em = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expira_em = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const { error: insertError } = await supabase.from("portal_convites").insert({
       paciente_id,
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
               <a href="${link}" style="display:inline-block;background:#3b82f6;color:#fff;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:16px;">Ativar a minha conta</a>
             </div>
             <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:8px;margin:24px 0;">
-              <p style="margin:0;color:#78350f;font-size:13px;">⏱ Este link é válido por <strong>24 horas</strong> e pode ser usado <strong>uma única vez</strong>.</p>
+              <p style="margin:0;color:#78350f;font-size:13px;">⏱ Este link é válido por <strong>7 dias</strong> e pode ser usado <strong>uma única vez</strong>.</p>
             </div>
             <p style="color:#94a3b8;font-size:12px;margin-top:24px;">Se o botão não funcionar, copie e cole este endereço no navegador:</p>
             <p style="color:#3b82f6;font-size:12px;word-break:break-all;">${link}</p>
