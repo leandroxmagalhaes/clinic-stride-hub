@@ -75,7 +75,7 @@ export function NewClinicalReportModal({
   const { professionals } = useData();
   const [activeTab, setActiveTab] = useState("dados");
   const [saving, setSaving] = useState(false);
-  const [loadingEvolutions, setLoadingEvolutions] = useState(false);
+  const [, setLoadingEvolutions] = useState(false);
   const [loadingAIDraft, setLoadingAIDraft] = useState(false);
 
   // Form state
