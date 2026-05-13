@@ -88,6 +88,10 @@ export function NewClinicalReportModal({
   // Professional selection
   const [professionalId, setProfessionalId] = useState("");
 
+  // Conteúdo: tipo de inclusão
+  const [tipoConteudo, setTipoConteudo] = useState<"evolucoes" | "anamnese" | "completo">("completo");
+  const [loadingBuild, setLoadingBuild] = useState(false);
+
   // Reset form when modal opens/closes
   useEffect(() => {
     if (open) {
