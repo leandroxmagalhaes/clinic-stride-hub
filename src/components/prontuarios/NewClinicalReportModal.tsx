@@ -551,6 +551,93 @@ Pode incluir:
                 rows={18}
                 className="min-h-[350px]"
               />
+
+              {/* Personalização do PDF */}
+              <div className="border-t pt-4 mt-4 space-y-4">
+                <div>
+                  <h4 className="text-sm font-semibold mb-1">Personalização do PDF</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Estes campos personalizam o relatório gerado (introdução, conclusão e destaques).
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="finalidade" className="text-xs">Finalidade do relatório (opcional)</Label>
+                    <Input
+                      id="finalidade"
+                      value={finalidade}
+                      onChange={(e) => setFinalidade(e.target.value)}
+                      placeholder='ex: "a equipa pediátrica"'
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Classificação da evolução</Label>
+                    <RadioGroup
+                      value={classificacao}
+                      onValueChange={(v) => setClassificacao(v as any)}
+                      className="grid grid-cols-2 gap-1 mt-1"
+                    >
+                      {[
+                        { v: "favoravel", l: "Favorável" },
+                        { v: "progressiva", l: "Progressiva" },
+                        { v: "consolidacao", l: "Em consolidação" },
+                        { v: "outra", l: "Outra" },
+                      ].map((o) => (
+                        <label key={o.v} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <RadioGroupItem value={o.v} id={`cls-${o.v}`} />
+                          {o.l}
+                        </label>
+                      ))}
+                    </RadioGroup>
+                    {classificacao === "outra" && (
+                      <Input
+                        className="mt-2"
+                        value={classificacaoOutra}
+                        onChange={(e) => setClassificacaoOutra(e.target.value)}
+                        placeholder="Descreva..."
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={achadoChecked}
+                        onCheckedChange={(c) => setAchadoChecked(!!c)}
+                      />
+                      Incluir destaque: <span className="font-medium">Achado clínico relevante</span>
+                    </label>
+                    {achadoChecked && (
+                      <Textarea
+                        value={achadoTexto}
+                        onChange={(e) => setAchadoTexto(e.target.value)}
+                        placeholder="Descreva o achado clínico que merece destaque no PDF..."
+                        rows={3}
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={sugestaoChecked}
+                        onCheckedChange={(c) => setSugestaoChecked(!!c)}
+                      />
+                      Incluir destaque: <span className="font-medium">Sugestão multidisciplinar</span>
+                    </label>
+                    {sugestaoChecked && (
+                      <Textarea
+                        value={sugestaoTexto}
+                        onChange={(e) => setSugestaoTexto(e.target.value)}
+                        placeholder="Descreva a sugestão para a equipa multidisciplinar..."
+                        rows={3}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
             </TabsContent>
 
             {/* Tab 3: Preview */}
