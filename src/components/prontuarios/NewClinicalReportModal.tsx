@@ -382,7 +382,14 @@ export function NewClinicalReportModal({
     };
 
     try {
-      await generateClinicalReportPDF(tempReport, clinicInfo);
+      const extras: ReportExtras = {
+        finalidade: finalidade.trim() || undefined,
+        classificacao,
+        classificacaoOutra: classificacao === "outra" ? classificacaoOutra.trim() || undefined : undefined,
+        achadoClinico: achadoChecked ? achadoTexto.trim() || undefined : undefined,
+        sugestaoMultidisciplinar: sugestaoChecked ? sugestaoTexto.trim() || undefined : undefined,
+      };
+      await generateClinicalReportPDF(tempReport, clinicInfo, extras);
       toast.success("PDF gerado com sucesso!");
     } catch (error) {
       console.error("Error generating PDF:", error);
