@@ -42,7 +42,8 @@ import {
   REPORT_TYPE_LABELS,
   REPORT_STATUS_CONFIG,
 } from "@/services/ClinicalReportService";
-import { generateClinicalReportPDF } from "./ClinicalReportPDF";
+import { generateClinicalReportPDF, type ReportExtras } from "./ClinicalReportPDF";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useData } from "@/contexts/DataContext";
 import { AIService } from "@/services/AIService";
 
@@ -91,6 +92,15 @@ export function NewClinicalReportModal({
   // Conteúdo: tipo de inclusão
   const [tipoConteudo, setTipoConteudo] = useState<"evolucoes" | "anamnese" | "completo">("completo");
   const [loadingBuild, setLoadingBuild] = useState(false);
+
+  // Personalização do PDF (Sofia Sopas style)
+  const [finalidade, setFinalidade] = useState("");
+  const [classificacao, setClassificacao] = useState<"favoravel" | "progressiva" | "consolidacao" | "outra">("progressiva");
+  const [classificacaoOutra, setClassificacaoOutra] = useState("");
+  const [achadoChecked, setAchadoChecked] = useState(false);
+  const [achadoTexto, setAchadoTexto] = useState("");
+  const [sugestaoChecked, setSugestaoChecked] = useState(false);
+  const [sugestaoTexto, setSugestaoTexto] = useState("");
 
   // Reset form when modal opens/closes
   useEffect(() => {
