@@ -122,33 +122,141 @@ export function NewClinicalReportModal({
     }
   }, [open, editingReport, professionals]);
 
-  const handleImportEvolutions = async () => {
-    setLoadingEvolutions(true);
+  const formatFieldValue = (value: any): string => {
+    if (value === null || value === undefined || value === "") return "— não preenchido";
+    if (Array.isArray(value)) return value.length ? value.join(", ") : "— não preenchido";
+    if (typeof value === "object") {
+      const entries = Object.entries(value).filter(([, v]) => v !== null && v !== undefined && v !== "");
+      if (!entries.length) return "— não preenchido";
+      return entries.map(([k, v]) => `${k}: ${v}`).join("; ");
+    }
+    if (typeof value === "boolean") return value ? "Sim" : "Não";
+    return String(value);
+  };
+
+  const fetchAnamnese = async (): Promise<{ text: string; hasData: boolean; summary?: Record<string, string> }> => {
+    const { data: q } = await (supabase as any)
+      .from("portal_questionario")
+      .select("respostas, completo, updated_at, template_id, perfil_tipo")
+      .eq("paciente_id", patientId)
+      .maybeSingle();
+
+    if (!q || !q.respostas || Object.keys(q.respostas).length === 0) {
+      return { text: "", hasData: false };
+    }
+
+    const respostas = q.respostas || {};
+
+    let sections: any[] = [];
+    if (q.template_id) {
+      const { data: tpl } = await (supabase as any)
+        .from("portal_questionario_templates")
+        .select("schema")
+        .eq("id", q.template_id)
+        .maybeSingle();
+      sections = tpl?.schema?.sections || [];
+    }
+
+    // Resumo executivo (extracção tolerante a chaves diferentes)
+    const pick = (...paths: string[]): string => {
+      for (const p of paths) {
+        const parts = p.split(".");
+        let cur: any = respostas;
+        for (const part of parts) {
+          cur = cur?.[part];
+          if (cur === undefined) break;
+        }
+        if (cur !== undefined && cur !== null && cur !== "") return formatFieldValue(cur);
+      }
+      return "—";
+    };
+
+    const summary: Record<string, string> = {
+      "Diagnóstico clínico": pick("ficha_clinica.diagnostico_clinico", "clinical.diagnostico_clinico", "clinical.diagnosis", "diagnostico_clinico"),
+      "Queixa principal": pick("ficha_clinica.queixa_maior", "clinical.queixa_maior", "clinical.main_complaint", "queixa_principal"),
+      "Medicação contínua": pick("primeiros_dias.medicamentos_actuais", "medicacao.medicacao_continua", "health.current_medication", "medicacao_continua"),
+      "Alergias conhecidas": pick("saude_vacinacao.alergias", "health.alergias", "health.allergies", "alergias"),
+      "Início da queixa": pick("ficha_clinica.quando_comecou", "clinical.quando_comecou", "clinical.complaint_start", "inicio_queixa"),
+    };
+
+    const lines: string[] = [];
+    lines.push("=== RESUMO EXECUTIVO ===");
+    Object.entries(summary).forEach(([k, v]) => lines.push(`• ${k}: ${v || "—"}`));
+    lines.push("");
+    lines.push("=== ANAMNESE COMPLETA ===");
+
+    if (sections.length) {
+      sections.forEach((sec: any, idx: number) => {
+        const sectionData = respostas[sec.id] ?? respostas[sec.key] ?? null;
+        lines.push("");
+        lines.push(`${idx + 1}. ${sec.title || sec.id}`);
+        lines.push("─".repeat(40));
+        const fields = sec.fields || [];
+        fields.forEach((f: any) => {
+          const val = sectionData && typeof sectionData === "object" ? sectionData[f.key] : respostas[f.key];
+          lines.push(`  ${f.label || f.key}: ${formatFieldValue(val)}`);
+        });
+      });
+    } else {
+      // Fallback: dump bruto se não houver template
+      Object.entries(respostas).forEach(([k, v]) => {
+        lines.push(`• ${k}: ${formatFieldValue(v)}`);
+      });
+    }
+
+    return { text: lines.join("\n"), hasData: true, summary };
+  };
+
+  const handleBuildContent = async () => {
+    setLoadingBuild(true);
     try {
-      // Import all evolutions (no period filter — use full history)
       const today = new Date();
       const oneYearAgo = new Date(today);
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-      const evolutionsText = await ClinicalReportService.getEvolutionsForPeriod(
-        prontuarioId,
-        format(oneYearAgo, "yyyy-MM-dd"),
-        format(today, "yyyy-MM-dd")
-      );
+      let anamneseBlock = "";
+      let evolutionsBlock = "";
+      let warnings: string[] = [];
 
-      if (evolutionsText) {
-        setConteudo(prev => 
-          prev ? `${prev}\n\n--- Evoluções Importadas ---\n\n${evolutionsText}` : evolutionsText
+      if (tipoConteudo === "anamnese" || tipoConteudo === "completo") {
+        const ana = await fetchAnamnese();
+        if (ana.hasData) {
+          anamneseBlock = ana.text;
+        } else {
+          warnings.push("Este utente ainda não preencheu a Anamnese.");
+        }
+      }
+
+      if (tipoConteudo === "evolucoes" || tipoConteudo === "completo") {
+        const evText = await ClinicalReportService.getEvolutionsForPeriod(
+          prontuarioId,
+          format(oneYearAgo, "yyyy-MM-dd"),
+          format(today, "yyyy-MM-dd")
         );
-        toast.success("Evoluções importadas com sucesso!");
+        if (evText) {
+          evolutionsBlock = `=== EVOLUÇÕES (período seleccionado) ===\n\n${evText}`;
+        } else if (tipoConteudo === "evolucoes" || (tipoConteudo === "completo" && anamneseBlock)) {
+          warnings.push("Não há evoluções no período seleccionado.");
+        }
+      }
+
+      const blocks = [anamneseBlock, evolutionsBlock].filter(Boolean);
+      if (!blocks.length) {
+        toast.error(warnings.join(" ") || "Nada para importar.");
+        return;
+      }
+
+      setConteudo(blocks.join("\n\n"));
+      if (warnings.length) {
+        toast.warning(warnings.join(" "));
       } else {
-        toast.info("Nenhuma evolução encontrada");
+        toast.success("Conteúdo importado com sucesso!");
       }
     } catch (error) {
-      console.error("Error importing evolutions:", error);
-      toast.error("Erro ao importar evoluções");
+      console.error("Error building content:", error);
+      toast.error("Erro ao importar conteúdo");
     } finally {
-      setLoadingEvolutions(false);
+      setLoadingBuild(false);
     }
   };
 
