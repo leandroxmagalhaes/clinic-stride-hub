@@ -461,6 +461,28 @@ export function NewClinicalReportModal({
 
             {/* Tab 2: Conteúdo Clínico */}
             <TabsContent value="conteudo" className="space-y-4 mt-0">
+              <div className="space-y-2">
+                <Label>Conteúdo do relatório</Label>
+                <RadioGroup
+                  value={tipoConteudo}
+                  onValueChange={(v) => setTipoConteudo(v as any)}
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-2"
+                >
+                  <label className="flex items-center gap-2 border rounded-md px-3 py-2 cursor-pointer hover:bg-muted/50">
+                    <RadioGroupItem value="completo" id="tc-completo" />
+                    <span className="text-sm">Anamnese + Evoluções <Badge variant="secondary" className="ml-1">Recomendado</Badge></span>
+                  </label>
+                  <label className="flex items-center gap-2 border rounded-md px-3 py-2 cursor-pointer hover:bg-muted/50">
+                    <RadioGroupItem value="anamnese" id="tc-anamnese" />
+                    <span className="text-sm">Só Anamnese</span>
+                  </label>
+                  <label className="flex items-center gap-2 border rounded-md px-3 py-2 cursor-pointer hover:bg-muted/50">
+                    <RadioGroupItem value="evolucoes" id="tc-evolucoes" />
+                    <span className="text-sm">Só Evoluções</span>
+                  </label>
+                </RadioGroup>
+              </div>
+
               <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <Label htmlFor="conteudo">Conteúdo do Relatório</Label>
                 <div className="flex gap-2">
@@ -483,16 +505,16 @@ export function NewClinicalReportModal({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={handleImportEvolutions}
-                    disabled={loadingEvolutions}
+                    onClick={handleBuildContent}
+                    disabled={loadingBuild}
                     className="gap-2"
                   >
-                    {loadingEvolutions ? (
+                    {loadingBuild ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Import className="h-4 w-4" />
                     )}
-                    Importar Evoluções
+                    Importar conteúdo
                   </Button>
                 </div>
               </div>
