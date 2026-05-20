@@ -46,11 +46,9 @@ export default function PortalVerificacao() {
   const loadInvite = useCallback(async () => {
     if (!token) { setErrorMessage("Link inválido."); setStage("error"); return; }
 
-    const { data, error } = await (supabase as any)
-      .from("portal_convites")
-      .select("*")
-      .eq("link_token", token)
-      .single();
+    const { data: rows, error } = await (supabase as any)
+      .rpc("get_portal_invite_by_token", { p_token: token });
+    const data = Array.isArray(rows) ? rows[0] : rows;
 
     if (error || !data) {
       setErrorMessage("Convite inválido ou expirado.");
@@ -122,12 +120,10 @@ export default function PortalVerificacao() {
       setStage("create-account");
       toast.success("Código verificado com sucesso!");
     } else {
-      // Increment attempts
-      const newAttempts = invite.tentativas + 1;
-      await (supabase as any)
-        .from("portal_convites")
-        .update({ tentativas: newAttempts })
-        .eq("id", invite.id);
+      // Increment attempts via scoped RPC
+      const { data: newAttemptsData } = await (supabase as any)
+        .rpc("increment_portal_invite_attempts", { p_token: token });
+      const newAttempts = typeof newAttemptsData === "number" ? newAttemptsData : invite.tentativas + 1;
 
       setInvite({ ...invite, tentativas: newAttempts });
       setShake(true);

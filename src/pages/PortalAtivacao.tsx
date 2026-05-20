@@ -48,11 +48,9 @@ export default function PortalAtivacao() {
       /* ignore */
     }
 
-    const { data, error } = await (supabase as any)
-      .from("portal_convites")
-      .select("paciente_id, enviado_para_email, expira_em, template_id, utilizado, tipo")
-      .eq("link_token", token)
-      .maybeSingle();
+    const { data: rows, error } = await (supabase as any)
+      .rpc("get_portal_invite_by_token", { p_token: token });
+    const data = Array.isArray(rows) ? rows[0] : rows;
 
     if (error || !data) {
       setErrorMessage("not_found");

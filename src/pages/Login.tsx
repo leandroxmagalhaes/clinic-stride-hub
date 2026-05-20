@@ -79,13 +79,9 @@ export default function Login() {
     // Check for pending invites (only for staff)
     if (hasStaffRole) {
       try {
-        const { data: pendingInvite } = await supabase
-          .from('team_invites')
-          .select('token, role, full_name')
-          .eq('email', email.toLowerCase())
-          .eq('status', 'pending')
-          .gt('expires_at', new Date().toISOString())
-          .maybeSingle();
+        const { data: pendingRows } = await (supabase as any)
+          .rpc('get_pending_team_invite_for_me');
+        const pendingInvite = Array.isArray(pendingRows) ? pendingRows[0] : pendingRows;
 
         if (pendingInvite) {
           const { data: result } = await supabase.rpc('process_team_invite', {

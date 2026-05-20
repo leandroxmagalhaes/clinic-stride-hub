@@ -3051,7 +3051,42 @@ export type Database = {
         Args: { p_patient_id: string }
         Returns: number
       }
+      get_pending_team_invite_for_me: {
+        Args: never
+        Returns: {
+          full_name: string
+          role: Database["public"]["Enums"]["app_role"]
+          token: string
+        }[]
+      }
+      get_portal_invite_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          codigo: string
+          enviado_para_email: string
+          expira_em: string
+          id: string
+          max_tentativas: number
+          paciente_id: string
+          template_id: string
+          tentativas: number
+          tipo: string
+          utilizado: boolean
+        }[]
+      }
       get_portal_patient_ids: { Args: { p_user_id: string }; Returns: string[] }
+      get_team_invite_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          clinic_id: string
+          email: string
+          expires_at: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: string
+        }[]
+      }
       get_user_clinic_id: { Args: { p_user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -3059,6 +3094,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_portal_invite_attempts: {
+        Args: { p_token: string }
+        Returns: number
       }
       is_professional: { Args: { p_user_id: string }; Returns: boolean }
       list_portal_conversations: {

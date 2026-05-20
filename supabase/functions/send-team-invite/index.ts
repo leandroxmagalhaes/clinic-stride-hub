@@ -20,6 +20,14 @@ const ROLE_LABELS: Record<string, string> = {
   secretary: 'Secretaria',
 };
 
+const escapeHtml = (s: unknown) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -154,11 +162,11 @@ serve(async (req) => {
           </div>
           
           <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
-            <h2 style="color: #111827; margin-top: 0;">Olá ${full_name}!</h2>
+            <h2 style="color: #111827; margin-top: 0;">Olá ${escapeHtml(full_name)}!</h2>
             
             <p style="color: #4b5563; font-size: 16px;">
-              Você foi convidado por <strong>${profile.full_name}</strong> para juntar-se à equipe da 
-              <strong>${clinic.name}</strong> como <strong>${roleLabel}</strong>.
+              Você foi convidado por <strong>${escapeHtml(profile.full_name)}</strong> para juntar-se à equipe da 
+              <strong>${escapeHtml(clinic.name)}</strong> como <strong>${escapeHtml(roleLabel)}</strong>.
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
