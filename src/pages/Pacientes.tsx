@@ -521,11 +521,27 @@ export default function Pacientes() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredPatients.map((patient) => {
                 const healthTags = (patient.health_tags as HealthTag[]) || [];
+                const handleInativar = async () => {
+                  if (!confirm(`Inativar o utente "${patient.full_name}"?`)) return;
+                  try {
+                    await handleUpdatePatient(patient.id, { is_active: false } as Partial<Patient>);
+                  } catch {
+                    /* toast já mostrado */
+                  }
+                };
+                const handleExtrato = async () => {
+                  try {
+                    await PatientStatementService.downloadStatement(patient.id, patient.full_name);
+                    toast.success("Extrato descarregado!");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Erro ao gerar extrato");
+                  }
+                };
                 return (
                   <Card
                     key={patient.id}
                     className="shadow-card hover:shadow-medium transition-shadow cursor-pointer"
-                    onClick={() => handleOpenPatient(patient)}
+                    onClick={() => navigate(`/prontuarios?paciente=${patient.id}`)}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-4">
@@ -541,7 +557,7 @@ export default function Pacientes() {
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold truncate">{patient.full_name}</h3>
+                            <h3 className="font-semibold truncate flex-1">{patient.full_name}</h3>
                             {patient.is_active ? (
                               <Badge variant="secondary" className="bg-success/10 text-success text-[10px]">
                                 Ativo
@@ -551,6 +567,62 @@ export default function Pacientes() {
                                 Inativo
                               </Badge>
                             )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 -mr-2 -mt-1"
+                                  aria-label="Acções rápidas"
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenPatient(patient);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Ver dados
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsOnboardingLinkModalOpen(true);
+                                  }}
+                                >
+                                  <Send className="h-4 w-4 mr-2" />
+                                  Enviar Link do Portal
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleExtrato();
+                                  }}
+                                >
+                                  <FileDown className="h-4 w-4 mr-2" />
+                                  Extrato
+                                </DropdownMenuItem>
+                                {patient.is_active !== false && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleInativar();
+                                      }}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <XCircle className="h-4 w-4 mr-2" />
+                                      Inativar
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                           <div className="space-y-1 text-sm text-muted-foreground">
                             <div className="flex items-center gap-2">
