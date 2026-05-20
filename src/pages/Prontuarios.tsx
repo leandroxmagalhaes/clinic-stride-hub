@@ -51,6 +51,7 @@ import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { PatientMessagesTab } from "@/components/prontuarios/PatientMessagesTab";
 import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
 import RelatorioRespiratorio from "@/pages/RelatorioRespiratorio";
+import { PatientDataTab } from "@/components/prontuarios/PatientDataTab";
 
 interface ProntuarioData {
   id: string;
@@ -94,6 +95,23 @@ export default function Prontuarios() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("prontuarios-patients-collapsed") === "true";
   });
+  // Busca dinâmica (dropdown)
+  const [quickSearch, setQuickSearch] = useState("");
+  const [showQuickResults, setShowQuickResults] = useState(false);
+  const [debouncedQuickSearch, setDebouncedQuickSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuickSearch(quickSearch), 250);
+    return () => clearTimeout(t);
+  }, [quickSearch]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowQuickResults(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("prontuarios-patients-collapsed", String(patientsCollapsed));
@@ -148,9 +166,16 @@ export default function Prontuarios() {
   }, []);
 
   const pacienteIdFromUrl = searchParams.get("paciente");
-  const rawTab = searchParams.get("tab") || "evolucoes";
+  const rawTab = searchParams.get("tab") || "dados";
   // Retro-compat: slug antigo "diario"/"mensagens" → "acompanhamento"
   const tabFromUrl = rawTab === "diario" || rawTab === "mensagens" ? "acompanhamento" : rawTab;
+
+  // Ao abrir um utente, recolher automaticamente a lista lateral
+  useEffect(() => {
+    if (pacienteIdFromUrl) {
+      setPatientsCollapsed(true);
+    }
+  }, [pacienteIdFromUrl]);
 
   useEffect(() => {
     const sessaoData = searchParams.get("sessao_data");
@@ -562,18 +587,62 @@ export default function Prontuarios() {
 
         {/* Detalhe */}
         <div className={cn("transition-all duration-300", patientsCollapsed ? "lg:col-span-12" : "lg:col-span-8")}>
-          {patientsCollapsed && (
+          {/* Barra superior: toggle lista + busca dinâmica */}
+          <div className="hidden lg:flex items-center gap-2 mb-3">
             <Button
               variant="outline"
-              size="sm"
-              className="hidden lg:inline-flex gap-2 mb-3 text-muted-foreground hover:text-primary"
-              onClick={() => setPatientsCollapsed(false)}
-              title="Mostrar lista de utentes (Ctrl+\\)"
+              size="icon"
+              className="text-muted-foreground hover:text-primary shrink-0"
+              onClick={() => setPatientsCollapsed((v) => !v)}
+              title={patientsCollapsed ? "Mostrar lista de utentes (Ctrl+\\)" : "Recolher lista de utentes (Ctrl+\\)"}
+              aria-label={patientsCollapsed ? "Mostrar lista de utentes" : "Recolher lista de utentes"}
             >
-              <PanelLeftOpen className="h-4 w-4" />
-              Mostrar utentes
+              {patientsCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </Button>
-          )}
+            <div className="relative flex-1 max-w-xl">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar utente por nome..."
+                value={quickSearch}
+                onChange={(e) => {
+                  setQuickSearch(e.target.value);
+                  setShowQuickResults(true);
+                }}
+                onFocus={() => quickSearch.length >= 2 && setShowQuickResults(true)}
+                onBlur={() => setTimeout(() => setShowQuickResults(false), 150)}
+                className="pl-9"
+              />
+              {showQuickResults && debouncedQuickSearch.length >= 2 && (
+                <div className="absolute z-50 mt-1 w-full bg-popover border rounded-md shadow-lg max-h-80 overflow-y-auto">
+                  {(() => {
+                    const results = patients
+                      .filter((p) => p.full_name.toLowerCase().includes(debouncedQuickSearch.toLowerCase()))
+                      .slice(0, 10);
+                    if (results.length === 0) {
+                      return <div className="p-3 text-sm text-muted-foreground text-center">Nenhum utente encontrado</div>;
+                    }
+                    return results.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setSearchParams({ paciente: p.id, tab: "dados" }, { replace: false });
+                          setShowQuickResults(false);
+                          setQuickSearch("");
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-muted transition-colors flex items-center justify-between gap-3 border-b last:border-b-0"
+                      >
+                        <span className="font-medium text-sm truncate">{p.full_name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{p.phone || ""}</span>
+                      </button>
+                    ));
+                  })()}
+                </div>
+              )}
+            </div>
+          </div>
+
           {selectedProntuario ? (
             <div className="space-y-4">
               <Button
@@ -630,7 +699,11 @@ export default function Prontuarios() {
 
               {/* Tabs */}
               <Tabs value={tabFromUrl} onValueChange={handleTabChange} className="space-y-4">
-                <TabsList className="bg-muted/50">
+                <TabsList className="bg-muted/50 flex-wrap h-auto">
+                  <TabsTrigger value="dados" className="gap-2">
+                    <User className="h-4 w-4" />
+                    Dados
+                  </TabsTrigger>
                   <TabsTrigger value="evolucoes" className="gap-2">
                     <Activity className="h-4 w-4" />
                     Evoluções
@@ -656,6 +729,25 @@ export default function Prontuarios() {
                     Respiratório
                   </TabsTrigger>
                 </TabsList>
+
+                {/* Dados (cadastro completo) */}
+                <TabsContent value="dados">
+                  {(() => {
+                    const fullPatient = patients.find((p) => p.id === selectedProntuario.paciente_id);
+                    if (!fullPatient) return null;
+                    return (
+                      <PatientDataTab
+                        patient={fullPatient}
+                        onPatientUpdated={(data) => {
+                          setSelectedProntuario((prev) =>
+                            prev ? { ...prev, paciente: { ...(prev.paciente as any), ...data } } : prev,
+                          );
+                        }}
+                      />
+                    );
+                  })()}
+                </TabsContent>
+
 
                 {/* Evoluções */}
                 <TabsContent value="evolucoes">
