@@ -1401,12 +1401,12 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName }: { onOpen
 }
 
 /* ─── Componente Principal ───────────────────────────────────────────────── */
-export default function RelatorioRespiratório() {
+export default function RelatorioRespiratório({ pacienteId, patientName }: { pacienteId?: string; patientName?: string } = {}) {
   const [view, setView] = useState<"history" | "new">("history");
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
   const [fileData, setFileData] = useState(null);
-  const [data, setData] = useState({ ...EMPTY_DATA });
+  const [data, setData] = useState({ ...EMPTY_DATA, nome: patientName || "" });
   const [secoes, setSocoes] = useState(Object.fromEntries(SECOES_CONFIG.map((s) => [s.id, true])));
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -1417,7 +1417,7 @@ export default function RelatorioRespiratório() {
   };
 
   const handleIADone = (parsed) => {
-    setData({ ...EMPTY_DATA, ...parsed, progressao: parsed.progressao || EMPTY_DATA.progressao });
+    setData({ ...EMPTY_DATA, nome: patientName || "", ...parsed, progressao: parsed.progressao || EMPTY_DATA.progressao });
     setStep(3);
   };
 
@@ -1429,7 +1429,7 @@ export default function RelatorioRespiratório() {
   };
 
   const handleNew = () => {
-    setData({ ...EMPTY_DATA });
+    setData({ ...EMPTY_DATA, nome: patientName || "" });
     setEditingId(null);
     setStep(1);
     setView("new");
