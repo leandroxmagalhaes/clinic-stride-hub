@@ -1224,7 +1224,7 @@ function StepRelatorio({ data, secoes, onEdit, onSave = null }) {
    APP ROOT
 ═══════════════════════════════════════════════════════════════════════════ */
 /* ─── Histórico ──────────────────────────────────────────────────────────── */
-function HistoricoRelatorios({ onOpen, onNew, onPreview }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void }) {
+function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void; patientName?: string }) {
   const { user } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1264,7 +1264,11 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview }: { onOpen: (r: any) =>
     }
   };
 
-  const filtered = reports.filter((r) => r.patient_name.toLowerCase().includes(search.toLowerCase()));
+  // Filtro por paciente actual (se embebido no prontuário) + filtro de pesquisa
+  const scoped = patientName
+    ? reports.filter((r) => (r.patient_name || "").toLowerCase().includes(patientName.toLowerCase()))
+    : reports;
+  const filtered = scoped.filter((r) => r.patient_name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div>
@@ -1397,12 +1401,12 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview }: { onOpen: (r: any) =>
 }
 
 /* ─── Componente Principal ───────────────────────────────────────────────── */
-export default function RelatorioRespiratório() {
+export default function RelatorioRespiratório({ pacienteId, patientName }: { pacienteId?: string; patientName?: string } = {}) {
   const [view, setView] = useState<"history" | "new">("history");
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
   const [fileData, setFileData] = useState(null);
-  const [data, setData] = useState({ ...EMPTY_DATA });
+  const [data, setData] = useState({ ...EMPTY_DATA, nome: patientName || "" });
   const [secoes, setSocoes] = useState(Object.fromEntries(SECOES_CONFIG.map((s) => [s.id, true])));
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -1413,7 +1417,7 @@ export default function RelatorioRespiratório() {
   };
 
   const handleIADone = (parsed) => {
-    setData({ ...EMPTY_DATA, ...parsed, progressao: parsed.progressao || EMPTY_DATA.progressao });
+    setData({ ...EMPTY_DATA, nome: patientName || "", ...parsed, progressao: parsed.progressao || EMPTY_DATA.progressao });
     setStep(3);
   };
 
@@ -1425,7 +1429,7 @@ export default function RelatorioRespiratório() {
   };
 
   const handleNew = () => {
-    setData({ ...EMPTY_DATA });
+    setData({ ...EMPTY_DATA, nome: patientName || "" });
     setEditingId(null);
     setStep(1);
     setView("new");
@@ -1506,12 +1510,13 @@ export default function RelatorioRespiratório() {
             backdropFilter: "blur(12px)",
           }}
         >
-          <HistoricoRelatorios onOpen={handleOpenReport} onNew={handleNew} onPreview={(r) => {
+          <HistoricoRelatorios patientName={patientName} onOpen={handleOpenReport} onNew={handleNew} onPreview={(r) => {
             setData({ ...EMPTY_DATA, ...r.data });
             setEditingId(r.id);
             setStep(4);
             setView("new");
           }} />
+
         </div>
       </div>
     );

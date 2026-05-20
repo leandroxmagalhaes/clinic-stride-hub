@@ -27,6 +27,7 @@ import {
   MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  Wind,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -49,6 +50,7 @@ import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCa
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { PatientMessagesTab } from "@/components/prontuarios/PatientMessagesTab";
 import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
+import RelatorioRespiratorio from "@/pages/RelatorioRespiratorio";
 
 interface ProntuarioData {
   id: string;
@@ -649,6 +651,10 @@ export default function Prontuarios() {
                     <MessageCircle className="h-4 w-4" />
                     Acompanhamento
                   </TabsTrigger>
+                  <TabsTrigger value="respiratorio" className="gap-2">
+                    <Wind className="h-4 w-4" />
+                    Respiratório
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Evoluções */}
@@ -928,6 +934,14 @@ export default function Prontuarios() {
                     pacienteId={selectedProntuario.paciente_id}
                     patientName={selectedProntuario.paciente?.full_name || "Utente"}
                     patientEmail={selectedProntuario.paciente?.email || null}
+                  />
+                </TabsContent>
+
+                {/* Relatório Respiratório (componente importado tal como está) */}
+                <TabsContent value="respiratorio">
+                  <RelatorioRespiratorio
+                    pacienteId={selectedProntuario.paciente_id}
+                    patientName={selectedProntuario.paciente?.full_name || ""}
                   />
                 </TabsContent>
               </Tabs>
