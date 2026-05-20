@@ -95,6 +95,23 @@ export default function Prontuarios() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("prontuarios-patients-collapsed") === "true";
   });
+  // Busca dinâmica (dropdown)
+  const [quickSearch, setQuickSearch] = useState("");
+  const [showQuickResults, setShowQuickResults] = useState(false);
+  const [debouncedQuickSearch, setDebouncedQuickSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuickSearch(quickSearch), 250);
+    return () => clearTimeout(t);
+  }, [quickSearch]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowQuickResults(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("prontuarios-patients-collapsed", String(patientsCollapsed));
