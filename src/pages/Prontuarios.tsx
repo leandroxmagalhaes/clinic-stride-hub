@@ -149,9 +149,16 @@ export default function Prontuarios() {
   }, []);
 
   const pacienteIdFromUrl = searchParams.get("paciente");
-  const rawTab = searchParams.get("tab") || "evolucoes";
+  const rawTab = searchParams.get("tab") || "dados";
   // Retro-compat: slug antigo "diario"/"mensagens" → "acompanhamento"
   const tabFromUrl = rawTab === "diario" || rawTab === "mensagens" ? "acompanhamento" : rawTab;
+
+  // Ao abrir um utente, recolher automaticamente a lista lateral
+  useEffect(() => {
+    if (pacienteIdFromUrl) {
+      setPatientsCollapsed(true);
+    }
+  }, [pacienteIdFromUrl]);
 
   useEffect(() => {
     const sessaoData = searchParams.get("sessao_data");
