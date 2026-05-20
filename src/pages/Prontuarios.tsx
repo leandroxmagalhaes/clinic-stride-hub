@@ -651,6 +651,10 @@ export default function Prontuarios() {
                     <MessageCircle className="h-4 w-4" />
                     Acompanhamento
                   </TabsTrigger>
+                  <TabsTrigger value="respiratorio" className="gap-2">
+                    <Wind className="h-4 w-4" />
+                    Respiratório
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Evoluções */}
