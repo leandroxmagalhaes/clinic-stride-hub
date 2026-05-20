@@ -50,6 +50,7 @@ import { PreSessionBriefingCard } from "@/components/agenda/PreSessionBriefingCa
 import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { PatientMessagesTab } from "@/components/prontuarios/PatientMessagesTab";
 import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
+import RelatorioRespiratorio from "@/pages/RelatorioRespiratorio";
 
 interface ProntuarioData {
   id: string;
