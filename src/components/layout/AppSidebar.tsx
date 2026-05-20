@@ -216,18 +216,20 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        <SidebarGroup className="mt-2">
-          <SidebarGroupLabel className="text-sidebar-muted text-[10px] uppercase tracking-wider font-medium">
-            Clínica
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {clinicNavItems.map((item) => (
-                <NavItem key={item.title} item={item} isActive={currentPath === item.url} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {clinicNavItems.length > 0 && (
+          <SidebarGroup className="mt-2">
+            <SidebarGroupLabel className="text-sidebar-muted text-[10px] uppercase tracking-wider font-medium">
+              Clínica
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {clinicNavItems.map((item) => (
+                  <NavItem key={item.title} item={item} isActive={currentPath === item.url} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
