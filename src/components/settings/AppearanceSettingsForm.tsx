@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Palette, Save, ImageIcon, Check, Sun, Moon, Monitor, Sparkles } from 'lucide-react';
+import { Palette, Save, ImageIcon, Check, Sun, Moon, Monitor, Sparkles, PanelLeft, Layout } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   appearanceSettingsSchema,
@@ -18,12 +18,18 @@ import {
 import {
   PREMIUM_COLORS,
   PREMIUM_FAMILIES,
+  SIDEBAR_STYLES,
   applyPrimaryColor,
   applyThemeMode,
   applyGradients,
+  applySidebarStyle,
+  applySidebarCompact,
   getStoredMode,
   getStoredGradient,
+  getStoredSidebarStyle,
+  getStoredSidebarCompact,
   type ThemeMode,
+  type SidebarStyle,
 } from '@/lib/theme';
 
 interface AppearanceSettingsFormProps {
@@ -42,6 +48,8 @@ export function AppearanceSettingsForm({
   const [customColor, setCustomColor] = useState(false);
   const [mode, setMode] = useState<ThemeMode>(getStoredMode());
   const [gradients, setGradients] = useState<boolean>(getStoredGradient());
+  const [sidebarStyle, setSidebarStyle] = useState<SidebarStyle>(getStoredSidebarStyle());
+  const [sidebarCompact, setSidebarCompact] = useState<boolean>(getStoredSidebarCompact());
 
   const form = useForm<AppearanceSettingsFormData>({
     resolver: zodResolver(appearanceSettingsSchema),
@@ -78,6 +86,21 @@ export function AppearanceSettingsForm({
   const handleGradients = (v: boolean) => {
     setGradients(v);
     applyGradients(v);
+  };
+  const handleSidebarStyle = (s: SidebarStyle) => {
+    setSidebarStyle(s);
+    applySidebarStyle(s);
+  };
+  const handleSidebarCompact = (v: boolean) => {
+    setSidebarCompact(v);
+    applySidebarCompact(v);
+    // Notify PersistentLayout (same-tab) by dispatching a storage event manually.
+    try {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'physione.sidebar.compact',
+        newValue: v ? '1' : '0',
+      }));
+    } catch { /* ignore */ }
   };
 
   if (isLoading) {
@@ -259,6 +282,71 @@ export function AppearanceSettingsForm({
               </p>
             </div>
             <Switch checked={gradients} onCheckedChange={handleGradients} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Layout className="h-5 w-5" />
+            Barra Lateral
+          </CardTitle>
+          <CardDescription>
+            Escolha o estilo visual e o modo compacto da sidebar
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <Label className="mb-2 block">Estilo da Barra Lateral</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {SIDEBAR_STYLES.map((s) => {
+                const active = sidebarStyle === s.value;
+                // Mini preview swatches per style — Colorido/Vidro usam --primary
+                const previewClass =
+                  s.value === 'escuro'   ? 'bg-[hsl(220_25%_10%)]'
+                  : s.value === 'claro'  ? 'bg-white border border-border'
+                  : s.value === 'colorido' ? 'bg-gradient-to-b from-[hsl(var(--primary-dark))] to-[hsl(var(--primary))]'
+                  : 'bg-gradient-to-b from-[hsl(var(--primary)/0.95)] to-[hsl(var(--primary-dark)/0.9)] backdrop-blur';
+                const dotClass =
+                  s.value === 'claro' ? 'bg-primary' : 'bg-white/80';
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => handleSidebarStyle(s.value)}
+                    className={cn(
+                      "group relative rounded-xl border-2 p-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
+                      active ? "border-foreground shadow-md" : "border-border"
+                    )}
+                  >
+                    <div className={cn("h-20 w-full rounded-md mb-2 flex flex-col gap-1.5 p-1.5", previewClass)}>
+                      <div className={cn("h-2 w-3/4 rounded-sm", dotClass)} />
+                      <div className={cn("h-2 w-1/2 rounded-sm opacity-60", dotClass)} />
+                      <div className={cn("h-2 w-2/3 rounded-sm opacity-60", dotClass)} />
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-medium">{s.label}</span>
+                      {active && <Check className="h-3.5 w-3.5 shrink-0" />}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground line-clamp-1">{s.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-2">
+                <PanelLeft className="h-4 w-4" />
+                Sidebar compacta (só ícones)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Encolhe a sidebar e mostra apenas ícones com tooltips. Atalho: ⌘/Ctrl + B.
+              </p>
+            </div>
+            <Switch checked={sidebarCompact} onCheckedChange={handleSidebarCompact} />
           </div>
         </CardContent>
       </Card>

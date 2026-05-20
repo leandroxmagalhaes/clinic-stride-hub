@@ -137,6 +137,104 @@
   }
 }
 
+/* =============================================
+   SIDEBAR STYLES (4 variantes)
+   Aplicadas via [data-sidebar-style="..."] no <html>.
+   "colorido" e "vidro" usam --primary (cor escolhida pelo utilizador).
+   ============================================= */
+@layer base {
+  /* Estilo 1 — Escuro (default, já definido em :root) */
+
+  /* Estilo 2 — Claro / minimalista */
+  html[data-sidebar-style="claro"] {
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 25% 35%;
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--primary);
+    --sidebar-accent-foreground: var(--primary);
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: var(--primary);
+    --sidebar-muted: 215 16% 47%;
+  }
+  html[data-sidebar-style="claro"] [data-sidebar="sidebar"] {
+    background: hsl(0 0% 100%);
+  }
+  html[data-sidebar-style="claro"] [data-sidebar="menu-button"]:hover {
+    background-color: hsl(210 40% 96%);
+  }
+  html[data-sidebar-style="claro"] [data-sidebar="menu-button"][data-active="true"] {
+    background-color: hsl(var(--primary) / 0.10);
+    color: hsl(var(--primary));
+    font-weight: 600;
+  }
+
+  /* Estilo 3 — Colorido (gradiente com a cor principal) */
+  html[data-sidebar-style="colorido"] {
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 100% / 0.12;
+    --sidebar-muted: 0 0% 100%;
+  }
+  html[data-sidebar-style="colorido"] [data-sidebar="sidebar"] {
+    background-image: linear-gradient(180deg, hsl(var(--primary-dark)), hsl(var(--primary)));
+    color: hsl(0 0% 100% / 0.85);
+  }
+  html[data-sidebar-style="colorido"] [data-sidebar="menu-button"] {
+    color: hsl(0 0% 100% / 0.85);
+  }
+  html[data-sidebar-style="colorido"] [data-sidebar="menu-button"]:hover {
+    background-color: hsl(0 0% 100% / 0.12);
+    color: hsl(0 0% 100%);
+  }
+  html[data-sidebar-style="colorido"] [data-sidebar="menu-button"][data-active="true"] {
+    background-color: hsl(0 0% 100% / 0.22);
+    color: hsl(0 0% 100%);
+    font-weight: 600;
+  }
+
+  /* Estilo 4 — Vidro (glassmorphism) */
+  html[data-sidebar-style="vidro"] {
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-muted: 0 0% 100%;
+  }
+  html[data-sidebar-style="vidro"] [data-sidebar="sidebar"] {
+    background-image: linear-gradient(180deg, hsl(var(--primary) / 0.95), hsl(var(--primary-dark) / 0.9));
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid hsl(0 0% 100% / 0.1);
+    color: hsl(0 0% 100% / 0.9);
+  }
+  html[data-sidebar-style="vidro"] [data-sidebar="menu-button"] {
+    color: hsl(0 0% 100% / 0.9);
+  }
+  html[data-sidebar-style="vidro"] [data-sidebar="menu-button"]:hover {
+    background-color: hsl(0 0% 100% / 0.15);
+    color: hsl(0 0% 100%);
+  }
+  html[data-sidebar-style="vidro"] [data-sidebar="menu-button"][data-active="true"] {
+    background-color: hsl(0 0% 100% / 0.25);
+    color: hsl(0 0% 100%);
+    font-weight: 600;
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.15);
+  }
+
+  /* Logo / textos em fundos coloridos ficam legíveis */
+  html[data-sidebar-style="colorido"] [data-sidebar="header"] .text-sidebar-muted,
+  html[data-sidebar-style="vidro"]    [data-sidebar="header"] .text-sidebar-muted,
+  html[data-sidebar-style="colorido"] [data-sidebar="footer"] .text-sidebar-muted,
+  html[data-sidebar-style="vidro"]    [data-sidebar="footer"] .text-sidebar-muted {
+    color: hsl(0 0% 100% / 0.7) !important;
+  }
+  html[data-sidebar-style="colorido"] [data-sidebar="group-label"],
+  html[data-sidebar-style="vidro"]    [data-sidebar="group-label"] {
+    color: hsl(0 0% 100% / 0.65) !important;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

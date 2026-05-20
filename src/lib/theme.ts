@@ -48,6 +48,35 @@ export const PREMIUM_FAMILIES = Array.from(
 const LS_PRIMARY = "physione.theme.primary";
 const LS_MODE = "physione.theme.mode";
 const LS_GRADIENT = "physione.theme.gradient";
+const LS_SIDEBAR_STYLE = "physione.sidebar.style";
+const LS_SIDEBAR_COMPACT = "physione.sidebar.compact";
+
+export type SidebarStyle = "escuro" | "claro" | "colorido" | "vidro";
+export const SIDEBAR_STYLES: { value: SidebarStyle; label: string; description: string }[] = [
+  { value: "escuro",    label: "Escuro",    description: "Azul-marinho profissional (padrão)" },
+  { value: "claro",     label: "Claro",     description: "Branco minimalista" },
+  { value: "colorido",  label: "Colorido",  description: "Gradiente com a cor principal" },
+  { value: "vidro",     label: "Vidro",     description: "Glassmorphism com cor principal" },
+];
+
+export function applySidebarStyle(style: SidebarStyle) {
+  if (typeof document === "undefined") return;
+  document.documentElement.setAttribute("data-sidebar-style", style);
+  try { localStorage.setItem(LS_SIDEBAR_STYLE, style); } catch { /* ignore */ }
+}
+export function getStoredSidebarStyle(): SidebarStyle {
+  try {
+    const v = localStorage.getItem(LS_SIDEBAR_STYLE);
+    if (v === "escuro" || v === "claro" || v === "colorido" || v === "vidro") return v;
+  } catch { /* ignore */ }
+  return "escuro";
+}
+export function applySidebarCompact(compact: boolean) {
+  try { localStorage.setItem(LS_SIDEBAR_COMPACT, compact ? "1" : "0"); } catch { /* ignore */ }
+}
+export function getStoredSidebarCompact(): boolean {
+  try { return localStorage.getItem(LS_SIDEBAR_COMPACT) === "1"; } catch { return false; }
+}
 
 /** Convert "#rrggbb" to "h s% l%" (shadcn format, no commas). */
 export function hexToHSL(hex: string): string | null {
