@@ -51,6 +51,7 @@ import { usePreSessionBriefing } from "@/hooks/usePreSessionBriefing";
 import { PatientMessagesTab } from "@/components/prontuarios/PatientMessagesTab";
 import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
 import RelatorioRespiratorio from "@/pages/RelatorioRespiratorio";
+import { PatientDataTab } from "@/components/prontuarios/PatientDataTab";
 
 interface ProntuarioData {
   id: string;
