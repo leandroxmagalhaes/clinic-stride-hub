@@ -936,6 +936,14 @@ export default function Prontuarios() {
                     patientEmail={selectedProntuario.paciente?.email || null}
                   />
                 </TabsContent>
+
+                {/* Relatório Respiratório (componente importado tal como está) */}
+                <TabsContent value="respiratorio">
+                  <RelatorioRespiratorio
+                    pacienteId={selectedProntuario.paciente_id}
+                    patientName={selectedProntuario.paciente?.full_name || ""}
+                  />
+                </TabsContent>
               </Tabs>
             </div>
           ) : (
