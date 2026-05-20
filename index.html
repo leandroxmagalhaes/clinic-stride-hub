@@ -43,6 +43,40 @@
       body { margin: 0; background-color: hsl(0 0% 100%); color: hsl(240 10% 3.9%); font-family: Inter, Plus Jakarta Sans, system-ui, -apple-system, sans-serif; }
       #root { min-height: 100vh; }
     </style>
+    <script>
+      // No-flash theme boot: applies stored primary color + mode BEFORE first paint.
+      (function () {
+        try {
+          var hex = localStorage.getItem('physione.theme.primary');
+          var mode = localStorage.getItem('physione.theme.mode') || 'system';
+          var grad = localStorage.getItem('physione.theme.gradient') === '1';
+          var root = document.documentElement;
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (mode === 'dark' || (mode === 'system' && prefersDark)) root.classList.add('dark');
+          if (grad) root.classList.add('theme-gradients');
+          if (hex && /^#[0-9a-fA-F]{6}$/.test(hex)) {
+            var c = hex.slice(1);
+            var r = parseInt(c.substr(0,2),16)/255, g = parseInt(c.substr(2,2),16)/255, b = parseInt(c.substr(4,2),16)/255;
+            var max = Math.max(r,g,b), min = Math.min(r,g,b), h=0, s=0, l=(max+min)/2;
+            if (max!==min) {
+              var d = max-min;
+              s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+              if (max===r) h = (g-b)/d + (g<b?6:0);
+              else if (max===g) h = (b-r)/d + 2;
+              else h = (r-g)/d + 4;
+              h /= 6;
+            }
+            var hsl = Math.round(h*360)+' '+Math.round(s*100)+'% '+Math.round(l*100)+'%';
+            root.style.setProperty('--primary', hsl);
+            root.style.setProperty('--ring', hsl);
+            // contrast-aware foreground
+            var lin = function(v){ v=v; return v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
+            var lum = 0.2126*lin(r)+0.7152*lin(g)+0.0722*lin(b);
+            root.style.setProperty('--primary-foreground', lum>0.55 ? '0 0% 10%' : '0 0% 100%');
+          }
+        } catch (e) { /* fail silently */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
