@@ -699,7 +699,11 @@ export default function Prontuarios() {
 
               {/* Tabs */}
               <Tabs value={tabFromUrl} onValueChange={handleTabChange} className="space-y-4">
-                <TabsList className="bg-muted/50">
+                <TabsList className="bg-muted/50 flex-wrap h-auto">
+                  <TabsTrigger value="dados" className="gap-2">
+                    <User className="h-4 w-4" />
+                    Dados
+                  </TabsTrigger>
                   <TabsTrigger value="evolucoes" className="gap-2">
                     <Activity className="h-4 w-4" />
                     Evoluções
@@ -725,6 +729,25 @@ export default function Prontuarios() {
                     Respiratório
                   </TabsTrigger>
                 </TabsList>
+
+                {/* Dados (cadastro completo) */}
+                <TabsContent value="dados">
+                  {(() => {
+                    const fullPatient = patients.find((p) => p.id === selectedProntuario.paciente_id);
+                    if (!fullPatient) return null;
+                    return (
+                      <PatientDataTab
+                        patient={fullPatient}
+                        onPatientUpdated={(data) => {
+                          setSelectedProntuario((prev) =>
+                            prev ? { ...prev, paciente: { ...(prev.paciente as any), ...data } } : prev,
+                          );
+                        }}
+                      />
+                    );
+                  })()}
+                </TabsContent>
+
 
                 {/* Evoluções */}
                 <TabsContent value="evolucoes">
