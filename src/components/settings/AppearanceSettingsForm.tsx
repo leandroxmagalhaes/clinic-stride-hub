@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Palette, Save, ImageIcon, Check, Sun, Moon, Monitor, Sparkles } from 'lucide-react';
+import { Palette, Save, ImageIcon, Check, Sun, Moon, Monitor, Sparkles, PanelLeft, Layout } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   appearanceSettingsSchema,
@@ -18,12 +18,18 @@ import {
 import {
   PREMIUM_COLORS,
   PREMIUM_FAMILIES,
+  SIDEBAR_STYLES,
   applyPrimaryColor,
   applyThemeMode,
   applyGradients,
+  applySidebarStyle,
+  applySidebarCompact,
   getStoredMode,
   getStoredGradient,
+  getStoredSidebarStyle,
+  getStoredSidebarCompact,
   type ThemeMode,
+  type SidebarStyle,
 } from '@/lib/theme';
 
 interface AppearanceSettingsFormProps {
@@ -42,6 +48,8 @@ export function AppearanceSettingsForm({
   const [customColor, setCustomColor] = useState(false);
   const [mode, setMode] = useState<ThemeMode>(getStoredMode());
   const [gradients, setGradients] = useState<boolean>(getStoredGradient());
+  const [sidebarStyle, setSidebarStyle] = useState<SidebarStyle>(getStoredSidebarStyle());
+  const [sidebarCompact, setSidebarCompact] = useState<boolean>(getStoredSidebarCompact());
 
   const form = useForm<AppearanceSettingsFormData>({
     resolver: zodResolver(appearanceSettingsSchema),
@@ -78,6 +86,21 @@ export function AppearanceSettingsForm({
   const handleGradients = (v: boolean) => {
     setGradients(v);
     applyGradients(v);
+  };
+  const handleSidebarStyle = (s: SidebarStyle) => {
+    setSidebarStyle(s);
+    applySidebarStyle(s);
+  };
+  const handleSidebarCompact = (v: boolean) => {
+    setSidebarCompact(v);
+    applySidebarCompact(v);
+    // Notify PersistentLayout (same-tab) by dispatching a storage event manually.
+    try {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'physione.sidebar.compact',
+        newValue: v ? '1' : '0',
+      }));
+    } catch { /* ignore */ }
   };
 
   if (isLoading) {
