@@ -79,6 +79,7 @@ const NavItem = memo(function NavItem({ item, isActive }: NavItemProps) {
         asChild={!item.disabled}
         isActive={isActive}
         disabled={item.disabled}
+        tooltip={item.title}
         className={cn(
           "transition-all duration-200",
           item.disabled && "opacity-50 cursor-not-allowed"
@@ -168,13 +169,13 @@ export function AppSidebar() {
   const currentPath = location.pathname;
 
   return (
-    <Sidebar className="border-r-0">
+    <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <Link to="/" className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md shrink-0">
             <span className="text-primary-foreground font-bold text-lg font-display">P</span>
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
             <span className="font-display font-bold text-base text-sidebar-primary-foreground">
               Physione
             </span>
