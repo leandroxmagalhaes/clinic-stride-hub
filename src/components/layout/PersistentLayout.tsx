@@ -1,5 +1,6 @@
-import { ReactNode, memo, useEffect } from 'react';
+import { ReactNode, memo, useEffect, useState } from 'react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { getStoredSidebarCompact, applySidebarCompact } from '@/lib/theme';
 import { AppSidebar } from './AppSidebar';
 import { AppFooter } from './AppFooter';
 import { PersistentHeader } from './PersistentHeader';
@@ -43,10 +44,24 @@ function FloatingPanels() {
 }
 
 export function PersistentLayout({ children }: PersistentLayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !getStoredSidebarCompact());
+  const handleOpenChange = (o: boolean) => {
+    setSidebarOpen(o);
+    applySidebarCompact(!o);
+  };
+  // React to changes from Configurações
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'physione.sidebar.compact') setSidebarOpen(e.newValue !== '1');
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   return (
     <PageTitleProvider>
       <FloatingPanelsProvider>
-        <SidebarProvider>
+        <SidebarProvider open={sidebarOpen} onOpenChange={handleOpenChange}>
           <AppSidebar />
           <SidebarInset className="flex flex-col min-h-screen">
             <PersistentHeader />
