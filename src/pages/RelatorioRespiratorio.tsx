@@ -1224,7 +1224,7 @@ function StepRelatorio({ data, secoes, onEdit, onSave = null }) {
    APP ROOT
 ═══════════════════════════════════════════════════════════════════════════ */
 /* ─── Histórico ──────────────────────────────────────────────────────────── */
-function HistoricoRelatorios({ onOpen, onNew, onPreview }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void }) {
+function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void; patientName?: string }) {
   const { user } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1264,7 +1264,11 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview }: { onOpen: (r: any) =>
     }
   };
 
-  const filtered = reports.filter((r) => r.patient_name.toLowerCase().includes(search.toLowerCase()));
+  // Filtro por paciente actual (se embebido no prontuário) + filtro de pesquisa
+  const scoped = patientName
+    ? reports.filter((r) => (r.patient_name || "").toLowerCase().includes(patientName.toLowerCase()))
+    : reports;
+  const filtered = scoped.filter((r) => r.patient_name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div>
