@@ -120,12 +120,10 @@ export default function PortalVerificacao() {
       setStage("create-account");
       toast.success("Código verificado com sucesso!");
     } else {
-      // Increment attempts
-      const newAttempts = invite.tentativas + 1;
-      await (supabase as any)
-        .from("portal_convites")
-        .update({ tentativas: newAttempts })
-        .eq("id", invite.id);
+      // Increment attempts via scoped RPC
+      const { data: newAttemptsData } = await (supabase as any)
+        .rpc("increment_portal_invite_attempts", { p_token: token });
+      const newAttempts = typeof newAttemptsData === "number" ? newAttemptsData : invite.tentativas + 1;
 
       setInvite({ ...invite, tentativas: newAttempts });
       setShake(true);
