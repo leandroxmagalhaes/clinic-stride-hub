@@ -233,17 +233,17 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3">
+      <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:p-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer">
-              <Avatar className="h-8 w-8">
+            <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+              <Avatar className="h-8 w-8 shrink-0">
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-primary/20 text-primary text-xs font-medium">
                   {userInfo.userInitials}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
                 <p className="text-sm font-medium text-sidebar-primary-foreground truncate">
                   {userInfo.userName}
                 </p>
@@ -251,7 +251,7 @@ export function AppSidebar() {
                   {userInfo.userRoles.length > 0 ? userInfo.userRoles.join(' • ') : userInfo.userEmail}
                 </p>
               </div>
-              <ChevronDown className="h-4 w-4 text-sidebar-muted shrink-0" />
+              <ChevronDown className="h-4 w-4 text-sidebar-muted shrink-0 group-data-[collapsible=icon]:hidden" />
             </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 bg-popover">
