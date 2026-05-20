@@ -285,6 +285,71 @@ export function AppearanceSettingsForm({
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Layout className="h-5 w-5" />
+            Barra Lateral
+          </CardTitle>
+          <CardDescription>
+            Escolha o estilo visual e o modo compacto da sidebar
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <Label className="mb-2 block">Estilo da Barra Lateral</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {SIDEBAR_STYLES.map((s) => {
+                const active = sidebarStyle === s.value;
+                // Mini preview swatches per style — Colorido/Vidro usam --primary
+                const previewClass =
+                  s.value === 'escuro'   ? 'bg-[hsl(220_25%_10%)]'
+                  : s.value === 'claro'  ? 'bg-white border border-border'
+                  : s.value === 'colorido' ? 'bg-gradient-to-b from-[hsl(var(--primary-dark))] to-[hsl(var(--primary))]'
+                  : 'bg-gradient-to-b from-[hsl(var(--primary)/0.95)] to-[hsl(var(--primary-dark)/0.9)] backdrop-blur';
+                const dotClass =
+                  s.value === 'claro' ? 'bg-primary' : 'bg-white/80';
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => handleSidebarStyle(s.value)}
+                    className={cn(
+                      "group relative rounded-xl border-2 p-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
+                      active ? "border-foreground shadow-md" : "border-border"
+                    )}
+                  >
+                    <div className={cn("h-20 w-full rounded-md mb-2 flex flex-col gap-1.5 p-1.5", previewClass)}>
+                      <div className={cn("h-2 w-3/4 rounded-sm", dotClass)} />
+                      <div className={cn("h-2 w-1/2 rounded-sm opacity-60", dotClass)} />
+                      <div className={cn("h-2 w-2/3 rounded-sm opacity-60", dotClass)} />
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-medium">{s.label}</span>
+                      {active && <Check className="h-3.5 w-3.5 shrink-0" />}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground line-clamp-1">{s.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-2">
+                <PanelLeft className="h-4 w-4" />
+                Sidebar compacta (só ícones)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Encolhe a sidebar e mostra apenas ícones com tooltips. Atalho: ⌘/Ctrl + B.
+              </p>
+            </div>
+            <Switch checked={sidebarCompact} onCheckedChange={handleSidebarCompact} />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
