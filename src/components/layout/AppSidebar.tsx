@@ -109,7 +109,7 @@ const mainNavItems: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, module: "dashboard" },
   { title: "Agenda", url: "/agenda", icon: Calendar, module: "agenda" },
   { title: "Pacientes", url: "/pacientes", icon: Users, module: "pacientes" },
-  { title: "Prontuários", url: "/prontuarios", icon: FileText, module: "prontuarios" },
+  // Prontuários removido do menu — acesso via clique num paciente (rota /prontuarios preservada)
   { title: "Profissionais", url: "/profissionais", icon: UserCog, module: "profissionais" },
 ];
 
@@ -121,9 +121,8 @@ const managementNavItems: NavItem[] = [
   // Mensagens removido do menu — agora dentro do prontuário e via atalho flutuante
 ];
 
-const clinicNavItems: NavItem[] = [
-  { title: "Rel. Respiratórios", url: "/relatorios-respiratorios", icon: Wind },
-];
+// Rel. Respiratórios movido para dentro do prontuário do paciente (aba "Respiratório")
+const clinicNavItems: NavItem[] = [];
 
 export function AppSidebar() {
   const location = useLocation();
