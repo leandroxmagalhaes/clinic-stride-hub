@@ -20,6 +20,14 @@ const ROLE_LABELS: Record<string, string> = {
   secretary: 'Secretaria',
 };
 
+const escapeHtml = (s: unknown) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
