@@ -46,11 +46,9 @@ export default function PortalVerificacao() {
   const loadInvite = useCallback(async () => {
     if (!token) { setErrorMessage("Link inválido."); setStage("error"); return; }
 
-    const { data, error } = await (supabase as any)
-      .from("portal_convites")
-      .select("*")
-      .eq("link_token", token)
-      .single();
+    const { data: rows, error } = await (supabase as any)
+      .rpc("get_portal_invite_by_token", { p_token: token });
+    const data = Array.isArray(rows) ? rows[0] : rows;
 
     if (error || !data) {
       setErrorMessage("Convite inválido ou expirado.");
