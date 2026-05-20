@@ -44,16 +44,18 @@
       #root { min-height: 100vh; }
     </style>
     <script>
-      // No-flash theme boot: applies stored primary color + mode BEFORE first paint.
+      // No-flash theme boot: applies stored primary color + mode + sidebar style BEFORE first paint.
       (function () {
         try {
           var hex = localStorage.getItem('physione.theme.primary');
           var mode = localStorage.getItem('physione.theme.mode') || 'system';
           var grad = localStorage.getItem('physione.theme.gradient') === '1';
+          var sbStyle = localStorage.getItem('physione.sidebar.style') || 'escuro';
           var root = document.documentElement;
           var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
           if (mode === 'dark' || (mode === 'system' && prefersDark)) root.classList.add('dark');
           if (grad) root.classList.add('theme-gradients');
+          root.setAttribute('data-sidebar-style', sbStyle);
           if (hex && /^#[0-9a-fA-F]{6}$/.test(hex)) {
             var c = hex.slice(1);
             var r = parseInt(c.substr(0,2),16)/255, g = parseInt(c.substr(2,2),16)/255, b = parseInt(c.substr(4,2),16)/255;
@@ -66,11 +68,14 @@
               else h = (r-g)/d + 4;
               h /= 6;
             }
-            var hsl = Math.round(h*360)+' '+Math.round(s*100)+'% '+Math.round(l*100)+'%';
+            var H = Math.round(h*360), S = Math.round(s*100), L = Math.round(l*100);
+            var hsl = H+' '+S+'% '+L+'%';
             root.style.setProperty('--primary', hsl);
             root.style.setProperty('--ring', hsl);
+            root.style.setProperty('--primary-light', H+' '+S+'% '+Math.min(L+10,92)+'%');
+            root.style.setProperty('--primary-dark',  H+' '+S+'% '+Math.max(L-10,8)+'%');
             // contrast-aware foreground
-            var lin = function(v){ v=v; return v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
+            var lin = function(v){ return v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
             var lum = 0.2126*lin(r)+0.7152*lin(g)+0.0722*lin(b);
             root.style.setProperty('--primary-foreground', lum>0.55 ? '0 0% 10%' : '0 0% 100%');
           }
