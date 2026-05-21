@@ -8,6 +8,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Search,
   Plus,
   FileText,
@@ -28,6 +36,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Wind,
+  AlertTriangle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -97,6 +106,8 @@ export default function Prontuarios() {
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
   const [aiSummary, setAiSummary] = useState<AIClinicalSummary | null>(null);
   const [upcomingSession, setUpcomingSession] = useState<{ id: string; patientId: string } | null>(null);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
+  const [activeTags, setActiveTags] = useState<{ id: string; nome: string; cor: string }[]>([]);
   const [patientsCollapsed, setPatientsCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("prontuarios-patients-collapsed") === "true";
@@ -213,6 +224,12 @@ export default function Prontuarios() {
   };
 
   useEffect(() => {
+    if (selectedProntuario?.paciente_id) {
+      fetchActiveTags(selectedProntuario.paciente_id);
+    }
+  }, [selectedProntuario?.paciente_id]);
+
+  useEffect(() => {
     if (!selectedProntuario?.paciente_id) {
       setUpcomingSession(null);
       return;
@@ -257,6 +274,19 @@ export default function Prontuarios() {
   const getProntuarioForPatient = (pacienteId: string) => prontuariosData[pacienteId];
   const getEvolucoesForProntuario = (prontuarioId: string) =>
     EvolutionService.getByProntuario(evolutions, prontuarioId);
+
+  const fetchActiveTags = async (pacienteId: string) => {
+    const { data } = await (supabase as any)
+      .from("paciente_etiquetas")
+      .select("id, nome, cor")
+      .eq("paciente_id", pacienteId)
+      .is("deleted_at", null);
+    const tags = (data || []) as { id: string; nome: string; cor: string }[];
+    setActiveTags(tags);
+    if (tags.length > 0) {
+      setShowAlertsModal(true);
+    }
+  };
 
   const handleSelectPatient = async (pacienteId: string) => {
     const existingProntuario = getProntuarioForPatient(pacienteId);
@@ -677,7 +707,20 @@ export default function Prontuarios() {
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <h2 className="font-display text-xl font-semibold">{selectedProntuario.paciente?.full_name}</h2>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="font-display text-xl font-semibold">{selectedProntuario.paciente?.full_name}</h2>
+                          {activeTags.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowAlertsModal(true)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium hover:bg-amber-100 transition-colors"
+                              title={`${activeTags.length} ${activeTags.length === 1 ? 'alerta' : 'alertas'} de segurança`}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              {activeTags.length} {activeTags.length === 1 ? 'alerta' : 'alertas'}
+                            </button>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           {selectedProntuario.paciente?.phone} • {selectedProntuario.paciente?.email}
                         </p>
@@ -1148,6 +1191,38 @@ export default function Prontuarios() {
           onSave={handleSaveClinicalData}
         />
       )}
+
+      <Dialog open={showAlertsModal} onOpenChange={setShowAlertsModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Alertas de Segurança
+            </DialogTitle>
+            <DialogDescription className="font-medium text-foreground">
+              {selectedProntuario?.paciente?.full_name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {activeTags.map((tag) => (
+              <div
+                key={tag.id}
+                className="flex items-center gap-3 p-3 rounded-lg"
+                style={{
+                  backgroundColor: `${tag.cor}15`,
+                  borderLeft: `4px solid ${tag.cor}`,
+                }}
+              >
+                <Tag className="h-4 w-4 shrink-0" style={{ color: tag.cor }} />
+                <span className="font-medium text-sm">{tag.nome}</span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowAlertsModal(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
