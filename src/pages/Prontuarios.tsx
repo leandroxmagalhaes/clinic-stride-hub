@@ -52,6 +52,11 @@ import { PatientMessagesTab } from "@/components/prontuarios/PatientMessagesTab"
 import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
 import RelatorioRespiratorio from "@/pages/RelatorioRespiratorio";
 import { PatientDataTab } from "@/components/prontuarios/PatientDataTab";
+import { PatientPortalTab } from "@/components/patients/PatientPortalTab";
+import { PackManagerModal } from "@/components/agenda/PackManagerModal";
+import { HealthTagList } from "@/components/ui/health-tag-badge";
+import { HealthTag } from "@/services/HealthTagService";
+import { Tag, Package as PackageIcon, Globe } from "lucide-react";
 
 interface ProntuarioData {
   id: string;
@@ -699,36 +704,54 @@ export default function Prontuarios() {
 
               {/* Tabs */}
               <Tabs value={tabFromUrl} onValueChange={handleTabChange} className="space-y-4">
-                <TabsList className="bg-muted/50 flex-wrap h-auto">
-                  <TabsTrigger value="dados" className="gap-2">
-                    <User className="h-4 w-4" />
-                    Dados
-                  </TabsTrigger>
-                  <TabsTrigger value="evolucoes" className="gap-2">
-                    <Activity className="h-4 w-4" />
-                    Evoluções
-                  </TabsTrigger>
-                  <TabsTrigger value="relatorios" className="gap-2">
-                    <ClipboardList className="h-4 w-4" />
-                    Relatórios
-                  </TabsTrigger>
-                  <TabsTrigger value="documentos" className="gap-2">
-                    <Paperclip className="h-4 w-4" />
-                    Documentos
-                  </TabsTrigger>
-                  <TabsTrigger value="prontuario" className="gap-2">
-                    <ClipboardList className="h-4 w-4" />
-                    Anamnese
-                  </TabsTrigger>
-                  <TabsTrigger value="acompanhamento" className="gap-2">
-                    <MessageCircle className="h-4 w-4" />
-                    Acompanhamento
-                  </TabsTrigger>
-                  <TabsTrigger value="respiratorio" className="gap-2">
-                    <Wind className="h-4 w-4" />
-                    Respiratório
-                  </TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto scrollbar-thin">
+                  <TabsList className="bg-muted/50 h-auto inline-flex w-max">
+                    {/* Administrativas */}
+                    <TabsTrigger value="dados" className="gap-2">
+                      <User className="h-4 w-4" />
+                      Dados
+                    </TabsTrigger>
+                    <TabsTrigger value="etiquetas" className="gap-2">
+                      <Tag className="h-4 w-4" />
+                      Etiquetas
+                    </TabsTrigger>
+                    <TabsTrigger value="packs" className="gap-2">
+                      <PackageIcon className="h-4 w-4" />
+                      Packs
+                    </TabsTrigger>
+                    <TabsTrigger value="portal" className="gap-2">
+                      <Globe className="h-4 w-4" />
+                      Portal
+                    </TabsTrigger>
+                    {/* Separador admin / clínico */}
+                    <div className="mx-2 self-stretch w-px bg-border" aria-hidden />
+                    {/* Clínicas */}
+                    <TabsTrigger value="evolucoes" className="gap-2">
+                      <Activity className="h-4 w-4" />
+                      Evoluções
+                    </TabsTrigger>
+                    <TabsTrigger value="relatorios" className="gap-2">
+                      <ClipboardList className="h-4 w-4" />
+                      Relatórios
+                    </TabsTrigger>
+                    <TabsTrigger value="documentos" className="gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      Documentos
+                    </TabsTrigger>
+                    <TabsTrigger value="prontuario" className="gap-2">
+                      <ClipboardList className="h-4 w-4" />
+                      Anamnese
+                    </TabsTrigger>
+                    <TabsTrigger value="acompanhamento" className="gap-2">
+                      <MessageCircle className="h-4 w-4" />
+                      Acompanhamento
+                    </TabsTrigger>
+                    <TabsTrigger value="respiratorio" className="gap-2">
+                      <Wind className="h-4 w-4" />
+                      Respiratório
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
                 {/* Dados (cadastro completo) */}
                 <TabsContent value="dados">
@@ -748,6 +771,53 @@ export default function Prontuarios() {
                   })()}
                 </TabsContent>
 
+                {/* Etiquetas */}
+                <TabsContent value="etiquetas">
+                  <Card className="shadow-card">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="font-display text-lg">Etiquetas de Saúde</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Personalizam o atendimento e geram alertas no agendamento. Para editar, abra o cartão do utente em "Pacientes".
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      {(() => {
+                        const fullPatient = patients.find((p) => p.id === selectedProntuario.paciente_id);
+                        const tags = ((fullPatient?.health_tags as HealthTag[]) || []);
+                        return tags.length > 0 ? (
+                          <HealthTagList tags={tags} maxVisible={20} size="md" />
+                        ) : (
+                          <div className="text-center py-8 bg-muted/30 rounded-lg">
+                            <Tag className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">Nenhuma etiqueta atribuída</p>
+                          </div>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Packs */}
+                <TabsContent value="packs">
+                  <PackManagerModal
+                    embedded
+                    isOpen={true}
+                    onClose={() => {}}
+                    pacienteId={selectedProntuario.paciente_id}
+                    pacienteNome={selectedProntuario.paciente?.full_name || ""}
+                  />
+                </TabsContent>
+
+                {/* Portal */}
+                <TabsContent value="portal">
+                  <PatientPortalTab
+                    patientId={selectedProntuario.paciente_id}
+                    patientEmail={selectedProntuario.paciente?.email}
+                    patientPhone={selectedProntuario.paciente?.phone}
+                    patientName={selectedProntuario.paciente?.full_name || ""}
+                    patientBirthDate={patients.find((p) => p.id === selectedProntuario.paciente_id)?.birth_date}
+                  />
+                </TabsContent>
 
                 {/* Evoluções */}
                 <TabsContent value="evolucoes">
