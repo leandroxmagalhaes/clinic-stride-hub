@@ -1191,6 +1191,38 @@ export default function Prontuarios() {
           onSave={handleSaveClinicalData}
         />
       )}
+
+      <Dialog open={showAlertsModal} onOpenChange={setShowAlertsModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Alertas de Segurança
+            </DialogTitle>
+            <DialogDescription className="font-medium text-foreground">
+              {selectedProntuario?.paciente?.full_name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {activeTags.map((tag) => (
+              <div
+                key={tag.id}
+                className="flex items-center gap-3 p-3 rounded-lg"
+                style={{
+                  backgroundColor: `${tag.cor}15`,
+                  borderLeft: `4px solid ${tag.cor}`,
+                }}
+              >
+                <Tag className="h-4 w-4 shrink-0" style={{ color: tag.cor }} />
+                <span className="font-medium text-sm">{tag.nome}</span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowAlertsModal(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
