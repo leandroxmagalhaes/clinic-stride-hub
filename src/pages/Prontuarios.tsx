@@ -704,36 +704,54 @@ export default function Prontuarios() {
 
               {/* Tabs */}
               <Tabs value={tabFromUrl} onValueChange={handleTabChange} className="space-y-4">
-                <TabsList className="bg-muted/50 flex-wrap h-auto">
-                  <TabsTrigger value="dados" className="gap-2">
-                    <User className="h-4 w-4" />
-                    Dados
-                  </TabsTrigger>
-                  <TabsTrigger value="evolucoes" className="gap-2">
-                    <Activity className="h-4 w-4" />
-                    Evoluções
-                  </TabsTrigger>
-                  <TabsTrigger value="relatorios" className="gap-2">
-                    <ClipboardList className="h-4 w-4" />
-                    Relatórios
-                  </TabsTrigger>
-                  <TabsTrigger value="documentos" className="gap-2">
-                    <Paperclip className="h-4 w-4" />
-                    Documentos
-                  </TabsTrigger>
-                  <TabsTrigger value="prontuario" className="gap-2">
-                    <ClipboardList className="h-4 w-4" />
-                    Anamnese
-                  </TabsTrigger>
-                  <TabsTrigger value="acompanhamento" className="gap-2">
-                    <MessageCircle className="h-4 w-4" />
-                    Acompanhamento
-                  </TabsTrigger>
-                  <TabsTrigger value="respiratorio" className="gap-2">
-                    <Wind className="h-4 w-4" />
-                    Respiratório
-                  </TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto scrollbar-thin">
+                  <TabsList className="bg-muted/50 h-auto inline-flex w-max">
+                    {/* Administrativas */}
+                    <TabsTrigger value="dados" className="gap-2">
+                      <User className="h-4 w-4" />
+                      Dados
+                    </TabsTrigger>
+                    <TabsTrigger value="etiquetas" className="gap-2">
+                      <Tag className="h-4 w-4" />
+                      Etiquetas
+                    </TabsTrigger>
+                    <TabsTrigger value="packs" className="gap-2">
+                      <PackageIcon className="h-4 w-4" />
+                      Packs
+                    </TabsTrigger>
+                    <TabsTrigger value="portal" className="gap-2">
+                      <Globe className="h-4 w-4" />
+                      Portal
+                    </TabsTrigger>
+                    {/* Separador admin / clínico */}
+                    <div className="mx-2 self-stretch w-px bg-border" aria-hidden />
+                    {/* Clínicas */}
+                    <TabsTrigger value="evolucoes" className="gap-2">
+                      <Activity className="h-4 w-4" />
+                      Evoluções
+                    </TabsTrigger>
+                    <TabsTrigger value="relatorios" className="gap-2">
+                      <ClipboardList className="h-4 w-4" />
+                      Relatórios
+                    </TabsTrigger>
+                    <TabsTrigger value="documentos" className="gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      Documentos
+                    </TabsTrigger>
+                    <TabsTrigger value="prontuario" className="gap-2">
+                      <ClipboardList className="h-4 w-4" />
+                      Anamnese
+                    </TabsTrigger>
+                    <TabsTrigger value="acompanhamento" className="gap-2">
+                      <MessageCircle className="h-4 w-4" />
+                      Acompanhamento
+                    </TabsTrigger>
+                    <TabsTrigger value="respiratorio" className="gap-2">
+                      <Wind className="h-4 w-4" />
+                      Respiratório
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
                 {/* Dados (cadastro completo) */}
                 <TabsContent value="dados">
