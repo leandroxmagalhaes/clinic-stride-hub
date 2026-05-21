@@ -269,6 +269,19 @@ export default function Prontuarios() {
   const getEvolucoesForProntuario = (prontuarioId: string) =>
     EvolutionService.getByProntuario(evolutions, prontuarioId);
 
+  const fetchActiveTags = async (pacienteId: string) => {
+    const { data } = await (supabase as any)
+      .from("paciente_etiquetas")
+      .select("id, nome, cor")
+      .eq("paciente_id", pacienteId)
+      .is("deleted_at", null);
+    const tags = (data || []) as { id: string; nome: string; cor: string }[];
+    setActiveTags(tags);
+    if (tags.length > 0) {
+      setShowAlertsModal(true);
+    }
+  };
+
   const handleSelectPatient = async (pacienteId: string) => {
     const existingProntuario = getProntuarioForPatient(pacienteId);
     const paciente = patients.find((p) => p.id === pacienteId);
