@@ -283,6 +283,8 @@ export default function Prontuarios() {
     EvolutionService.getByProntuario(evolutions, prontuarioId);
 
   const fetchActiveTags = async (pacienteId: string) => {
+    const paciente = patients.find((p) => p.id === pacienteId);
+    // Manual tags
     const { data } = await (supabase as any)
       .from("paciente_etiquetas")
       .select("id, nome, cor")
@@ -290,9 +292,29 @@ export default function Prontuarios() {
       .is("deleted_at", null);
     const tags = (data || []) as { id: string; nome: string; cor: string }[];
     setActiveTags(tags);
-    if (tags.length > 0) {
-      setShowAlertsModal(true);
+
+    // Anamnese: always extract the 5 critical fields
+    let alerts: AnamneseAlert[] = [];
+    try {
+      const { data: q } = await (supabase as any)
+        .from("portal_questionario")
+        .select("respostas, template_id, perfil_tipo")
+        .eq("paciente_id", pacienteId)
+        .maybeSingle();
+      const template = await QuestionnaireTemplateService.resolveForPatient({
+        pacienteId,
+        perfilTipo: q?.perfil_tipo,
+        birthDate: paciente?.birth_date,
+      });
+      alerts = extrairAlertasAnamnese(q?.respostas || {}, template?.schema || null);
+    } catch (e) {
+      console.error("Erro a extrair alertas da anamnese:", e);
+      alerts = extrairAlertasAnamnese({}, null);
     }
+    setAnamneseAlerts(alerts);
+
+    // Open whenever there is a patient profile (5 fields always show).
+    setShowAlertsModal(true);
   };
 
   const handleSelectPatient = async (pacienteId: string) => {
