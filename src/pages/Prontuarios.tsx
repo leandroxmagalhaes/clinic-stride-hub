@@ -771,6 +771,53 @@ export default function Prontuarios() {
                   })()}
                 </TabsContent>
 
+                {/* Etiquetas */}
+                <TabsContent value="etiquetas">
+                  <Card className="shadow-card">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="font-display text-lg">Etiquetas de Saúde</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Personalizam o atendimento e geram alertas no agendamento. Para editar, abra o cartão do utente em "Pacientes".
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      {(() => {
+                        const fullPatient = patients.find((p) => p.id === selectedProntuario.paciente_id);
+                        const tags = ((fullPatient?.health_tags as HealthTag[]) || []);
+                        return tags.length > 0 ? (
+                          <HealthTagList tags={tags} maxVisible={20} size="md" />
+                        ) : (
+                          <div className="text-center py-8 bg-muted/30 rounded-lg">
+                            <Tag className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">Nenhuma etiqueta atribuída</p>
+                          </div>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Packs */}
+                <TabsContent value="packs">
+                  <PackManagerModal
+                    embedded
+                    isOpen={true}
+                    onClose={() => {}}
+                    pacienteId={selectedProntuario.paciente_id}
+                    pacienteNome={selectedProntuario.paciente?.full_name || ""}
+                  />
+                </TabsContent>
+
+                {/* Portal */}
+                <TabsContent value="portal">
+                  <PatientPortalTab
+                    patientId={selectedProntuario.paciente_id}
+                    patientEmail={selectedProntuario.paciente?.email}
+                    patientPhone={selectedProntuario.paciente?.phone}
+                    patientName={selectedProntuario.paciente?.full_name || ""}
+                    patientBirthDate={patients.find((p) => p.id === selectedProntuario.paciente_id)?.birth_date}
+                  />
+                </TabsContent>
 
                 {/* Evoluções */}
                 <TabsContent value="evolucoes">
