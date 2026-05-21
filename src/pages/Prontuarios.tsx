@@ -1237,7 +1237,7 @@ export default function Prontuarios() {
               {selectedProntuario?.paciente?.full_name}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-2">
+          <div className="space-y-2 py-2 max-h-[60vh] overflow-y-auto">
             {activeTags.map((tag) => (
               <div
                 key={tag.id}
@@ -1251,6 +1251,37 @@ export default function Prontuarios() {
                 <span className="font-medium text-sm">{tag.nome}</span>
               </div>
             ))}
+            {sortAlertsByRisk(anamneseAlerts).map((alert, idx) => {
+              if (alert.estado === "risco") {
+                return (
+                  <div
+                    key={`an-${idx}`}
+                    className="flex items-start gap-3 p-3 rounded-lg border-l-4"
+                    style={{
+                      backgroundColor: "#fef2f2",
+                      borderLeftColor: "#dc2626",
+                    }}
+                  >
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "#dc2626" }} />
+                    <div className="text-sm leading-snug" style={{ color: "#991b1b" }}>
+                      <span className="font-semibold">{alert.termo}:</span>{" "}
+                      <span className="font-semibold">{alert.valor}</span>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div
+                  key={`an-${idx}`}
+                  className="flex items-start gap-3 px-3 py-2 rounded-lg bg-muted/40"
+                >
+                  <span className="text-xs text-muted-foreground leading-snug">
+                    <span className="font-medium">{alert.termo}:</span>{" "}
+                    <span className={alert.estado === "vazio" ? "italic" : ""}>{alert.valor}</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
           <DialogFooter>
             <Button onClick={() => setShowAlertsModal(false)}>Fechar</Button>
