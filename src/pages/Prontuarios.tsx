@@ -106,6 +106,8 @@ export default function Prontuarios() {
   const [templates, setTemplates] = useState<SpecialtyTemplate[]>([]);
   const [aiSummary, setAiSummary] = useState<AIClinicalSummary | null>(null);
   const [upcomingSession, setUpcomingSession] = useState<{ id: string; patientId: string } | null>(null);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
+  const [activeTags, setActiveTags] = useState<{ id: string; nome: string; cor: string }[]>([]);
   const [patientsCollapsed, setPatientsCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("prontuarios-patients-collapsed") === "true";
