@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye, Mail, MessageCircle } from "lucide-react";
+import { Loader2, Send, Copy, Lock, Unlock, ChevronDown, ChevronUp, Eye, Mail, MessageCircle, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { getPublicBaseUrl } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -65,6 +65,31 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
   const [waOpen, setWaOpen] = useState(false);
   const { isAdmin, isProfessional } = useUserRole();
   const showDiagnostics = isAdmin || isProfessional;
+  const isAdminMaster = isAdmin;
+  const [resettingPwd, setResettingPwd] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  const handleResetPortalPassword = async () => {
+    const email = account?.email || patientEmail;
+    if (!email) {
+      toast.error("Utente sem email registado.");
+      return;
+    }
+    setResettingPwd(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-reset-portal-password", {
+        body: { paciente_id: patientId, email },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`Link de reposição enviado para ${email}`);
+      setConfirmReset(false);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao enviar reposição de senha");
+    } finally {
+      setResettingPwd(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
