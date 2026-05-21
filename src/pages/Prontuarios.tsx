@@ -52,6 +52,11 @@ import { PatientMessagesTab } from "@/components/prontuarios/PatientMessagesTab"
 import { QuestionnaireHealthSummary } from "@/components/prontuarios/QuestionnaireHealthSummary";
 import RelatorioRespiratorio from "@/pages/RelatorioRespiratorio";
 import { PatientDataTab } from "@/components/prontuarios/PatientDataTab";
+import { PatientPortalTab } from "@/components/patients/PatientPortalTab";
+import { PackManagerModal } from "@/components/agenda/PackManagerModal";
+import { HealthTagList } from "@/components/ui/health-tag-badge";
+import { HealthTag } from "@/services/HealthTagService";
+import { Tag, Package as PackageIcon, Globe } from "lucide-react";
 
 interface ProntuarioData {
   id: string;
