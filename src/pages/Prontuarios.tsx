@@ -114,6 +114,7 @@ export default function Prontuarios() {
   const [upcomingSession, setUpcomingSession] = useState<{ id: string; patientId: string } | null>(null);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [activeTags, setActiveTags] = useState<{ id: string; nome: string; cor: string }[]>([]);
+  const [anamneseAlerts, setAnamneseAlerts] = useState<AnamneseAlert[]>([]);
   const [patientsCollapsed, setPatientsCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("prontuarios-patients-collapsed") === "true";
