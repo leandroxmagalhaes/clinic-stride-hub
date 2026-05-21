@@ -40,6 +40,7 @@ import { NewEvolutionModal } from "@/components/prontuarios/NewEvolutionModal";
 import { EditEvolutionModal, type EvolutionToEdit } from "@/components/prontuarios/EditEvolutionModal";
 import { StructuredDataViewer } from "@/components/prontuarios/StructuredDataViewer";
 import { ClinicalReportsList } from "@/components/prontuarios/ClinicalReportsList";
+import { EtiquetasManager } from "@/components/prontuarios/EtiquetasManager";
 import { PatientDocuments } from "@/components/prontuarios/PatientDocuments";
 import { SpecialtyService, type SpecialtyTemplate, type StructuredData } from "@/services/SpecialtyService";
 import { supabase } from "@/integrations/supabase/client";
