@@ -462,6 +462,51 @@ export type Database = {
           },
         ]
       }
+      etiquetas_auditoria: {
+        Row: {
+          accao: string
+          clinic_id: string
+          created_at: string
+          etiqueta_cor: string | null
+          etiqueta_id: string | null
+          etiqueta_nome: string
+          id: string
+          paciente_id: string
+          realizado_por: string
+          realizado_por_nome: string | null
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          accao: string
+          clinic_id: string
+          created_at?: string
+          etiqueta_cor?: string | null
+          etiqueta_id?: string | null
+          etiqueta_nome: string
+          id?: string
+          paciente_id: string
+          realizado_por: string
+          realizado_por_nome?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          accao?: string
+          clinic_id?: string
+          created_at?: string
+          etiqueta_cor?: string | null
+          etiqueta_id?: string | null
+          etiqueta_nome?: string
+          id?: string
+          paciente_id?: string
+          realizado_por?: string
+          realizado_por_nome?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: []
+      }
       evolucoes: {
         Row: {
           anexos: Json | null
@@ -958,6 +1003,48 @@ export type Database = {
             referencedColumns: ["patient_id"]
           },
         ]
+      }
+      paciente_etiquetas: {
+        Row: {
+          clinic_id: string
+          cor: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          id: string
+          nome: string
+          paciente_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          clinic_id: string
+          cor?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          id?: string
+          nome: string
+          paciente_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          clinic_id?: string
+          cor?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          id?: string
+          nome?: string
+          paciente_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       pacientes: {
         Row: {
@@ -1812,6 +1899,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      portal_seguranca_auditoria: {
+        Row: {
+          accao: string
+          clinic_id: string
+          created_at: string
+          detalhes: Json | null
+          id: string
+          paciente_id: string
+          realizado_por: string
+          realizado_por_email: string | null
+          realizado_por_nome: string | null
+        }
+        Insert: {
+          accao: string
+          clinic_id: string
+          created_at?: string
+          detalhes?: Json | null
+          id?: string
+          paciente_id: string
+          realizado_por: string
+          realizado_por_email?: string | null
+          realizado_por_nome?: string | null
+        }
+        Update: {
+          accao?: string
+          clinic_id?: string
+          created_at?: string
+          detalhes?: Json | null
+          id?: string
+          paciente_id?: string
+          realizado_por?: string
+          realizado_por_email?: string | null
+          realizado_por_nome?: string | null
+        }
+        Relationships: []
       }
       professional_patient_assignments: {
         Row: {
