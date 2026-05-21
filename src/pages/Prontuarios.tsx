@@ -224,6 +224,12 @@ export default function Prontuarios() {
   };
 
   useEffect(() => {
+    if (selectedProntuario?.paciente_id) {
+      fetchActiveTags(selectedProntuario.paciente_id);
+    }
+  }, [selectedProntuario?.paciente_id]);
+
+  useEffect(() => {
     if (!selectedProntuario?.paciente_id) {
       setUpcomingSession(null);
       return;
