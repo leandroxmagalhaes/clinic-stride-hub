@@ -738,17 +738,22 @@ export default function Prontuarios() {
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h2 className="font-display text-xl font-semibold">{selectedProntuario.paciente?.full_name}</h2>
-                          {activeTags.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setShowAlertsModal(true)}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium hover:bg-amber-100 transition-colors"
-                              title={`${activeTags.length} ${activeTags.length === 1 ? 'alerta' : 'alertas'} de segurança`}
-                            >
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                              {activeTags.length} {activeTags.length === 1 ? 'alerta' : 'alertas'}
-                            </button>
-                          )}
+                          {(() => {
+                            const riskCount = anamneseAlerts.filter((a) => a.estado === "risco").length;
+                            const total = activeTags.length + riskCount;
+                            if (total === 0) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setShowAlertsModal(true)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium hover:bg-amber-100 transition-colors"
+                                title={`${total} ${total === 1 ? 'alerta' : 'alertas'} de segurança`}
+                              >
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                {total} {total === 1 ? 'alerta' : 'alertas'}
+                              </button>
+                            );
+                          })()}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {selectedProntuario.paciente?.phone} • {selectedProntuario.paciente?.email}
