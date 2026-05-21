@@ -329,7 +329,43 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
             {account.status === "blocked" ? "Reactivar acesso" : "Bloquear acesso"}
           </Button>
         )}
+
+        {isAdminMaster && (account?.email || patientEmail) && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirmReset(true)}
+            disabled={resettingPwd}
+            className="gap-1.5"
+            title="Apenas Admin Master"
+          >
+            {resettingPwd ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+            Repor senha
+          </Button>
+        )}
       </div>
+
+      {/* Confirm password reset */}
+      <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Repor senha do portal?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Enviar link de reposição de senha para{" "}
+            <strong>{account?.email || patientEmail}</strong>? O utente vai criar uma nova senha.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConfirmReset(false)} disabled={resettingPwd}>
+              Cancelar
+            </Button>
+            <Button onClick={handleResetPortalPassword} disabled={resettingPwd}>
+              {resettingPwd && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Enviar link
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Last invite details */}
       {lastInvite && (
