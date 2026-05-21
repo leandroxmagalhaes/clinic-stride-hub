@@ -48,6 +48,12 @@ import { EditClinicalDataModal } from "@/components/prontuarios/EditClinicalData
 import { NewEvolutionModal } from "@/components/prontuarios/NewEvolutionModal";
 import { EditEvolutionModal, type EvolutionToEdit } from "@/components/prontuarios/EditEvolutionModal";
 import { StructuredDataViewer } from "@/components/prontuarios/StructuredDataViewer";
+import {
+  extrairAlertasAnamnese,
+  sortAlertsByRisk,
+  type AnamneseAlert,
+} from "@/lib/safetyAlerts";
+import { QuestionnaireTemplateService } from "@/services/QuestionnaireTemplateService";
 import { ClinicalReportsList } from "@/components/prontuarios/ClinicalReportsList";
 import { EtiquetasManager } from "@/components/prontuarios/EtiquetasManager";
 import { PatientDocuments } from "@/components/prontuarios/PatientDocuments";
