@@ -48,6 +48,12 @@ import { EditClinicalDataModal } from "@/components/prontuarios/EditClinicalData
 import { NewEvolutionModal } from "@/components/prontuarios/NewEvolutionModal";
 import { EditEvolutionModal, type EvolutionToEdit } from "@/components/prontuarios/EditEvolutionModal";
 import { StructuredDataViewer } from "@/components/prontuarios/StructuredDataViewer";
+import {
+  extrairAlertasAnamnese,
+  sortAlertsByRisk,
+  type AnamneseAlert,
+} from "@/lib/safetyAlerts";
+import { QuestionnaireTemplateService } from "@/services/QuestionnaireTemplateService";
 import { ClinicalReportsList } from "@/components/prontuarios/ClinicalReportsList";
 import { EtiquetasManager } from "@/components/prontuarios/EtiquetasManager";
 import { PatientDocuments } from "@/components/prontuarios/PatientDocuments";
@@ -108,6 +114,7 @@ export default function Prontuarios() {
   const [upcomingSession, setUpcomingSession] = useState<{ id: string; patientId: string } | null>(null);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [activeTags, setActiveTags] = useState<{ id: string; nome: string; cor: string }[]>([]);
+  const [anamneseAlerts, setAnamneseAlerts] = useState<AnamneseAlert[]>([]);
   const [patientsCollapsed, setPatientsCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("prontuarios-patients-collapsed") === "true";
@@ -276,6 +283,8 @@ export default function Prontuarios() {
     EvolutionService.getByProntuario(evolutions, prontuarioId);
 
   const fetchActiveTags = async (pacienteId: string) => {
+    const paciente = patients.find((p) => p.id === pacienteId);
+    // Manual tags
     const { data } = await (supabase as any)
       .from("paciente_etiquetas")
       .select("id, nome, cor")
@@ -283,9 +292,29 @@ export default function Prontuarios() {
       .is("deleted_at", null);
     const tags = (data || []) as { id: string; nome: string; cor: string }[];
     setActiveTags(tags);
-    if (tags.length > 0) {
-      setShowAlertsModal(true);
+
+    // Anamnese: always extract the 5 critical fields
+    let alerts: AnamneseAlert[] = [];
+    try {
+      const { data: q } = await (supabase as any)
+        .from("portal_questionario")
+        .select("respostas, template_id, perfil_tipo")
+        .eq("paciente_id", pacienteId)
+        .maybeSingle();
+      const template = await QuestionnaireTemplateService.resolveForPatient({
+        pacienteId,
+        perfilTipo: q?.perfil_tipo,
+        birthDate: paciente?.birth_date,
+      });
+      alerts = extrairAlertasAnamnese(q?.respostas || {}, template?.schema || null);
+    } catch (e) {
+      console.error("Erro a extrair alertas da anamnese:", e);
+      alerts = extrairAlertasAnamnese({}, null);
     }
+    setAnamneseAlerts(alerts);
+
+    // Open whenever there is a patient profile (5 fields always show).
+    setShowAlertsModal(true);
   };
 
   const handleSelectPatient = async (pacienteId: string) => {
@@ -709,17 +738,22 @@ export default function Prontuarios() {
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h2 className="font-display text-xl font-semibold">{selectedProntuario.paciente?.full_name}</h2>
-                          {activeTags.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setShowAlertsModal(true)}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium hover:bg-amber-100 transition-colors"
-                              title={`${activeTags.length} ${activeTags.length === 1 ? 'alerta' : 'alertas'} de segurança`}
-                            >
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                              {activeTags.length} {activeTags.length === 1 ? 'alerta' : 'alertas'}
-                            </button>
-                          )}
+                          {(() => {
+                            const riskCount = anamneseAlerts.filter((a) => a.estado === "risco").length;
+                            const total = activeTags.length + riskCount;
+                            if (total === 0) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setShowAlertsModal(true)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium hover:bg-amber-100 transition-colors"
+                                title={`${total} ${total === 1 ? 'alerta' : 'alertas'} de segurança`}
+                              >
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                {total} {total === 1 ? 'alerta' : 'alertas'}
+                              </button>
+                            );
+                          })()}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {selectedProntuario.paciente?.phone} • {selectedProntuario.paciente?.email}
@@ -1203,7 +1237,7 @@ export default function Prontuarios() {
               {selectedProntuario?.paciente?.full_name}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-2">
+          <div className="space-y-2 py-2 max-h-[60vh] overflow-y-auto">
             {activeTags.map((tag) => (
               <div
                 key={tag.id}
@@ -1217,6 +1251,37 @@ export default function Prontuarios() {
                 <span className="font-medium text-sm">{tag.nome}</span>
               </div>
             ))}
+            {sortAlertsByRisk(anamneseAlerts).map((alert, idx) => {
+              if (alert.estado === "risco") {
+                return (
+                  <div
+                    key={`an-${idx}`}
+                    className="flex items-start gap-3 p-3 rounded-lg border-l-4"
+                    style={{
+                      backgroundColor: "#fef2f2",
+                      borderLeftColor: "#dc2626",
+                    }}
+                  >
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "#dc2626" }} />
+                    <div className="text-sm leading-snug" style={{ color: "#991b1b" }}>
+                      <span className="font-semibold">{alert.termo}:</span>{" "}
+                      <span className="font-semibold">{alert.valor}</span>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div
+                  key={`an-${idx}`}
+                  className="flex items-start gap-3 px-3 py-2 rounded-lg bg-muted/40"
+                >
+                  <span className="text-xs text-muted-foreground leading-snug">
+                    <span className="font-medium">{alert.termo}:</span>{" "}
+                    <span className={alert.estado === "vazio" ? "italic" : ""}>{alert.valor}</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
           <DialogFooter>
             <Button onClick={() => setShowAlertsModal(false)}>Fechar</Button>
