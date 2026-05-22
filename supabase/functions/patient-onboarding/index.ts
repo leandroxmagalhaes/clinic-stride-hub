@@ -171,6 +171,31 @@ Deno.serve(async (req) => {
           created_at: new Date().toISOString(),
         });
 
+        // Trigger automation: portal_link_enviado (fire-and-forget, anti-dup at function level)
+        if (body.email?.trim()) {
+          try {
+            await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-portal-link-automation`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                  apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+                },
+                body: JSON.stringify({
+                  pacienteId: newPatient.id,
+                  clinicId: clinic.id,
+                  triggerType: "portal_link_enviado",
+                }),
+              },
+            );
+          } catch (e) {
+            console.error("portal_link_enviado dispatch failed:", e);
+          }
+        }
+
+
         return new Response(
           JSON.stringify({ success: true, patient_id: newPatient.id }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
