@@ -25,6 +25,7 @@ import { SessionManagementModal } from "@/components/agenda/SessionManagementMod
 import { ReservedSlotManagementModal } from "@/components/agenda/ReservedSlotManagementModal";
 import { BatchSchedulingModal } from "@/components/agenda/BatchSchedulingModal";
 import { AgendaSearchPanel } from "@/components/agenda/AgendaSearchPanel";
+import { PaymentModal } from "@/components/PaymentModal";
 
 const ALL_HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
@@ -79,6 +80,31 @@ export default function Agenda() {
   const [selectedReservation, setSelectedReservation] = useState<ReservedSlot | null>(null);
   const [isReservationManageOpen, setIsReservationManageOpen] = useState(false);
   const [localPatients, setLocalPatients] = useState(patients);
+  const [paymentModal, setPaymentModal] = useState<{ sessionId: string; patientId: string; patientName?: string; amount: number; phone?: string } | null>(null);
+
+  // Listener global para abrir PaymentModal a partir do badge "Pendente"
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (!d?.sessionId) return;
+      const sess = sessions.find((s) => s.id === d.sessionId);
+      const amount =
+        d.amount ||
+        (sess as any)?.price ||
+        (sess as any)?.servico?.price ||
+        0;
+      const patient = patients.find((p) => p.id === (d.patientId || sess?.paciente_id));
+      setPaymentModal({
+        sessionId: d.sessionId,
+        patientId: patient?.id || d.patientId || sess?.paciente_id,
+        patientName: d.patientName || patient?.full_name,
+        amount: Number(amount) || 0,
+        phone: patient?.phone || undefined,
+      });
+    };
+    window.addEventListener("open-payment-modal", handler);
+    return () => window.removeEventListener("open-payment-modal", handler);
+  }, [sessions, patients]);
 
   // Quick Panel state
   const [quickPanelOpen, setQuickPanelOpen] = useState(false);
@@ -410,6 +436,17 @@ export default function Agenda() {
           toast.success("Status atualizado");
         }}
         onGoToDate={(d) => { setCurrentDate(d); }}
+      />
+
+      <PaymentModal
+        isOpen={!!paymentModal}
+        onClose={() => setPaymentModal(null)}
+        sessionId={paymentModal?.sessionId || null}
+        patientId={paymentModal?.patientId || null}
+        patientName={paymentModal?.patientName}
+        patientPhone={paymentModal?.phone}
+        amount={paymentModal?.amount || 0}
+        onPaid={refreshSessions}
       />
     </AppLayout>
 

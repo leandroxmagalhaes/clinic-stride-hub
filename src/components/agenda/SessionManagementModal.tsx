@@ -576,12 +576,23 @@ export function SessionManagementModal({
                     size="sm"
                     className="shrink-0 bg-green-600 hover:bg-green-700 gap-1 text-xs h-8"
                     onClick={() => {
-                      setReceiveMethod("numerario");
-                      setShowReceiveDialog(true);
+                      onClose();
+                      setTimeout(() => {
+                        window.dispatchEvent(
+                          new CustomEvent("open-payment-modal", {
+                            detail: {
+                              sessionId: session.id,
+                              patientId: session.paciente_id,
+                              patientName: patientName,
+                              amount: sessionPrice,
+                            },
+                          }),
+                        );
+                      }, 50);
                     }}
                   >
                     <CircleDollarSign className="h-3.5 w-3.5" />
-                    Receber
+                    💶 Pagamento
                   </Button>
                 </div>
               )}

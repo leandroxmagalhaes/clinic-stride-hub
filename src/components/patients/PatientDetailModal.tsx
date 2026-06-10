@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package, RotateCcw, XCircle, Globe } from "lucide-react";
+import { MapPin, Phone, User, Tag, Mail, Loader2, Trash2, Pencil, Package, RotateCcw, XCircle, Globe, Banknote } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { PatientStatementButton } from "./PatientStatementButton";
 import { PatientPortalTab } from "./PatientPortalTab";
 import { Patient } from "@/services/PatientService";
@@ -46,6 +47,7 @@ export function PatientDetailModal({
   onReactivatePatient,
 }: PatientDetailModalProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
   const [isSendingPortalLink, setIsSendingPortalLink] = useState(false);
@@ -323,6 +325,14 @@ export function PatientDetailModal({
               >
                 {isSendingPortalLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                 Enviar Link do Portal
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { onClose(); navigate("/pagamentos"); }}
+                className="gap-2"
+              >
+                <Banknote className="h-4 w-4" />
+                💶 Pagamento
               </Button>
               <PatientStatementButton patientId={patient.id} patientName={patient.full_name} />
             </div>
