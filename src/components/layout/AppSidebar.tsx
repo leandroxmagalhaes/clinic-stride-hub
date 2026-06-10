@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Globe,
   Wind,
+  Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -118,6 +119,7 @@ const managementNavItems: NavItem[] = [
   { title: "Serviços", url: "/servicos", icon: Briefcase, module: "servicos" },
   { title: "Comercial", url: "/comercial", icon: TrendingUp, module: "comercial" },
   { title: "Financeiro", url: "/financeiro", icon: DollarSign, module: "financeiro" },
+  { title: "Pagamentos", url: "/pagamentos", icon: Banknote },
   { title: "Engajamento", url: "/engajamento", icon: Heart, module: "engajamento" },
   // Mensagens removido do menu — agora dentro do prontuário e via atalho flutuante
 ];
