@@ -1487,6 +1487,102 @@ export type Database = {
           },
         ]
       }
+      payments: {
+        Row: {
+          amount: number
+          clinic_id: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          ifthenpay_request_id: string | null
+          invoice_issued: boolean
+          mb_entity: string | null
+          mb_reference: string | null
+          mbway_phone: string | null
+          method: Database["public"]["Enums"]["payment_method"] | null
+          paid_at: string | null
+          patient_id: string
+          session_id: string
+          status: Database["public"]["Enums"]["payment_status"]
+          toconline_invoice_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          clinic_id?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          ifthenpay_request_id?: string | null
+          invoice_issued?: boolean
+          mb_entity?: string | null
+          mb_reference?: string | null
+          mbway_phone?: string | null
+          method?: Database["public"]["Enums"]["payment_method"] | null
+          paid_at?: string | null
+          patient_id: string
+          session_id: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          toconline_invoice_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          clinic_id?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          ifthenpay_request_id?: string | null
+          invoice_issued?: boolean
+          mb_entity?: string | null
+          mb_reference?: string | null
+          mbway_phone?: string | null
+          method?: Database["public"]["Enums"]["payment_method"] | null
+          paid_at?: string | null
+          patient_id?: string
+          session_id?: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          toconline_invoice_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "payments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "payments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "sessoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_conta_pacientes: {
         Row: {
           conta_id: string
@@ -3131,6 +3227,59 @@ export type Database = {
           },
         ]
       }
+      v_pending_payments: {
+        Row: {
+          amount: number | null
+          clinic_id: string | null
+          created_at: string | null
+          id: string | null
+          mb_entity: string | null
+          mb_reference: string | null
+          method: Database["public"]["Enums"]["payment_method"] | null
+          patient_id: string | null
+          patient_name: string | null
+          patient_phone: string | null
+          pending_for: string | null
+          session_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "payments_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "saldo_creditos"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "payments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "sessoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       batch_insert_sessions: { Args: { p_sessions: Json }; Returns: number }
@@ -3307,6 +3456,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "professional" | "patient" | "secretary"
+      payment_method: "mbway" | "multibanco" | "dinheiro" | "transferencia"
+      payment_status: "pendente" | "pago" | "expirado" | "cancelado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3435,6 +3586,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "professional", "patient", "secretary"],
+      payment_method: ["mbway", "multibanco", "dinheiro", "transferencia"],
+      payment_status: ["pendente", "pago", "expirado", "cancelado"],
     },
   },
 } as const

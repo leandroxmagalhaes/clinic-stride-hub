@@ -59,3 +59,9 @@ verify_jwt = false
 
 [functions.portal-link-reminder-cron]
 verify_jwt = false
+
+[functions.ifthenpay-callback]
+verify_jwt = false
+
+[functions.issue-toconline-invoice]
+verify_jwt = false
