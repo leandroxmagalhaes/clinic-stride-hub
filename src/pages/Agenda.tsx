@@ -437,6 +437,17 @@ export default function Agenda() {
         }}
         onGoToDate={(d) => { setCurrentDate(d); }}
       />
+
+      <PaymentModal
+        isOpen={!!paymentModal}
+        onClose={() => setPaymentModal(null)}
+        sessionId={paymentModal?.sessionId || null}
+        patientId={paymentModal?.patientId || null}
+        patientName={paymentModal?.patientName}
+        patientPhone={paymentModal?.phone}
+        amount={paymentModal?.amount || 0}
+        onPaid={refreshSessions}
+      />
     </AppLayout>
 
       <QuickPanel
