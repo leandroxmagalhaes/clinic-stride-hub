@@ -154,12 +154,33 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
         onClick(session);
       }}
     >
-      {/* Círculo farol de pagamento — canto inferior direito */}
+      {/* Badge de pagamento — canto inferior direito */}
       {!isCompact && isPago && (
-        <div className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-green-600 border border-white/70 shadow-sm z-10" />
+        <span className="absolute bottom-1 right-1 z-10 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-green-600 text-white shadow-sm">
+          Pago
+        </span>
       )}
       {!isCompact && isPendentePagamento && (
-        <div className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-orange-500 border border-white/70 shadow-sm z-10" />
+        <button
+          type="button"
+          className="absolute bottom-1 right-1 z-10 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-orange-500 hover:bg-orange-600 text-white shadow-sm cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            window.dispatchEvent(
+              new CustomEvent("open-payment-modal", {
+                detail: {
+                  sessionId: session.id,
+                  patientId: (session.paciente as any)?.id,
+                  patientName: session.paciente?.full_name,
+                  amount: (session as any).price ?? 0,
+                },
+              }),
+            );
+          }}
+          title="Cobrar pagamento"
+        >
+          Pendente
+        </button>
       )}
 
       {/* Pack a acabar — icone canto superior direito */}
