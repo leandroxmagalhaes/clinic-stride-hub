@@ -2215,6 +2215,38 @@ export type Database = {
           },
         ]
       }
+      reminder_logs: {
+        Row: {
+          canal: string
+          created_at: string
+          enviado_em: string
+          id: string
+          sessao_id: string
+        }
+        Insert: {
+          canal?: string
+          created_at?: string
+          enviado_em?: string
+          id?: string
+          sessao_id: string
+        }
+        Update: {
+          canal?: string
+          created_at?: string
+          enviado_em?: string
+          id?: string
+          sessao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_logs_sessao_id_fkey"
+            columns: ["sessao_id"]
+            isOneToOne: false
+            referencedRelation: "sessoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       respiratory_reports: {
         Row: {
           clinic_id: string | null
