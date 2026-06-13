@@ -749,8 +749,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     refreshPacks: fetchPacks,
     getActivePack,
     associateSessionToPack,
-    incrementPackUsage,
-    decrementPackUsage,
     // Credit compatibility
     getCreditBalance,
     addCredits: addCreditsHandler,
