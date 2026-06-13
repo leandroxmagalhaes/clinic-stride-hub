@@ -377,6 +377,36 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_messages: {
+        Row: {
+          clinic_id: string
+          content: string
+          created_at: string
+          file_name: string | null
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          clinic_id: string
+          content?: string
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          clinic_id?: string
+          content?: string
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       credit_transactions: {
         Row: {
           amount: number
