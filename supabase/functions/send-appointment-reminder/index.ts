@@ -210,6 +210,16 @@ serve(async (req) => {
           </tr>
         </table>
 
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 16px;">
+          <tr>
+            <td style="padding: 16px 20px;">
+              <p style="margin: 0; color: #991b1b; font-size: 14px; line-height: 1.5;">
+                ⚠️ <strong>Remarcações ou cancelamentos</strong> podem ser feitos até <strong>hoje às 14h00</strong>. Após esse horário, a sessão será cobrada normalmente.
+              </p>
+            </td>
+          </tr>
+        </table>
+
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr>
             <td style="padding: 20px 0; border-top: 1px solid #e4e4e7;">
@@ -219,6 +229,7 @@ serve(async (req) => {
             </td>
           </tr>
         </table>
+
 
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr>
