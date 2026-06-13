@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.90.1";
+import { executeAction, actionToolDefinitions, ACTION_TOOL_NAMES } from "./copilot-actions.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -206,6 +207,12 @@ async function executeTool(
   extraContext?: { fileUpload?: { name: string; base64: string; mime_type: string }; userId?: string; lovableApiKey?: string; scope?: UserScope }
 ): Promise<string> {
   const scope: UserScope = extraContext?.scope || { isAdmin: true, isProfessional: false, isSecretary: false, professionalProfileId: null };
+  // Ações de escrita (Fase 4) — delegadas ao módulo de ações, com confirmação obrigatória
+  if (ACTION_TOOL_NAMES.includes(toolName)) {
+    return await executeAction(toolName, args, {
+      supabaseAdmin, clinicId, userId: extraContext?.userId || "",
+    });
+  }
   try {
     switch (toolName) {
       case "search_patients": {
@@ -276,12 +283,10 @@ async function executeTool(
         return JSON.stringify({ date, available_slots: slots.slice(0, 15) });
       }
 
-      case "propose_session":
-      case "create_session":
-      case "cancel_session": {
-        return JSON.stringify({
-          error: "ACTION_NOT_AVAILABLE",
-          message: "Nesta versão posso apenas consultar informação. Para criar, alterar ou cancelar sessões use a Agenda.",
+      case "propose_session": {
+        // alias antigo → trata como create_session em modo preview
+        return await executeAction("create_session", { ...args, confirm: false }, {
+          supabaseAdmin, clinicId, userId: extraContext?.userId || "",
         });
       }
 
@@ -616,33 +621,31 @@ async function executeTool(
 }
 
 // ── System prompt ──────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `Você é o Copiloto, um assistente integrado numa plataforma de gestão de clínicas de fisioterapia. Nesta versão (Fase 1) você opera em modo **APENAS LEITURA**: pode consultar dados reais, mas NÃO pode criar, alterar ou apagar nada.
+const SYSTEM_PROMPT = `Você é o Copiloto, o assistente operacional de uma clínica de fisioterapia. Você CONSULTA dados e EXECUTA ações (agendar, confirmar, cancelar, marcar falta, registar pagamento, isentar), sempre com confirmação do utilizador antes de qualquer alteração.
 
-REGRAS CRÍTICAS:
-1. Você NÃO tem capacidade de escrita. Se o utilizador pedir para criar/alterar/cancelar sessões, agendar, registar pacientes, importar ficheiros ou enviar mensagens, recuse de forma clara e educada e indique a página correta da app (Agenda, Pacientes, Mensagens, etc.).
-2. Responda SEMPRE em português de Portugal (pt-PT). Use "utente" em vez de "paciente", "agendamento" em vez de "consulta", etc.
-3. Seja conciso, directo e usa formatação markdown (listas, tabelas) quando ajudar a leitura.
-4. Quando o utilizador mencionar um nome de utente, use search_patients para o localizar; se houver ambiguidade, peça para escolher.
-5. Para perguntas sobre sessões/agenda, escolhe a tool certa: get_today_sessions ("hoje"), get_sessions_by_date_range ("amanhã", "esta semana", intervalos), check_availability (slots livres).
-6. Respeite as permissões: profissionais (sem admin) só vêem os seus próprios dados; secretárias não acedem a evoluções clínicas — se a tool devolver erro de acesso, comunique de forma educada.
-7. Formate datas e horas de forma legível (ex.: "Quarta, 15 de Março às 18:30").
-8. Nunca invente dados. Se uma tool devolver vazio ou erro, diga-o claramente e sugira o que o utilizador pode fazer a seguir.
-9. Use o contexto fornecido (página actual, utente seleccionado) para antecipar a intenção.
+ESTILO:
+1. Responda SEMPRE em português de Portugal (pt-PT): "utente", "agendamento", "marcação".
+2. Seja muito conciso e directo. Nada de respostas longas ou repetitivas. Vá ao ponto.
+3. Use markdown leve (listas curtas, negrito pontual) só quando ajuda. Evite encher de texto.
+4. Formate datas de forma legível (ex.: "Terça, 16 de Junho às 16:00").
 
-CAPACIDADES (apenas leitura):
-- Procurar utentes (search_patients)
-- Ver disponibilidade de horários (check_availability)
-- Sessões de hoje / por intervalo de datas
-- Evoluções pendentes / recentes
-- Pagamentos pendentes
-- Packs a expirar
-- Resumo diário
-- Utentes inactivos / activos
-- Mensagens não lidas no Diário de Acompanhamento
-- Contagem de utentes por profissional
+REGRA DE OURO DAS AÇÕES (criar/confirmar/cancelar/faltar/pagar/isentar):
+- NUNCA execute de imediato. Primeiro chame a tool SEM confirm (ou confirm:false) para obter o "preview".
+- Mostre ao utilizador um resumo de UMA linha do que vai acontecer e pergunte se confirma.
+- Só quando o utilizador disser que sim, chame a MESMA tool com confirm:true.
+- Se a tool devolver needs_clarification (vários utentes/sessões), liste as opções e peça para escolher antes de prosseguir.
+- Se devolver needs_reason (isenção), pergunte o motivo antes de confirmar.
 
-RECUSA DE MUTATIONS (exemplo de resposta):
-"Nesta versão posso apenas consultar informação. Para [criar sessão / cancelar / importar ficheiro], use a página [Agenda / Pacientes]."`;
+LEITURA:
+- Nome de utente → search_patients. Ambiguidade → peça para escolher.
+- "hoje" → get_today_sessions; "amanhã"/intervalos → get_sessions_by_date_range; horários livres → check_availability.
+- Não invente dados; se vier vazio/erro, diga e sugira o próximo passo.
+
+PERMISSÕES:
+- Profissionais sem admin só veem os seus dados; secretárias não acedem a evoluções clínicas. Se uma tool devolver erro de acesso, comunique educadamente.
+
+CONTEXTO:
+- Use a página atual e o utente seleccionado para antecipar a intenção (ex.: na ficha de um utente, "marca falta de hoje" refere-se a ele).`;
 
 // ── Main handler ───────────────────────────────────────────────────────────
 serve(async (req) => {
@@ -751,7 +754,7 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "google/gemini-3-flash-preview",
           messages: currentMessages,
-          tools: toolDefinitions,
+          tools: [...toolDefinitions, ...actionToolDefinitions],
           stream: round === MAX_TOOL_ROUNDS - 1 ? true : false,
         }),
       });
