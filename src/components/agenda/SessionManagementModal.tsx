@@ -274,7 +274,7 @@ export function SessionManagementModal({
       // Update extended fields directly via supabase
       await (supabase as any).from("sessoes").update({
         tipo_agendamento: editTipoAgendamento,
-        pack_grupo_id: editTipoAgendamento === "pack" && editPackGrupoId ? editPackGrupoId : null,
+        pack_id: editTipoAgendamento === "pack" && editPackId ? editPackId : null,
         pagamento_estado: editPaymentStatus,
         pagamento_metodo: editPaymentStatus !== "pendente" && editPaymentMethod ? editPaymentMethod : null,
         pagamento_data: editPaymentStatus !== "pendente" && editPaymentDate ? editPaymentDate : null,
@@ -317,7 +317,7 @@ export function SessionManagementModal({
         // Associar ao pack activo automaticamente
         await supabase
           .from("sessoes")
-          .update({ package_id: activePack.id } as any)
+          .update({ pack_id: activePack.id } as any)
           .eq("id", session.id);
         await incrementPackUsage(activePack.id);
       }
@@ -779,7 +779,7 @@ export function SessionManagementModal({
                       className="flex-1"
                       onClick={() => {
                         setEditTipoAgendamento("avulso");
-                        setEditPackGrupoId("");
+                        setEditPackId("");
                       }}
                     >
                       Avulso
@@ -797,32 +797,23 @@ export function SessionManagementModal({
                   </div>
                 </div>
 
-                {/* Pack group — only when type=pack */}
+                {/* Pack selector — only when type=pack */}
                 {editTipoAgendamento === "pack" && (
                   <div className="space-y-1">
-                    <Label className="text-xs">Grupo de Pack</Label>
-                    <Select
-                      value={editPackGrupoId}
-                      onValueChange={(v) => {
-                        if (v === "__new__") {
-                          setEditPackGrupoId(crypto.randomUUID());
-                        } else {
-                          setEditPackGrupoId(v);
-                        }
-                      }}
-                    >
+                    <Label className="text-xs">Pack</Label>
+                    <Select value={editPackId || "__none__"} onValueChange={(v) => setEditPackId(v === "__none__" ? "" : v)}>
                       <SelectTrigger className="min-h-[40px]">
-                        <SelectValue placeholder="Selecione grupo..." />
+                        <SelectValue placeholder="Selecione pack..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {packGroups.map((g) => (
-                          <SelectItem key={g.pack_grupo_id} value={g.pack_grupo_id}>
-                            {g.pack_grupo_id.slice(0, 8)}… ({g.count} sessões)
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="__new__">
-                          ➕ Criar novo grupo
-                        </SelectItem>
+                        <SelectItem value="__none__">Sem pack</SelectItem>
+                        {packs
+                          .filter((p) => p.paciente_id === editPaciente && p.status === "ativo")
+                          .map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              Pack #{p.numero_pack} · {p.sessoes_usadas}/{p.total_sessoes}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
