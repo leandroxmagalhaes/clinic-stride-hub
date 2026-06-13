@@ -254,6 +254,11 @@ serve(async (req) => {
           html: emailHtml,
         });
 
+        // Log the send to prevent duplicates on subsequent runs
+        await supabase
+          .from("reminder_logs")
+          .insert({ sessao_id: session.id, canal: "email" });
+
         console.log(`Reminder sent to ${patient.email} for session ${session.id}`);
         results.sent++;
       } catch (emailError) {
