@@ -27,11 +27,10 @@ export async function cascadeDeletePatient(patientId: string, patientName?: stri
     await supabase.from('prontuarios').delete().eq('paciente_id', patientId);
   }
 
-  // 4. Sessions, packs, packages, reserved slots, reports, credits
+  // 4. Sessions, packs, reserved slots, reports
   await Promise.all([
     supabase.from('sessoes').delete().eq('paciente_id', patientId),
     supabase.from('packs').delete().eq('paciente_id', patientId),
-    supabase.from('scheduling_packages').delete().eq('paciente_id', patientId),
     supabase.from('horarios_reservados').delete().eq('patient_id', patientId),
     supabase.from('relatorios_clinicos').delete().eq('patient_id', patientId),
   ]);
