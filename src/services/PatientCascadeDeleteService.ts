@@ -17,8 +17,6 @@ export async function cascadeDeletePatient(patientId: string, patientName?: stri
     supabase.from('credit_transactions').delete().eq('patient_id', patientId),
   ]);
 
-  // 2. Evolutions
-  await supabase.from('evolucoes').delete().eq('patient_id', patientId);
 
   // 3. Clinical evolutions via prontuarios
   const { data: prontuarios } = await supabase.from('prontuarios').select('id').eq('paciente_id', patientId);
@@ -36,8 +34,8 @@ export async function cascadeDeletePatient(patientId: string, patientName?: stri
     supabase.from('scheduling_packages').delete().eq('paciente_id', patientId),
     supabase.from('horarios_reservados').delete().eq('patient_id', patientId),
     supabase.from('relatorios_clinicos').delete().eq('patient_id', patientId),
-    supabase.from('transacoes_credito').delete().eq('patient_id', patientId),
   ]);
+
 
   // 5. Nullify lead and import_queue references
   await Promise.all([

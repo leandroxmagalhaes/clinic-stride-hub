@@ -231,13 +231,6 @@ export type Database = {
             referencedColumns: ["patient_id"]
           },
           {
-            foreignKeyName: "automation_logs_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
-          {
             foreignKeyName: "automation_logs_sessao_id_fkey"
             columns: ["sessao_id"]
             isOneToOne: false
@@ -447,13 +440,6 @@ export type Database = {
             referencedColumns: ["patient_id"]
           },
           {
-            foreignKeyName: "credit_transactions_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
-          {
             foreignKeyName: "credit_transactions_related_session_id_fkey"
             columns: ["related_session_id"]
             isOneToOne: false
@@ -506,94 +492,6 @@ export type Database = {
           valor_novo?: string | null
         }
         Relationships: []
-      }
-      evolucoes: {
-        Row: {
-          anexos: Json | null
-          clinic_id: string
-          conteudo: string
-          created_at: string
-          created_by: string | null
-          id: string
-          patient_id: string
-          professional_id: string
-          session_id: string | null
-          tipo: string
-          titulo: string
-          updated_at: string
-        }
-        Insert: {
-          anexos?: Json | null
-          clinic_id: string
-          conteudo: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          patient_id: string
-          professional_id: string
-          session_id?: string | null
-          tipo?: string
-          titulo: string
-          updated_at?: string
-        }
-        Update: {
-          anexos?: Json | null
-          clinic_id?: string
-          conteudo?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          patient_id?: string
-          professional_id?: string
-          session_id?: string | null
-          tipo?: string
-          titulo?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "evolucoes_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "evolucoes_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "pacientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "evolucoes_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "evolucoes_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "evolucoes_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "profissionais"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "evolucoes_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "sessoes"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       evolucoes_clinicas: {
         Row: {
@@ -760,13 +658,6 @@ export type Database = {
             referencedColumns: ["patient_id"]
           },
           {
-            foreignKeyName: "horarios_reservados_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
-          {
             foreignKeyName: "horarios_reservados_professional_id_fkey"
             columns: ["professional_id"]
             isOneToOne: false
@@ -839,13 +730,6 @@ export type Database = {
             columns: ["suggested_patient_id"]
             isOneToOne: false
             referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "import_queue_suggested_patient_id_fkey"
-            columns: ["suggested_patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
           },
           {
@@ -993,13 +877,6 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "notifications_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
           },
         ]
@@ -1191,13 +1068,6 @@ export type Database = {
             referencedRelation: "patient_credit_balances"
             referencedColumns: ["patient_id"]
           },
-          {
-            foreignKeyName: "pacientes_acessos_recentes_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
         ]
       }
       pacientes_excluidos: {
@@ -1302,13 +1172,6 @@ export type Database = {
             columns: ["paciente_id"]
             isOneToOne: false
             referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "packs_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
           },
         ]
@@ -1416,13 +1279,6 @@ export type Database = {
             referencedColumns: ["patient_id"]
           },
           {
-            foreignKeyName: "patient_documents_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
-          {
             foreignKeyName: "patient_documents_prontuario_id_fkey"
             columns: ["prontuario_id"]
             isOneToOne: false
@@ -1476,13 +1332,6 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "patient_feedback_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
           },
         ]
@@ -1565,13 +1414,6 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "payments_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
           },
           {
@@ -2080,13 +1922,6 @@ export type Database = {
             referencedColumns: ["patient_id"]
           },
           {
-            foreignKeyName: "professional_patient_assignments_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
-          {
             foreignKeyName: "professional_patient_assignments_professional_id_fkey"
             columns: ["professional_id"]
             isOneToOne: false
@@ -2266,13 +2101,6 @@ export type Database = {
             referencedRelation: "patient_credit_balances"
             referencedColumns: ["patient_id"]
           },
-          {
-            foreignKeyName: "prontuarios_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
         ]
       }
       relatorios_clinicos: {
@@ -2383,13 +2211,6 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "relatorios_clinicos_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
           },
           {
@@ -2545,13 +2366,6 @@ export type Database = {
             referencedRelation: "patient_credit_balances"
             referencedColumns: ["patient_id"]
           },
-          {
-            foreignKeyName: "sales_leads_converted_patient_id_fkey"
-            columns: ["converted_patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
         ]
       }
       scheduling_packages: {
@@ -2632,13 +2446,6 @@ export type Database = {
             columns: ["paciente_id"]
             isOneToOne: false
             referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "scheduling_packages_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
           },
           {
@@ -2758,13 +2565,6 @@ export type Database = {
             referencedColumns: ["patient_id"]
           },
           {
-            foreignKeyName: "session_briefings_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
-          {
             foreignKeyName: "session_briefings_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
@@ -2872,13 +2672,6 @@ export type Database = {
             columns: ["paciente_id"]
             isOneToOne: false
             referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "sessoes_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
           },
           {
@@ -2995,90 +2788,6 @@ export type Database = {
           },
         ]
       }
-      transacoes_credito: {
-        Row: {
-          clinic_id: string
-          created_at: string
-          created_by: string | null
-          expira_em: string | null
-          id: string
-          metodo_pagamento: string | null
-          motivo: string | null
-          package_id: string | null
-          patient_id: string
-          quantidade: number
-          session_id: string | null
-          tipo: string
-          valor_pago: number | null
-        }
-        Insert: {
-          clinic_id: string
-          created_at?: string
-          created_by?: string | null
-          expira_em?: string | null
-          id?: string
-          metodo_pagamento?: string | null
-          motivo?: string | null
-          package_id?: string | null
-          patient_id: string
-          quantidade: number
-          session_id?: string | null
-          tipo: string
-          valor_pago?: number | null
-        }
-        Update: {
-          clinic_id?: string
-          created_at?: string
-          created_by?: string | null
-          expira_em?: string | null
-          id?: string
-          metodo_pagamento?: string | null
-          motivo?: string | null
-          package_id?: string | null
-          patient_id?: string
-          quantidade?: number
-          session_id?: string | null
-          tipo?: string
-          valor_pago?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "transacoes_credito_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transacoes_credito_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "pacientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transacoes_credito_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "transacoes_credito_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "transacoes_credito_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "sessoes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_permissions: {
         Row: {
           clinic_id: string
@@ -3182,13 +2891,6 @@ export type Database = {
             referencedRelation: "patient_credit_balances"
             referencedColumns: ["patient_id"]
           },
-          {
-            foreignKeyName: "packs_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
-            referencedColumns: ["patient_id"]
-          },
         ]
       }
       patient_credit_balances: {
@@ -3197,25 +2899,6 @@ export type Database = {
           clinic_id: string | null
           full_name: string | null
           patient_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pacientes_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      saldo_creditos: {
-        Row: {
-          clinic_id: string | null
-          full_name: string | null
-          patient_id: string | null
-          saldo: number | null
-          total_compras: number | null
-          ultima_compra: string | null
         }
         Relationships: [
           {
@@ -3262,13 +2945,6 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "payments_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "saldo_creditos"
             referencedColumns: ["patient_id"]
           },
           {
