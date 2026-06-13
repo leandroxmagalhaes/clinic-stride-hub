@@ -1,7 +1,11 @@
-// NewSessionModal v5 — 5-step scheduling wizard (Patient First)
+// NewSessionModal v6 — Tela única adaptativa (Fase 3)
+// Substitui o assistente de 5 passos por um formulário único e inteligente:
+// • Paciente no topo; ao selecionar, o resto da tela se adapta
+// • Pack ativo detectado e vinculado automaticamente (regra: pack sem especialidade)
+// • Checkbox "Cobrar avulso" para exceções; criação de novo pack inline
+// • Serviço e profissional pré-preenchidos com base na última sessão do paciente
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -9,16 +13,16 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { Calendar as CalendarIcon, Clock, Check, UserPlus, Loader2, Package, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar as CalendarIcon, Check, UserPlus, Loader2, Package, Search, X, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthContext } from "@/lib/auth-helpers";
 import { checkAppointmentCreatedTrigger } from "@/services/AutomationEngine";
 
-// Keep export for backward compatibility
+// Mantido para compatibilidade com importações existentes
 export interface PackageSubmitData {
   modality: string;
   frequency?: string;
@@ -52,11 +56,11 @@ interface Service {
 interface ActivePack {
   id: string;
   numero_pack: number;
-  quantidade_sessoes: number;
+  total_sessoes: number;
   sessoes_usadas: number;
   valor_total: number;
   payment_status: string;
-  notes: string | null;
+  data_validade: string | null;
 }
 
 interface NewSessionModalProps {
@@ -86,7 +90,7 @@ const TIME_OPTIONS: string[] = (() => {
   return opts;
 })();
 
-const STEP_NAMES = ["Paciente", "Tipo", "Datas", "Detalhes", "Confirmação"];
+const QTY_PRESETS = [1, 2, 5, 10];
 
 export function NewSessionModal({
   isOpen,
@@ -98,69 +102,71 @@ export function NewSessionModal({
   onPatientCreated,
   onSessionsCreated,
 }: NewSessionModalProps) {
-  // ── Wizard step ──
-  const [step, setStep] = useState(1);
-
-  // ── Step 1: Patient ──
+  // ── Paciente ──
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [activePacks, setActivePacks] = useState<ActivePack[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Criação rápida de paciente
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [quickName, setQuickName] = useState("");
   const [quickPhone, setQuickPhone] = useState("");
   const [quickEmail, setQuickEmail] = useState("");
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [showDropdown, setShowDropdown] = useState(false);
 
-  // ── Step 2: Type ──
-  const [tipoAgendamento, setTipoAgendamento] = useState<"avulso" | "pack_existente" | "novo_pack">("avulso");
-  const [quantidade, setQuantidade] = useState(1);
-  const [customQty, setCustomQty] = useState("");
+  // ── Packs ──
+  const [activePacks, setActivePacks] = useState<ActivePack[]>([]);
+  const [isLoadingPacks, setIsLoadingPacks] = useState(false);
   const [selectedPackId, setSelectedPackId] = useState<string>("");
+  const [cobrarAvulso, setCobrarAvulso] = useState(false);
+  const [showNewPack, setShowNewPack] = useState(false);
+  const [novoPackSessoes, setNovoPackSessoes] = useState("10");
   const [novoPackValor, setNovoPackValor] = useState("");
   const [novoPackPago, setNovoPackPago] = useState(false);
 
-  // ── Step 3: Dates ──
+  // ── Sessões ──
+  const [quantidade, setQuantidade] = useState(1);
+  const [customQty, setCustomQty] = useState("");
   const [sessionSlots, setSessionSlots] = useState<SessionSlot[]>([]);
 
-  // ── Step 4: Details ──
+  // ── Detalhes ──
   const [selectedServico, setSelectedServico] = useState("");
   const [selectedProfissional, setSelectedProfissional] = useState("");
   const [notes, setNotes] = useState("");
 
-  // ── Saving ──
   const [isSaving, setIsSaving] = useState(false);
 
-  // ── Reset on open ──
+  // ── Reset ao abrir ──
   useEffect(() => {
     if (isOpen) {
-      setStep(1);
       setSearchQuery("");
       setSearchResults([]);
       setSelectedPatient(null);
-      setActivePacks([]);
+      setShowDropdown(false);
       setShowQuickCreate(false);
       setQuickName("");
       setQuickPhone("");
       setQuickEmail("");
-      setTipoAgendamento("avulso");
-      setQuantidade(1);
-      setCustomQty("");
+      setActivePacks([]);
       setSelectedPackId("");
+      setCobrarAvulso(false);
+      setShowNewPack(false);
+      setNovoPackSessoes("10");
       setNovoPackValor("");
       setNovoPackPago(false);
+      setQuantidade(1);
+      setCustomQty("");
       setSessionSlots([]);
       setSelectedServico("");
       setSelectedProfissional("");
       setNotes("");
-      setShowDropdown(false);
     }
   }, [isOpen]);
 
-  // ── Build session slots when quantity changes or entering step 3 ──
+  // ── Slots conforme a quantidade ──
   useEffect(() => {
     if (quantidade < 1) return;
     setSessionSlots((prev) => {
@@ -181,7 +187,7 @@ export function NewSessionModal({
     });
   }, [quantidade, selectedSlot]);
 
-  // ── Patient search with debounce ──
+  // ── Busca de paciente com debounce ──
   useEffect(() => {
     if (searchQuery.length < 2) {
       setSearchResults([]);
@@ -198,18 +204,17 @@ export function NewSessionModal({
           .ilike("full_name", `%${searchQuery}%`)
           .eq("is_active", true)
           .limit(10);
-        
+
         if (data) {
-          // Check active packs for each result
           const patientIds = data.map((p: any) => p.id);
           const { data: packsData } = await (supabase as any)
             .from("packs")
             .select("paciente_id")
             .in("paciente_id", patientIds)
-            .eq("is_active", true);
-          
+            .eq("status", "ativo");
+
           const patientsWithPacks = new Set((packsData || []).map((p: any) => p.paciente_id));
-          
+
           setSearchResults(data.map((p: any) => ({
             ...p,
             _hasActivePack: patientsWithPacks.has(p.id),
@@ -225,16 +230,18 @@ export function NewSessionModal({
     return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
   }, [searchQuery]);
 
-  // ── Fetch active packs when patient selected ──
+  // ── Packs ativos do paciente ──
   const fetchActivePacks = useCallback(async (patientId: string) => {
+    setIsLoadingPacks(true);
     try {
       const { data: packsData } = await (supabase as any)
         .from("packs")
-        .select("id, numero_pack, total_sessoes, valor_total, payment_status, notes")
+        .select("id, numero_pack, total_sessoes, valor_total, payment_status, data_validade")
         .eq("paciente_id", patientId)
-        .eq("status", "ativo");
+        .eq("status", "ativo")
+        .order("numero_pack", { ascending: false });
       const packIds = (packsData || []).map((p: any) => p.id);
-      let usageMap: Record<string, number> = {};
+      const usageMap: Record<string, number> = {};
       if (packIds.length > 0) {
         const { data: sessRows } = await (supabase as any)
           .from("sessoes")
@@ -246,38 +253,66 @@ export function NewSessionModal({
           usageMap[s.pack_id] = (usageMap[s.pack_id] || 0) + 1;
         });
       }
-      setActivePacks(
-        (packsData || []).map((p: any) => ({
-          id: p.id,
-          numero_pack: p.numero_pack,
-          quantidade_sessoes: p.total_sessoes,
-          sessoes_usadas: usageMap[p.id] || 0,
-          valor_total: p.valor_total,
-          payment_status: p.payment_status,
-          notes: p.notes,
-        })),
-      );
+      const packs: ActivePack[] = (packsData || []).map((p: any) => ({
+        id: p.id,
+        numero_pack: p.numero_pack,
+        total_sessoes: p.total_sessoes,
+        sessoes_usadas: usageMap[p.id] || 0,
+        valor_total: p.valor_total,
+        payment_status: p.payment_status,
+        data_validade: p.data_validade,
+      }));
+      setActivePacks(packs);
+      // Vínculo automático: pack mais recente com saldo
+      const withBalance = packs.find((p) => p.sessoes_usadas < p.total_sessoes);
+      setSelectedPackId(withBalance ? withBalance.id : "");
     } catch (err) {
       console.error("Error fetching packs:", err);
       setActivePacks([]);
+      setSelectedPackId("");
+    } finally {
+      setIsLoadingPacks(false);
     }
   }, []);
+
+  // ── Pré-preencher serviço/profissional da última sessão ──
+  const prefillFromLastSession = useCallback(async (patientId: string) => {
+    try {
+      const { data } = await (supabase as any)
+        .from("sessoes")
+        .select("servico_id, profissional_id")
+        .eq("paciente_id", patientId)
+        .order("start_time", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data?.servico_id && services.some((s) => s.id === data.servico_id)) {
+        setSelectedServico((cur) => cur || data.servico_id);
+      }
+      if (data?.profissional_id && professionals.some((p) => p.id === data.profissional_id)) {
+        setSelectedProfissional((cur) => cur || data.profissional_id);
+      }
+    } catch (err) {
+      console.error("Prefill error:", err);
+    }
+  }, [services, professionals]);
 
   const handleSelectPatient = useCallback((patient: Patient) => {
     setSelectedPatient(patient);
     setSearchQuery("");
     setShowDropdown(false);
     fetchActivePacks(patient.id);
-  }, [fetchActivePacks]);
+    prefillFromLastSession(patient.id);
+  }, [fetchActivePacks, prefillFromLastSession]);
 
   const handleClearPatient = useCallback(() => {
     setSelectedPatient(null);
     setActivePacks([]);
-    setTipoAgendamento("avulso");
     setSelectedPackId("");
+    setCobrarAvulso(false);
+    setShowNewPack(false);
   }, []);
 
-  // ── Quick patient create ──
+  // ── Criação rápida de paciente ──
   const handleQuickCreate = async () => {
     if (!quickName.trim()) { toast.error("Nome é obrigatório"); return; }
     setIsCreatingPatient(true);
@@ -309,27 +344,14 @@ export function NewSessionModal({
     }
   };
 
-  // ── Get selected pack data ──
-  const selectedPack = useMemo(() => activePacks.find((p) => p.id === selectedPackId), [activePacks, selectedPackId]);
+  // ── Derivados ──
+  const linkedPack = useMemo(
+    () => (!cobrarAvulso && !showNewPack ? activePacks.find((p) => p.id === selectedPackId) : undefined),
+    [activePacks, selectedPackId, cobrarAvulso, showNewPack],
+  );
+  const packRestantes = linkedPack ? linkedPack.total_sessoes - linkedPack.sessoes_usadas : 0;
+  const excedePack = !!linkedPack && quantidade > packRestantes;
 
-  // ── Auto-select single pack ──
-  useEffect(() => {
-    if (tipoAgendamento === "pack_existente" && activePacks.length === 1) {
-      setSelectedPackId(activePacks[0].id);
-      const remaining = activePacks[0].quantidade_sessoes - activePacks[0].sessoes_usadas;
-      setQuantidade(Math.max(1, remaining));
-    }
-  }, [tipoAgendamento, activePacks]);
-
-  // ── When selecting a pack, set quantity to remaining ──
-  useEffect(() => {
-    if (selectedPack) {
-      const remaining = selectedPack.quantidade_sessoes - selectedPack.sessoes_usadas;
-      setQuantidade(Math.max(1, remaining));
-    }
-  }, [selectedPack]);
-
-  // ── Quantity helpers ──
   const handleQtyButton = (n: number) => {
     setQuantidade(n);
     setCustomQty("");
@@ -340,32 +362,21 @@ export function NewSessionModal({
     if (!isNaN(n) && n >= 1 && n <= 50) setQuantidade(n);
   };
 
-  // ── Update slot ──
   const updateSlot = useCallback((index: number, field: keyof SessionSlot, value: string) => {
-    setSessionSlots((prev) => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+    setSessionSlots((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
   }, []);
 
-  // ── Validation per step ──
-  const canAdvance1 = !!selectedPatient;
-  const canAdvance2 = (() => {
-    if (tipoAgendamento === "avulso") return quantidade >= 1;
-    if (tipoAgendamento === "pack_existente") return !!selectedPackId;
-    if (tipoAgendamento === "novo_pack") return quantidade >= 1;
-    return false;
-  })();
-  const canAdvance3 = sessionSlots.length > 0 && sessionSlots.every((s) => s.date && s.time);
-  const canAdvance4 = !!selectedServico && !!selectedProfissional;
-
-  const filledCount = sessionSlots.filter((s) => s.date && s.time).length;
-
-  // ── Initials avatar ──
   const getInitials = (name: string) => {
     const parts = name.split(" ").filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return (parts[0]?.[0] || "?").toUpperCase();
   };
 
-  // ── Confirm ──
+  const slotsOk = sessionSlots.length > 0 && sessionSlots.every((s) => s.date && s.time);
+  const novoPackOk = !showNewPack || (parseInt(novoPackSessoes, 10) >= 1);
+  const canConfirm = !!selectedPatient && slotsOk && !!selectedServico && !!selectedProfissional && novoPackOk && !isSaving;
+
+  // ── Confirmar ──
   const handleConfirm = async () => {
     if (!selectedPatient) return;
     setIsSaving(true);
@@ -374,17 +385,17 @@ export function NewSessionModal({
       const selectedService = services.find((s) => s.id === selectedServico);
       const durationMin = selectedService?.duration_minutes || 60;
 
-      let packageId: string | null = null;
+      let packId: string | null = null;
 
-      // If "novo_pack", create pack first
-      if (tipoAgendamento === "novo_pack") {
+      if (showNewPack) {
+        // Criar novo pack inline
         const { data: packData, error: packError } = await (supabase as any)
           .from("packs")
           .insert({
             clinic_id: clinicId,
             paciente_id: selectedPatient.id,
             data_inicio: sessionSlots[0]?.date || format(new Date(), "yyyy-MM-dd"),
-            total_sessoes: quantidade,
+            total_sessoes: parseInt(novoPackSessoes, 10) || quantidade,
             valor_total: parseFloat(novoPackValor) || 0,
             payment_status: novoPackPago ? "pago" : "pendente",
             status: "ativo",
@@ -392,12 +403,9 @@ export function NewSessionModal({
           .select("id")
           .single();
         if (packError) throw packError;
-        packageId = packData.id;
-      }
-
-      // If "pack_existente", use the selected pack
-      if (tipoAgendamento === "pack_existente" && selectedPackId) {
-        packageId = selectedPackId;
+        packId = packData.id;
+      } else if (!cobrarAvulso && linkedPack) {
+        packId = linkedPack.id;
       }
 
       for (let i = 0; i < sessionSlots.length; i++) {
@@ -423,14 +431,13 @@ export function NewSessionModal({
           notes: notes || null,
           price: selectedService ? Number(selectedService.price) : 0,
           payment_status: "pendente",
-          tipo_agendamento: tipoAgendamento === "pack_existente" || tipoAgendamento === "novo_pack" ? "pack" : "avulso",
-          pack_id: packageId,
+          tipo_agendamento: packId ? "pack" : "avulso",
+          pack_id: packId,
           created_by: userId,
         } as any).select("id").single();
 
         if (error) throw error;
 
-        // Automation trigger
         if (insertedSession?.id) {
           const selectedProf = professionals.find((p) => p.id === selectedProfissional);
           checkAppointmentCreatedTrigger({
@@ -445,7 +452,7 @@ export function NewSessionModal({
           }).catch((err) => console.error("Automation trigger error:", err));
         }
       }
-      // Pack usage is auto-recomputed by DB triggers
+      // O consumo do pack é recalculado por triggers no banco
 
       toast.success(`${quantidade} sessão${quantidade > 1 ? "ões" : ""} agendada${quantidade > 1 ? "s" : ""} para ${selectedPatient.full_name}`);
       onSessionsCreated?.();
@@ -458,48 +465,27 @@ export function NewSessionModal({
     }
   };
 
-  // ── Lookup helpers for confirmation ──
-  const serviceName = services.find((s) => s.id === selectedServico)?.name || "";
-  const professionalName = professionals.find((p) => p.id === selectedProfissional)?.full_name || "";
-
-  const typeBadge = useMemo(() => {
-    if (tipoAgendamento === "avulso") return { label: `Avulsa — ${quantidade} sessão${quantidade > 1 ? "ões" : ""}`, className: "bg-yellow-100 text-yellow-800 border-yellow-200" };
-    if (tipoAgendamento === "pack_existente") return { label: `Pack existente — ${quantidade} sessão${quantidade > 1 ? "ões" : ""}`, className: "bg-green-100 text-green-800 border-green-200" };
-    return { label: `Novo pack — ${quantidade} sessão${quantidade > 1 ? "ões" : ""}`, className: "bg-blue-100 text-blue-800 border-blue-200" };
-  }, [tipoAgendamento, quantidade]);
+  const formatValidade = (d: string | null) => {
+    if (!d) return null;
+    try { return format(new Date(d + "T00:00:00"), "dd/MM/yyyy"); } catch { return d; }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarIcon className="h-5 w-5 text-primary" />
-            <div>
-              <div>Novo Agendamento</div>
-              <div className="text-xs font-normal text-muted-foreground">Passo {step} de 5 — {STEP_NAMES[step - 1]}</div>
-            </div>
+            Novo Agendamento
           </DialogTitle>
         </DialogHeader>
 
-        {/* ── 5-segment progress bar ── */}
-        <div className="flex gap-1">
-          {[1, 2, 3, 4, 5].map((s) => (
-            <div
-              key={s}
-              className={cn(
-                "h-1.5 flex-1 rounded-full transition-colors",
-                s <= step ? "bg-[#3b82f6]" : "bg-[#e2e8f0]"
-              )}
-            />
-          ))}
-        </div>
-
-        {/* ═══════════ STEP 1: Paciente ═══════════ */}
-        {step === 1 && (
-          <div className="space-y-4 py-2">
+        <div className="space-y-5 py-1">
+          {/* ═══ PACIENTE ═══ */}
+          <section className="space-y-2">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">Paciente</Label>
             {!selectedPatient ? (
               <>
-                {/* Search input */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -512,7 +498,6 @@ export function NewSessionModal({
                   {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
                 </div>
 
-                {/* Search results dropdown */}
                 {showDropdown && (
                   <div className="border rounded-lg max-h-[200px] overflow-y-auto bg-card shadow-sm">
                     {searchResults.length > 0 ? (
@@ -528,7 +513,7 @@ export function NewSessionModal({
                             {p.phone && <div className="text-xs text-muted-foreground">{p.phone}</div>}
                           </div>
                           {p._hasActivePack && (
-                            <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">Pack activo</Badge>
+                            <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">Pack ativo</Badge>
                           )}
                         </button>
                       ))
@@ -552,93 +537,165 @@ export function NewSessionModal({
                   </div>
                 )}
 
-                {/* Quick create link */}
-                {!showQuickCreate && (
+                {!showQuickCreate && !showDropdown && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="gap-1 text-xs"
+                    className="gap-1 text-xs text-muted-foreground"
                     onClick={() => setShowQuickCreate(true)}
                   >
-                    <UserPlus className="h-3 w-3" /> Criar paciente rápido
+                    <UserPlus className="h-3 w-3" /> Novo paciente
                   </Button>
                 )}
 
-                {/* Quick create form */}
                 {showQuickCreate && (
-                  <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
-                    <Label className="text-xs font-medium">Novo Paciente</Label>
+                  <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
                     <Input placeholder="Nome completo *" value={quickName} onChange={(e) => setQuickName(e.target.value)} autoFocus />
                     <div className="grid grid-cols-2 gap-2">
                       <Input placeholder="Telefone" value={quickPhone} onChange={(e) => setQuickPhone(e.target.value)} />
-                      <Input placeholder="Email" value={quickEmail} onChange={(e) => setQuickEmail(e.target.value)} />
+                      <Input placeholder="E-mail" value={quickEmail} onChange={(e) => setQuickEmail(e.target.value)} />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="ghost" size="sm" onClick={() => setShowQuickCreate(false)}>Cancelar</Button>
                       <Button size="sm" onClick={handleQuickCreate} disabled={isCreatingPatient} className="gap-1">
-                        {isCreatingPatient ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
+                        {isCreatingPatient ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                         Criar
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setShowQuickCreate(false)}>Cancelar</Button>
                     </div>
                   </div>
                 )}
               </>
             ) : (
-              <>
-                {/* Selected patient card */}
-                <div className="p-4 rounded-lg border bg-card flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm flex-shrink-0">
+              <div className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-muted/30">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
                     {getInitials(selectedPatient.full_name)}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{selectedPatient.full_name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {[selectedPatient.phone, selectedPatient.email].filter(Boolean).join(" • ") || "Sem contacto"}
-                    </div>
+                  <div>
+                    <div className="text-sm font-medium">{selectedPatient.full_name}</div>
+                    {selectedPatient.phone && <div className="text-xs text-muted-foreground">{selectedPatient.phone}</div>}
                   </div>
-                  <Button variant="ghost" size="sm" onClick={handleClearPatient} className="text-xs">
-                    Alterar
-                  </Button>
                 </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClearPatient}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </section>
 
-                {/* Active pack banner */}
-                {activePacks.length > 0 && (
-                  <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm">
-                    Pack activo detectado — será pré-seleccionado no passo seguinte
+          {/* O resto da tela aparece quando há paciente — adaptativo */}
+          {selectedPatient && (
+            <>
+              {/* ═══ PACK (automático) ═══ */}
+              <section className="space-y-2">
+                {isLoadingPacks ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Verificando packs...
+                  </div>
+                ) : linkedPack ? (
+                  <div className="border border-green-200 bg-green-50 rounded-lg px-3 py-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm font-medium text-green-900">
+                        <Package className="h-4 w-4" />
+                        Pack {linkedPack.numero_pack} — {linkedPack.sessoes_usadas}/{linkedPack.total_sessoes} usadas
+                      </div>
+                      <Badge className={cn("text-[10px]", linkedPack.payment_status === "pago" ? "bg-green-100 text-green-700 border-green-200" : "bg-amber-100 text-amber-800 border-amber-200")}>
+                        {linkedPack.payment_status === "pago" ? "Pago" : "Pagamento pendente"}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-green-800">
+                      {packRestantes} restante{packRestantes !== 1 ? "s" : ""}
+                      {linkedPack.data_validade ? ` · válido até ${formatValidade(linkedPack.data_validade)}` : ""}
+                      {" · "}próxima sessão será {linkedPack.sessoes_usadas + 1}/{linkedPack.total_sessoes}
+                    </div>
+                    {activePacks.length > 1 && (
+                      <Select value={selectedPackId} onValueChange={setSelectedPackId}>
+                        <SelectTrigger className="h-8 text-xs bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {activePacks.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              Pack {p.numero_pack} — {p.sessoes_usadas}/{p.total_sessoes}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {excedePack && (
+                      <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                        Atenção: {quantidade} sessões excedem o saldo do pack ({packRestantes}). As excedentes ficarão sem vínculo de pack no consumo.
+                      </div>
+                    )}
+                  </div>
+                ) : !showNewPack ? (
+                  <div className="flex items-center justify-between text-xs text-muted-foreground border rounded-lg px-3 py-2">
+                    <span>
+                      {cobrarAvulso
+                        ? "Sessão avulsa (fora do pack)"
+                        : activePacks.length > 0
+                          ? "Pack ativo sem saldo — sessão será avulsa"
+                          : "Sem pack ativo — sessão avulsa"}
+                    </span>
+                    <Button variant="outline" size="sm" className="gap-1 h-7 text-xs" onClick={() => setShowNewPack(true)}>
+                      <Plus className="h-3 w-3" /> Criar pack
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium flex items-center gap-2">
+                        <Package className="h-4 w-4 text-primary" /> Novo pack
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowNewPack(false)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Nº de sessões</Label>
+                        <Input type="number" min={1} max={50} value={novoPackSessoes} onChange={(e) => setNovoPackSessoes(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Valor total (€)</Label>
+                        <Input type="number" min={0} step="0.01" placeholder="0,00" value={novoPackValor} onChange={(e) => setNovoPackValor(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch checked={novoPackPago} onCheckedChange={setNovoPackPago} id="novo-pack-pago" />
+                      <Label htmlFor="novo-pack-pago" className="text-xs">Já está pago</Label>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Validade: 3 meses a partir da primeira sessão (ajustável depois no painel de Packs).</p>
                   </div>
                 )}
-              </>
-            )}
 
-            <div className="flex justify-end pt-2">
-              <Button onClick={() => setStep(2)} disabled={!canAdvance1} className="gap-1">
-                Próximo <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+                {(linkedPack || cobrarAvulso) && !showNewPack && (
+                  <div className="flex items-center gap-2 pl-1">
+                    <Checkbox
+                      id="cobrar-avulso"
+                      checked={cobrarAvulso}
+                      onCheckedChange={(v) => setCobrarAvulso(v === true)}
+                    />
+                    <Label htmlFor="cobrar-avulso" className="text-xs text-muted-foreground cursor-pointer">
+                      Cobrar avulso (fora do pack)
+                    </Label>
+                  </div>
+                )}
+              </section>
 
-        {/* ═══════════ STEP 2: Tipo de Agendamento ═══════════ */}
-        {step === 2 && (
-          <div className="space-y-3 py-2">
-            {/* Card: Avulso */}
-            <button
-              type="button"
-              onClick={() => { setTipoAgendamento("avulso"); setSelectedPackId(""); }}
-              className={cn(
-                "w-full text-left p-4 rounded-xl border-2 transition-all",
-                tipoAgendamento === "avulso" ? "border-[#3b82f6] bg-blue-50/50" : "border-border hover:border-muted-foreground/30"
-              )}
-            >
-              <div className="font-semibold text-sm">Avulso</div>
-              <p className="text-xs text-muted-foreground mt-0.5">Sessão individual ou em série (recorrência)</p>
-            </button>
-            {tipoAgendamento === "avulso" && (
-              <div className="pl-4 space-y-2">
-                <Label className="text-xs">Quantidade de sessões</Label>
-                <div className="flex items-center gap-2">
-                  {[1, 5, 10, 20].map((n) => (
-                    <Button key={n} type="button" variant={quantidade === n && !customQty ? "default" : "outline"} size="sm" onClick={() => handleQtyButton(n)} className="min-w-[36px]">
+              {/* ═══ SESSÕES ═══ */}
+              <section className="space-y-2">
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Sessões</Label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {QTY_PRESETS.map((n) => (
+                    <Button
+                      key={n}
+                      type="button"
+                      variant={quantidade === n && !customQty ? "default" : "outline"}
+                      size="sm"
+                      className="w-10"
+                      onClick={() => handleQtyButton(n)}
+                    >
                       {n}
                     </Button>
                   ))}
@@ -649,337 +706,95 @@ export function NewSessionModal({
                     placeholder="Outro"
                     value={customQty}
                     onChange={(e) => handleCustomQty(e.target.value)}
-                    className="w-20 text-center h-9"
+                    className="w-20 h-9"
                   />
                 </div>
-              </div>
-            )}
 
-            {/* Card: Pack existente — only if active packs */}
-            {activePacks.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setTipoAgendamento("pack_existente")}
-                  className={cn(
-                    "w-full text-left p-4 rounded-xl border-2 transition-all",
-                    tipoAgendamento === "pack_existente" ? "border-[#3b82f6] bg-blue-50/50" : "border-border hover:border-muted-foreground/30"
-                  )}
-                >
-                  <div className="font-semibold text-sm flex items-center gap-1.5">
-                    <Package className="h-4 w-4" /> Pack existente
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">Associar sessões a um pack activo</p>
-                </button>
-                {tipoAgendamento === "pack_existente" && (
-                  <div className="pl-4 space-y-2">
-                    {activePacks.map((pack) => {
-                      const remaining = pack.quantidade_sessoes - pack.sessoes_usadas;
-                      const progress = (pack.sessoes_usadas / pack.quantidade_sessoes) * 100;
-                      return (
-                        <button
-                          key={pack.id}
-                          type="button"
-                          onClick={() => { setSelectedPackId(pack.id); }}
-                          className={cn(
-                            "w-full text-left p-3 rounded-lg border-2 transition-all",
-                            selectedPackId === pack.id ? "border-green-500 bg-green-50/50" : "border-border"
-                          )}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium">Pack #{pack.numero_pack}</span>
-                            <div className="flex gap-1">
-                              <Badge className="text-[10px] bg-green-100 text-green-700 border-green-200">Activo</Badge>
-                              <Badge className={cn("text-[10px]", pack.payment_status === "pago" ? "bg-green-100 text-green-700 border-green-200" : "bg-yellow-100 text-yellow-700 border-yellow-200")}>
-                                {pack.payment_status === "pago" ? "Pago" : "Pendente"}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            <Progress value={progress} className="h-1.5" />
-                            <div className="text-xs text-muted-foreground">
-                              {pack.sessoes_usadas}/{pack.quantidade_sessoes} usadas • <span className="font-medium">{remaining} restantes</span>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Card: Criar novo pack */}
-            <button
-              type="button"
-              onClick={() => { setTipoAgendamento("novo_pack"); setSelectedPackId(""); }}
-              className={cn(
-                "w-full text-left p-4 rounded-xl border-2 transition-all",
-                tipoAgendamento === "novo_pack" ? "border-[#3b82f6] bg-blue-50/50" : "border-border hover:border-muted-foreground/30"
-              )}
-            >
-              <div className="font-semibold text-sm flex items-center gap-1.5">
-                <Package className="h-4 w-4" /> Criar novo pack
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">Pack pré-pago — pagamento antecipado ou na 1ª sessão</p>
-            </button>
-            {tipoAgendamento === "novo_pack" && (
-              <div className="pl-4 space-y-3">
-                <div className="space-y-2">
-                  <Label className="text-xs">Quantidade de sessões</Label>
-                  <div className="flex items-center gap-2">
-                    {[1, 5, 10, 20].map((n) => (
-                      <Button key={n} type="button" variant={quantidade === n && !customQty ? "default" : "outline"} size="sm" onClick={() => handleQtyButton(n)} className="min-w-[36px]">
-                        {n}
-                      </Button>
-                    ))}
-                    <Input
-                      type="number"
-                      min={1}
-                      max={50}
-                      placeholder="Outro"
-                      value={customQty}
-                      onChange={(e) => handleCustomQty(e.target.value)}
-                      className="w-20 text-center h-9"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Valor total do pack (€)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={novoPackValor}
-                    onChange={(e) => setNovoPackValor(e.target.value)}
-                    placeholder="0.00"
-                    className="h-9"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={novoPackPago} onCheckedChange={setNovoPackPago} />
-                  <Label className="text-xs">{novoPackPago ? "Pago" : "Pagamento pendente"}</Label>
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setStep(1)} className="gap-1">
-                <ChevronLeft className="h-4 w-4" /> Voltar
-              </Button>
-              <Button onClick={() => setStep(3)} disabled={!canAdvance2} className="gap-1">
-                Próximo <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════ STEP 3: Datas e Horários ═══════════ */}
-        {step === 3 && (
-          <div className="space-y-4 py-2">
-            {/* Contextual banner */}
-            <div className={cn(
-              "p-3 rounded-lg text-sm",
-              tipoAgendamento === "avulso" && "bg-muted text-muted-foreground",
-              tipoAgendamento === "pack_existente" && "bg-green-50 text-green-700 border border-green-200",
-              tipoAgendamento === "novo_pack" && "bg-blue-50 text-blue-700 border border-blue-200",
-            )}>
-              {tipoAgendamento === "avulso" && `${quantidade} sessão${quantidade > 1 ? "ões" : ""} avulsa${quantidade > 1 ? "s" : ""} — preencha as datas`}
-              {tipoAgendamento === "pack_existente" && `Pack com ${quantidade} sessão${quantidade > 1 ? "ões" : ""} restante${quantidade > 1 ? "s" : ""} — preencha as datas`}
-              {tipoAgendamento === "novo_pack" && `Novo pack com ${quantidade} sessão${quantidade > 1 ? "ões" : ""} — preencha as datas`}
-            </div>
-
-            {/* Session date rows */}
-            <div className={cn(quantidade > 6 && "max-h-[360px] overflow-y-auto pr-1", "space-y-2")}>
-              {sessionSlots.map((slot, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-center gap-2 p-2.5 rounded-lg border bg-card",
-                    (!slot.date || !slot.time) && "border-yellow-300"
-                  )}
-                >
-                  <span className="text-xs font-medium text-muted-foreground whitespace-nowrap min-w-[60px]">
-                    Sessão {i + 1}
-                  </span>
-                  <Input
-                    type="date"
-                    value={slot.date}
-                    onChange={(e) => updateSlot(i, "date", e.target.value)}
-                    className="h-9 flex-1"
-                  />
-                  <Select value={slot.time} onValueChange={(v) => updateSlot(i, "time", v)}>
-                    <SelectTrigger className="w-[100px] h-9">
-                      <SelectValue placeholder="Hora" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIME_OPTIONS.map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-xs text-muted-foreground text-center">
-              {filledCount} de {quantidade} sessões com data preenchida
-            </p>
-
-            <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setStep(2)} className="gap-1">
-                <ChevronLeft className="h-4 w-4" /> Voltar
-              </Button>
-              <Button onClick={() => setStep(4)} disabled={!canAdvance3} className="gap-1">
-                Próximo <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════ STEP 4: Detalhes ═══════════ */}
-        {step === 4 && (
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Serviço *</Label>
-              <Select value={selectedServico} onValueChange={setSelectedServico}>
-                <SelectTrigger className="min-h-[44px]">
-                  <SelectValue placeholder="Selecione o serviço" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-                        <span>{s.name}</span>
-                        <span className="text-muted-foreground text-xs">({s.duration_minutes}min)</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Profissional *</Label>
-              <Select value={selectedProfissional} onValueChange={setSelectedProfissional}>
-                <SelectTrigger className="min-h-[44px]">
-                  <SelectValue placeholder="Selecione o profissional" />
-                </SelectTrigger>
-                <SelectContent>
-                  {professionals.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Observações</Label>
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas ou observações..." rows={2} />
-            </div>
-
-            <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setStep(3)} className="gap-1">
-                <ChevronLeft className="h-4 w-4" /> Voltar
-              </Button>
-              <Button onClick={() => setStep(5)} disabled={!canAdvance4} className="gap-1">
-                Próximo <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════ STEP 5: Confirmação ═══════════ */}
-        {step === 5 && selectedPatient && (
-          <div className="space-y-4 py-2">
-            <div className="p-4 rounded-lg border bg-card space-y-4">
-              {/* Patient */}
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                  {getInitials(selectedPatient.full_name)}
-                </div>
-                <div>
-                  <div className="font-medium text-sm">{selectedPatient.full_name}</div>
-                  {selectedPatient.phone && <div className="text-xs text-muted-foreground">{selectedPatient.phone}</div>}
-                </div>
-              </div>
-
-              {/* Type badge */}
-              <div>
-                <span className="text-xs text-muted-foreground">Tipo</span>
-                <div className="mt-0.5">
-                  <Badge className={cn("text-xs", typeBadge.className)}>{typeBadge.label}</Badge>
-                </div>
-              </div>
-
-              {/* Service & Professional */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <span className="text-xs text-muted-foreground">Serviço</span>
-                  <div className="text-sm font-medium mt-0.5">{serviceName}</div>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground">Profissional</span>
-                  <div className="text-sm font-medium mt-0.5">{professionalName}</div>
-                </div>
-              </div>
-
-              {/* Pack value */}
-              {tipoAgendamento === "novo_pack" && novoPackValor && (
-                <div>
-                  <span className="text-xs text-muted-foreground">Valor do pack</span>
-                  <div className="text-sm font-medium mt-0.5">
-                    €{parseFloat(novoPackValor).toFixed(2)} {novoPackPago ? "(Pago)" : "(Pendente)"}
-                  </div>
-                </div>
-              )}
-
-              {/* Sessions table */}
-              <div>
-                <span className="text-xs text-muted-foreground">Sessões</span>
-                <div className="mt-1 rounded-md border overflow-hidden">
+                <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
                   {sessionSlots.map((slot, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        "flex items-center justify-between px-3 py-2 text-sm",
-                        i % 2 === 0 ? "bg-muted/30" : "bg-card"
+                    <div key={i} className="flex items-center gap-2">
+                      {quantidade > 1 && (
+                        <span className="text-xs text-muted-foreground w-5 text-right shrink-0">{i + 1}.</span>
                       )}
-                    >
-                      <span className="text-muted-foreground">Sessão {i + 1}</span>
-                      <span className="font-medium">
-                        {slot.date ? format(new Date(slot.date + "T00:00:00"), "dd/MM/yyyy") : "—"} às {slot.time || "—"}
-                      </span>
+                      <Input
+                        type="date"
+                        value={slot.date}
+                        onChange={(e) => updateSlot(i, "date", e.target.value)}
+                        className="flex-1"
+                      />
+                      <Select value={slot.time} onValueChange={(v) => updateSlot(i, "time", v)}>
+                        <SelectTrigger className="w-[110px]">
+                          <SelectValue placeholder="Hora" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TIME_OPTIONS.map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              {/* Notes */}
-              {notes && (
-                <div>
-                  <span className="text-xs text-muted-foreground">Observações</span>
-                  <div className="text-sm mt-0.5">{notes}</div>
+              {/* ═══ DETALHES ═══ */}
+              <section className="space-y-2">
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Detalhes</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Serviço *</Label>
+                    <Select value={selectedServico} onValueChange={setSelectedServico}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar serviço" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {services.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            <span className="flex items-center gap-2">
+                              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                              {s.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Profissional *</Label>
+                    <Select value={selectedProfissional} onValueChange={setSelectedProfissional}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar profissional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {professionals.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              )}
-            </div>
+                <Textarea
+                  placeholder="Observações (opcional)"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                />
+              </section>
 
-            <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setStep(4)} className="gap-1">
-                <ChevronLeft className="h-4 w-4" /> Voltar
-              </Button>
-              <Button
-                onClick={handleConfirm}
-                disabled={isSaving}
-                className="gap-1 bg-green-600 hover:bg-green-700 text-white"
-              >
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Confirmar Agendamento
-              </Button>
-            </div>
-          </div>
-        )}
+              {/* ═══ RODAPÉ ═══ */}
+              <div className="flex items-center justify-between gap-3 pt-1 border-t">
+                <div className="text-xs text-muted-foreground">
+                  {quantidade} sessão{quantidade > 1 ? "ões" : ""}
+                  {linkedPack ? ` · Pack ${linkedPack.numero_pack}` : showNewPack ? " · novo pack" : " · avulso"}
+                </div>
+                <Button onClick={handleConfirm} disabled={!canConfirm} className="gap-2 min-w-[140px]">
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Agendar{quantidade > 1 ? ` (${quantidade})` : ""}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
