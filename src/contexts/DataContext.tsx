@@ -27,7 +27,7 @@ export interface Service {
 
 // ── Pack type ─────────────────────────────────────────────────────────────────
 export type PackStatus = "ativo" | "concluido" | "expirado" | "cancelado";
-export type PackPaymentStatus = "pendente" | "pago";
+export type PackPaymentStatus = "pendente" | "pago" | "parcial";
 
 export interface Pack {
   id: string;
