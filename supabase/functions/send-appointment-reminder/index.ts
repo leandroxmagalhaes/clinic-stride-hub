@@ -29,14 +29,17 @@ serve(async (req) => {
       throw new Error("RESEND_API_KEY not configured");
     }
 
-    // Restrict to internal/scheduled invocations: must present service role key or CRON_SECRET
+    // Restrict to internal/scheduled invocations: must present service role key,
+    // CRON_SECRET, or the project anon key (used by pg_cron jobs).
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const cronSecret = Deno.env.get("CRON_SECRET");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const authHeader = req.headers.get("Authorization") ?? "";
     const provided = authHeader.replace(/^Bearer\s+/i, "");
     const isAuthorized =
       provided === serviceKey ||
-      (!!cronSecret && provided === cronSecret);
+      (!!cronSecret && provided === cronSecret) ||
+      (!!anonKey && provided === anonKey);
     if (!isAuthorized) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -120,6 +123,19 @@ serve(async (req) => {
           continue;
         }
 
+        // Dedup: skip if a reminder was already logged for this session/email channel
+        const { data: existingLog } = await supabase
+          .from("reminder_logs")
+          .select("id")
+          .eq("sessao_id", session.id)
+          .eq("canal", "email")
+          .maybeSingle();
+        if (existingLog) {
+          console.log(`Skipping session ${session.id}: reminder already sent`);
+          results.skipped++;
+          continue;
+        }
+
         const appointmentDate = new Date(session.start_time);
         const formattedDate = appointmentDate.toLocaleDateString("pt-PT", {
           weekday: "long",
@@ -197,6 +213,16 @@ serve(async (req) => {
           </tr>
         </table>
 
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 16px;">
+          <tr>
+            <td style="padding: 16px 20px;">
+              <p style="margin: 0; color: #991b1b; font-size: 14px; line-height: 1.5;">
+                ⚠️ <strong>Remarcações ou cancelamentos</strong> podem ser feitos até <strong>hoje às 14h00</strong>. Após esse horário, a sessão será cobrada normalmente.
+              </p>
+            </td>
+          </tr>
+        </table>
+
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr>
             <td style="padding: 20px 0; border-top: 1px solid #e4e4e7;">
@@ -206,6 +232,7 @@ serve(async (req) => {
             </td>
           </tr>
         </table>
+
 
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
           <tr>
@@ -229,6 +256,11 @@ serve(async (req) => {
           subject: `Lembrete: Sessão amanhã às ${formattedTime}`,
           html: emailHtml,
         });
+
+        // Log the send to prevent duplicates on subsequent runs
+        await supabase
+          .from("reminder_logs")
+          .insert({ sessao_id: session.id, canal: "email" });
 
         console.log(`Reminder sent to ${patient.email} for session ${session.id}`);
         results.sent++;
