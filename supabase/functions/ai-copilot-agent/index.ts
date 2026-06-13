@@ -745,6 +745,7 @@ serve(async (req) => {
     const MAX_TOOL_ROUNDS = 5;
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const isLastRound = round === MAX_TOOL_ROUNDS - 1;
       const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -754,8 +755,9 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "google/gemini-3-flash-preview",
           messages: currentMessages,
-          tools: [...toolDefinitions, ...actionToolDefinitions],
-          stream: round === MAX_TOOL_ROUNDS - 1 ? true : false,
+          // Na última rodada, sem ferramentas: força uma resposta de texto que fecha a conversa
+          ...(isLastRound ? {} : { tools: [...toolDefinitions, ...actionToolDefinitions] }),
+          stream: false,
         }),
       });
 
@@ -845,11 +847,20 @@ serve(async (req) => {
       });
     }
 
-    // Fallback if max rounds exceeded
-    return new Response(
-      JSON.stringify({ error: "O agente atingiu o limite de iterações." }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    // Fallback se exceder as rondas — devolve mensagem amigável como stream
+    const encoder2 = new TextEncoder();
+    const fallbackStream = new ReadableStream({
+      start(controller) {
+        const msg = "Não consegui concluir num único passo. Pode reformular ou dividir o pedido? (ex.: confirmar um utente de cada vez)";
+        const sseData = JSON.stringify({ choices: [{ delta: { content: msg }, finish_reason: null }] });
+        controller.enqueue(encoder2.encode(`data: ${sseData}\n\n`));
+        controller.enqueue(encoder2.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+    return new Response(fallbackStream, {
+      headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+    });
   } catch (e) {
     console.error("Copilot error:", e);
     return new Response(
