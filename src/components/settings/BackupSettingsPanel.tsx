@@ -99,11 +99,8 @@ export function BackupSettingsPanel() {
               <CheckCircle2 className="h-4 w-4 text-success" />
               <span><strong>sessoes.csv</strong> - Histórico de agendamentos</span>
             </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-success" />
-              <span><strong>transacoes_credito.csv</strong> - Movimentação de créditos</span>
-            </li>
           </ul>
+
         </div>
 
         {/* Last backup info */}
