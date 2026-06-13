@@ -120,6 +120,7 @@ const managementNavItems: NavItem[] = [
   { title: "Comercial", url: "/comercial", icon: TrendingUp, module: "comercial" },
   { title: "Financeiro", url: "/financeiro", icon: DollarSign, module: "financeiro" },
   { title: "Pagamentos", url: "/pagamentos", icon: Banknote },
+  { title: "Packs", url: "/packs", icon: Package },
   { title: "Engajamento", url: "/engajamento", icon: Heart, module: "engajamento" },
   // Mensagens removido do menu — agora dentro do prontuário e via atalho flutuante
 ];
