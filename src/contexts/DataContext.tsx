@@ -328,7 +328,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         console.error("Error fetching packs:", error);
         return;
       }
-      setPacks((data || []).map(enrichPack));
+      setPacks((data || []).map((p) => enrichPack(p)));
     } catch (err) {
       console.error("Exception fetching packs:", err);
     } finally {
@@ -586,116 +586,65 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Pack CRUD ─────────────────────────────────────────────────────────────
-  const addPack = async (
-    data: Omit<
-      Pack,
-      "id" | "clinic_id" | "numero_pack" | "sessoes_usadas" | "created_at" | "sessoes_restantes" | "alert_status"
-    >,
-  ): Promise<Pack> => {
+  const addPack: DataContextType["addPack"] = async (data) => {
     const { getAuthContext } = await import("@/lib/auth-helpers");
     const { clinicId } = await getAuthContext();
-    const { data: created, error } = await supabase
+    const payload: Record<string, unknown> = {
+      clinic_id: clinicId,
+      paciente_id: data.paciente_id,
+      total_sessoes: data.total_sessoes,
+      valor_total: data.valor_total,
+      payment_status: data.payment_status ?? "pendente",
+      payment_method: data.payment_method ?? null,
+      paid_at: data.paid_at ?? null,
+      notes: data.notes ?? null,
+    };
+    if (data.data_inicio) payload.data_inicio = data.data_inicio;
+    if (data.data_validade) payload.data_validade = data.data_validade;
+
+    const { data: created, error } = await (supabase as any)
       .from("packs")
-      .insert({
-        clinic_id: clinicId,
-        paciente_id: data.paciente_id,
-        data_inicio: data.data_inicio,
-        quantidade_sessoes: data.quantidade_sessoes,
-        sessoes_usadas: 0,
-        valor_total: data.valor_total,
-        payment_status: data.payment_status,
-        payment_method: data.payment_method ?? null,
-        paid_at: data.paid_at ?? null,
-        notes: data.notes ?? null,
-        is_active: true,
-      })
+      .insert(payload)
       .select("*")
       .single();
     if (error) throw error;
-    const enriched = enrichPack(created);
+    const enriched = enrichPack(created, sessions);
     setPacks((prev) => [enriched, ...prev]);
-
-    // Auto-associar sessões realizadas a partir da data de início
-    await autoAssociateSessionsToPack(enriched);
     return enriched;
   };
 
   const updatePack = async (id: string, data: Partial<Pack>): Promise<void> => {
     const updateData: Record<string, unknown> = {};
     if (data.data_inicio !== undefined) updateData.data_inicio = data.data_inicio;
-    if (data.quantidade_sessoes !== undefined) updateData.quantidade_sessoes = data.quantidade_sessoes;
-    if (data.sessoes_usadas !== undefined) updateData.sessoes_usadas = data.sessoes_usadas;
+    if (data.data_validade !== undefined) updateData.data_validade = data.data_validade;
+    if (data.total_sessoes !== undefined) updateData.total_sessoes = data.total_sessoes;
+    if ((data as any).quantidade_sessoes !== undefined && data.total_sessoes === undefined)
+      updateData.total_sessoes = (data as any).quantidade_sessoes;
     if (data.valor_total !== undefined) updateData.valor_total = data.valor_total;
     if (data.payment_status !== undefined) updateData.payment_status = data.payment_status;
     if (data.payment_method !== undefined) updateData.payment_method = data.payment_method;
     if (data.paid_at !== undefined) updateData.paid_at = data.paid_at;
     if (data.notes !== undefined) updateData.notes = data.notes;
-    if (data.is_active !== undefined) updateData.is_active = data.is_active;
-    const { error } = await supabase.from("packs").update(updateData).eq("id", id);
+    if (data.status !== undefined) updateData.status = data.status;
+    const { error } = await (supabase as any).from("packs").update(updateData).eq("id", id);
     if (error) throw error;
-    setPacks((prev) => prev.map((p) => (p.id === id ? enrichPack({ ...p, ...data }) : p)));
+    setPacks((prev) => prev.map((p) => (p.id === id ? enrichPack({ ...p, ...updateData }, sessions) : p)));
   };
 
   const deletePack = async (id: string): Promise<void> => {
-    // Desassociar sessões primeiro
-    await supabase.from("sessoes").update({ package_id: null } as any).eq("package_id", id);
     const { error } = await supabase.from("packs").delete().eq("id", id);
     if (error) throw error;
     setPacks((prev) => prev.filter((p) => p.id !== id));
     await fetchSessions();
   };
 
-  // Auto-associar sessões do paciente a partir da data de início do pack
-  const autoAssociateSessionsToPack = async (pack: Pack): Promise<void> => {
-    try {
-      // Busca sessões do paciente a partir da data de início que não têm pack
-      const { data, error } = await supabase
-        .from("sessoes")
-        .select("id, start_time")
-        .eq("paciente_id", pack.paciente_id)
-        .gte("start_time", pack.data_inicio)
-        .is("package_id", null)
-        .order("start_time", { ascending: true })
-        .limit(pack.quantidade_sessoes);
-      if (error || !data) return;
-
-      if (data.length > 0) {
-        const ids = data.map((s: any) => s.id);
-        await supabase.from("sessoes").update({ package_id: pack.id } as any).in("id", ids);
-        // Contar realizadas para atualizar sessoes_usadas
-        const realizadas = sessions.filter((s) => ids.includes(s.id) && s.status === "realizado").length;
-        if (realizadas > 0) {
-          await supabase.from("packs").update({ sessoes_usadas: realizadas }).eq("id", pack.id);
-        }
-        await fetchSessions();
-        await fetchPacks(true);
-      }
-    } catch (err) {
-      console.error("Error auto-associating sessions:", err);
-    }
-  };
-
   const associateSessionToPack = async (sessionId: string, packId: string | null): Promise<void> => {
-    const { error } = await supabase.from("sessoes").update({ package_id: packId } as any).eq("id", sessionId);
+    const { error } = await (supabase as any).from("sessoes").update({ pack_id: packId }).eq("id", sessionId);
     if (error) throw error;
-    setSessions((prev) => prev.map((s) => (s.id === sessionId ? ({ ...s, package_id: packId } as any) : s)));
+    setSessions((prev) => prev.map((s) => (s.id === sessionId ? ({ ...s, pack_id: packId } as any) : s)));
+    await fetchPacks(true);
   };
 
-  const incrementPackUsage = async (packId: string): Promise<void> => {
-    const pack = packs.find((p) => p.id === packId);
-    if (!pack) return;
-    const newUsage = Math.min(pack.sessoes_usadas + 1, pack.quantidade_sessoes);
-    // Auto-desactiva pack se esgotado
-    const isNowInactive = newUsage >= pack.quantidade_sessoes;
-    await updatePack(packId, { sessoes_usadas: newUsage, is_active: !isNowInactive });
-  };
-
-  const decrementPackUsage = async (packId: string): Promise<void> => {
-    const pack = packs.find((p) => p.id === packId);
-    if (!pack) return;
-    const newUsage = Math.max(pack.sessoes_usadas - 1, 0);
-    await updatePack(packId, { sessoes_usadas: newUsage, is_active: true });
-  };
 
   const getActivePack = (pacienteId: string): Pack | null => {
     return packs.find((p) => p.paciente_id === pacienteId && p.is_active) ?? null;
