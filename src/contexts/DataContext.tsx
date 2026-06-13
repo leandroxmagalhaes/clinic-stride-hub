@@ -26,24 +26,32 @@ export interface Service {
 }
 
 // ── Pack type ─────────────────────────────────────────────────────────────────
+export type PackStatus = "ativo" | "concluido" | "expirado" | "cancelado";
+export type PackPaymentStatus = "pendente" | "pago";
+
 export interface Pack {
   id: string;
   clinic_id: string;
   paciente_id: string;
   numero_pack: number;
-  data_inicio: string; // ISO date string YYYY-MM-DD
-  quantidade_sessoes: number;
-  sessoes_usadas: number;
+  total_sessoes: number;
   valor_total: number;
-  payment_status: "pago" | "pendente" | "parcial";
+  payment_status: PackPaymentStatus;
   payment_method: string | null;
   paid_at: string | null;
+  data_inicio: string; // YYYY-MM-DD
+  data_validade: string; // YYYY-MM-DD
+  status: PackStatus;
   notes: string | null;
-  is_active: boolean;
   created_at: string;
-  // computed client-side
-  sessoes_restantes?: number;
-  alert_status?: "activo" | "penultima_sessao" | "ultima_sessao" | "esgotado";
+  updated_at: string;
+  // computed
+  sessoes_usadas: number;
+  sessoes_restantes: number;
+  alert_status: "activo" | "penultima_sessao" | "ultima_sessao" | "esgotado";
+  // compat aliases (deprecated, kept to ease migration)
+  quantidade_sessoes: number;
+  is_active: boolean;
 }
 
 // ── Context type ──────────────────────────────────────────────────────────────
@@ -135,19 +143,32 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const hasInitiallyLoaded = useRef(false);
 
   // ── Helper: calcular alert_status ────────────────────────────────────────
-  const computeAlertStatus = (p: Pack): Pack["alert_status"] => {
-    const restantes = p.quantidade_sessoes - p.sessoes_usadas;
+  const computeAlertStatus = (total: number, usadas: number): Pack["alert_status"] => {
+    const restantes = total - usadas;
     if (restantes <= 0) return "esgotado";
     if (restantes === 1) return "ultima_sessao";
     if (restantes === 2) return "penultima_sessao";
     return "activo";
   };
 
-  const enrichPack = (p: any): Pack => ({
-    ...p,
-    sessoes_restantes: p.quantidade_sessoes - p.sessoes_usadas,
-    alert_status: computeAlertStatus(p),
-  });
+  // Enrich a raw pack row with computed fields (sessoes_usadas counted from sessions array)
+  const enrichPack = (p: any, sessionList: Session[] = []): Pack => {
+    const usadas = sessionList.filter(
+      (s: any) =>
+        s.pack_id === p.id &&
+        !s.isento &&
+        ["realizado", "finalizado", "falta_cobrada"].includes(s.status),
+    ).length;
+    const total = p.total_sessoes ?? 0;
+    return {
+      ...p,
+      sessoes_usadas: usadas,
+      sessoes_restantes: Math.max(total - usadas, 0),
+      alert_status: computeAlertStatus(total, usadas),
+      quantidade_sessoes: total,
+      is_active: p.status === "ativo",
+    };
+  };
 
   // ── Fetch patients ────────────────────────────────────────────────────────
   const fetchPatients = async (silent = false) => {
