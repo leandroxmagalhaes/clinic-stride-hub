@@ -99,12 +99,7 @@ interface DataContextType {
   // Packs
   packs: Pack[];
   packsLoading: boolean;
-  addPack: (
-    data: Omit<
-      Pack,
-      "id" | "clinic_id" | "numero_pack" | "sessoes_usadas" | "created_at" | "sessoes_restantes" | "alert_status"
-    >,
-  ) => Promise<Pack>;
+  addPack: (data: Partial<Pack> & { paciente_id: string; valor_total: number }) => Promise<Pack>;
   updatePack: (id: string, data: Partial<Pack>) => Promise<void>;
   deletePack: (id: string) => Promise<void>;
   refreshPacks: () => Promise<void>;
