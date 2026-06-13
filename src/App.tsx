@@ -58,6 +58,7 @@ const PortalResetPassword = lazyWithRetry(() => import("./pages/PortalResetPassw
 const PortalMensagens = lazyWithRetry(() => import("./pages/PortalMensagens"));
 const Mensagens = lazyWithRetry(() => import("./pages/Mensagens"));
 const Pagamentos = lazyWithRetry(() => import("./pages/Pagamentos"));
+const Packs = lazyWithRetry(() => import("./pages/Packs"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -302,6 +303,14 @@ const App = () => (
                     element={
                       <ProtectedPage>
                         <Pagamentos />
+                      </ProtectedPage>
+                    }
+                  />
+                  <Route
+                    path="/packs"
+                    element={
+                      <ProtectedPage>
+                        <Packs />
                       </ProtectedPage>
                     }
                   />

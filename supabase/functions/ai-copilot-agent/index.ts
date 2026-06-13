@@ -343,20 +343,18 @@ async function executeTool(
         const futureDate = new Date();
         futureDate.setDate(futureDate.getDate() + days);
         const { data } = await supabaseAdmin
-          .from("scheduling_packages")
-          .select("id, total_sessions, sessions_created, end_date, pacientes!scheduling_packages_paciente_id_fkey(full_name)")
+          .from("packs")
+          .select("id, total_sessoes, data_validade, pacientes!packs_paciente_id_fkey(full_name)")
           .eq("clinic_id", clinicId)
           .eq("status", "ativo")
-          .not("end_date", "is", null)
-          .lte("end_date", futureDate.toISOString().split("T")[0])
-          .order("end_date", { ascending: true });
+          .not("data_validade", "is", null)
+          .lte("data_validade", futureDate.toISOString().split("T")[0])
+          .order("data_validade", { ascending: true });
         const packs = (data || []).map((p: any) => ({
           id: p.id,
           patient_name: (p as any).pacientes?.full_name || "N/A",
-          total: p.total_sessions,
-          used: p.sessions_created,
-          remaining: p.total_sessions - p.sessions_created,
-          end_date: p.end_date,
+          total: p.total_sessoes,
+          end_date: p.data_validade,
         }));
         return JSON.stringify({ expiring_packs: packs });
       }

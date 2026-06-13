@@ -56,7 +56,6 @@ interface ActivePack {
   sessoes_usadas: number;
   valor_total: number;
   payment_status: string;
-  is_active: boolean;
   notes: string | null;
 }
 
@@ -229,12 +228,35 @@ export function NewSessionModal({
   // ── Fetch active packs when patient selected ──
   const fetchActivePacks = useCallback(async (patientId: string) => {
     try {
-      const { data } = await (supabase as any)
+      const { data: packsData } = await (supabase as any)
         .from("packs")
-        .select("id, numero_pack, quantidade_sessoes, sessoes_usadas, valor_total, payment_status, is_active, notes")
+        .select("id, numero_pack, total_sessoes, valor_total, payment_status, notes")
         .eq("paciente_id", patientId)
-        .eq("is_active", true);
-      setActivePacks(data || []);
+        .eq("status", "ativo");
+      const packIds = (packsData || []).map((p: any) => p.id);
+      let usageMap: Record<string, number> = {};
+      if (packIds.length > 0) {
+        const { data: sessRows } = await (supabase as any)
+          .from("sessoes")
+          .select("pack_id, status, isento")
+          .in("pack_id", packIds);
+        (sessRows || []).forEach((s: any) => {
+          if (s.isento) return;
+          if (!["realizado", "finalizado", "falta_cobrada"].includes(s.status)) return;
+          usageMap[s.pack_id] = (usageMap[s.pack_id] || 0) + 1;
+        });
+      }
+      setActivePacks(
+        (packsData || []).map((p: any) => ({
+          id: p.id,
+          numero_pack: p.numero_pack,
+          quantidade_sessoes: p.total_sessoes,
+          sessoes_usadas: usageMap[p.id] || 0,
+          valor_total: p.valor_total,
+          payment_status: p.payment_status,
+          notes: p.notes,
+        })),
+      );
     } catch (err) {
       console.error("Error fetching packs:", err);
       setActivePacks([]);
@@ -353,7 +375,6 @@ export function NewSessionModal({
       const durationMin = selectedService?.duration_minutes || 60;
 
       let packageId: string | null = null;
-      const packGrupoId = quantidade >= 2 ? crypto.randomUUID() : null;
 
       // If "novo_pack", create pack first
       if (tipoAgendamento === "novo_pack") {
@@ -363,11 +384,10 @@ export function NewSessionModal({
             clinic_id: clinicId,
             paciente_id: selectedPatient.id,
             data_inicio: sessionSlots[0]?.date || format(new Date(), "yyyy-MM-dd"),
-            quantidade_sessoes: quantidade,
-            sessoes_usadas: 0,
+            total_sessoes: quantidade,
             valor_total: parseFloat(novoPackValor) || 0,
             payment_status: novoPackPago ? "pago" : "pendente",
-            is_active: true,
+            status: "ativo",
           })
           .select("id")
           .single();
@@ -403,11 +423,10 @@ export function NewSessionModal({
           notes: notes || null,
           price: selectedService ? Number(selectedService.price) : 0,
           payment_status: "pendente",
-          tipo_agendamento: tipoAgendamento === "pack_existente" ? "pack" : tipoAgendamento === "novo_pack" ? "pack" : "avulso",
-          pack_grupo_id: packGrupoId,
-          package_id: packageId,
+          tipo_agendamento: tipoAgendamento === "pack_existente" || tipoAgendamento === "novo_pack" ? "pack" : "avulso",
+          pack_id: packageId,
           created_by: userId,
-        }).select("id").single();
+        } as any).select("id").single();
 
         if (error) throw error;
 
@@ -426,14 +445,7 @@ export function NewSessionModal({
           }).catch((err) => console.error("Automation trigger error:", err));
         }
       }
-
-      // Update pack sessoes_usadas if pack_existente
-      if (tipoAgendamento === "pack_existente" && selectedPack) {
-        await (supabase as any)
-          .from("packs")
-          .update({ sessoes_usadas: selectedPack.sessoes_usadas + quantidade })
-          .eq("id", selectedPackId);
-      }
+      // Pack usage is auto-recomputed by DB triggers
 
       toast.success(`${quantidade} sessão${quantidade > 1 ? "ões" : ""} agendada${quantidade > 1 ? "s" : ""} para ${selectedPatient.full_name}`);
       onSessionsCreated?.();

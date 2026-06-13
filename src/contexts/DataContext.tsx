@@ -27,7 +27,7 @@ export interface Service {
 
 // ── Pack type ─────────────────────────────────────────────────────────────────
 export type PackStatus = "ativo" | "concluido" | "expirado" | "cancelado";
-export type PackPaymentStatus = "pendente" | "pago";
+export type PackPaymentStatus = "pendente" | "pago" | "parcial";
 
 export interface Pack {
   id: string;
@@ -99,12 +99,7 @@ interface DataContextType {
   // Packs
   packs: Pack[];
   packsLoading: boolean;
-  addPack: (
-    data: Omit<
-      Pack,
-      "id" | "clinic_id" | "numero_pack" | "sessoes_usadas" | "created_at" | "sessoes_restantes" | "alert_status"
-    >,
-  ) => Promise<Pack>;
+  addPack: (data: Partial<Pack> & { paciente_id: string; valor_total: number }) => Promise<Pack>;
   updatePack: (id: string, data: Partial<Pack>) => Promise<void>;
   deletePack: (id: string) => Promise<void>;
   refreshPacks: () => Promise<void>;
@@ -219,11 +214,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         payment_status: s.payment_status || "pendente",
         payment_method: s.payment_method,
         notes: s.notes,
-        package_id: s.package_id ?? null,
+        pack_id: s.pack_id ?? null,
+        numero_no_pack: s.numero_no_pack ?? null,
+        isento: s.isento ?? false,
         paciente: s.paciente,
         profissional: s.profissional,
         servico: s.servico,
-      }));
+      } as any));
       setSessions(transformed);
     } catch (err) {
       console.error("Exception fetching sessions:", err);
@@ -443,7 +440,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       payment_status: session.payment_status,
     };
     if (session.payment_method) insertPayload.payment_method = session.payment_method;
-    if ((session as any).package_id) insertPayload.package_id = (session as any).package_id;
+    const _packId = (session as any).pack_id ?? (session as any).package_id;
+    if (_packId) insertPayload.pack_id = _packId;
 
     const { data, error } = await supabase
       .from("sessoes")
@@ -472,12 +470,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       payment_status: data.payment_status || "pendente",
       payment_method: data.payment_method,
       notes: data.notes,
-      package_id: (data as any).package_id ?? null,
+      pack_id: (data as any).pack_id ?? null,
+      numero_no_pack: (data as any).numero_no_pack ?? null,
       paciente: data.paciente,
       profissional: data.profissional,
       servico: data.servico,
     };
     setSessions((prev) => [newSession, ...prev]);
+    fetchPacks(true);
   };
 
   const updateSession = async (id: string, data: Partial<Session>): Promise<void> => {
@@ -493,10 +493,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (data.price !== undefined) updateData.price = data.price;
     if (data.profissional_id !== undefined) updateData.profissional_id = data.profissional_id;
     if (data.servico_id !== undefined) updateData.servico_id = data.servico_id;
-    if ((data as any).package_id !== undefined) updateData.package_id = (data as any).package_id;
+    if ((data as any).paciente_id !== undefined) updateData.paciente_id = (data as any).paciente_id;
+    const _newPackId = (data as any).pack_id ?? (data as any).package_id;
+    if (_newPackId !== undefined) updateData.pack_id = _newPackId;
+    if ((data as any).isento !== undefined) updateData.isento = (data as any).isento;
     const { error } = await supabase.from("sessoes").update(updateData as any).eq("id", id);
     if (error) throw error;
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...data } : s)));
+    fetchPacks(true);
   };
 
   const deleteSession = async (sessionId: string, reason?: string): Promise<void> => {
@@ -586,13 +590,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Pack CRUD ─────────────────────────────────────────────────────────────
-  const addPack: DataContextType["addPack"] = async (data) => {
+  const addPack: DataContextType["addPack"] = async (data: any) => {
     const { getAuthContext } = await import("@/lib/auth-helpers");
     const { clinicId } = await getAuthContext();
+    const totalSessoes = data.total_sessoes ?? data.quantidade_sessoes ?? 10;
     const payload: Record<string, unknown> = {
       clinic_id: clinicId,
       paciente_id: data.paciente_id,
-      total_sessoes: data.total_sessoes,
+      total_sessoes: totalSessoes,
       valor_total: data.valor_total,
       payment_status: data.payment_status ?? "pendente",
       payment_method: data.payment_method ?? null,
@@ -645,6 +650,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await fetchPacks(true);
   };
 
+  // Pack usage is auto-recomputed by DB triggers; these are no-ops kept for compat
+  const incrementPackUsage = async (_packId: string): Promise<void> => { await fetchPacks(true); };
+  const decrementPackUsage = async (_packId: string): Promise<void> => { await fetchPacks(true); };
 
   const getActivePack = (pacienteId: string): Pack | null => {
     return packs.find((p) => p.paciente_id === pacienteId && p.is_active) ?? null;
@@ -749,7 +757,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     refreshPacks: fetchPacks,
     getActivePack,
     associateSessionToPack,
-    // Credit compatibility
+    incrementPackUsage,
+    decrementPackUsage,
     getCreditBalance,
     addCredits: addCreditsHandler,
     refundCredit: refundCreditHandler,
