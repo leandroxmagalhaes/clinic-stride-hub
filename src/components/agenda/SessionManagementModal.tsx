@@ -158,11 +158,10 @@ export function SessionManagementModal({
   const [editNotes, setEditNotes] = useState("");
   const [editPaciente, setEditPaciente] = useState("");
   const [editTipoAgendamento, setEditTipoAgendamento] = useState<"avulso" | "pack">("avulso");
-  const [editPackGrupoId, setEditPackGrupoId] = useState("");
+  const [editPackId, setEditPackId] = useState<string>("");
   const [editPaymentStatus, setEditPaymentStatus] = useState("pendente");
   const [editPaymentMethod, setEditPaymentMethod] = useState("");
   const [editPaymentDate, setEditPaymentDate] = useState("");
-  const [packGroups, setPackGroups] = useState<{ pack_grupo_id: string; count: number }[]>([]);
   const [patientSearchOpen, setPatientSearchOpen] = useState(false);
   const [patientSearchQuery, setPatientSearchQuery] = useState("");
 
@@ -208,37 +207,11 @@ export function SessionManagementModal({
     setEditNotes(session.notes || "");
     setEditPaciente(session.paciente_id || "");
     setEditTipoAgendamento((session as any).tipo_agendamento || "avulso");
-    setEditPackGrupoId((session as any).pack_grupo_id || "");
+    setEditPackId(((session as any).pack_id || (session as any).package_id) || "");
     setEditPaymentStatus((session as any).pagamento_estado || "pendente");
     setEditPaymentMethod((session as any).pagamento_metodo || "");
     setEditPaymentDate((session as any).pagamento_data || "");
   }, [session?.id]);
-
-  // Fetch pack groups for selected patient when type is pack
-  useEffect(() => {
-    if (editTipoAgendamento !== "pack" || !editPaciente) {
-      setPackGroups([]);
-      return;
-    }
-    (async () => {
-      const { data } = await (supabase as any)
-        .from("sessoes")
-        .select("pack_grupo_id")
-        .eq("paciente_id", editPaciente)
-        .eq("tipo_agendamento", "pack")
-        .not("pack_grupo_id", "is", null);
-      if (data) {
-        const grouped = (data as { pack_grupo_id: string }[]).reduce(
-          (acc: Record<string, number>, r) => {
-            acc[r.pack_grupo_id] = (acc[r.pack_grupo_id] || 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>,
-        );
-        setPackGroups(Object.entries(grouped).map(([pack_grupo_id, count]) => ({ pack_grupo_id, count: count as number })));
-      }
-    })();
-  }, [editPaciente, editTipoAgendamento]);
 
   if (!session) return null;
 
@@ -257,7 +230,7 @@ export function SessionManagementModal({
 
   // Pack activo do paciente
   const activePack = getActivePack(session.paciente_id);
-  const sessionPackId = (session as any).package_id ?? (session as any).pack_id;
+  const sessionPackId = (session as any).pack_id ?? (session as any).package_id;
   const sessionPack = sessionPackId ? packs.find((p) => p.id === sessionPackId) : null;
 
   const trySetPaymentMethod = async (sessionId: string, method: string) => {
