@@ -724,12 +724,34 @@ serve(async (req) => {
     if (context?.patientId) contextNote += ` Paciente selecionado ID: ${context.patientId}.`;
     if (context?.patientName) contextNote += ` Paciente selecionado: ${context.patientName}.`;
     if (context?.selectedDate) contextNote += ` Data selecionada na agenda: ${context.selectedDate}.`;
-    if (file_upload) contextNote += ` FICHEIRO ANEXADO: "${file_upload.name}" (${file_upload.mime_type}). Use parse_import_file para processar.`;
+    const isImage = !!file_upload && /^image\//.test(file_upload.mime_type || "");
+    if (file_upload && !isImage) {
+      contextNote += ` FICHEIRO ANEXADO: "${file_upload.name}" (${file_upload.mime_type}). Use parse_import_file para processar.`;
+    } else if (isImage) {
+      contextNote += ` IMAGEM ANEXADA: "${file_upload.name}". Analise o conteúdo visual da imagem para responder ao pedido do utilizador.`;
+    }
+
+    // Se for imagem, injeta-a na última mensagem do utilizador no formato multimodal
+    let messagesForModel = [...messages];
+    if (isImage && messagesForModel.length > 0) {
+      const lastIdx = messagesForModel.length - 1;
+      const last = messagesForModel[lastIdx];
+      if (last.role === "user") {
+        const textPart = typeof last.content === "string" ? last.content : "";
+        messagesForModel[lastIdx] = {
+          role: "user",
+          content: [
+            { type: "text", text: textPart || `Analisa a imagem "${file_upload.name}".` },
+            { type: "image_url", image_url: { url: `data:${file_upload.mime_type};base64,${file_upload.base64}` } },
+          ],
+        } as any;
+      }
+    }
 
     const fullMessages = [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "system", content: contextNote },
-      ...messages,
+      ...messagesForModel,
     ];
 
     // Extra context for tool execution

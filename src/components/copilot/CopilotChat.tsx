@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, Loader2, Trash2, Paperclip, FileSpreadsheet, FileText, XCircle } from 'lucide-react';
+import { Bot, X, Send, Loader2, Trash2, Paperclip, FileSpreadsheet, FileText, XCircle, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -9,12 +9,16 @@ import { toast } from 'sonner';
 import type { CopilotMessage, CopilotFileUpload } from '@/hooks/useCopilot';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ACCEPTED_TYPES = '.xlsx,.xls,.csv,.pdf';
+const ACCEPTED_TYPES = '.xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.webp,.gif';
 const ACCEPTED_MIME = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
   'text/csv',
   'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
 ];
 
 interface CopilotChatProps {
@@ -69,11 +73,14 @@ function MessageBubble({ message }: { message: CopilotMessage }) {
 
 function FileAttachmentPill({ fileName, onRemove }: { fileName: string; onRemove: () => void }) {
   const isExcel = /\.(xlsx?|csv)$/i.test(fileName);
+  const isImg = /\.(png|jpe?g|webp|gif)$/i.test(fileName);
 
   return (
     <div className="flex items-center gap-1.5 bg-accent/50 border border-border rounded-lg px-2.5 py-1.5 text-xs">
       {isExcel ? (
         <FileSpreadsheet className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+      ) : isImg ? (
+        <ImageIcon className="h-3.5 w-3.5 text-primary flex-shrink-0" />
       ) : (
         <FileText className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
       )}
@@ -120,8 +127,8 @@ export function CopilotChat({
       return;
     }
 
-    if (!ACCEPTED_MIME.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv|pdf)$/i)) {
-      toast.error('Tipo de ficheiro não suportado. Aceita: Excel, CSV ou PDF.');
+    if (!ACCEPTED_MIME.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv|pdf|png|jpe?g|webp|gif)$/i)) {
+      toast.error('Tipo não suportado. Aceita: Excel, CSV, PDF ou imagens.');
       return;
     }
 

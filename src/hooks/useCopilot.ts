@@ -31,7 +31,59 @@ export function useCopilot() {
   const [messages, setMessages] = useState<CopilotMessage[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const location = useLocation();
+
+  // Carregar histórico persistido (últimas 100 mensagens do utilizador)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('copilot_messages')
+          .select('id, role, content, file_name')
+          .order('created_at', { ascending: true })
+          .limit(100);
+        if (!active) return;
+        if (!error && data) {
+          setMessages(
+            data.map((m: any) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              fileName: m.file_name || undefined,
+            }))
+          );
+        }
+      } catch (e) {
+        console.error('Erro ao carregar histórico do Copiloto:', e);
+      } finally {
+        if (active) setIsLoadingHistory(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  // Guarda uma mensagem no histórico (best-effort, não bloqueia a UI)
+  const persistMessage = useCallback(async (role: 'user' | 'assistant', content: string, fileName?: string) => {
+    try {
+      const { data: prof } = await (supabase as any)
+        .from('profiles')
+        .select('clinic_id')
+        .maybeSingle();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!prof?.clinic_id || !user) return;
+      await (supabase as any).from('copilot_messages').insert({
+        clinic_id: prof.clinic_id,
+        user_id: user.id,
+        role,
+        content,
+        file_name: fileName || null,
+      });
+    } catch (e) {
+      console.error('Erro ao guardar mensagem:', e);
+    }
+  }, []);
 
   const getContext = useCallback((): CopilotContext => {
     return {
@@ -71,6 +123,7 @@ export function useCopilot() {
       };
       setMessages((prev) => [...prev, userMsg]);
       setIsStreaming(true);
+      persistMessage('user', displayText, file?.name);
 
       // Build API messages (without file indicator in content for cleaner AI context)
       const apiMessages = [...messages, { ...userMsg, content: text.trim() || (file ? `Processar o ficheiro "${file.name}"` : '') }].map((m) => ({
@@ -204,6 +257,8 @@ export function useCopilot() {
             ...prev,
             { id: assistantId, role: 'assistant', content: 'Não consegui gerar uma resposta. Tente novamente.' },
           ]);
+        } else {
+          persistMessage('assistant', assistantSoFar);
         }
       } catch (e) {
         console.error('Copilot error:', e);
@@ -219,15 +274,26 @@ export function useCopilot() {
         setIsStreaming(false);
       }
     },
-    [messages, isStreaming, getContext]
+    [messages, isStreaming, getContext, persistMessage]
   );
 
-  const clearMessages = useCallback(() => setMessages([]), []);
+  const clearMessages = useCallback(async () => {
+    setMessages([]);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await (supabase as any).from('copilot_messages').delete().eq('user_id', user.id);
+      }
+    } catch (e) {
+      console.error('Erro ao limpar histórico:', e);
+    }
+  }, []);
 
   return {
     messages,
     isOpen,
     isStreaming,
+    isLoadingHistory,
     togglePanel,
     sendMessage,
     clearMessages,
