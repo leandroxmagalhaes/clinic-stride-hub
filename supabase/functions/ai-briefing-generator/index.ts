@@ -105,18 +105,18 @@ serve(async (req) => {
     // Get package total if exists
     const { data: currentSession } = await supabase
       .from("sessoes")
-      .select("package_id")
+      .select("pack_id")
       .eq("id", sessionId)
       .single();
 
     let packageTotal: number | null = null;
-    if (currentSession?.package_id) {
+    if ((currentSession as any)?.pack_id) {
       const { data: pkg } = await supabase
-        .from("scheduling_packages")
-        .select("total_sessions")
-        .eq("id", currentSession.package_id)
+        .from("packs")
+        .select("total_sessoes")
+        .eq("id", (currentSession as any).pack_id)
         .single();
-      packageTotal = pkg?.total_sessions || null;
+      packageTotal = (pkg as any)?.total_sessoes || null;
     }
 
     // Generate AI summary of last evolution
