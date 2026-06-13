@@ -120,6 +120,19 @@ serve(async (req) => {
           continue;
         }
 
+        // Dedup: skip if a reminder was already logged for this session/email channel
+        const { data: existingLog } = await supabase
+          .from("reminder_logs")
+          .select("id")
+          .eq("sessao_id", session.id)
+          .eq("canal", "email")
+          .maybeSingle();
+        if (existingLog) {
+          console.log(`Skipping session ${session.id}: reminder already sent`);
+          results.skipped++;
+          continue;
+        }
+
         const appointmentDate = new Date(session.start_time);
         const formattedDate = appointmentDate.toLocaleDateString("pt-PT", {
           weekday: "long",
