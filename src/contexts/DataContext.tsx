@@ -655,6 +655,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await fetchPacks(true);
   };
 
+  // Pack usage is auto-recomputed by DB triggers; these are no-ops kept for compat
+  const incrementPackUsage = async (_packId: string): Promise<void> => { await fetchPacks(true); };
+  const decrementPackUsage = async (_packId: string): Promise<void> => { await fetchPacks(true); };
 
   const getActivePack = (pacienteId: string): Pack | null => {
     return packs.find((p) => p.paciente_id === pacienteId && p.is_active) ?? null;
@@ -759,7 +762,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     refreshPacks: fetchPacks,
     getActivePack,
     associateSessionToPack,
-    // Credit compatibility
+    incrementPackUsage,
+    decrementPackUsage,
     getCreditBalance,
     addCredits: addCreditsHandler,
     refundCredit: refundCreditHandler,
