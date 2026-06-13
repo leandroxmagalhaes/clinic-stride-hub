@@ -29,14 +29,17 @@ serve(async (req) => {
       throw new Error("RESEND_API_KEY not configured");
     }
 
-    // Restrict to internal/scheduled invocations: must present service role key or CRON_SECRET
+    // Restrict to internal/scheduled invocations: must present service role key,
+    // CRON_SECRET, or the project anon key (used by pg_cron jobs).
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const cronSecret = Deno.env.get("CRON_SECRET");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const authHeader = req.headers.get("Authorization") ?? "";
     const provided = authHeader.replace(/^Bearer\s+/i, "");
     const isAuthorized =
       provided === serviceKey ||
-      (!!cronSecret && provided === cronSecret);
+      (!!cronSecret && provided === cronSecret) ||
+      (!!anonKey && provided === anonKey);
     if (!isAuthorized) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
