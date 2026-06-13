@@ -1103,63 +1103,56 @@ export type Database = {
       packs: {
         Row: {
           clinic_id: string
-          created_at: string | null
+          created_at: string
           data_inicio: string
+          data_validade: string | null
           id: string
-          is_active: boolean
           notes: string | null
           numero_pack: number
           paciente_id: string
           paid_at: string | null
           payment_method: string | null
           payment_status: string
-          quantidade_sessoes: number
-          sessoes_usadas: number
-          updated_at: string | null
+          status: string
+          total_sessoes: number
+          updated_at: string
           valor_total: number
         }
         Insert: {
           clinic_id: string
-          created_at?: string | null
-          data_inicio: string
+          created_at?: string
+          data_inicio?: string
+          data_validade?: string | null
           id?: string
-          is_active?: boolean
           notes?: string | null
-          numero_pack?: number
+          numero_pack: number
           paciente_id: string
           paid_at?: string | null
           payment_method?: string | null
           payment_status?: string
-          quantidade_sessoes?: number
-          sessoes_usadas?: number
-          updated_at?: string | null
+          status?: string
+          total_sessoes: number
+          updated_at?: string
           valor_total?: number
         }
         Update: {
           clinic_id?: string
-          created_at?: string | null
+          created_at?: string
           data_inicio?: string
+          data_validade?: string | null
           id?: string
-          is_active?: boolean
           notes?: string | null
           numero_pack?: number
           paciente_id?: string
           paid_at?: string | null
           payment_method?: string | null
           payment_status?: string
-          quantidade_sessoes?: number
-          sessoes_usadas?: number
-          updated_at?: string | null
+          status?: string
+          total_sessoes?: number
+          updated_at?: string
           valor_total?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "packs_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "packs_paciente_id_fkey"
             columns: ["paciente_id"]
@@ -2368,102 +2361,6 @@ export type Database = {
           },
         ]
       }
-      scheduling_packages: {
-        Row: {
-          clinic_id: string
-          created_at: string
-          created_by: string | null
-          end_date: string | null
-          fixed_days: Json | null
-          flexible: boolean
-          frequency: string | null
-          id: string
-          modality: string
-          notes: string | null
-          paciente_id: string
-          profissional_id: string
-          servico_id: string
-          sessions_created: number
-          start_date: string
-          status: string
-          total_sessions: number
-        }
-        Insert: {
-          clinic_id: string
-          created_at?: string
-          created_by?: string | null
-          end_date?: string | null
-          fixed_days?: Json | null
-          flexible?: boolean
-          frequency?: string | null
-          id?: string
-          modality: string
-          notes?: string | null
-          paciente_id: string
-          profissional_id: string
-          servico_id: string
-          sessions_created?: number
-          start_date: string
-          status?: string
-          total_sessions?: number
-        }
-        Update: {
-          clinic_id?: string
-          created_at?: string
-          created_by?: string | null
-          end_date?: string | null
-          fixed_days?: Json | null
-          flexible?: boolean
-          frequency?: string | null
-          id?: string
-          modality?: string
-          notes?: string | null
-          paciente_id?: string
-          profissional_id?: string
-          servico_id?: string
-          sessions_created?: number
-          start_date?: string
-          status?: string
-          total_sessions?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scheduling_packages_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scheduling_packages_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "pacientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scheduling_packages_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-          {
-            foreignKeyName: "scheduling_packages_profissional_id_fkey"
-            columns: ["profissional_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scheduling_packages_servico_id_fkey"
-            columns: ["servico_id"]
-            isOneToOne: false
-            referencedRelation: "servicos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       servicos: {
         Row: {
           clinic_id: string
@@ -2581,10 +2478,14 @@ export type Database = {
           end_time: string
           gympass_booking_id: string | null
           id: string
+          isento: boolean
+          isento_em: string | null
+          isento_motivo: string | null
+          isento_por: string | null
           notes: string | null
+          numero_no_pack: number | null
           paciente_id: string
-          pack_grupo_id: string | null
-          package_id: string | null
+          pack_id: string | null
           pagamento_data: string | null
           pagamento_estado: string | null
           pagamento_metodo: string | null
@@ -2597,7 +2498,6 @@ export type Database = {
           status: string
           tipo_agendamento: string
           updated_at: string
-          valor_pack_total: number | null
           valor_sessao: number | null
         }
         Insert: {
@@ -2607,10 +2507,14 @@ export type Database = {
           end_time: string
           gympass_booking_id?: string | null
           id?: string
+          isento?: boolean
+          isento_em?: string | null
+          isento_motivo?: string | null
+          isento_por?: string | null
           notes?: string | null
+          numero_no_pack?: number | null
           paciente_id: string
-          pack_grupo_id?: string | null
-          package_id?: string | null
+          pack_id?: string | null
           pagamento_data?: string | null
           pagamento_estado?: string | null
           pagamento_metodo?: string | null
@@ -2623,7 +2527,6 @@ export type Database = {
           status?: string
           tipo_agendamento?: string
           updated_at?: string
-          valor_pack_total?: number | null
           valor_sessao?: number | null
         }
         Update: {
@@ -2633,10 +2536,14 @@ export type Database = {
           end_time?: string
           gympass_booking_id?: string | null
           id?: string
+          isento?: boolean
+          isento_em?: string | null
+          isento_motivo?: string | null
+          isento_por?: string | null
           notes?: string | null
+          numero_no_pack?: number | null
           paciente_id?: string
-          pack_grupo_id?: string | null
-          package_id?: string | null
+          pack_id?: string | null
           pagamento_data?: string | null
           pagamento_estado?: string | null
           pagamento_metodo?: string | null
@@ -2649,7 +2556,6 @@ export type Database = {
           status?: string
           tipo_agendamento?: string
           updated_at?: string
-          valor_pack_total?: number | null
           valor_sessao?: number | null
         }
         Relationships: [
@@ -2675,10 +2581,10 @@ export type Database = {
             referencedColumns: ["patient_id"]
           },
           {
-            foreignKeyName: "sessoes_package_id_fkey"
-            columns: ["package_id"]
+            foreignKeyName: "sessoes_pack_id_fkey"
+            columns: ["pack_id"]
             isOneToOne: false
-            referencedRelation: "scheduling_packages"
+            referencedRelation: "packs"
             referencedColumns: ["id"]
           },
           {
@@ -2846,53 +2752,6 @@ export type Database = {
       }
     }
     Views: {
-      packs_com_contagem: {
-        Row: {
-          alert_status: string | null
-          clinic_id: string | null
-          created_at: string | null
-          data_inicio: string | null
-          id: string | null
-          is_active: boolean | null
-          notes: string | null
-          numero_pack: number | null
-          paciente_id: string | null
-          paciente_nome: string | null
-          paid_at: string | null
-          payment_method: string | null
-          payment_status: string | null
-          quantidade_sessoes: number | null
-          sessoes_associadas: number | null
-          sessoes_realizadas_real: number | null
-          sessoes_restantes: number | null
-          sessoes_usadas: number | null
-          updated_at: string | null
-          valor_total: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "packs_clinic_id_fkey"
-            columns: ["clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "packs_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "pacientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "packs_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: false
-            referencedRelation: "patient_credit_balances"
-            referencedColumns: ["patient_id"]
-          },
-        ]
-      }
       patient_credit_balances: {
         Row: {
           balance: number | null
@@ -2959,6 +2818,10 @@ export type Database = {
     }
     Functions: {
       batch_insert_sessions: { Args: { p_sessions: Json }; Returns: number }
+      cancel_session_with_pack_rule: {
+        Args: { p_reason?: string; p_session_id: string }
+        Returns: Json
+      }
       check_horario_reservado: {
         Args: { p_date: string; p_professional_id?: string; p_time: string }
         Returns: {
@@ -2993,6 +2856,7 @@ export type Database = {
         }
         Returns: string
       }
+      expire_packs: { Args: never; Returns: number }
       get_invite_details: { Args: { invite_token: string }; Returns: Json }
       get_patient_balance: { Args: { p_patient_id: string }; Returns: number }
       get_patient_credit_balance: {
@@ -3048,6 +2912,10 @@ export type Database = {
         Returns: number
       }
       is_professional: { Args: { p_user_id: string }; Returns: boolean }
+      isentar_falta_cobrada: {
+        Args: { p_motivo: string; p_session_id: string }
+        Returns: undefined
+      }
       list_portal_conversations: {
         Args: { p_clinic_id: string }
         Returns: {
@@ -3118,6 +2986,7 @@ export type Database = {
         Args: { p_session_id: string; p_user_id: string }
         Returns: boolean
       }
+      recompute_pack_status: { Args: { p_pack_id: string }; Returns: undefined }
       upsert_portal_questionnaire: {
         Args: {
           p_completo?: boolean
