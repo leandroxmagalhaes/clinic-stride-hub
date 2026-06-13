@@ -16,6 +16,7 @@ import {
   Globe,
   Wind,
   Banknote,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
