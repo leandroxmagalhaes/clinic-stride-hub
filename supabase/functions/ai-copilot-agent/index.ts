@@ -632,7 +632,10 @@ ESTILO:
 REGRA DE OURO DAS AÇÕES (criar/confirmar/cancelar/faltar/pagar/isentar):
 - NUNCA execute de imediato. Primeiro chame a tool SEM confirm (ou confirm:false) para obter o "preview".
 - Mostre ao utilizador um resumo de UMA linha do que vai acontecer e pergunte se confirma.
-- Só quando o utilizador disser que sim, chame a MESMA tool com confirm:true.
+- Quando o utilizador responder que sim (ex.: "sim", "confirmo", "pode", "executa"), DEVE de imediato, nessa mesma resposta, voltar a chamar a MESMA tool com EXATAMENTE os mesmos parâmetros mais confirm:true. NÃO escreva apenas "feito" — é OBRIGATÓRIO chamar a tool.
+- NUNCA diga que uma ação foi concluída sem que uma tool tenha devolvido {"success": true}. Se não houve resultado success:true, a ação NÃO aconteceu — não afirme o contrário.
+- Após receber {"success": true}, confirme em uma frase curta o que foi feito.
+- Se a confirmação do utilizador chegar numa mensagem nova e você não tiver a certeza dos parâmetros originais, volte a fazer o preview (chamar a tool sem confirm) e peça nova confirmação, em vez de inventar.
 - Se a tool devolver needs_clarification (vários utentes/sessões), liste as opções e peça para escolher antes de prosseguir.
 - Se devolver needs_reason (isenção), pergunte o motivo antes de confirmar.
 
@@ -764,7 +767,8 @@ serve(async (req) => {
 
     // Call AI with tools — loop for tool calls
     let currentMessages = [...fullMessages];
-    const MAX_TOOL_ROUNDS = 5;
+    const MAX_TOOL_ROUNDS = 8;
+    let actionSucceeded = false;
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const isLastRound = round === MAX_TOOL_ROUNDS - 1;
@@ -824,6 +828,12 @@ serve(async (req) => {
           }
 
           const result = await executeTool(tc.function.name, toolArgs, adminClient, clinicId, toolExtraContext);
+          try {
+            const parsed = JSON.parse(result);
+            if (parsed?.success === true && ACTION_TOOL_NAMES.includes(tc.function.name)) {
+              actionSucceeded = true;
+            }
+          } catch { /* result não-JSON, ignora */ }
           currentMessages.push({
             role: "tool",
             tool_call_id: tc.id,
@@ -835,7 +845,14 @@ serve(async (req) => {
       }
 
       // No tool call — return the text response as SSE stream
-      const textContent = choice?.message?.content || "";
+      let textContent = choice?.message?.content || "";
+
+      // Salvaguarda: se o texto afirma conclusão mas nenhuma ação teve success:true nesta requisição,
+      // não deixar passar uma falsa confirmação.
+      const claimsDone = /\b(feito|conclu[ií]|registad|registrad|agendad|marcad|cancelad|confirmad|atualizad|atualizei|guardad|paga)\b/i.test(textContent);
+      if (claimsDone && !actionSucceeded) {
+        textContent = "Para concluir, preciso da tua confirmação explícita. Confirmas a ação? (responde \"sim\" e eu executo de imediato)";
+      }
 
       // Log usage
       try {

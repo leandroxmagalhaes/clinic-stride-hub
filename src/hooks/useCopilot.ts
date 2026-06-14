@@ -67,12 +67,14 @@ export function useCopilot() {
   // Guarda uma mensagem no histórico (best-effort, não bloqueia a UI)
   const persistMessage = useCallback(async (role: 'user' | 'assistant', content: string, fileName?: string) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
       const { data: prof } = await (supabase as any)
         .from('profiles')
         .select('clinic_id')
+        .eq('user_id', user.id)
         .maybeSingle();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!prof?.clinic_id || !user) return;
+      if (!prof?.clinic_id) return;
       await (supabase as any).from('copilot_messages').insert({
         clinic_id: prof.clinic_id,
         user_id: user.id,
