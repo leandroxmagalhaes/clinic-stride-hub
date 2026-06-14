@@ -35,7 +35,7 @@ async function resolveSession(
   if (args.session_id) {
     const { data } = await supabaseAdmin
       .from("sessoes")
-      .select("id, start_time, end_time, status, payment_status, pack_id, price, paciente_id, profissional_id, pacientes!sessoes_paciente_id_fkey(full_name), profissionais(full_name)")
+      .select("id, start_time, end_time, status, payment_status, pack_id, price, paciente_id, profissional_id, pacientes!sessoes_paciente_id_fkey(full_name), profissional:profiles!sessoes_profissional_id_fkey(full_name)")
       .eq("id", args.session_id)
       .eq("clinic_id", clinicId)
       .maybeSingle();
@@ -61,7 +61,7 @@ async function resolveSession(
   // Buscar sessões desse paciente (na data, ou as próximas)
   let q = supabaseAdmin
     .from("sessoes")
-    .select("id, start_time, end_time, status, payment_status, pack_id, price, paciente_id, profissional_id, pacientes!sessoes_paciente_id_fkey(full_name), profissionais(full_name)")
+    .select("id, start_time, end_time, status, payment_status, pack_id, price, paciente_id, profissional_id, pacientes!sessoes_paciente_id_fkey(full_name), profissional:profiles!sessoes_profissional_id_fkey(full_name)")
     .eq("clinic_id", clinicId)
     .eq("paciente_id", patients[0].id)
     .order("start_time", { ascending: true });
@@ -263,13 +263,22 @@ export async function executeAction(
         service = svcs?.[0] || null;
       }
 
-      // Profissional
+      // Profissional (FK aponta para profiles)
       let profId = args.professional_id as string | undefined;
       let profName = "";
       if (!profId) {
-        const { data: profs } = await supabaseAdmin.from("profissionais").select("id, full_name").eq("clinic_id", clinicId).eq("is_active", true).limit(1);
+        const { data: profs } = await supabaseAdmin
+          .from("profiles")
+          .select("id, full_name")
+          .eq("clinic_id", clinicId)
+          .eq("is_active", true)
+          .limit(1);
         profId = profs?.[0]?.id; profName = profs?.[0]?.full_name || "";
+      } else {
+        const { data: p } = await supabaseAdmin.from("profiles").select("full_name").eq("id", profId).maybeSingle();
+        profName = p?.full_name || "";
       }
+      if (!profId) return JSON.stringify({ error: "Nenhum profissional ativo encontrado para vincular a sessão." });
 
       // Pack ativo com saldo
       const { data: packs } = await supabaseAdmin

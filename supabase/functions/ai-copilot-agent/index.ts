@@ -246,14 +246,14 @@ async function executeTool(
         let professionals: Array<{ id: string; full_name: string }> = [];
         if (!profId) {
           const { data: profs } = await supabaseAdmin
-            .from("profissionais")
+            .from("profiles")
             .select("id, full_name")
             .eq("clinic_id", clinicId)
             .eq("is_active", true);
           professionals = profs || [];
         } else {
           const { data: prof } = await supabaseAdmin
-            .from("profissionais")
+            .from("profiles")
             .select("id, full_name")
             .eq("id", profId)
             .single();
