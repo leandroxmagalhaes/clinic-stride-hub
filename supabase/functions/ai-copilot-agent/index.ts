@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.90.1";
 import { executeAction, actionToolDefinitions, ACTION_TOOL_NAMES } from "./copilot-actions.ts";
+import { toAnthropicTools, toAnthropicMessages, fromAnthropicResponse } from "./anthropic-adapter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -670,6 +671,12 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+    // Motor primário: Claude (Anthropic, formato nativo /v1/messages) se houver chave;
+    // caso contrário, Gemini via gateway do Lovable. Em caso de falha do Claude, faz fallback para Gemini.
+    const useClaude = anthropicApiKey.length > 0;
+    const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+    const GEMINI_MODEL = "google/gemini-3-flash-preview";
 
     // Verify user
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -770,46 +777,86 @@ serve(async (req) => {
     const MAX_TOOL_ROUNDS = 8;
     let actionSucceeded = false;
 
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const isLastRound = round === MAX_TOOL_ROUNDS - 1;
-      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Chama o modelo escolhido; devolve sempre no formato OpenAI (choices[...]).
+    // Tenta Claude primeiro (se configurado); em erro, faz fallback para Gemini.
+    async function callModel(msgs: any[], withTools: boolean): Promise<{ ok: boolean; status: number; data?: any; errorText?: string }> {
+      const toolsOpenAI = [...toolDefinitions, ...actionToolDefinitions];
+
+      if (useClaude) {
+        try {
+          const { system, messages: amsgs } = toAnthropicMessages(msgs);
+          const body: any = {
+            model: CLAUDE_MODEL,
+            max_tokens: 2048,
+            system,
+            messages: amsgs,
+          };
+          if (withTools) body.tools = toAnthropicTools(toolsOpenAI);
+          const resp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": anthropicApiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify(body),
+          });
+          if (resp.ok) {
+            const raw = await resp.json();
+            return { ok: true, status: 200, data: fromAnthropicResponse(raw) };
+          }
+          const errorText = await resp.text();
+          console.error("Claude error, fallback to Gemini:", resp.status, errorText);
+          // cai para o Gemini abaixo
+        } catch (e) {
+          console.error("Claude exception, fallback to Gemini:", e);
+        }
+      }
+
+      // Gemini via gateway do Lovable (formato OpenAI nativo)
+      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${lovableApiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: currentMessages,
-          // Na última rodada, sem ferramentas: força uma resposta de texto que fecha a conversa
-          ...(isLastRound ? {} : { tools: [...toolDefinitions, ...actionToolDefinitions] }),
+          model: GEMINI_MODEL,
+          messages: msgs,
+          ...(withTools ? { tools: toolsOpenAI } : {}),
           stream: false,
         }),
       });
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        return { ok: false, status: resp.status, errorText };
+      }
+      return { ok: true, status: 200, data: await resp.json() };
+    }
 
-      if (!aiResponse.ok) {
-        if (aiResponse.status === 429) {
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const isLastRound = round === MAX_TOOL_ROUNDS - 1;
+      const modelResult = await callModel(currentMessages, !isLastRound);
+
+      if (!modelResult.ok) {
+        if (modelResult.status === 429) {
           return new Response(JSON.stringify({ error: "Limite de requisições atingido. Tente novamente em alguns segundos." }), {
             status: 429,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        if (aiResponse.status === 402) {
+        if (modelResult.status === 402) {
           return new Response(JSON.stringify({ error: "Créditos de IA esgotados." }), {
             status: 402,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const errorText = await aiResponse.text();
-        console.error("AI error:", aiResponse.status, errorText);
+        console.error("AI error:", modelResult.status, modelResult.errorText);
         return new Response(JSON.stringify({ error: "Erro no serviço de IA" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Check if it's a tool call (non-streaming response)
-      const responseData = await aiResponse.json();
+      // Resposta sempre em formato OpenAI
+      const responseData = modelResult.data;
       const choice = responseData.choices?.[0];
 
       if (choice?.finish_reason === "tool_calls" || choice?.message?.tool_calls?.length > 0) {
@@ -861,7 +908,7 @@ serve(async (req) => {
           user_id: userId,
           feature: "copilot",
           action: file_upload ? "file_import_chat" : "chat",
-          model: "google/gemini-3-flash-preview",
+          model: useClaude ? CLAUDE_MODEL : GEMINI_MODEL,
           tokens_used: responseData.usage?.total_tokens || null,
         });
       } catch (e) {
