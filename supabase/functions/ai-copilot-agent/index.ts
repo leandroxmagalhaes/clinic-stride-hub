@@ -670,16 +670,6 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
-    const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
-    // Modelo do Copiloto: usa Claude (Anthropic) se a chave existir; senão, mantém Gemini via Lovable
-    const useClaude = anthropicApiKey.length > 0;
-    const AI_ENDPOINT = useClaude
-      ? "https://api.anthropic.com/v1/chat/completions"
-      : "https://ai.gateway.lovable.dev/v1/chat/completions";
-    const AI_MODEL = useClaude ? "claude-haiku-4-5-20251001" : "google/gemini-3-flash-preview";
-    const AI_AUTH_HEADER = useClaude
-      ? { "x-api-key": anthropicApiKey, "anthropic-version": "2023-06-01" }
-      : { Authorization: `Bearer ${lovableApiKey}` };
 
     // Verify user
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -782,16 +772,15 @@ serve(async (req) => {
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const isLastRound = round === MAX_TOOL_ROUNDS - 1;
-      const aiResponse = await fetch(AI_ENDPOINT, {
+      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
-          ...AI_AUTH_HEADER,
+          Authorization: `Bearer ${lovableApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: AI_MODEL,
+          model: "google/gemini-3-flash-preview",
           messages: currentMessages,
-          max_tokens: 2048,
           // Na última rodada, sem ferramentas: força uma resposta de texto que fecha a conversa
           ...(isLastRound ? {} : { tools: [...toolDefinitions, ...actionToolDefinitions] }),
           stream: false,
@@ -825,12 +814,7 @@ serve(async (req) => {
 
       if (choice?.finish_reason === "tool_calls" || choice?.message?.tool_calls?.length > 0) {
         const toolCalls = choice.message.tool_calls;
-        // Anthropic-compat pode devolver content null com tool_calls; normalizar para evitar erro na próxima ronda
-        currentMessages.push({
-          role: "assistant",
-          content: choice.message.content ?? "",
-          tool_calls: toolCalls,
-        });
+        currentMessages.push(choice.message);
 
         // Execute all tool calls
         for (const tc of toolCalls) {
@@ -877,7 +861,7 @@ serve(async (req) => {
           user_id: userId,
           feature: "copilot",
           action: file_upload ? "file_import_chat" : "chat",
-          model: AI_MODEL,
+          model: "google/gemini-3-flash-preview",
           tokens_used: responseData.usage?.total_tokens || null,
         });
       } catch (e) {
