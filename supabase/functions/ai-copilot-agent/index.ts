@@ -1,4 +1,5 @@
-// ai-copilot-agent v2 — Agente nativo Anthropic (Messages API)
+// ai-copilot-agent v2.1 — Agente nativo Anthropic (Messages API) [BUILD 2026-06-16]
+// Marcador de versão: se vês isto a correr, o deploy do v2 foi aplicado.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.90.1";
 import { TOOLS, ACTION_TOOLS, runTool, todayInLisbon, ANTHROPIC_MODEL, MAX_ROUNDS, corsHeaders } from "./agent-core.ts";
