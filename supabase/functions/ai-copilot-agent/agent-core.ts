@@ -127,7 +127,7 @@ const TOOLS = [
         patient_name: { type: "string" },
         date: { type: "string", description: "YYYY-MM-DD (default: hoje)" },
         time: { type: "string", description: "HH:MM da sessão, se souberes" },
-        method: { type: "string", enum: ["dinheiro", "pix", "cartao_credito", "cartao_debito", "convenio", "boleto"] },
+        method: { type: "string", enum: ["numerario", "mbway", "multibanco", "transferencia", "cartao"], description: "Método: numerario, mbway, multibanco, transferencia ou cartao" },
         confirm: { type: "boolean" },
       },
     },
@@ -410,7 +410,18 @@ async function runTool(name: string, args: any, db: any, clinicId: string, userI
         return { preview: true, resumo: `Marcar como PAGA a sessão de ${s.pacientes?.full_name} (${fmtLisbon(s.start_time)})${s.price ? `, €${Number(s.price).toFixed(2)}` : ""}.`, pergunta: "Confirmas o pagamento?" };
       }
       const upd: any = { payment_status: "pago", paid_at: new Date().toISOString() };
-      if (args.method) upd.payment_method = args.method;
+      if (args.method) {
+        // Normaliza variações para os valores reais do sistema (Portugal)
+        const m = String(args.method).toLowerCase().replace(/\s|-/g, "");
+        const map: Record<string, string> = {
+          numerario: "numerario", dinheiro: "numerario", cash: "numerario", numerário: "numerario",
+          mbway: "mbway", mbw: "mbway",
+          multibanco: "multibanco", mb: "multibanco", atm: "multibanco",
+          transferencia: "transferencia", transferência: "transferencia", transfer: "transferencia",
+          cartao: "cartao", cartão: "cartao", card: "cartao", credito: "cartao", debito: "cartao",
+        };
+        upd.payment_method = map[m] || "numerario";
+      }
       const { error } = await db.from("sessoes").update(upd).eq("id", s.id).eq("clinic_id", clinicId);
       if (error) return { error: error.message };
       return { success: true, mensagem: `Pagamento registado para ${s.pacientes?.full_name}.` };
