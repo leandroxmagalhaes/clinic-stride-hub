@@ -102,42 +102,50 @@ const TOOLS = [
   },
   {
     name: "update_session_status",
-    description: "Altera o estado de uma sessão: confirmado | realizado | faltou | cancelado. Para faltou/cancelado aplica a regra das 14h (pode tornar-se falta cobrada). Identifica a sessão por session_id (preferível). Confirmação obrigatória (confirm=true após 'sim').",
+    description: "Altera o estado de uma sessão: confirmado | realizado | faltou | cancelado. Para faltou/cancelado aplica a regra das 14h. Identifica a sessão por session_id OU por patient_name + (date opcional, YYYY-MM-DD) + (time opcional, HH:MM). Confirmação obrigatória (confirm=true após 'sim').",
     input_schema: {
       type: "object",
       properties: {
         session_id: { type: "string" },
+        patient_name: { type: "string" },
+        date: { type: "string", description: "YYYY-MM-DD (default: hoje)" },
+        time: { type: "string", description: "HH:MM da sessão, se souberes" },
         new_status: { type: "string", enum: ["confirmado", "realizado", "faltou", "cancelado"] },
-        reason: { type: "string", description: "Motivo (para falta/cancelamento)" },
+        reason: { type: "string" },
         confirm: { type: "boolean" },
       },
-      required: ["session_id", "new_status"],
+      required: ["new_status"],
     },
   },
   {
     name: "register_payment",
-    description: "Marca uma sessão como paga. Identifica por session_id. Confirmação obrigatória (confirm=true após 'sim').",
+    description: "Marca uma sessão como paga. Identifica por session_id OU por patient_name + (date opcional) + (time opcional). Confirmação obrigatória (confirm=true após 'sim').",
     input_schema: {
       type: "object",
       properties: {
         session_id: { type: "string" },
+        patient_name: { type: "string" },
+        date: { type: "string", description: "YYYY-MM-DD (default: hoje)" },
+        time: { type: "string", description: "HH:MM da sessão, se souberes" },
         method: { type: "string", enum: ["dinheiro", "pix", "cartao_credito", "cartao_debito", "convenio", "boleto"] },
         confirm: { type: "boolean" },
       },
-      required: ["session_id"],
     },
   },
   {
     name: "exempt_no_show",
-    description: "Isenta uma falta cobrada, devolvendo a sessão ao pack. Exige motivo. Confirmação obrigatória.",
+    description: "Isenta uma falta cobrada, devolvendo a sessão ao pack. Exige motivo. Identifica por session_id OU patient_name + (date/time opcionais). Confirmação obrigatória.",
     input_schema: {
       type: "object",
       properties: {
         session_id: { type: "string" },
+        patient_name: { type: "string" },
+        date: { type: "string" },
+        time: { type: "string" },
         reason: { type: "string" },
         confirm: { type: "boolean" },
       },
-      required: ["session_id", "reason"],
+      required: ["reason"],
     },
   },
   {
@@ -180,6 +188,38 @@ async function resolvePatient(db: any, clinicId: string, args: any): Promise<{ i
 async function packUsage(db: any, packId: string): Promise<number> {
   const { data } = await db.from("sessoes").select("status, isento").eq("pack_id", packId);
   return (data || []).filter((s: any) => !s.isento && ["realizado", "finalizado", "falta_cobrada"].includes(s.status)).length;
+}
+
+// Resolve uma sessão a partir de session_id OU (paciente + dia + hora aproximada).
+// Devolve { id } ou { error } ou { options } (várias candidatas para o agente escolher).
+async function resolveSession(db: any, clinicId: string, args: any): Promise<{ id?: string; error?: string; options?: any[] }> {
+  if (args.session_id) return { id: args.session_id };
+
+  // precisa de paciente
+  const p = await resolvePatient(db, clinicId, args);
+  if (p.options) return { error: "Há vários utentes com esse nome; especifica qual.", options: p.options };
+  if (p.error) return { error: p.error };
+
+  // intervalo: dia indicado, ou hoje
+  const date = args.date || todayInLisbon();
+  const { startUTC, endUTC } = lisbonDayRangeUTC(date);
+  const { data } = await db.from("sessoes")
+    .select("id, start_time, status")
+    .eq("clinic_id", clinicId).eq("paciente_id", p.id)
+    .gte("start_time", startUTC).lte("start_time", endUTC)
+    .order("start_time", { ascending: true });
+
+  if (!data || data.length === 0) return { error: `Não encontrei sessões de ${p.name} em ${date}.` };
+
+  // se foi indicada uma hora aproximada (args.time "HH:MM"), filtra
+  if (args.time && /^\d{1,2}:\d{2}$/.test(args.time)) {
+    const want = args.time.padStart(5, "0");
+    const match = data.filter((s: any) => fmtHourLisbon(s.start_time) === want);
+    if (match.length === 1) return { id: match[0].id };
+    if (match.length > 1) return { options: match.map((s: any) => ({ session_id: s.id, hora: fmtHourLisbon(s.start_time), estado: s.status })) };
+  }
+  if (data.length === 1) return { id: data[0].id };
+  return { options: data.map((s: any) => ({ session_id: s.id, hora: fmtHourLisbon(s.start_time), estado: s.status })) };
 }
 
 // ───────────────────────── Executor de ferramentas ─────────────────────────
@@ -323,10 +363,12 @@ async function runTool(name: string, args: any, db: any, clinicId: string, userI
     }
 
     case "update_session_status": {
-      if (!args.session_id) return { error: "Preciso do session_id (usa list_sessions para o obter)." };
+      const rs = await resolveSession(db, clinicId, args);
+      if (rs.options) return { needs_clarification: true, opcoes: rs.options };
+      if (rs.error) return { error: rs.error };
       const { data: s } = await db.from("sessoes")
         .select("id, start_time, status, pack_id, pacientes!sessoes_paciente_id_fkey(full_name)")
-        .eq("id", args.session_id).eq("clinic_id", clinicId).maybeSingle();
+        .eq("id", rs.id).eq("clinic_id", clinicId).maybeSingle();
       if (!s) return { error: "Sessão não encontrada." };
       const nome = s.pacientes?.full_name;
       const quando = fmtLisbon(s.start_time);
@@ -357,10 +399,12 @@ async function runTool(name: string, args: any, db: any, clinicId: string, userI
     }
 
     case "register_payment": {
-      if (!args.session_id) return { error: "Preciso do session_id." };
+      const rs = await resolveSession(db, clinicId, args);
+      if (rs.options) return { needs_clarification: true, opcoes: rs.options };
+      if (rs.error) return { error: rs.error };
       const { data: s } = await db.from("sessoes")
         .select("id, start_time, price, pacientes!sessoes_paciente_id_fkey(full_name)")
-        .eq("id", args.session_id).eq("clinic_id", clinicId).maybeSingle();
+        .eq("id", rs.id).eq("clinic_id", clinicId).maybeSingle();
       if (!s) return { error: "Sessão não encontrada." };
       if (args.confirm !== true) {
         return { preview: true, resumo: `Marcar como PAGA a sessão de ${s.pacientes?.full_name} (${fmtLisbon(s.start_time)})${s.price ? `, €${Number(s.price).toFixed(2)}` : ""}.`, pergunta: "Confirmas o pagamento?" };
@@ -373,11 +417,13 @@ async function runTool(name: string, args: any, db: any, clinicId: string, userI
     }
 
     case "exempt_no_show": {
-      if (!args.session_id) return { error: "Preciso do session_id." };
       if (!args.reason) return { needs_reason: true, pergunta: "Qual o motivo da isenção?" };
+      const rs = await resolveSession(db, clinicId, args);
+      if (rs.options) return { needs_clarification: true, opcoes: rs.options };
+      if (rs.error) return { error: rs.error };
       const { data: s } = await db.from("sessoes")
         .select("id, start_time, pack_id, pacientes!sessoes_paciente_id_fkey(full_name)")
-        .eq("id", args.session_id).eq("clinic_id", clinicId).maybeSingle();
+        .eq("id", rs.id).eq("clinic_id", clinicId).maybeSingle();
       if (!s) return { error: "Sessão não encontrada." };
       if (args.confirm !== true) {
         return { preview: true, resumo: `Isentar a falta cobrada de ${s.pacientes?.full_name} (${fmtLisbon(s.start_time)}), devolvendo a sessão ao pack. Motivo: ${args.reason}.`, pergunta: "Confirmas a isenção?" };

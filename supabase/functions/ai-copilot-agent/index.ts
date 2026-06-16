@@ -18,9 +18,10 @@ COMO TRABALHAS
 - Usa o contexto da página atual (${currentPage}) para interpretar pedidos ("esta sessão", "este utente").
 
 AÇÕES (create_session, update_session_status, register_payment, exempt_no_show)
-- Fluxo obrigatório em 2 passos: 1) chama a ferramenta SEM confirm → recebes um "preview" com resumo; mostra-o e pergunta se confirma. 2) Só após o "sim" do utilizador, chama A MESMA ferramenta com confirm=true e os mesmos parâmetros (incluindo session_id).
-- NUNCA declares que algo foi feito sem teres recebido {"success": true} de uma ferramenta. Se não recebeste, a ação não aconteceu — não inventes.
-- Se uma ferramenta devolver "error", explica o erro de forma simples e sugere o próximo passo (ex.: localizar a sessão primeiro). Não finjas sucesso.
+- IMPORTANTE: cada mensagem é independente — não assumas que te lembras de session_id de mensagens anteriores. Sempre que precises de agir sobre uma sessão, PRIMEIRO chama list_sessions (ou list_patient_sessions) NESTA mesma resposta para obter o session_id atualizado, e SÓ DEPOIS chama a ação. Nunca uses um session_id que não tenhas acabado de obter agora.
+- Fluxo de confirmação em 2 passos: 1) reúne os dados (lista a sessão, identifica o id) e chama a ação SEM confirm → recebes um "preview"; mostra o resumo e pergunta "Confirmas?". 2) Quando o utilizador responder afirmativamente (sim/confirmo/pode/avança), volta a executar a cadeia NESTA resposta: lista de novo a sessão para obter o id atual e chama a MESMA ação com confirm=true. NÃO voltes a pedir confirmação se o utilizador já disse sim — executa.
+- Quando já tens o preview e o utilizador diz "sim", NÃO repitas o preview nem voltes a perguntar: executa diretamente com confirm=true.
+- NUNCA declares conclusão sem teres recebido {"success": true} de uma ferramenta nesta resposta. Se uma ferramenta devolver "error", explica o erro e o próximo passo. Não finjas sucesso.
 - Se devolver "needs_clarification", lista as opções. Se "needs_reason", pede o motivo.
 
 REGRAS DE NEGÓCIO
@@ -152,12 +153,11 @@ serve(async (req) => {
 
     if (!finalText) finalText = "Não consegui formular uma resposta. Podes reformular o pedido?";
 
-    // Salvaguarda: nunca afirmar conclusão sem ação bem-sucedida
-    if (!actionOk && /\b(feito|conclu[ií]|regist|agend|marqu|cancel|atualiz|paga|isent)\w*/i.test(finalText)) {
-      // só intervém se o texto afirmar conclusão; perguntas ("confirmas?") passam
-      if (!/confirm|\?/i.test(finalText)) {
-        finalText = "Para concluir, preciso da tua confirmação. Confirmas a ação?";
-      }
+    // Salvaguarda mínima: só intervém se o texto AFIRMA que concluiu (verbo no passado de sucesso)
+    // sem ter havido ação bem-sucedida. Não toca em perguntas, previews ou pedidos de confirmação.
+    const afirmaConclusao = /\b(registei|registado com sucesso|paga com sucesso|agendad[ao] com sucesso|marcad[ao] com sucesso|cancelad[ao] com sucesso|isent[ao] com sucesso|conclu[ií]d[ao] com sucesso|feito com sucesso|✅)\b/i.test(finalText);
+    if (!actionOk && afirmaConclusao) {
+      finalText = "Ainda não executei essa ação — preciso que confirmes. Queres que avance agora?";
     }
 
     // Log de uso (best-effort)
