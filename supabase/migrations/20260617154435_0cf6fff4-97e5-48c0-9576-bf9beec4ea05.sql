@@ -1,0 +1,1 @@
+ALTER TABLE public.sessoes ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT NULL;
