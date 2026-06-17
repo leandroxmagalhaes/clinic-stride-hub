@@ -409,22 +409,33 @@ async function runTool(name: string, args: any, db: any, clinicId: string, userI
       if (args.confirm !== true) {
         return { preview: true, resumo: `Marcar como PAGA a sessão de ${s.pacientes?.full_name} (${fmtLisbon(s.start_time)})${s.price ? `, €${Number(s.price).toFixed(2)}` : ""}.`, pergunta: "Confirmas o pagamento?" };
       }
-      const upd: any = { payment_status: "pago", paid_at: new Date().toISOString() };
+      // Grava o pagamento de forma resiliente (igual ao frontend):
+      // 1) marca como pago (sempre funciona); 2) tenta gravar o método à parte e ignora se a coluna não existir.
+      const { error } = await db.from("sessoes")
+        .update({ payment_status: "pago", paid_at: new Date().toISOString() })
+        .eq("id", s.id).eq("clinic_id", clinicId);
+      if (error) return { error: error.message };
+
+      let metodoTxt = "";
       if (args.method) {
-        // Normaliza variações para os valores reais do sistema (Portugal)
         const m = String(args.method).toLowerCase().replace(/\s|-/g, "");
         const map: Record<string, string> = {
-          numerario: "numerario", dinheiro: "numerario", cash: "numerario", numerário: "numerario",
+          numerario: "numerario", dinheiro: "numerario", cash: "numerario", "numerário": "numerario",
           mbway: "mbway", mbw: "mbway",
           multibanco: "multibanco", mb: "multibanco", atm: "multibanco",
-          transferencia: "transferencia", transferência: "transferencia", transfer: "transferencia",
-          cartao: "cartao", cartão: "cartao", card: "cartao", credito: "cartao", debito: "cartao",
+          transferencia: "transferencia", "transferência": "transferencia", transfer: "transferencia",
+          cartao: "cartao", "cartão": "cartao", card: "cartao", credito: "cartao", debito: "cartao",
         };
-        upd.payment_method = map[m] || "numerario";
+        const dbMethod = map[m] || "numerario";
+        const { error: eMethod } = await db.from("sessoes").update({ payment_method: dbMethod }).eq("id", s.id).eq("clinic_id", clinicId);
+        if (eMethod) {
+          console.warn("payment_method não gravado (coluna pode não existir):", eMethod.message);
+          metodoTxt = ` Método indicado: ${dbMethod} (não foi possível guardar o método, mas o pagamento ficou registado).`;
+        } else {
+          metodoTxt = ` Método: ${dbMethod}.`;
+        }
       }
-      const { error } = await db.from("sessoes").update(upd).eq("id", s.id).eq("clinic_id", clinicId);
-      if (error) return { error: error.message };
-      return { success: true, mensagem: `Pagamento registado para ${s.pacientes?.full_name}.` };
+      return { success: true, mensagem: `Pagamento registado para ${s.pacientes?.full_name}.${metodoTxt}` };
     }
 
     case "exempt_no_show": {
