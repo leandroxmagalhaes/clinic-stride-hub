@@ -38,6 +38,14 @@ function todayInLisbon(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
+// Rótulo legível de "agora" em Lisboa (dia da semana, data e hora) para ancorar o agente.
+function nowLisbonLabel(): string {
+  return new Intl.DateTimeFormat("pt-PT", {
+    timeZone: TZ, weekday: "long", day: "2-digit", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  }).format(new Date());
+}
+
 function fmtLisbon(iso: string): string {
   try {
     return new Intl.DateTimeFormat("pt-PT", {
@@ -324,9 +332,9 @@ async function runTool(name: string, args: any, db: any, clinicId: string, userI
         const { data } = await db.from("servicos").select("id, name, duration_minutes, price").eq("clinic_id", clinicId).limit(1);
         service = data?.[0] || null;
       }
-      // profissional (FK -> profiles)
-      const { data: profs } = await db.from("profiles").select("id, full_name").eq("clinic_id", clinicId).eq("is_active", true).limit(1);
-      const prof = profs?.[0];
+      // profissional (FK -> profiles). Preferência: Camila (fisioterapeuta padrão); senão, primeiro ativo.
+      const { data: profsAll } = await db.from("profiles").select("id, full_name").eq("clinic_id", clinicId).eq("is_active", true);
+      let prof = (profsAll || []).find((p: any) => /camila/i.test(p.full_name || "")) || (profsAll || [])[0];
       if (!prof) return { error: "Nenhum profissional ativo encontrado." };
 
       // pack ativo com saldo
@@ -463,4 +471,4 @@ async function runTool(name: string, args: any, db: any, clinicId: string, userI
   }
 }
 
-export { TOOLS, ACTION_TOOLS, runTool, todayInLisbon, ANTHROPIC_MODEL, TZ, MAX_ROUNDS, corsHeaders };
+export { TOOLS, ACTION_TOOLS, runTool, todayInLisbon, nowLisbonLabel, ANTHROPIC_MODEL, TZ, MAX_ROUNDS, corsHeaders };
