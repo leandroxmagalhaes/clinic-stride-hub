@@ -34,6 +34,7 @@ interface PortalInvite {
   id: string;
   link_token: string;
   codigo: string;
+  tipo?: string | null;
   created_at: string;
   enviado_para_email: string | null;
   enviado_para_telefone: string | null;
@@ -89,6 +90,15 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
     } finally {
       setResettingPwd(false);
     }
+  };
+
+  const buildPortalLink = (invite: PortalInvite) => {
+    if (invite.tipo === "magic_link") return `${getPublicBaseUrl()}/portal/acesso/${invite.link_token}`;
+    return `${getPublicBaseUrl()}/portal/${invite.link_token}`;
+  };
+
+  const copyToClipboard = async (text: string) => {
+    await navigator.clipboard.writeText(text);
   };
 
   useEffect(() => {
@@ -163,7 +173,15 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
         body: { paciente_id: patientId, email: patientEmail, telefone: patientPhone, template_id: selectedTemplateId || null },
       });
       if (error) throw error;
-      toast.success("Convite gerado e enviado com sucesso!");
+      const fallbackLink = (data as any)?.link as string | undefined;
+      if ((data as any)?.email_sent) {
+        toast.success("Convite gerado e enviado com sucesso!");
+      } else if (fallbackLink) {
+        await copyToClipboard(fallbackLink);
+        toast.warning("O email não foi confirmado. Link copiado para envio manual.");
+      } else {
+        toast.warning("Convite gerado, mas o email não foi confirmado.");
+      }
       await loadData();
     } catch (err: any) {
       toast.error(err.message || "Erro ao gerar convite.");
@@ -204,7 +222,7 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
 
   const handleCopyLink = () => {
     if (!lastInvite) return;
-    const link = `${getPublicBaseUrl()}/portal/${lastInvite.link_token}`;
+    const link = buildPortalLink(lastInvite);
     navigator.clipboard.writeText(link);
     toast.success("Link copiado!");
   };
