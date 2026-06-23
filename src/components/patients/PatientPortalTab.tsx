@@ -295,11 +295,21 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
             if (!patientEmail) { toast.error("Utente sem email registado. Adicione um email antes de gerar o magic link."); return; }
             setGenerating(true);
             try {
-              const { error } = await supabase.functions.invoke("generate-portal-magic-link", {
+              const { data, error } = await supabase.functions.invoke("generate-portal-magic-link", {
                 body: { paciente_id: patientId, email: patientEmail, template_id: selectedTemplateId || null },
               });
               if (error) throw error;
-              toast.success("Magic link enviado por email (válido 24h, uso único).");
+              const emailLink = (data as any)?.link as string | undefined;
+              const token = emailLink?.split("/portal/ativar/")[1];
+              const directUrl = token ? `${getPublicBaseUrl()}/portal/acesso/${token}` : undefined;
+              if ((data as any)?.email_sent) {
+                toast.success("Magic link enviado por email.");
+              } else if (directUrl) {
+                await copyToClipboard(directUrl);
+                toast.warning("O email não foi confirmado. Link direto copiado para WhatsApp.");
+              } else {
+                toast.warning("Magic link gerado, mas o email não foi confirmado.");
+              }
               await loadData();
             } catch (e: any) {
               toast.error(e.message || "Erro a gerar magic link");
@@ -438,6 +448,7 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
           <CollapsibleContent className="mt-2">
             <div className="bg-muted/30 rounded-lg p-3 text-xs space-y-1.5">
               <div className="flex justify-between"><span className="text-muted-foreground">Código</span><span className="font-mono font-bold tracking-widest">{lastInvite.codigo}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Tipo</span><span>{lastInvite.tipo === "magic_link" ? "Acesso direto" : "Código OTP"}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Enviado para</span><span>{lastInvite.enviado_para_email || lastInvite.enviado_para_telefone || "-"}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Data</span><span>{new Date(lastInvite.created_at).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Tentativas</span><span>{lastInvite.tentativas}/3</span></div>
@@ -506,8 +517,8 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
           open={waOpen}
           onOpenChange={setWaOpen}
           patientName={patientName}
-          link={`${getPublicBaseUrl()}/portal/${lastInvite.link_token}`}
-          codigo={lastInvite.codigo}
+          link={buildPortalLink(lastInvite)}
+          codigo={lastInvite.tipo === "magic_link" ? "" : lastInvite.codigo}
           phone={patientPhone}
         />
       )}
