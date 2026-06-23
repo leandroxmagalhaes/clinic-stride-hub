@@ -317,6 +317,48 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
           </>
         )}
 
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={async () => {
+            if (!patientEmail) {
+              toast.error("Utente sem email registado. Adicione um email antes de gerar o link.");
+              return;
+            }
+            setGenerating(true);
+            try {
+              const { data, error } = await supabase.functions.invoke("generate-portal-magic-link", {
+                body: {
+                  paciente_id: patientId,
+                  email: patientEmail,
+                  template_id: selectedTemplateId || null,
+                  skip_email: true,
+                },
+              });
+              if (error) throw error;
+              const link = (data as any)?.link as string | undefined;
+              const token = link?.split("/portal/ativar/")[1];
+              if (!token) throw new Error("Não foi possível gerar o token.");
+              const directUrl = `${getPublicBaseUrl()}/portal/acesso/${token}`;
+              await navigator.clipboard.writeText(directUrl);
+              toast.success("Link de acesso directo copiado!", {
+                description: "Envie por WhatsApp. Abre o portal sem código nem senha.",
+              });
+              await loadData();
+            } catch (e: any) {
+              toast.error(e.message || "Erro a gerar link de acesso");
+            } finally {
+              setGenerating(false);
+            }
+          }}
+          disabled={generating || !patientEmail}
+          className="gap-1.5"
+          title="Gera um link único que abre o portal sem código nem senha (contingência)"
+        >
+          {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlock className="h-3.5 w-3.5" />}
+          Link acesso directo (sem código)
+        </Button>
+
         {account && (
           <Button
             size="sm"
