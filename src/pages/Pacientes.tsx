@@ -986,27 +986,49 @@ export default function Pacientes() {
                   {reportData.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        Nenhum paciente encontrado
+                        Nenhum registo encontrado
                       </TableCell>
                     </TableRow>
                   ) : (
-                    reportData.map((patient) => {
-                      const dt = (patient as any).created_at ? new Date((patient as any).created_at) : null;
-                      const origin = detectOrigin(patient);
+                    reportData.map((row) => {
+                      const dt = row.date ? new Date(row.date) : null;
+                      const patient = row.patient;
+                      const handleNameClick = () => {
+                        setIsReportModalOpen(false);
+                        if (row.kind === "anamnese") {
+                          navigate(`/prontuarios?paciente=${patient.id}&tab=anamnese`);
+                        } else {
+                          setSelectedPatient(patient);
+                        }
+                      };
                       return (
-                        <TableRow key={patient.id}>
+                        <TableRow key={row.key}>
                           <TableCell>{dt ? format(dt, "dd/MM/yyyy", { locale: ptBR }) : "—"}</TableCell>
                           <TableCell>{dt ? format(dt, "HH:mm", { locale: ptBR }) : "—"}</TableCell>
-                          <TableCell className="font-medium">{patient.full_name}</TableCell>
                           <TableCell>
-                            <Badge
-                              variant="secondary"
-                              className={
-                                origin === "link" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
-                              }
+                            <button
+                              type="button"
+                              onClick={handleNameClick}
+                              className="font-medium text-primary hover:underline text-left"
                             >
-                              {origin === "link" ? "🔗 Link (cliente)" : "💻 Sistema"}
-                            </Badge>
+                              {patient.full_name}
+                            </button>
+                          </TableCell>
+                          <TableCell>
+                            {row.kind === "anamnese" ? (
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                                📝 Anamnese
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="secondary"
+                                className={
+                                  row.origin === "link" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                                }
+                              >
+                                {row.origin === "link" ? "🔗 Cadastro (Link)" : "💻 Cadastro (Sistema)"}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell>{patient.phone || "—"}</TableCell>
                           <TableCell>{patient.email || "—"}</TableCell>
