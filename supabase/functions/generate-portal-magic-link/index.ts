@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { paciente_id, email, template_id } = await req.json();
+    const { paciente_id, email, template_id, skip_email } = await req.json();
     if (!paciente_id) throw new Error("paciente_id is required");
     if (!email) throw new Error("email is required for magic link");
 
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
     const link = `${baseUrl}/portal/ativar/${link_token}`;
     const firstName = patient?.full_name?.split(" ")[0] || "Utente";
 
-    if (resendKey) {
+    if (resendKey && !skip_email) {
       const html = `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#f8fafc;">
           <div style="background:#fff;border-radius:16px;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
