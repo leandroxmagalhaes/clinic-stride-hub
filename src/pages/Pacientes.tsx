@@ -98,11 +98,23 @@ export default function Pacientes() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   type ReportSortField = "created_at" | "full_name" | "origin";
   type ReportSortDir = "asc" | "desc";
-  type OriginFilter = "all" | "sistema" | "link";
+  type OriginFilter = "all" | "sistema" | "link" | "anamnese";
   const [reportSearch, setReportSearch] = useState("");
   const [reportOrigin, setReportOrigin] = useState<OriginFilter>("all");
   const [reportSortField, setReportSortField] = useState<ReportSortField>("created_at");
   const [reportSortDir, setReportSortDir] = useState<ReportSortDir>("desc");
+  const [anamneseEntries, setAnamneseEntries] = useState<Array<{ id: string; paciente_id: string; created_at: string; updated_at: string; completo: boolean }>>([]);
+
+  useEffect(() => {
+    if (!isReportModalOpen) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("portal_questionario")
+        .select("id, paciente_id, created_at, updated_at, completo")
+        .eq("completo", true);
+      setAnamneseEntries(data || []);
+    })();
+  }, [isReportModalOpen]);
   const reportTableRef = useRef<HTMLDivElement>(null);
 
   function detectOrigin(patient: Patient): "sistema" | "link" {
