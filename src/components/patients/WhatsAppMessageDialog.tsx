@@ -16,14 +16,19 @@ interface Props {
 }
 
 function buildDefaultMessage(opts: { firstName: string; patientName: string; link: string; codigo: string }) {
+  const codeLine = opts.codigo ? `\n🔢 Código: ${opts.codigo}\n` : "";
+  const expiryLine = opts.codigo
+    ? "⚠️ Importante: o link expira em 48h e tem 3 tentativas."
+    : "⚠️ Importante: este link abre diretamente o portal e deve ser usado apenas pela pessoa responsável.";
+
   return `Olá ${opts.firstName},
 
 Aqui está o seu acesso ao Portal Physione para preencher o questionário do/a ${opts.patientName}:
 
 🔗 ${opts.link}
-🔢 Código: ${opts.codigo}
+${codeLine}
 
-⚠️ Importante: o link expira em 48h e tem 3 tentativas.
+${expiryLine}
 Se já tinha começado a preencher noutro dispositivo, o sistema vai detetar e oferecer continuar.
 
 Qualquer dúvida, responda a esta mensagem.`;
