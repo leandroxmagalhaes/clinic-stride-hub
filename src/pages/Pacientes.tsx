@@ -197,26 +197,35 @@ export default function Pacientes() {
     }
   };
 
+  const eventLabel = (r: ReportRow) =>
+    r.kind === "anamnese"
+      ? "Anamnese preenchida"
+      : r.origin === "link"
+      ? "Cadastro · Link (cliente)"
+      : "Cadastro · Sistema";
+
   const handleExportCSV = () => {
-    const headers = ["Data Cadastro", "Hora", "Nome Completo", "Origem", "Telefone", "Email", "Estado"];
-    const rows = reportData.map((p) => {
-      const dt = (p as any).created_at ? new Date((p as any).created_at) : null;
+    const headers = ["Data", "Hora", "Evento", "Nome Completo", "Origem", "Telefone", "Email", "Estado"];
+    const rows = reportData.map((r) => {
+      const dt = r.date ? new Date(r.date) : null;
+      const p = r.patient;
       return [
         dt ? format(dt, "dd/MM/yyyy", { locale: ptBR }) : "-",
         dt ? format(dt, "HH:mm", { locale: ptBR }) : "-",
+        r.kind === "anamnese" ? "Anamnese" : "Cadastro",
         p.full_name || "-",
-        detectOrigin(p) === "link" ? "Link (cliente)" : "Sistema",
+        eventLabel(r),
         p.phone || "-",
         p.email || "-",
         p.is_active ? "Ativo" : "Inativo",
       ];
     });
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `pacientes_${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.download = `relatorio_${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success("CSV exportado!");
@@ -226,11 +235,11 @@ export default function Pacientes() {
     const dateStr = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
     const esc = (s: any) =>
       String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório Pacientes</title><style>body{font-family:system-ui,sans-serif;padding:20px;font-size:12px}h1{font-size:18px;margin-bottom:4px}p.sub{color:#666;margin-bottom:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-weight:600}.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px}.link{background:#dbeafe;color:#1d4ed8}.sistema{background:#f0fdf4;color:#15803d}.ativo{background:#f0fdf4;color:#15803d}.inativo{background:#fef2f2;color:#dc2626}@media print{body{padding:0}}</style></head><body><h1>Relatório de Pacientes</h1><p class="sub">Gerado em ${esc(dateStr)} · ${reportData.length} paciente(s)</p><table><thead><tr><th>Data</th><th>Hora</th><th>Nome</th><th>Origem</th><th>Telefone</th><th>Email</th><th>Estado</th></tr></thead><tbody>${reportData
-      .map((p) => {
-        const dt = (p as any).created_at ? new Date((p as any).created_at) : null;
-        const o = detectOrigin(p);
-        return `<tr><td>${dt ? esc(format(dt, "dd/MM/yyyy", { locale: ptBR })) : "-"}</td><td>${dt ? esc(format(dt, "HH:mm", { locale: ptBR })) : "-"}</td><td>${esc(p.full_name || "-")}</td><td><span class="badge ${o}">${o === "link" ? "Link" : "Sistema"}</span></td><td>${esc(p.phone || "-")}</td><td>${esc(p.email || "-")}</td><td><span class="badge ${p.is_active ? "ativo" : "inativo"}">${p.is_active ? "Ativo" : "Inativo"}</span></td></tr>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório de Cadastros e Anamneses</title><style>body{font-family:system-ui,sans-serif;padding:20px;font-size:12px}h1{font-size:18px;margin-bottom:4px}p.sub{color:#666;margin-bottom:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-weight:600}.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px}.link{background:#dbeafe;color:#1d4ed8}.sistema{background:#f0fdf4;color:#15803d}.anamnese{background:#fef3c7;color:#92400e}.ativo{background:#f0fdf4;color:#15803d}.inativo{background:#fef2f2;color:#dc2626}@media print{body{padding:0}}</style></head><body><h1>Relatório de Cadastros e Anamneses</h1><p class="sub">Gerado em ${esc(dateStr)} · ${reportData.length} registo(s)</p><table><thead><tr><th>Data</th><th>Hora</th><th>Evento</th><th>Nome</th><th>Origem</th><th>Telefone</th><th>Email</th><th>Estado</th></tr></thead><tbody>${reportData
+      .map((r) => {
+        const dt = r.date ? new Date(r.date) : null;
+        const p = r.patient;
+        return `<tr><td>${dt ? esc(format(dt, "dd/MM/yyyy", { locale: ptBR })) : "-"}</td><td>${dt ? esc(format(dt, "HH:mm", { locale: ptBR })) : "-"}</td><td><span class="badge ${r.origin}">${r.kind === "anamnese" ? "Anamnese" : "Cadastro"}</span></td><td>${esc(p.full_name || "-")}</td><td>${esc(eventLabel(r))}</td><td>${esc(p.phone || "-")}</td><td>${esc(p.email || "-")}</td><td><span class="badge ${p.is_active ? "ativo" : "inativo"}">${p.is_active ? "Ativo" : "Inativo"}</span></td></tr>`;
       })
       .join("")}</tbody></table></body></html>`;
     const win = window.open("", "_blank");
