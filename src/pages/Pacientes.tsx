@@ -98,11 +98,23 @@ export default function Pacientes() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   type ReportSortField = "created_at" | "full_name" | "origin";
   type ReportSortDir = "asc" | "desc";
-  type OriginFilter = "all" | "sistema" | "link";
+  type OriginFilter = "all" | "sistema" | "link" | "anamnese";
   const [reportSearch, setReportSearch] = useState("");
   const [reportOrigin, setReportOrigin] = useState<OriginFilter>("all");
   const [reportSortField, setReportSortField] = useState<ReportSortField>("created_at");
   const [reportSortDir, setReportSortDir] = useState<ReportSortDir>("desc");
+  const [anamneseEntries, setAnamneseEntries] = useState<Array<{ id: string; paciente_id: string; created_at: string; updated_at: string; completo: boolean }>>([]);
+
+  useEffect(() => {
+    if (!isReportModalOpen) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("portal_questionario")
+        .select("id, paciente_id, created_at, updated_at, completo")
+        .eq("completo", true);
+      setAnamneseEntries(data || []);
+    })();
+  }, [isReportModalOpen]);
   const reportTableRef = useRef<HTMLDivElement>(null);
 
   function detectOrigin(patient: Patient): "sistema" | "link" {
@@ -111,36 +123,71 @@ export default function Pacientes() {
     return "sistema";
   }
 
-  const reportData = useMemo(() => {
-    let data = [...patients];
-    if (reportOrigin !== "all") data = data.filter((p) => detectOrigin(p) === reportOrigin);
+  type ReportRow = {
+    key: string;
+    kind: "cadastro" | "anamnese";
+    patient: Patient;
+    date: string; // ISO
+    origin: "sistema" | "link" | "anamnese";
+  };
+
+  const reportData = useMemo<ReportRow[]>(() => {
+    const patientById = new Map(patients.map((p) => [p.id, p]));
+    const rows: ReportRow[] = [];
+
+    // Cadastros
+    patients.forEach((p) => {
+      rows.push({
+        key: `cad-${p.id}`,
+        kind: "cadastro",
+        patient: p,
+        date: (p as any).created_at || "",
+        origin: detectOrigin(p),
+      });
+    });
+
+    // Anamneses preenchidas
+    anamneseEntries.forEach((a) => {
+      const p = patientById.get(a.paciente_id);
+      if (!p) return;
+      rows.push({
+        key: `ana-${a.id}`,
+        kind: "anamnese",
+        patient: p,
+        date: a.updated_at || a.created_at || "",
+        origin: "anamnese",
+      });
+    });
+
+    let data = rows;
+    if (reportOrigin !== "all") data = data.filter((r) => r.origin === reportOrigin);
     if (reportSearch.trim()) {
       const term = reportSearch.toLowerCase();
       data = data.filter(
-        (p) =>
-          p.full_name?.toLowerCase().includes(term) ||
-          p.email?.toLowerCase().includes(term) ||
-          p.phone?.toLowerCase().includes(term),
+        (r) =>
+          r.patient.full_name?.toLowerCase().includes(term) ||
+          r.patient.email?.toLowerCase().includes(term) ||
+          r.patient.phone?.toLowerCase().includes(term),
       );
     }
     data.sort((a, b) => {
       let valA = "",
         valB = "";
       if (reportSortField === "created_at") {
-        valA = (a as any).created_at || "";
-        valB = (b as any).created_at || "";
+        valA = a.date;
+        valB = b.date;
       } else if (reportSortField === "full_name") {
-        valA = a.full_name || "";
-        valB = b.full_name || "";
+        valA = a.patient.full_name || "";
+        valB = b.patient.full_name || "";
       } else if (reportSortField === "origin") {
-        valA = detectOrigin(a);
-        valB = detectOrigin(b);
+        valA = a.origin;
+        valB = b.origin;
       }
       const cmp = valA.localeCompare(valB, "pt-PT");
       return reportSortDir === "asc" ? cmp : -cmp;
     });
     return data;
-  }, [patients, reportSearch, reportOrigin, reportSortField, reportSortDir]);
+  }, [patients, anamneseEntries, reportSearch, reportOrigin, reportSortField, reportSortDir]);
 
   const toggleSort = (field: ReportSortField) => {
     if (reportSortField === field) setReportSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -150,26 +197,35 @@ export default function Pacientes() {
     }
   };
 
+  const eventLabel = (r: ReportRow) =>
+    r.kind === "anamnese"
+      ? "Anamnese preenchida"
+      : r.origin === "link"
+      ? "Cadastro · Link (cliente)"
+      : "Cadastro · Sistema";
+
   const handleExportCSV = () => {
-    const headers = ["Data Cadastro", "Hora", "Nome Completo", "Origem", "Telefone", "Email", "Estado"];
-    const rows = reportData.map((p) => {
-      const dt = (p as any).created_at ? new Date((p as any).created_at) : null;
+    const headers = ["Data", "Hora", "Evento", "Nome Completo", "Origem", "Telefone", "Email", "Estado"];
+    const rows = reportData.map((r) => {
+      const dt = r.date ? new Date(r.date) : null;
+      const p = r.patient;
       return [
         dt ? format(dt, "dd/MM/yyyy", { locale: ptBR }) : "-",
         dt ? format(dt, "HH:mm", { locale: ptBR }) : "-",
+        r.kind === "anamnese" ? "Anamnese" : "Cadastro",
         p.full_name || "-",
-        detectOrigin(p) === "link" ? "Link (cliente)" : "Sistema",
+        eventLabel(r),
         p.phone || "-",
         p.email || "-",
         p.is_active ? "Ativo" : "Inativo",
       ];
     });
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `pacientes_${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.download = `relatorio_${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success("CSV exportado!");
@@ -179,11 +235,11 @@ export default function Pacientes() {
     const dateStr = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
     const esc = (s: any) =>
       String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório Pacientes</title><style>body{font-family:system-ui,sans-serif;padding:20px;font-size:12px}h1{font-size:18px;margin-bottom:4px}p.sub{color:#666;margin-bottom:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-weight:600}.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px}.link{background:#dbeafe;color:#1d4ed8}.sistema{background:#f0fdf4;color:#15803d}.ativo{background:#f0fdf4;color:#15803d}.inativo{background:#fef2f2;color:#dc2626}@media print{body{padding:0}}</style></head><body><h1>Relatório de Pacientes</h1><p class="sub">Gerado em ${esc(dateStr)} · ${reportData.length} paciente(s)</p><table><thead><tr><th>Data</th><th>Hora</th><th>Nome</th><th>Origem</th><th>Telefone</th><th>Email</th><th>Estado</th></tr></thead><tbody>${reportData
-      .map((p) => {
-        const dt = (p as any).created_at ? new Date((p as any).created_at) : null;
-        const o = detectOrigin(p);
-        return `<tr><td>${dt ? esc(format(dt, "dd/MM/yyyy", { locale: ptBR })) : "-"}</td><td>${dt ? esc(format(dt, "HH:mm", { locale: ptBR })) : "-"}</td><td>${esc(p.full_name || "-")}</td><td><span class="badge ${o}">${o === "link" ? "Link" : "Sistema"}</span></td><td>${esc(p.phone || "-")}</td><td>${esc(p.email || "-")}</td><td><span class="badge ${p.is_active ? "ativo" : "inativo"}">${p.is_active ? "Ativo" : "Inativo"}</span></td></tr>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório de Cadastros e Anamneses</title><style>body{font-family:system-ui,sans-serif;padding:20px;font-size:12px}h1{font-size:18px;margin-bottom:4px}p.sub{color:#666;margin-bottom:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-weight:600}.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px}.link{background:#dbeafe;color:#1d4ed8}.sistema{background:#f0fdf4;color:#15803d}.anamnese{background:#fef3c7;color:#92400e}.ativo{background:#f0fdf4;color:#15803d}.inativo{background:#fef2f2;color:#dc2626}@media print{body{padding:0}}</style></head><body><h1>Relatório de Cadastros e Anamneses</h1><p class="sub">Gerado em ${esc(dateStr)} · ${reportData.length} registo(s)</p><table><thead><tr><th>Data</th><th>Hora</th><th>Evento</th><th>Nome</th><th>Origem</th><th>Telefone</th><th>Email</th><th>Estado</th></tr></thead><tbody>${reportData
+      .map((r) => {
+        const dt = r.date ? new Date(r.date) : null;
+        const p = r.patient;
+        return `<tr><td>${dt ? esc(format(dt, "dd/MM/yyyy", { locale: ptBR })) : "-"}</td><td>${dt ? esc(format(dt, "HH:mm", { locale: ptBR })) : "-"}</td><td><span class="badge ${r.origin}">${r.kind === "anamnese" ? "Anamnese" : "Cadastro"}</span></td><td>${esc(p.full_name || "-")}</td><td>${esc(eventLabel(r))}</td><td>${esc(p.phone || "-")}</td><td>${esc(p.email || "-")}</td><td><span class="badge ${p.is_active ? "ativo" : "inativo"}">${p.is_active ? "Ativo" : "Inativo"}</span></td></tr>`;
       })
       .join("")}</tbody></table></body></html>`;
     const win = window.open("", "_blank");
@@ -847,7 +903,7 @@ export default function Pacientes() {
       <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
         <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display">Relatório de Cadastros</DialogTitle>
+            <DialogTitle className="font-display">Relatório de Cadastros e Anamneses</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-2">
@@ -865,9 +921,10 @@ export default function Pacientes() {
                   <SelectValue placeholder="Origem" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas as origens</SelectItem>
-                  <SelectItem value="sistema">Sistema (utilizador)</SelectItem>
-                  <SelectItem value="link">Link (cliente)</SelectItem>
+                  <SelectItem value="all">Todos os eventos</SelectItem>
+                  <SelectItem value="sistema">Cadastro · Sistema</SelectItem>
+                  <SelectItem value="link">Cadastro · Link (cliente)</SelectItem>
+                  <SelectItem value="anamnese">Anamnese preenchida</SelectItem>
                 </SelectContent>
               </Select>
               <div className="flex gap-2">
@@ -879,7 +936,7 @@ export default function Pacientes() {
                 </Button>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground">{reportData.length} paciente(s) encontrado(s)</p>
+            <p className="text-sm text-muted-foreground">{reportData.length} registo(s) encontrado(s)</p>
             <div className="overflow-x-auto rounded-md border" ref={reportTableRef}>
               <Table>
                 <TableHeader>
@@ -930,27 +987,49 @@ export default function Pacientes() {
                   {reportData.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        Nenhum paciente encontrado
+                        Nenhum registo encontrado
                       </TableCell>
                     </TableRow>
                   ) : (
-                    reportData.map((patient) => {
-                      const dt = (patient as any).created_at ? new Date((patient as any).created_at) : null;
-                      const origin = detectOrigin(patient);
+                    reportData.map((row) => {
+                      const dt = row.date ? new Date(row.date) : null;
+                      const patient = row.patient;
+                      const handleNameClick = () => {
+                        setIsReportModalOpen(false);
+                        if (row.kind === "anamnese") {
+                          navigate(`/prontuarios?paciente=${patient.id}&tab=anamnese`);
+                        } else {
+                          setSelectedPatient(patient);
+                        }
+                      };
                       return (
-                        <TableRow key={patient.id}>
+                        <TableRow key={row.key}>
                           <TableCell>{dt ? format(dt, "dd/MM/yyyy", { locale: ptBR }) : "—"}</TableCell>
                           <TableCell>{dt ? format(dt, "HH:mm", { locale: ptBR }) : "—"}</TableCell>
-                          <TableCell className="font-medium">{patient.full_name}</TableCell>
                           <TableCell>
-                            <Badge
-                              variant="secondary"
-                              className={
-                                origin === "link" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
-                              }
+                            <button
+                              type="button"
+                              onClick={handleNameClick}
+                              className="font-medium text-primary hover:underline text-left"
                             >
-                              {origin === "link" ? "🔗 Link (cliente)" : "💻 Sistema"}
-                            </Badge>
+                              {patient.full_name}
+                            </button>
+                          </TableCell>
+                          <TableCell>
+                            {row.kind === "anamnese" ? (
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                                📝 Anamnese
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="secondary"
+                                className={
+                                  row.origin === "link" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                                }
+                              >
+                                {row.origin === "link" ? "🔗 Cadastro (Link)" : "💻 Cadastro (Sistema)"}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell>{patient.phone || "—"}</TableCell>
                           <TableCell>{patient.email || "—"}</TableCell>
