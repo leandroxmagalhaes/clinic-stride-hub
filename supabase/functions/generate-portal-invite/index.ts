@@ -76,10 +76,13 @@ Deno.serve(async (req) => {
     const baseUrl = "https://clinic-stride-hub.lovable.app";
     const link = `${baseUrl}/portal/${link_token}`;
 
+    let email_sent = false;
+    let email_error: string | null = null;
+
     // Send email if we have an email and Resend key
     if (email && resendKey) {
       const firstName = patient?.full_name?.split(" ")[0] || "Paciente";
-      await fetch("https://api.resend.com/emails", {
+      const emailRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -102,9 +105,17 @@ Deno.serve(async (req) => {
           `,
         }),
       });
+      if (emailRes.ok) {
+        email_sent = true;
+      } else {
+        email_error = await emailRes.text();
+        console.error("generate-portal-invite email error:", email_error);
+      }
+    } else if (email && !resendKey) {
+      email_error = "RESEND_API_KEY not configured";
     }
 
-    return new Response(JSON.stringify({ link, codigo, expira_em }), {
+    return new Response(JSON.stringify({ link, codigo, expira_em, email_sent, email_error }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
