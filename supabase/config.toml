@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.issue-toconline-invoice]
 verify_jwt = false
+
+[functions.portal-direct-access]
+verify_jwt = false
