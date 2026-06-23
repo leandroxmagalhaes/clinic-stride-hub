@@ -89,6 +89,9 @@ Deno.serve(async (req) => {
     const link = `${baseUrl}/portal/ativar/${link_token}`;
     const firstName = patient?.full_name?.split(" ")[0] || "Utente";
 
+    let email_sent = false;
+    let email_error: string | null = null;
+
     if (resendKey && !skip_email) {
       const html = `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#f8fafc;">
@@ -109,7 +112,7 @@ Deno.serve(async (req) => {
         </div>
       `;
 
-      await fetch("https://api.resend.com/emails", {
+      const emailRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -119,9 +122,18 @@ Deno.serve(async (req) => {
           html,
         }),
       });
+
+      if (emailRes.ok) {
+        email_sent = true;
+      } else {
+        email_error = await emailRes.text();
+        console.error("generate-portal-magic-link email error:", email_error);
+      }
+    } else if (!skip_email) {
+      email_error = "RESEND_API_KEY not configured";
     }
 
-    return new Response(JSON.stringify({ link, expira_em }), {
+    return new Response(JSON.stringify({ link, expira_em, email_sent, email_error }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
