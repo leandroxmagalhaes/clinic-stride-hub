@@ -123,36 +123,71 @@ export default function Pacientes() {
     return "sistema";
   }
 
-  const reportData = useMemo(() => {
-    let data = [...patients];
-    if (reportOrigin !== "all") data = data.filter((p) => detectOrigin(p) === reportOrigin);
+  type ReportRow = {
+    key: string;
+    kind: "cadastro" | "anamnese";
+    patient: Patient;
+    date: string; // ISO
+    origin: "sistema" | "link" | "anamnese";
+  };
+
+  const reportData = useMemo<ReportRow[]>(() => {
+    const patientById = new Map(patients.map((p) => [p.id, p]));
+    const rows: ReportRow[] = [];
+
+    // Cadastros
+    patients.forEach((p) => {
+      rows.push({
+        key: `cad-${p.id}`,
+        kind: "cadastro",
+        patient: p,
+        date: (p as any).created_at || "",
+        origin: detectOrigin(p),
+      });
+    });
+
+    // Anamneses preenchidas
+    anamneseEntries.forEach((a) => {
+      const p = patientById.get(a.paciente_id);
+      if (!p) return;
+      rows.push({
+        key: `ana-${a.id}`,
+        kind: "anamnese",
+        patient: p,
+        date: a.updated_at || a.created_at || "",
+        origin: "anamnese",
+      });
+    });
+
+    let data = rows;
+    if (reportOrigin !== "all") data = data.filter((r) => r.origin === reportOrigin);
     if (reportSearch.trim()) {
       const term = reportSearch.toLowerCase();
       data = data.filter(
-        (p) =>
-          p.full_name?.toLowerCase().includes(term) ||
-          p.email?.toLowerCase().includes(term) ||
-          p.phone?.toLowerCase().includes(term),
+        (r) =>
+          r.patient.full_name?.toLowerCase().includes(term) ||
+          r.patient.email?.toLowerCase().includes(term) ||
+          r.patient.phone?.toLowerCase().includes(term),
       );
     }
     data.sort((a, b) => {
       let valA = "",
         valB = "";
       if (reportSortField === "created_at") {
-        valA = (a as any).created_at || "";
-        valB = (b as any).created_at || "";
+        valA = a.date;
+        valB = b.date;
       } else if (reportSortField === "full_name") {
-        valA = a.full_name || "";
-        valB = b.full_name || "";
+        valA = a.patient.full_name || "";
+        valB = b.patient.full_name || "";
       } else if (reportSortField === "origin") {
-        valA = detectOrigin(a);
-        valB = detectOrigin(b);
+        valA = a.origin;
+        valB = b.origin;
       }
       const cmp = valA.localeCompare(valB, "pt-PT");
       return reportSortDir === "asc" ? cmp : -cmp;
     });
     return data;
-  }, [patients, reportSearch, reportOrigin, reportSortField, reportSortDir]);
+  }, [patients, anamneseEntries, reportSearch, reportOrigin, reportSortField, reportSortDir]);
 
   const toggleSort = (field: ReportSortField) => {
     if (reportSortField === field) setReportSortDir((d) => (d === "asc" ? "desc" : "asc"));
