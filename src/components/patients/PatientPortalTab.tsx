@@ -302,10 +302,12 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
               const emailLink = (data as any)?.link as string | undefined;
               const token = emailLink?.split("/portal/ativar/")[1];
               const directUrl = token ? `${getPublicBaseUrl()}/portal/acesso/${token}` : undefined;
+              if (directUrl) await copyToClipboard(directUrl);
               if ((data as any)?.email_sent) {
-                toast.success("Magic link enviado por email.");
+                toast.success("Magic link enviado e link direto copiado.", {
+                  description: "Se o email não chegar, envie o link copiado por WhatsApp.",
+                });
               } else if (directUrl) {
-                await copyToClipboard(directUrl);
                 toast.warning("O email não foi confirmado. Link direto copiado para WhatsApp.");
               } else {
                 toast.warning("Magic link gerado, mas o email não foi confirmado.");
