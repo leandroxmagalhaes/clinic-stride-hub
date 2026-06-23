@@ -903,7 +903,7 @@ export default function Pacientes() {
       <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
         <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display">Relatório de Cadastros</DialogTitle>
+            <DialogTitle className="font-display">Relatório de Cadastros e Anamneses</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-2">
