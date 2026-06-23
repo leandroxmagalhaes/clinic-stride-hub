@@ -921,9 +921,10 @@ export default function Pacientes() {
                   <SelectValue placeholder="Origem" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas as origens</SelectItem>
-                  <SelectItem value="sistema">Sistema (utilizador)</SelectItem>
-                  <SelectItem value="link">Link (cliente)</SelectItem>
+                  <SelectItem value="all">Todos os eventos</SelectItem>
+                  <SelectItem value="sistema">Cadastro · Sistema</SelectItem>
+                  <SelectItem value="link">Cadastro · Link (cliente)</SelectItem>
+                  <SelectItem value="anamnese">Anamnese preenchida</SelectItem>
                 </SelectContent>
               </Select>
               <div className="flex gap-2">
@@ -935,7 +936,7 @@ export default function Pacientes() {
                 </Button>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground">{reportData.length} paciente(s) encontrado(s)</p>
+            <p className="text-sm text-muted-foreground">{reportData.length} registo(s) encontrado(s)</p>
             <div className="overflow-x-auto rounded-md border" ref={reportTableRef}>
               <Table>
                 <TableHeader>
