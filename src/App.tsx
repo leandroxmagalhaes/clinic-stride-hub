@@ -52,6 +52,7 @@ const PreRegisto = lazyWithRetry(() => import("./pages/PreRegisto"));
 const RelatorioResp = lazyWithRetry(() => import("./pages/RelatorioRespiratorio"));
 const PortalVerificacao = lazyWithRetry(() => import("./pages/PortalVerificacao"));
 const PortalAtivacao = lazyWithRetry(() => import("./pages/PortalAtivacao"));
+const PortalAcessoDireto = lazyWithRetry(() => import("./pages/PortalAcessoDireto"));
 const PortalOnboarding = lazyWithRetry(() => import("./pages/PortalOnboarding"));
 const PortalLogin = lazyWithRetry(() => import("./pages/PortalLogin"));
 const PortalResetPassword = lazyWithRetry(() => import("./pages/PortalResetPassword"));
@@ -132,6 +133,14 @@ const App = () => (
                     element={
                       <Suspense fallback={<PageLoadingFallback />}>
                         <PortalAtivacao />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/portal/acesso/:token"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <PortalAcessoDireto />
                       </Suspense>
                     }
                   />
