@@ -290,10 +290,18 @@ export type Database = {
           clinic_name: string | null
           created_at: string
           email_enabled: boolean | null
+          iban: string | null
+          iban_nome: string | null
           id: string
           language: string | null
           logo_url: string | null
+          mbway_nome_1: string | null
+          mbway_nome_2: string | null
+          mbway_numero_1: string | null
+          mbway_numero_2: string | null
           primary_color: string | null
+          reminder_antecedencia_horas: number
+          reminder_ativo: boolean
           sms_enabled: boolean | null
           timezone: string | null
           updated_at: string
@@ -307,10 +315,18 @@ export type Database = {
           clinic_name?: string | null
           created_at?: string
           email_enabled?: boolean | null
+          iban?: string | null
+          iban_nome?: string | null
           id?: string
           language?: string | null
           logo_url?: string | null
+          mbway_nome_1?: string | null
+          mbway_nome_2?: string | null
+          mbway_numero_1?: string | null
+          mbway_numero_2?: string | null
           primary_color?: string | null
+          reminder_antecedencia_horas?: number
+          reminder_ativo?: boolean
           sms_enabled?: boolean | null
           timezone?: string | null
           updated_at?: string
@@ -324,10 +340,18 @@ export type Database = {
           clinic_name?: string | null
           created_at?: string
           email_enabled?: boolean | null
+          iban?: string | null
+          iban_nome?: string | null
           id?: string
           language?: string | null
           logo_url?: string | null
+          mbway_nome_1?: string | null
+          mbway_nome_2?: string | null
+          mbway_numero_1?: string | null
+          mbway_numero_2?: string | null
           primary_color?: string | null
+          reminder_antecedencia_horas?: number
+          reminder_ativo?: boolean
           sms_enabled?: boolean | null
           timezone?: string | null
           updated_at?: string
