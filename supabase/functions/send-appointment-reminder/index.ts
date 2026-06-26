@@ -4,8 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 function escapeHtml(unsafe: string): string {
@@ -18,279 +17,213 @@ function escapeHtml(unsafe: string): string {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) {
-      throw new Error("RESEND_API_KEY not configured");
-    }
+    if (!resendApiKey) throw new Error("RESEND_API_KEY not configured");
 
-    // Restrict to internal/scheduled invocations: must present service role key,
-    // CRON_SECRET, or the project anon key (used by pg_cron jobs).
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const cronSecret = Deno.env.get("CRON_SECRET");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const provided = authHeader.replace(/^Bearer\s+/i, "");
-    const isAuthorized =
+    const provided = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    const ok =
       provided === serviceKey ||
       (!!cronSecret && provided === cronSecret) ||
       (!!anonKey && provided === anonKey);
-    if (!isAuthorized) {
+    if (!ok) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
-
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
     const resend = new Resend(resendApiKey);
 
-    // Get sessions scheduled for tomorrow that haven't been reminded yet
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStart = new Date(tomorrow);
-    tomorrowStart.setHours(0, 0, 0, 0);
-    const tomorrowEnd = new Date(tomorrow);
-    tomorrowEnd.setHours(23, 59, 59, 999);
+    const now = new Date();
+    const windowEnd = new Date(now.getTime() + 26 * 60 * 60 * 1000);
 
-    console.log(`Checking for sessions between ${tomorrowStart.toISOString()} and ${tomorrowEnd.toISOString()}`);
+    const { data: settingsRows } = await supabase
+      .from("clinic_settings")
+      .select(
+        "clinic_id, timezone, reminder_ativo, reminder_antecedencia_horas, mbway_nome_1, mbway_numero_1, mbway_nome_2, mbway_numero_2, iban_nome, iban"
+      );
+    const settingsMap = new Map<string, any>();
+    for (const r of settingsRows || []) settingsMap.set((r as any).clinic_id, r);
 
-    // Fetch sessions with patient and clinic info
     const { data: sessions, error: sessionsError } = await supabase
       .from("sessoes")
       .select(`
-        id,
-        start_time,
-        end_time,
-        status,
-        paciente_id,
-        profissional_id,
-        servico_id,
-        clinic_id,
-        pacientes!sessoes_paciente_id_fkey (
-          id,
-          full_name,
-          email,
-          phone
-        ),
-        profiles!sessoes_profissional_id_fkey (
-          full_name
-        ),
-        servicos!sessoes_servico_id_fkey (
-          name
-        ),
-        clinics!sessoes_clinic_id_fkey (
-          name,
-          phone,
-          email
-        )
+        id, start_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado,
+        pacientes!sessoes_paciente_id_fkey ( full_name, email ),
+        profiles!sessoes_profissional_id_fkey ( full_name ),
+        servicos!sessoes_servico_id_fkey ( name ),
+        clinics!sessoes_clinic_id_fkey ( name, phone, email )
       `)
-      .gte("start_time", tomorrowStart.toISOString())
-      .lte("start_time", tomorrowEnd.toISOString())
+      .gte("start_time", now.toISOString())
+      .lte("start_time", windowEnd.toISOString())
       .in("status", ["agendado", "confirmado"]);
+    if (sessionsError) throw new Error(`Failed to fetch sessions: ${sessionsError.message}`);
 
-    if (sessionsError) {
-      console.error("Error fetching sessions:", sessionsError);
-      throw new Error(`Failed to fetch sessions: ${sessionsError.message}`);
-    }
-
-    console.log(`Found ${sessions?.length || 0} sessions for tomorrow`);
-
-    const results = {
-      sent: 0,
-      skipped: 0,
-      errors: [] as string[],
-    };
+    const results = { sent: 0, skipped: 0, pending: 0, errors: [] as string[] };
 
     for (const session of sessions || []) {
       try {
-        const patient = session.pacientes as any;
-        const professional = session.profiles as any;
-        const service = session.servicos as any;
-        const clinic = session.clinics as any;
+        const patient = (session as any).pacientes;
+        const professional = (session as any).profiles;
+        const service = (session as any).servicos;
+        const clinic = (session as any).clinics;
+        const settings = settingsMap.get((session as any).clinic_id) || {};
 
-        // Skip if no patient email
-        if (!patient?.email) {
-          console.log(`Skipping session ${session.id}: no patient email`);
+        if (settings.reminder_ativo === false) {
           results.skipped++;
           continue;
         }
 
-        // Dedup: skip if a reminder was already logged for this session/email channel
+        const antecedencia = Number(settings.reminder_antecedencia_horas ?? 3);
+        const hoursUntil =
+          (new Date((session as any).start_time).getTime() - now.getTime()) / 3600000;
+        if (hoursUntil > antecedencia) {
+          results.pending++;
+          continue;
+        }
+        if (!patient?.email) {
+          results.skipped++;
+          continue;
+        }
+
         const { data: existingLog } = await supabase
           .from("reminder_logs")
           .select("id")
-          .eq("sessao_id", session.id)
+          .eq("sessao_id", (session as any).id)
           .eq("canal", "email")
           .maybeSingle();
         if (existingLog) {
-          console.log(`Skipping session ${session.id}: reminder already sent`);
           results.skipped++;
           continue;
         }
 
-        const appointmentDate = new Date(session.start_time);
-        const formattedDate = appointmentDate.toLocaleDateString("pt-PT", {
+        const tz = settings.timezone || "Europe/Lisbon";
+        const apt = new Date((session as any).start_time);
+        const formattedDate = apt.toLocaleDateString("pt-PT", {
           weekday: "long",
           year: "numeric",
           month: "long",
           day: "numeric",
+          timeZone: tz,
         });
-        const formattedTime = appointmentDate.toLocaleTimeString("pt-PT", {
+        const formattedTime = apt.toLocaleTimeString("pt-PT", {
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: tz,
         });
+
+        const jaPago =
+          (session as any).payment_status === "pago" ||
+          (session as any).pagamento_estado === "pago";
+        const temDados = !!(settings.mbway_numero_1 || settings.iban);
+        const mostrarPagamento =
+          !(session as any).isento && !(session as any).pack_id && !jaPago && temDados;
+
+        const pagamentoHtml = mostrarPagamento
+          ? `
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;margin:16px 0;">
+          <tr>
+            <td style="padding:16px 20px;">
+              <p style="margin:0 0 8px;color:#0c4a6e;font-size:14px;line-height:1.5;">
+                Se preferir adiantar o pagamento e agilizar a chegada, deixamos os dados (é totalmente opcional):
+              </p>
+              <p style="margin:6px 0;color:#0c4a6e;font-size:14px;">
+                <strong>MB WAY:</strong> ${escapeHtml(settings.mbway_nome_1 || "")} — ${escapeHtml(settings.mbway_numero_1 || "")}
+              </p>
+              ${
+                settings.mbway_numero_2
+                  ? `<p style="margin:6px 0;color:#0c4a6e;font-size:13px;">Alternativa (caso o 1.º atinja o limite): ${escapeHtml(settings.mbway_nome_2 || "")} — ${escapeHtml(settings.mbway_numero_2)}</p>`
+                  : ""
+              }
+              ${
+                settings.iban
+                  ? `<p style="margin:6px 0;color:#0c4a6e;font-size:14px;"><strong>IBAN:</strong> ${escapeHtml(settings.iban_nome || "")} — ${escapeHtml(settings.iban)}</p>`
+                  : ""
+              }
+              <p style="margin:10px 0 0;color:#0c4a6e;font-size:13px;line-height:1.5;">
+                Também pode pagar no local, em numerário, sem qualquer problema. Se já efetuou o pagamento, agradecemos que responda só a confirmar.
+              </p>
+            </td>
+          </tr>
+        </table>`
+          : "";
 
         const emailHtml = `
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f4f4f5;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f4f4f5;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;padding:20px;">
     <tr>
-      <td style="background-color: #ffffff; border-radius: 12px; padding: 40px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-          <tr>
-            <td style="text-align: center; padding-bottom: 30px; border-bottom: 1px solid #e4e4e7;">
-              <h1 style="margin: 0; color: #f59e0b; font-size: 24px;">⏰ Lembrete de Sessão</h1>
-            </td>
-          </tr>
+      <td style="background-color:#ffffff;border-radius:12px;padding:40px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        <div style="text-align:center;padding-bottom:24px;border-bottom:1px solid #e4e4e7;">
+          <h1 style="margin:0;color:#f59e0b;font-size:22px;">Lembrete da sua consulta</h1>
+        </div>
+        <div style="padding:24px 0 8px;">
+          <p style="margin:0;color:#3f3f46;font-size:16px;">Olá <strong>${escapeHtml(patient.full_name)}</strong>,</p>
+          <p style="margin:12px 0 0;color:#71717a;font-size:14px;line-height:1.5;">
+            Confirmamos a sua consulta na ${escapeHtml(clinic?.name || "nossa clínica")}. Estamos a contar consigo:
+          </p>
+        </div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#fef3c7;border:1px solid #fcd34d;border-radius:8px;margin:16px 0;">
+          <tr><td style="padding:20px;">
+            <p style="margin:0 0 10px;color:#78350f;font-size:15px;"><strong>Data:</strong> ${formattedDate}</p>
+            <p style="margin:0 0 10px;color:#78350f;font-size:15px;"><strong>Hora:</strong> ${formattedTime}</p>
+            <p style="margin:0 0 10px;color:#78350f;font-size:15px;"><strong>Profissional:</strong> ${escapeHtml(professional?.full_name || "A confirmar")}</p>
+            <p style="margin:0;color:#78350f;font-size:15px;"><strong>Serviço:</strong> ${escapeHtml(service?.name || "Consulta")}</p>
+          </td></tr>
         </table>
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-          <tr>
-            <td style="padding: 30px 0 20px;">
-              <p style="margin: 0; color: #3f3f46; font-size: 16px;">
-                Olá <strong>${escapeHtml(patient.full_name)}</strong>,
-              </p>
-              <p style="margin: 16px 0 0; color: #71717a; font-size: 14px;">
-                Este é um lembrete de que tem uma sessão agendada para <strong>amanhã</strong>:
-              </p>
-            </td>
-          </tr>
-        </table>
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #fef3c7; border-radius: 8px; margin-bottom: 20px; border: 1px solid #fcd34d;">
-          <tr>
-            <td style="padding: 24px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td style="padding-bottom: 12px;">
-                    <span style="color: #92400e; font-size: 12px; text-transform: uppercase;">Data</span>
-                    <p style="margin: 4px 0 0; color: #78350f; font-size: 16px; font-weight: 600;">${formattedDate}</p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding-bottom: 12px;">
-                    <span style="color: #92400e; font-size: 12px; text-transform: uppercase;">Hora</span>
-                    <p style="margin: 4px 0 0; color: #78350f; font-size: 16px; font-weight: 600;">${formattedTime}</p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding-bottom: 12px;">
-                    <span style="color: #92400e; font-size: 12px; text-transform: uppercase;">Profissional</span>
-                    <p style="margin: 4px 0 0; color: #78350f; font-size: 16px; font-weight: 600;">${escapeHtml(professional?.full_name || "A confirmar")}</p>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <span style="color: #92400e; font-size: 12px; text-transform: uppercase;">Serviço</span>
-                    <p style="margin: 4px 0 0; color: #78350f; font-size: 16px; font-weight: 600;">${escapeHtml(service?.name || "Consulta")}</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 16px;">
-          <tr>
-            <td style="padding: 16px 20px;">
-              <p style="margin: 0; color: #991b1b; font-size: 14px; line-height: 1.5;">
-                ⚠️ <strong>Remarcações ou cancelamentos</strong> podem ser feitos até <strong>hoje às 14h00</strong>. Após esse horário, a sessão será cobrada normalmente.
-              </p>
-            </td>
-          </tr>
-        </table>
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-          <tr>
-            <td style="padding: 20px 0; border-top: 1px solid #e4e4e7;">
-              <p style="margin: 0; color: #71717a; font-size: 14px;">
-                Em caso de impedimento, por favor contacte-nos o mais rapidamente possível.
-              </p>
-            </td>
-          </tr>
-        </table>
-
-
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-          <tr>
-            <td style="padding-top: 30px; border-top: 1px solid #e4e4e7; text-align: center;">
-              <p style="margin: 0 0 8px; color: #18181b; font-size: 16px; font-weight: 600;">${escapeHtml(clinic?.name || "Clínica")}</p>
-              ${clinic?.phone ? `<p style="margin: 0 0 4px; color: #71717a; font-size: 14px;">📞 ${escapeHtml(clinic.phone)}</p>` : ""}
-              ${clinic?.email ? `<p style="margin: 0; color: #71717a; font-size: 14px;">✉️ ${escapeHtml(clinic.email)}</p>` : ""}
-            </td>
-          </tr>
-        </table>
+        ${pagamentoHtml}
+        <div style="padding:16px 0;border-top:1px solid #e4e4e7;">
+          <p style="margin:0;color:#71717a;font-size:14px;line-height:1.5;">
+            Em caso de impedimento, por favor contacte-nos o mais rapidamente possível. Até já!
+          </p>
+        </div>
+        <div style="padding-top:20px;border-top:1px solid #e4e4e7;text-align:center;">
+          <p style="margin:0 0 6px;color:#18181b;font-size:16px;font-weight:600;">${escapeHtml(clinic?.name || "Clínica")}</p>
+          ${clinic?.phone ? `<p style="margin:0 0 4px;color:#71717a;font-size:14px;">📞 ${escapeHtml(clinic.phone)}</p>` : ""}
+          ${clinic?.email ? `<p style="margin:0;color:#71717a;font-size:14px;">✉️ ${escapeHtml(clinic.email)}</p>` : ""}
+        </div>
       </td>
     </tr>
   </table>
 </body>
-</html>
-        `;
+</html>`;
 
         await resend.emails.send({
-          from: `${clinic?.name || "Clínica"} <onboarding@resend.dev>`,
+          from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
           to: [patient.email],
-          subject: `Lembrete: Sessão amanhã às ${formattedTime}`,
+          subject: `Lembrete da sua consulta às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`,
           html: emailHtml,
         });
 
-        // Log the send to prevent duplicates on subsequent runs
-        await supabase
-          .from("reminder_logs")
-          .insert({ sessao_id: session.id, canal: "email" });
-
-        console.log(`Reminder sent to ${patient.email} for session ${session.id}`);
+        await supabase.from("reminder_logs").insert({ sessao_id: (session as any).id, canal: "email" });
         results.sent++;
-      } catch (emailError) {
-        const errorMsg = emailError instanceof Error ? emailError.message : "Unknown error";
-        console.error(`Failed to send reminder for session ${session.id}:`, errorMsg);
-        results.errors.push(`Session ${session.id}: ${errorMsg}`);
+      } catch (e) {
+        results.errors.push(
+          `Session ${(session as any).id}: ${e instanceof Error ? e.message : "Unknown error"}`
+        );
       }
     }
 
-    console.log(`Reminder batch complete: ${results.sent} sent, ${results.skipped} skipped, ${results.errors.length} errors`);
-
-    return new Response(
-      JSON.stringify({ success: true, results }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
-    );
+    return new Response(JSON.stringify({ success: true, results }), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   } catch (error) {
-    console.error("Error in reminder job:", error);
     return new Response(
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
       }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 });
