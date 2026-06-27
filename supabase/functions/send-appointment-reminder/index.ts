@@ -47,7 +47,7 @@ serve(async (req) => {
     const { data: settingsRows } = await supabase
       .from("clinic_settings")
       .select(
-        "clinic_id, timezone, reminder_ativo, reminder_antecedencia_horas, mbway_nome_1, mbway_numero_1, mbway_nome_2, mbway_numero_2, iban_nome, iban"
+        "clinic_id, timezone, reminder_ativo, reminder_antecedencia_horas, reminder_saudacao, mbway_nome_1, mbway_numero_1, mbway_nome_2, mbway_numero_2, iban_nome, iban"
       );
     const settingsMap = new Map<string, any>();
     for (const r of settingsRows || []) settingsMap.set((r as any).clinic_id, r);
@@ -167,10 +167,12 @@ serve(async (req) => {
           <h1 style="margin:0;color:#f59e0b;font-size:22px;">Lembrete da sua consulta</h1>
         </div>
         <div style="padding:24px 0 8px;">
-          <p style="margin:0;color:#3f3f46;font-size:16px;">Olá <strong>${escapeHtml(patient.full_name)}</strong>,</p>
-          <p style="margin:12px 0 0;color:#71717a;font-size:14px;line-height:1.5;">
-            Confirmamos a sua consulta na ${escapeHtml(clinic?.name || "nossa clínica")}. Estamos a contar consigo:
-          </p>
+          <p style="margin:0;color:#3f3f46;font-size:15px;line-height:1.6;">${
+            escapeHtml(settings.reminder_saudacao || "Olá! Lembramos a consulta do/a {nome} no dia {data} às {hora}. Estamos a contar consigo 💙")
+              .replace(/\{nome\}/g, "<strong>" + escapeHtml(patient.full_name) + "</strong>")
+              .replace(/\{data\}/g, formattedDate)
+              .replace(/\{hora\}/g, formattedTime)
+          }</p>
         </div>
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#fef3c7;border:1px solid #fcd34d;border-radius:8px;margin:16px 0;">
           <tr><td style="padding:20px;">
