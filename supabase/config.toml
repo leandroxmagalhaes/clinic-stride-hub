@@ -68,3 +68,7 @@ verify_jwt = false
 
 [functions.portal-direct-access]
 verify_jwt = false
+
+[functions.confirmar-presenca]
+verify_jwt = false
+
