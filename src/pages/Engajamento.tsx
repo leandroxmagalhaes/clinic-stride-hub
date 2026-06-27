@@ -14,7 +14,9 @@ import {
 import { AutomationService, AutomationFlow } from "@/services/AutomationService";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Gift, AlertTriangle, Star, Users, Zap, Heart } from "lucide-react";
+import { Gift, AlertTriangle, Star, Users, Zap, Heart, Bell } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
