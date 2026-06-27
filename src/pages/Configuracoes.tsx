@@ -2,6 +2,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
 import { Building2, Palette, Zap, Shield, Puzzle, Users, Hospital, FileArchive, History, Lock, Sparkles } from 'lucide-react';
 import { GeneralSettingsForm } from '@/components/settings/GeneralSettingsForm';
 import { AppearanceSettingsForm } from '@/components/settings/AppearanceSettingsForm';
