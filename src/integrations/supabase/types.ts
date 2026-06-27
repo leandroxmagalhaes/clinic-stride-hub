@@ -288,6 +288,9 @@ export type Database = {
           ai_management_enabled: boolean
           clinic_id: string
           clinic_name: string | null
+          confirmacao_dia_anterior_ativo: boolean
+          confirmacao_hora_corte: string
+          confirmacao_saudacao: string | null
           created_at: string
           email_enabled: boolean | null
           iban: string | null
@@ -299,6 +302,7 @@ export type Database = {
           mbway_nome_2: string | null
           mbway_numero_1: string | null
           mbway_numero_2: string | null
+          notificar_clinica_email_remarcacao: boolean
           primary_color: string | null
           reminder_antecedencia_horas: number
           reminder_ativo: boolean
@@ -314,6 +318,9 @@ export type Database = {
           ai_management_enabled?: boolean
           clinic_id: string
           clinic_name?: string | null
+          confirmacao_dia_anterior_ativo?: boolean
+          confirmacao_hora_corte?: string
+          confirmacao_saudacao?: string | null
           created_at?: string
           email_enabled?: boolean | null
           iban?: string | null
@@ -325,6 +332,7 @@ export type Database = {
           mbway_nome_2?: string | null
           mbway_numero_1?: string | null
           mbway_numero_2?: string | null
+          notificar_clinica_email_remarcacao?: boolean
           primary_color?: string | null
           reminder_antecedencia_horas?: number
           reminder_ativo?: boolean
@@ -340,6 +348,9 @@ export type Database = {
           ai_management_enabled?: boolean
           clinic_id?: string
           clinic_name?: string | null
+          confirmacao_dia_anterior_ativo?: boolean
+          confirmacao_hora_corte?: string
+          confirmacao_saudacao?: string | null
           created_at?: string
           email_enabled?: boolean | null
           iban?: string | null
@@ -351,6 +362,7 @@ export type Database = {
           mbway_nome_2?: string | null
           mbway_numero_1?: string | null
           mbway_numero_2?: string | null
+          notificar_clinica_email_remarcacao?: boolean
           primary_color?: string | null
           reminder_antecedencia_horas?: number
           reminder_ativo?: boolean
@@ -2562,6 +2574,9 @@ export type Database = {
       sessoes: {
         Row: {
           clinic_id: string
+          confirmacao_em: string | null
+          confirmacao_estado: string
+          confirmation_token: string
           created_at: string
           created_by: string | null
           end_time: string
@@ -2591,6 +2606,9 @@ export type Database = {
         }
         Insert: {
           clinic_id: string
+          confirmacao_em?: string | null
+          confirmacao_estado?: string
+          confirmation_token?: string
           created_at?: string
           created_by?: string | null
           end_time: string
@@ -2620,6 +2638,9 @@ export type Database = {
         }
         Update: {
           clinic_id?: string
+          confirmacao_em?: string | null
+          confirmacao_estado?: string
+          confirmation_token?: string
           created_at?: string
           created_by?: string | null
           end_time?: string
