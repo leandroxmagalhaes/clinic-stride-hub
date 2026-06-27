@@ -2,6 +2,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
 import { Building2, Palette, Zap, Shield, Puzzle, Users, Hospital, FileArchive, History, Lock, Sparkles } from 'lucide-react';
 import { GeneralSettingsForm } from '@/components/settings/GeneralSettingsForm';
 import { AppearanceSettingsForm } from '@/components/settings/AppearanceSettingsForm';
@@ -124,7 +126,23 @@ export default function Configuracoes() {
           </TabsContent>
 
           {/* Automation Settings Tab */}
-          <TabsContent value="automacao">
+          <TabsContent value="automacao" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Zap className="h-4 w-4" />
+                  Definições do lembrete
+                </CardTitle>
+                <CardDescription>
+                  Saudação, antecedência e dados de pagamento do e-mail automático enviado antes da consulta.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild variant="outline">
+                  <Link to="/configuracoes/lembrete">Abrir definições do lembrete</Link>
+                </Button>
+              </CardContent>
+            </Card>
             <AutomationSettingsForm
               settings={settings}
               isLoading={isLoading}

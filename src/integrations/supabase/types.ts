@@ -302,6 +302,7 @@ export type Database = {
           primary_color: string | null
           reminder_antecedencia_horas: number
           reminder_ativo: boolean
+          reminder_saudacao: string | null
           sms_enabled: boolean | null
           timezone: string | null
           updated_at: string
@@ -327,6 +328,7 @@ export type Database = {
           primary_color?: string | null
           reminder_antecedencia_horas?: number
           reminder_ativo?: boolean
+          reminder_saudacao?: string | null
           sms_enabled?: boolean | null
           timezone?: string | null
           updated_at?: string
@@ -352,6 +354,7 @@ export type Database = {
           primary_color?: string | null
           reminder_antecedencia_horas?: number
           reminder_ativo?: boolean
+          reminder_saudacao?: string | null
           sms_enabled?: boolean | null
           timezone?: string | null
           updated_at?: string

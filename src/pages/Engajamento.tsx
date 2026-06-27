@@ -14,7 +14,9 @@ import {
 import { AutomationService, AutomationFlow } from "@/services/AutomationService";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Gift, AlertTriangle, Star, Users, Zap, Heart } from "lucide-react";
+import { Gift, AlertTriangle, Star, Users, Zap, Heart, Bell } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -228,6 +230,22 @@ export default function Engajamento() {
 
         {/* Automation Tab */}
         <TabsContent value="automation" className="space-y-6">
+          <Card className="p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Bell className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">Definições do lembrete</p>
+                <p className="text-sm text-muted-foreground">
+                  Editar saudação, antecedência e dados de pagamento do e-mail automático.
+                </p>
+              </div>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/configuracoes/lembrete">Abrir</Link>
+            </Button>
+          </Card>
           <AutomationDashboard flows={automationFlows} />
           <AutomationFlowsList
             flows={automationFlows}
