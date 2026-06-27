@@ -112,7 +112,7 @@ export default function DefinicoesLembrete() {
     const saudacao = (form.reminder_saudacao || DEFAULT_GREETING)
       .split("{nome}").join(sample.nome)
       .split("{data}").join(sample.data)
-      .replaceAll("{hora}", sample.hora);
+      .split("{hora}").join(sample.hora);
     return { saudacao, ...sample };
   }, [form.reminder_saudacao]);
 
