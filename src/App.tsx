@@ -267,6 +267,16 @@ const App = () => (
                       </ProtectedPage>
                     }
                   />
+                  <Route
+                    path="/configuracoes/lembrete"
+                    element={
+                      <ProtectedPage module="configuracoes">
+                        <DefinicoesLembrete />
+                      </ProtectedPage>
+                    }
+                  />
+
+
 
                   {/* ── Relatórios Respiratórios ── */}
                   <Route
