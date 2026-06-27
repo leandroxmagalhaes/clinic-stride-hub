@@ -47,7 +47,7 @@ serve(async (req) => {
     const { data: settingsRows } = await supabase
       .from("clinic_settings")
       .select(
-        "clinic_id, timezone, reminder_ativo, reminder_antecedencia_horas, mbway_nome_1, mbway_numero_1, mbway_nome_2, mbway_numero_2, iban_nome, iban"
+        "clinic_id, timezone, reminder_ativo, reminder_antecedencia_horas, reminder_saudacao, mbway_nome_1, mbway_numero_1, mbway_nome_2, mbway_numero_2, iban_nome, iban"
       );
     const settingsMap = new Map<string, any>();
     for (const r of settingsRows || []) settingsMap.set((r as any).clinic_id, r);
