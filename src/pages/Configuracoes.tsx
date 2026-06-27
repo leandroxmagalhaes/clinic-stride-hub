@@ -124,7 +124,23 @@ export default function Configuracoes() {
           </TabsContent>
 
           {/* Automation Settings Tab */}
-          <TabsContent value="automacao">
+          <TabsContent value="automacao" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Zap className="h-4 w-4" />
+                  Definições do lembrete
+                </CardTitle>
+                <CardDescription>
+                  Saudação, antecedência e dados de pagamento do e-mail automático enviado antes da consulta.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild variant="outline">
+                  <Link to="/configuracoes/lembrete">Abrir definições do lembrete</Link>
+                </Button>
+              </CardContent>
+            </Card>
             <AutomationSettingsForm
               settings={settings}
               isLoading={isLoading}
