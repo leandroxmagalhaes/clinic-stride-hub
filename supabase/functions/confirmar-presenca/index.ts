@@ -17,10 +17,12 @@ function esc(s: unknown): string {
 }
 
 function html(body: string, status = 200): Response {
-  return new Response(body, {
-    status,
-    headers: { "Content-Type": "text/html; charset=utf-8", ...corsHeaders },
+  const headers = new Headers({
+    "Content-Type": "text/html; charset=utf-8",
+    ...corsHeaders,
   });
+  headers.delete("Content-Disposition");
+  return new Response(body, { status, headers });
 }
 
 function isUuid(s: string | null): s is string {
