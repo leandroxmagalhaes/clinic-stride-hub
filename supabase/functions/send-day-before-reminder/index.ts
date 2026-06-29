@@ -36,13 +36,40 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const cronSecret = Deno.env.get("CRON_SECRET");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const pubKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+    const pubKeysRaw = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "";
+    let pubKeys: string[] = [];
+    if (pubKeysRaw.trim().startsWith("{") || pubKeysRaw.trim().startsWith("[")) {
+      try {
+        const parsed = JSON.parse(pubKeysRaw);
+        if (Array.isArray(parsed)) pubKeys = parsed.filter(x => typeof x === "string");
+        else if (parsed && typeof parsed === "object") pubKeys = Object.values(parsed).filter((x): x is string => typeof x === "string");
+      } catch { /* ignore */ }
+    } else {
+      pubKeys = pubKeysRaw.split(/[,\s]+/).filter(Boolean);
+    }
     const provided = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    const legacyAnonJwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmenh0aWxkZ2Rhd2NwbHlrYmRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNDMyMTksImV4cCI6MjA4MzkxOTIxOX0.ibEeGX85efCDqUgUAjTncPxNQv4GeRIjfqwTD7b3rMk";
     const ok =
       provided === serviceKey ||
       (!!cronSecret && provided === cronSecret) ||
-      (!!anonKey && provided === anonKey);
+      (!!anonKey && provided === anonKey) ||
+      provided === legacyAnonJwt ||
+      pubKeys.includes(provided);
     if (!ok) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      const diag = new URL(req.url).searchParams.get("diag") === "1";
+      return new Response(JSON.stringify({
+        error: "Unauthorized",
+        ...(diag ? {
+          providedPrefix: provided.slice(0, 12),
+          providedLen: provided.length,
+          anonKeyPrefix: (anonKey || "").slice(0, 12),
+          anonKeyLen: (anonKey || "").length,
+          pubKeyPrefix: (pubKey || "").slice(0, 12),
+          pubKeysCount: pubKeys.length,
+          pubKeysPrefixes: pubKeys.map(k => k.slice(0, 12)),
+        } : {}),
+      }), {
         status: 401,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
