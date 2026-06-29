@@ -9,10 +9,11 @@ const corsHeaders = {
 
 function escapeHtml(unsafe: string): string {
   return String(unsafe ?? "")
-    .replace(/&/g, "&")
-    .replace(//g, ">")
-    .replace(/"/g, """)
-    .replace(/'/g, "'");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 // Data "YYYY-MM-DD" no fuso indicado (robusto a DST: deixa o Intl converter)
@@ -54,7 +55,7 @@ serve(async (req) => {
     // ---------- Travões de teste (opcionais). Produção/cron não passa nenhum. ----------
     const url = new URL(req.url);
     const qp = url.searchParams;
-    let body: Record = {};
+    let body: Record<string, any> = {};
     if (req.method === "POST") {
       try { body = await req.json(); } catch { /* sem corpo JSON — ok */ }
     }
@@ -65,14 +66,13 @@ serve(async (req) => {
       return b == null ? "" : String(b);
     };
     const isOn = (k: string) => flag(k) === "1" || flag(k) === "true";
-    const dryRun = isOn("dry_run");             // não envia, não grava: só mostra quem receberia
-    const ignoreCutoff = isOn("ignore_cutoff"); // ignora a hora de corte (testar a qualquer hora)
-    const force = isOn("force");                // ignora o dedup (repetir testes) e não grava log
-    const onlyEmail = flag("only_email").trim().toLowerCase(); // envia só p/ este email
-    const targetDateOverride = flag("target_date").trim();     // YYYY-MM-DD (testar outro dia)
+    const dryRun = isOn("dry_run");
+    const ignoreCutoff = isOn("ignore_cutoff");
+    const force = isOn("force");
+    const onlyEmail = flag("only_email").trim().toLowerCase();
+    const targetDateOverride = flag("target_date").trim();
 
     const now = new Date();
-    // Janela ampla; filtramos por igualdade da data local (Lisboa) de cada sessão.
     const windowEnd = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
     const { data: settingsRows } = await supabase
@@ -80,7 +80,7 @@ serve(async (req) => {
       .select(
         "clinic_id, timezone, confirmacao_dia_anterior_ativo, confirmacao_hora_corte, confirmacao_saudacao"
       );
-    const settingsMap = new Map();
+    const settingsMap = new Map<string, any>();
     for (const r of settingsRows || []) settingsMap.set((r as any).clinic_id, r);
 
     const { data: sessions, error: sessionsError } = await supabase
@@ -114,13 +114,11 @@ serve(async (req) => {
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
 
-        // 1) Funcionalidade ativa para esta clínica?
         if (settings.confirmacao_dia_anterior_ativo === false) {
           results.skipped++;
           continue;
         }
 
-        // 2) Já passou a hora de corte (local de Lisboa)? (saltado em teste com ignore_cutoff)
         if (!ignoreCutoff) {
           const parts = new Intl.DateTimeFormat("en-GB", {
             timeZone: tz,
@@ -141,16 +139,14 @@ serve(async (req) => {
           }
         }
 
-        // 3) A sessão é do dia-alvo? (amanhã em Lisboa, ou target_date em teste)
         const targetDate =
           targetDateOverride ||
           dateInTz(new Date(now.getTime() + 24 * 60 * 60 * 1000), tz);
         const sessLocalDate = dateInTz(new Date((session as any).start_time), tz);
         if (sessLocalDate !== targetDate) {
-          continue; // não é do dia-alvo — nem conta
+          continue;
         }
 
-        // 4) Tem email?
         if (!patient?.email) {
           results.skipped++;
           continue;
@@ -160,7 +156,6 @@ serve(async (req) => {
           continue;
         }
 
-        // 5) Dedup — já recebeu o email do dia anterior? (saltado em teste com force)
         if (!force) {
           const { data: existingLog } = await supabase
             .from("reminder_logs")
@@ -199,152 +194,53 @@ serve(async (req) => {
           settings.confirmacao_saudacao ||
             "Olá! Lembramos a consulta do/a {nome} amanhã, {data}, às {hora}. Pode confirmar a presença?"
         )
-          .replace(/\{nome\}/g, "" + escapeHtml(patient.full_name) + "")
+          .replace(/\{nome\}/g, "<strong>" + escapeHtml(patient.full_name) + "</strong>")
           .replace(/\{data\}/g, formattedDate)
           .replace(/\{hora\}/g, formattedTime);
 
         const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f4f4f5;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;padding:20px;">
+    <tr>
+      <td style="background-color:#ffffff;border-radius:12px;padding:40px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        <div style="text-align:center;padding-bottom:24px;border-bottom:1px solid #e4e4e7;">
+          <h1 style="margin:0;color:#be123c;font-size:22px;">${escapeHtml(clinic?.name || "Respira & Desenvolve")}</h1>
+        </div>
+        <div style="padding:24px 0 8px;">
+          <p style="margin:0;color:#3f3f46;font-size:15px;line-height:1.6;">${saudacao}</p>
+        </div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#fef3c7;border:1px solid #fcd34d;border-radius:8px;margin:16px 0;">
+          <tr><td style="padding:20px;">
+            <p style="margin:0 0 10px;color:#78350f;font-size:15px;"><strong>Data:</strong> ${formattedDate}</p>
+            <p style="margin:0 0 10px;color:#78350f;font-size:15px;"><strong>Hora:</strong> ${formattedTime}</p>
+            <p style="margin:0 0 10px;color:#78350f;font-size:15px;"><strong>Profissional:</strong> ${escapeHtml(professional?.full_name || "A confirmar")}</p>
+            <p style="margin:0;color:#78350f;font-size:15px;"><strong>Serviço:</strong> ${escapeHtml(service?.name || "Consulta")}</p>
+          </td></tr>
+        </table>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0 8px;">
+          <tr><td align="center">
+            <a href="${confirmarUrl}" style="display:inline-block;background-color:#16a34a;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:16px;font-weight:600;">✓ Confirmar presença</a>
+          </td></tr>
+        </table>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 20px;">
+          <tr><td align="center">
+            <a href="${remarcarUrl}" style="display:inline-block;background-color:transparent;color:#be123c;text-decoration:none;padding:12px 24px;border:1px solid #e4e4e7;border-radius:8px;font-size:14px;font-weight:500;">Preciso de remarcar</a>
+          </td></tr>
+        </table>
+        <div style="padding-top:20px;border-top:1px solid #e4e4e7;text-align:center;">
+          <p style="margin:0 0 6px;color:#18181b;font-size:16px;font-weight:600;">${escapeHtml(clinic?.name || "Clínica")}</p>
+          ${clinic?.phone ? `<p style="margin:0 0 4px;color:#71717a;font-size:14px;">📞 ${escapeHtml(clinic.phone)}</p>` : ""}
+          ${clinic?.email ? `<p style="margin:0;color:#71717a;font-size:14px;">✉️ ${escapeHtml(clinic.email)}</p>` : ""}
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
-
-
-
-  
-
-
-    
-      
-        
-
-
-          
-
-${escapeHtml(
-            clinic?.name || "Respira & Desenvolve"
-          )}
-
-
-        
-
-
-        
-
-
-          
-
-${saudacao}
-
-
-        
-
-
-        
-
-
-          
-            
-
-Data: ${formattedDate}
-
-
-            
-
-Hora: ${formattedTime}
-
-
-            
-
-Profissional: ${escapeHtml(
-              professional?.full_name || "A confirmar"
-            )}
-
-
-            
-
-Serviço: ${escapeHtml(
-              service?.name || "Consulta"
-            )}
-
-
-          
-        
-
-
-
-        
-        
-
-
-          
-            
-              
-                ✓ Confirmar presença
-              
-            
-          
-        
-
-
-
-        
-        
-
-
-          
-            
-              
-                Preciso de remarcar
-              
-            
-          
-        
-
-
-
-        
-
-
-          
-
-
-            Basta um toque. Se precisar de remarcar, pedimos-lhe só uma confirmação no passo seguinte.
-          
-
-
-        
-
-
-
-        
-
-
-          
-
-${escapeHtml(
-            clinic?.name || "Respira & Desenvolve"
-          )}
-
-
-          ${clinic?.phone ? `
-
-📞 ${escapeHtml(clinic.phone)}
-
-` : ""}
-          ${clinic?.email ? `
-
-✉️ ${escapeHtml(clinic.email)}
-
-` : ""}
-        
-
-
-      
-    
-
-
-
-`;
-
-        // DRY-RUN: não envia, não grava — só regista no preview
         if (dryRun) {
           results.preview.push({
             to: patient.email,
@@ -357,13 +253,12 @@ ${escapeHtml(
         }
 
         await resend.emails.send({
-          from: `${clinic?.name || "Respira & Desenvolve"} @respiraedesenvolve.com>`,
+          from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
           to: [patient.email],
           subject: `Confirma a consulta de amanhã às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`,
           html: emailHtml,
         });
 
-        // Só grava log fora de modo force (para testes repetíveis não bloquearem)
         if (!force) {
           await supabase
             .from("reminder_logs")
