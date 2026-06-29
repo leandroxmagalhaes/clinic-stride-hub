@@ -170,7 +170,7 @@ serve(async (req) => {
 
     // === REMARCAR ===
     if (!confirmar) {
-      const here = url.origin + url.pathname + "?token=" + encodeURIComponent(token) + "&accao=remarcar&confirmar=1";
+      const here = "?token=" + encodeURIComponent(token) + "&accao=remarcar&confirmar=1";
       const inner = `
         <div style="text-align:center;">
           <div style="width:72px;height:72px;border-radius:50%;background:#dbeafe;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
