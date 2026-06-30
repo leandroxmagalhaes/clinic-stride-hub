@@ -124,6 +124,22 @@ const App = () => (
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
                   <Route
+                    path="/r"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <ConfirmacaoResultado />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/r-confirmar"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <ConfirmarRemarcacao />
+                      </Suspense>
+                    }
+                  />
+                  <Route
                     path="/pre-registo/:token"
                     element={
                       <Suspense fallback={<PageLoadingFallback />}>
