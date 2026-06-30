@@ -61,6 +61,8 @@ const Mensagens = lazyWithRetry(() => import("./pages/Mensagens"));
 const Pagamentos = lazyWithRetry(() => import("./pages/Pagamentos"));
 const Packs = lazyWithRetry(() => import("./pages/Packs"));
 const DefinicoesLembrete = lazyWithRetry(() => import("./pages/DefinicoesLembrete"));
+const ConfirmacaoResultado = lazyWithRetry(() => import("./pages/ConfirmacaoResultado"));
+const ConfirmarRemarcacao = lazyWithRetry(() => import("./pages/ConfirmarRemarcacao"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -121,6 +123,22 @@ const App = () => (
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
+                  <Route
+                    path="/r"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <ConfirmacaoResultado />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/r-confirmar"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <ConfirmarRemarcacao />
+                      </Suspense>
+                    }
+                  />
                   <Route
                     path="/pre-registo/:token"
                     element={
