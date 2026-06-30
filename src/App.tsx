@@ -61,6 +61,8 @@ const Mensagens = lazyWithRetry(() => import("./pages/Mensagens"));
 const Pagamentos = lazyWithRetry(() => import("./pages/Pagamentos"));
 const Packs = lazyWithRetry(() => import("./pages/Packs"));
 const DefinicoesLembrete = lazyWithRetry(() => import("./pages/DefinicoesLembrete"));
+const ConfirmacaoResultado = lazyWithRetry(() => import("./pages/ConfirmacaoResultado"));
+const ConfirmarRemarcacao = lazyWithRetry(() => import("./pages/ConfirmarRemarcacao"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
