@@ -11,6 +11,7 @@ interface Session {
   start_time: Date;
   end_time: Date;
   status: string;
+  confirmacao_estado?: string;
   payment_status?: string;
   paciente?: {
     full_name: string;

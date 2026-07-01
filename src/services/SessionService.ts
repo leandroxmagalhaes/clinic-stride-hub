@@ -10,6 +10,7 @@ export interface Session {
   start_time: Date;
   end_time: Date;
   status: string;
+  confirmacao_estado?: string | null;
   price: number;
   payment_status: string;
   payment_method: string | null;
