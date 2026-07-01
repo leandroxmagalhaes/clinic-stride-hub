@@ -9,7 +9,8 @@ export type NotificationType =
   | 'inactive_patient'
   | 'new_patient'
   | 'diary_entry'
-  | 'diary_reply';
+  | 'diary_reply'
+  | 'remarcacao';
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
