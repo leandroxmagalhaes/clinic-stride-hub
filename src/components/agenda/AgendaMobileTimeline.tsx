@@ -161,7 +161,7 @@ export function AgendaMobileTimeline({
                     <div className="flex items-center gap-2 text-xs">
                       <span className="font-medium text-muted-foreground">{format(start, "HH:mm")}</span>
                       <span className="font-medium truncate">{session.paciente?.full_name?.split(' ')?.[0] ?? ''}</span>
-                      <StatusBadge status={session.status as any} className="scale-75" />
+                      <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="scale-75" />
                     </div>
                   ) : (
                     <>
@@ -172,7 +172,7 @@ export function AgendaMobileTimeline({
                             {session.paciente?.full_name}
                           </p>
                         </div>
-                        <StatusBadge status={session.status as any} className="flex-shrink-0" />
+                        <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="flex-shrink-0" />
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {format(start, "HH:mm")} • {session.servico?.name} • {session.profissional?.full_name?.split(' ')?.[0] ?? ''}

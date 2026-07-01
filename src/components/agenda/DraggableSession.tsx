@@ -228,7 +228,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
           >
             {session.paciente?.full_name ?? ""}
           </p>
-          <StatusBadge status={session.status as any} className="scale-75 flex-shrink-0" />
+          <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="scale-75 flex-shrink-0" />
         </div>
       ) : (
         /* ── Layout normal — 3 linhas fixas ── */
@@ -259,7 +259,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
                 </span>
               )}
             </div>
-            <StatusBadge status={session.status as any} className="scale-90 flex-shrink-0" />
+            <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="scale-90 flex-shrink-0" />
           </div>
 
           {/* Linha 2: Nome */}
