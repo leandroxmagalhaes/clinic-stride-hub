@@ -210,6 +210,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         start_time: new Date(s.start_time),
         end_time: new Date(s.end_time),
         status: s.status,
+        confirmacao_estado: s.confirmacao_estado ?? null,
         price: s.price || 0,
         payment_status: s.payment_status || "pendente",
         payment_method: s.payment_method,
