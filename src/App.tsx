@@ -141,6 +141,14 @@ const App = () => (
                     }
                   />
                   <Route
+                    path="/solicitar-vaga"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <SolicitarVaga />
+                      </Suspense>
+                    }
+                  />
+                  <Route
                     path="/pre-registo/:token"
                     element={
                       <Suspense fallback={<PageLoadingFallback />}>
