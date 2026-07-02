@@ -362,6 +362,14 @@ const App = () => (
                       </ProtectedPage>
                     }
                   />
+                  <Route
+                    path="/solicitacoes-vaga"
+                    element={
+                      <ProtectedPage>
+                        <SolicitacoesVaga />
+                      </ProtectedPage>
+                    }
+                  />
 
                   <Route path="*" element={<NotFound />} />
                 </Routes>
