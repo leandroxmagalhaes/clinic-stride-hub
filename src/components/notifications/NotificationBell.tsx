@@ -116,13 +116,21 @@ export const NotificationBell = memo(function NotificationBell() {
 
   const handleMarkAsRead = useCallback(async (id: string) => {
     await NotificationService.markAsRead(id);
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  }, []);
+    if (filter === 'all') {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } else {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }
+  }, [filter]);
 
   const handleMarkAllAsRead = useCallback(async () => {
     await NotificationService.markAllAsRead();
-    setNotifications(prev => prev.filter(n => !n.isDbNotification));
-  }, []);
+    if (filter === 'all') {
+      setNotifications(prev => prev.map(n => n.isDbNotification ? { ...n, read: true } : n));
+    } else {
+      setNotifications(prev => prev.filter(n => !n.isDbNotification));
+    }
+  }, [filter]);
 
   // Group notifications by priority
   const highPriority = notifications.filter(n => n.priority === 'high');
