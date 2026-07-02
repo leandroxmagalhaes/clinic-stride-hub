@@ -178,8 +178,27 @@ export const NotificationBell = memo(function NotificationBell() {
             </span>
           )}
         </div>
+
+        <div className="flex items-center gap-1 px-4 py-2 border-b bg-muted/30">
+          <Button
+            variant={filter === 'unread' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 text-xs px-2"
+            onClick={() => setFilter('unread')}
+          >
+            Não lidas
+          </Button>
+          <Button
+            variant={filter === 'all' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 text-xs px-2"
+            onClick={() => setFilter('all')}
+          >
+            Todas
+          </Button>
+        </div>
         
-        <ScrollArea className="max-h-[400px]">
+        <ScrollArea className="h-[400px]">
           {loading ? (
             <div className="p-4 text-center text-sm text-muted-foreground">
               A carregar...
