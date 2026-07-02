@@ -26,19 +26,20 @@ export interface AppNotification {
   count?: number;
   patientId?: string;
   isDbNotification?: boolean;
+  read?: boolean;
 }
 
 export class NotificationService {
   /**
    * Get all notifications aggregated from multiple sources + DB
    */
-  static async getNotifications(): Promise<AppNotification[]> {
+  static async getNotifications(includeRead: boolean = false): Promise<AppNotification[]> {
     const [birthdays, reports, sessions, inactive, dbNotifications, diaryNotifications] = await Promise.all([
       this.getBirthdayNotifications(),
       this.getReportAlerts(),
       this.getTodaySessions(),
       this.getInactivePatientNotifications(),
-      this.getDbNotifications(),
+      this.getDbNotifications(includeRead),
       this.getDiaryNotifications(),
     ]);
 
@@ -54,16 +55,21 @@ export class NotificationService {
   }
 
   /**
-   * Get unread notifications from the database
+   * Get notifications from the database. Defaults to unread only.
    */
-  static async getDbNotifications(): Promise<AppNotification[]> {
+  static async getDbNotifications(includeRead: boolean = false): Promise<AppNotification[]> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('notifications')
         .select('*')
-        .eq('read', false)
         .order('created_at', { ascending: false })
         .limit(50);
+
+      if (!includeRead) {
+        query = query.eq('read', false);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching DB notifications:', error);
@@ -80,6 +86,7 @@ export class NotificationService {
         createdAt: new Date(n.created_at),
         patientId: n.patient_id,
         isDbNotification: true,
+        read: n.read,
       }));
     } catch (error) {
       console.error('Error fetching DB notifications:', error);
