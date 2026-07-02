@@ -99,6 +99,15 @@ serve(async (req) => {
         .update({ confirmacao_estado: "confirmado", confirmacao_em: new Date().toISOString() })
         .eq("id", s.id);
 
+      await supabase.from("notifications").insert({
+        clinic_id: s.clinic_id,
+        type: "confirmacao",
+        title: "Presenca confirmada",
+        message: `${patientName} confirmou a consulta de ${dataFormatada} as ${horaFormatada}.`,
+        patient_id: s.paciente_id,
+        read: false,
+      });
+
       return redirectTo("/r?e=confirmado");
     }
 

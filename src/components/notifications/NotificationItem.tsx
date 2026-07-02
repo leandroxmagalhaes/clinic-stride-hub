@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Cake, AlertTriangle, FileText, Calendar, CalendarClock, UserX, UserPlus, BookOpen, MessageCircle } from 'lucide-react';
+import { Cake, AlertTriangle, FileText, Calendar, CalendarClock, CheckCircle2, UserX, UserPlus, BookOpen, MessageCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,7 @@ const iconMap: Record<NotificationType, React.ElementType> = {
   diary_entry: BookOpen,
   diary_reply: MessageCircle,
   remarcacao: CalendarClock,
+  confirmacao: CheckCircle2,
 };
 
 const priorityStyles: Record<string, string> = {
