@@ -15,12 +15,13 @@ export const NotificationBell = memo(function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'unread' | 'all'>('unread');
   const navigate = useNavigate();
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (includeRead: boolean = false) => {
     try {
       setLoading(true);
-      const data = await NotificationService.getNotifications();
+      const data = await NotificationService.getNotifications(includeRead);
       setNotifications(data);
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -30,10 +31,10 @@ export const NotificationBell = memo(function NotificationBell() {
   }, []);
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+    fetchNotifications(filter === 'all');
+    const interval = setInterval(() => fetchNotifications(filter === 'all'), 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, [fetchNotifications, filter]);
 
   // Realtime subscription
   useEffect(() => {
