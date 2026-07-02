@@ -1,29 +1,3 @@
-Criar a base de dados para pedidos de vaga públicos (parte 1 de 3).
-
-Alterações ao esquema:
-
-1. Nova tabela `public.solicitacoes_vaga` para registar pedidos de vaga recebidos via formulário público:
-   - `clinic_id`: referência à clínica destinatária
-   - `nome_paciente`, `data_nascimento`, `faixa_etaria`: dados do utente
-   - `nome_responsavel`, `telefone`, `email`: contactos
-   - `tipo_caso`: tipo de caso clínico
-   - `urgente`, `motivo_urgencia`: sinalização de urgência
-   - `observacoes`: notas do utente
-   - `estado`: estado do pedido (`nova`, `em_analise`, `contactada`, `agendada`, `sem_vaga`)
-   - `estado_em`, `notas_internas`: gestão interna da clínica
-
-2. Segurança:
-   - Ativar RLS na nova tabela.
-   - Permitir a profissionais autenticados da mesma clínica ver e atualizar os pedidos da sua clínica, usando o mesmo padrão da tabela `notifications` (`clinic_id = get_user_clinic_id(auth.uid())`).
-   - Conceder permissões totais ao `service_role` para a edge function pública inserir pedidos na próxima parte.
-   - Não criar política de inserção para anónimos: a inserção será feita exclusivamente pela edge function com service role.
-
-3. Adicionar a coluna `solicitacao_vaga_email` à tabela `public.clinic_settings` (texto, opcional), para guardar o endereço de email específico que recebe avisos de novos pedidos de vaga.
-
-Migration SQL:
-
-```sql
--- Nova tabela de solicitações de vaga
 CREATE TABLE public.solicitacoes_vaga (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   clinic_id uuid NOT NULL REFERENCES public.clinics(id) ON DELETE CASCADE,
@@ -43,26 +17,21 @@ CREATE TABLE public.solicitacoes_vaga (
   notas_internas text
 );
 
--- Garantir valores válidos para estado
 ALTER TABLE public.solicitacoes_vaga
   ADD CONSTRAINT solicitacoes_vaga_estado_check
   CHECK (estado IN ('nova', 'em_analise', 'contactada', 'agendada', 'sem_vaga'));
 
--- Garantir valores válidos para faixa_etaria
 ALTER TABLE public.solicitacoes_vaga
   ADD CONSTRAINT solicitacoes_vaga_faixa_etaria_check
   CHECK (faixa_etaria IN ('bebe', 'crianca', 'adulto', 'idoso'));
 
--- Garantir valores válidos para tipo_caso
 ALTER TABLE public.solicitacoes_vaga
   ADD CONSTRAINT solicitacoes_vaga_tipo_caso_check
   CHECK (tipo_caso IN ('respiratorio', 'motora', 'neurodesenvolvimento', 'vestibular'));
 
--- Acesso para a aplicação e edge functions
 GRANT SELECT, UPDATE ON public.solicitacoes_vaga TO authenticated;
 GRANT ALL ON public.solicitacoes_vaga TO service_role;
 
--- RLS e políticas
 ALTER TABLE public.solicitacoes_vaga ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Clinic members can view their requests"
@@ -78,7 +47,5 @@ CREATE POLICY "Clinic members can update their requests"
   USING (clinic_id = public.get_user_clinic_id(auth.uid()))
   WITH CHECK (clinic_id = public.get_user_clinic_id(auth.uid()));
 
--- Coluna de email destino na clinic_settings
 ALTER TABLE public.clinic_settings
   ADD COLUMN IF NOT EXISTS solicitacao_vaga_email text;
-```

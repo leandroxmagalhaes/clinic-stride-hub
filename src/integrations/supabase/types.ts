@@ -308,6 +308,7 @@ export type Database = {
           reminder_ativo: boolean
           reminder_saudacao: string | null
           sms_enabled: boolean | null
+          solicitacao_vaga_email: string | null
           timezone: string | null
           updated_at: string
           whatsapp_enabled: boolean | null
@@ -338,6 +339,7 @@ export type Database = {
           reminder_ativo?: boolean
           reminder_saudacao?: string | null
           sms_enabled?: boolean | null
+          solicitacao_vaga_email?: string | null
           timezone?: string | null
           updated_at?: string
           whatsapp_enabled?: boolean | null
@@ -368,6 +370,7 @@ export type Database = {
           reminder_ativo?: boolean
           reminder_saudacao?: string | null
           sms_enabled?: boolean | null
+          solicitacao_vaga_email?: string | null
           timezone?: string | null
           updated_at?: string
           whatsapp_enabled?: boolean | null
@@ -2709,6 +2712,71 @@ export type Database = {
             columns: ["servico_id"]
             isOneToOne: false
             referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      solicitacoes_vaga: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          data_nascimento: string
+          email: string
+          estado: string
+          estado_em: string | null
+          faixa_etaria: string
+          id: string
+          motivo_urgencia: string | null
+          nome_paciente: string
+          nome_responsavel: string | null
+          notas_internas: string | null
+          observacoes: string | null
+          telefone: string
+          tipo_caso: string
+          urgente: boolean
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          data_nascimento: string
+          email: string
+          estado?: string
+          estado_em?: string | null
+          faixa_etaria: string
+          id?: string
+          motivo_urgencia?: string | null
+          nome_paciente: string
+          nome_responsavel?: string | null
+          notas_internas?: string | null
+          observacoes?: string | null
+          telefone: string
+          tipo_caso: string
+          urgente?: boolean
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          data_nascimento?: string
+          email?: string
+          estado?: string
+          estado_em?: string | null
+          faixa_etaria?: string
+          id?: string
+          motivo_urgencia?: string | null
+          nome_paciente?: string
+          nome_responsavel?: string | null
+          notas_internas?: string | null
+          observacoes?: string | null
+          telefone?: string
+          tipo_caso?: string
+          urgente?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitacoes_vaga_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
         ]
