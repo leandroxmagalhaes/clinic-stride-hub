@@ -218,12 +218,19 @@ export const NotificationBell = memo(function NotificationBell() {
                     Urgente
                   </p>
                   {highPriority.map(notification => (
-                    <NotificationItem 
-                      key={notification.id} 
-                      notification={notification}
-                      onClose={handleClose}
-                      onMarkAsRead={handleMarkAsRead}
-                    />
+                    <div
+                      key={notification.id}
+                      className={cn(
+                        "transition-opacity",
+                        notification.read && "opacity-60"
+                      )}
+                    >
+                      <NotificationItem 
+                        notification={notification}
+                        onClose={handleClose}
+                        onMarkAsRead={handleMarkAsRead}
+                      />
+                    </div>
                   ))}
                 </>
               )}
@@ -235,12 +242,19 @@ export const NotificationBell = memo(function NotificationBell() {
                     Atenção
                   </p>
                   {mediumPriority.map(notification => (
-                    <NotificationItem 
-                      key={notification.id} 
-                      notification={notification}
-                      onClose={handleClose}
-                      onMarkAsRead={handleMarkAsRead}
-                    />
+                    <div
+                      key={notification.id}
+                      className={cn(
+                        "transition-opacity",
+                        notification.read && "opacity-60"
+                      )}
+                    >
+                      <NotificationItem 
+                        notification={notification}
+                        onClose={handleClose}
+                        onMarkAsRead={handleMarkAsRead}
+                      />
+                    </div>
                   ))}
                 </>
               )}
@@ -252,12 +266,19 @@ export const NotificationBell = memo(function NotificationBell() {
                     Informação
                   </p>
                   {lowPriority.map(notification => (
-                    <NotificationItem 
-                      key={notification.id} 
-                      notification={notification}
-                      onClose={handleClose}
-                      onMarkAsRead={handleMarkAsRead}
-                    />
+                    <div
+                      key={notification.id}
+                      className={cn(
+                        "transition-opacity",
+                        notification.read && "opacity-60"
+                      )}
+                    >
+                      <NotificationItem 
+                        notification={notification}
+                        onClose={handleClose}
+                        onMarkAsRead={handleMarkAsRead}
+                      />
+                    </div>
                   ))}
                 </>
               )}
