@@ -1,23 +1,32 @@
 ## Objetivo
-Restaurar o acesso da conta `leandroxmagalhaes@gmail.com` definindo a password para `Leo21m@@`.
+Passar a criar uma notificação no sino também quando o utente confirma a presença (hoje só é criada quando pede remarcação).
 
-## Diagnóstico
-- A conta existe em `auth.users` (id `c62de87b-...`), com e-mail confirmado e último login a 23/Jun/2026.
-- O erro `400 invalid_credentials` significa apenas password incorreta — nada de errado no fluxo de login nem no Supabase Auth.
-- A password atual está hashed; só é possível resolver definindo uma nova.
+## Alterações
 
-## Passos
-1. **Criar uma Edge Function de uso único** `supabase/functions/admin-set-user-password/index.ts`:
-   - Recebe `{ email, password }`.
-   - Usa `SUPABASE_SERVICE_ROLE_KEY` para localizar o utilizador via `auth.admin.listUsers` e chamar `auth.admin.updateUserById(id, { password, email_confirm: true })`.
-   - Protegida por um header simples (uso interno, será removida após).
-2. **Fazer deploy** da função.
-3. **Invocá-la uma vez** com `email = leandroxmagalhaes@gmail.com` e `password = Leo21m@@`.
-4. **Confirmar** o sucesso (resposta `{ success: true }`).
-5. **Remover** a Edge Function `admin-set-user-password` para não deixar nenhuma porta administrativa exposta.
-6. Comunicar ao utilizador para entrar em `/login` com as novas credenciais e mudar a password depois em Configurações → Conta.
+### 1. `supabase/functions/confirmar-presenca/index.ts`
+No ramo `accao === "confirmar"`, imediatamente após o `update` que grava `confirmacao_estado: "confirmado"` (linhas 97-100), inserir um registo em `notifications`, no mesmo formato do que já existe para a remarcação:
 
-## Notas
-- Não toco no schema `auth` diretamente; uso apenas a Admin API oficial do Supabase.
-- Nenhuma outra parte do código é alterada.
-- A função é apagada no fim, portanto nada fica em produção.
+- `clinic_id`: `s.clinic_id`
+- `type`: `"confirmacao"`
+- `title`: `"Presenca confirmada"`
+- `message`: `` `${patientName} confirmou a consulta de ${dataFormatada} as ${horaFormatada}.` ``
+- `patient_id`: `s.paciente_id`
+- `read`: `false`
+
+Só é criada quando o estado passa efetivamente de não-confirmado para confirmado (o `if (s.confirmacao_estado === "confirmado") return redirectTo(...)` acima já garante que repetições não geram notificações duplicadas).
+
+Nenhuma outra alteração à função. Deploy da função `confirmar-presenca` no fim.
+
+### 2. `src/services/NotificationService.ts`
+Adicionar `'confirmacao'` à união de tipos `NotificationType` (fica a par de `'remarcacao'`).
+
+### 3. `src/components/notifications/NotificationItem.tsx`
+- Importar `CheckCircle2` do `lucide-react`.
+- Acrescentar `confirmacao: CheckCircle2` ao `iconMap`.
+
+O fallback `|| Calendar` já existente continua a proteger tipos desconhecidos.
+
+## Fora do âmbito
+- Não mexer no email nem em `send-day-before-reminder`.
+- Não criar cron.
+- Não alterar prioridade nem lógica de agrupamento (herda o comportamento atual dos alertas de DB — prioridade `medium`, exceto `new_patient`).
