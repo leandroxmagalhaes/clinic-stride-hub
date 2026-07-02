@@ -64,6 +64,7 @@ const DefinicoesLembrete = lazyWithRetry(() => import("./pages/DefinicoesLembret
 const ConfirmacaoResultado = lazyWithRetry(() => import("./pages/ConfirmacaoResultado"));
 const ConfirmarRemarcacao = lazyWithRetry(() => import("./pages/ConfirmarRemarcacao"));
 const SolicitarVaga = lazyWithRetry(() => import("./pages/SolicitarVaga"));
+const SolicitacoesVaga = lazyWithRetry(() => import("./pages/SolicitacoesVaga"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -358,6 +359,14 @@ const App = () => (
                     element={
                       <ProtectedPage>
                         <Packs />
+                      </ProtectedPage>
+                    }
+                  />
+                  <Route
+                    path="/solicitacoes-vaga"
+                    element={
+                      <ProtectedPage>
+                        <SolicitacoesVaga />
                       </ProtectedPage>
                     }
                   />
