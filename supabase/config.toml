@@ -75,3 +75,6 @@ verify_jwt = false
 
 [functions.send-day-before-reminder]
 verify_jwt = false
+
+[functions.solicitar-vaga]
+verify_jwt = false
