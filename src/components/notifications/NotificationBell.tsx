@@ -74,6 +74,7 @@ export const NotificationBell = memo(function NotificationBell() {
               createdAt: new Date(n.created_at),
               patientId: n.patient_id,
               isDbNotification: true,
+              read: false,
             };
 
             setNotifications(prev => [newNotification, ...prev]);
