@@ -15,12 +15,13 @@ export const NotificationBell = memo(function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'unread' | 'all'>('unread');
   const navigate = useNavigate();
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (includeRead: boolean = false) => {
     try {
       setLoading(true);
-      const data = await NotificationService.getNotifications();
+      const data = await NotificationService.getNotifications(includeRead);
       setNotifications(data);
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -30,10 +31,10 @@ export const NotificationBell = memo(function NotificationBell() {
   }, []);
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+    fetchNotifications(filter === 'all');
+    const interval = setInterval(() => fetchNotifications(filter === 'all'), 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, [fetchNotifications, filter]);
 
   // Realtime subscription
   useEffect(() => {
@@ -73,6 +74,7 @@ export const NotificationBell = memo(function NotificationBell() {
               createdAt: new Date(n.created_at),
               patientId: n.patient_id,
               isDbNotification: true,
+              read: false,
             };
 
             setNotifications(prev => [newNotification, ...prev]);
@@ -114,13 +116,21 @@ export const NotificationBell = memo(function NotificationBell() {
 
   const handleMarkAsRead = useCallback(async (id: string) => {
     await NotificationService.markAsRead(id);
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  }, []);
+    if (filter === 'all') {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } else {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }
+  }, [filter]);
 
   const handleMarkAllAsRead = useCallback(async () => {
     await NotificationService.markAllAsRead();
-    setNotifications(prev => prev.filter(n => !n.isDbNotification));
-  }, []);
+    if (filter === 'all') {
+      setNotifications(prev => prev.map(n => n.isDbNotification ? { ...n, read: true } : n));
+    } else {
+      setNotifications(prev => prev.filter(n => !n.isDbNotification));
+    }
+  }, [filter]);
 
   // Group notifications by priority
   const highPriority = notifications.filter(n => n.priority === 'high');
@@ -168,8 +178,27 @@ export const NotificationBell = memo(function NotificationBell() {
             </span>
           )}
         </div>
+
+        <div className="flex items-center gap-1 px-4 py-2 border-b bg-muted/30">
+          <Button
+            variant={filter === 'unread' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 text-xs px-2"
+            onClick={() => setFilter('unread')}
+          >
+            Não lidas
+          </Button>
+          <Button
+            variant={filter === 'all' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 text-xs px-2"
+            onClick={() => setFilter('all')}
+          >
+            Todas
+          </Button>
+        </div>
         
-        <ScrollArea className="max-h-[400px]">
+        <ScrollArea className="h-[400px]">
           {loading ? (
             <div className="p-4 text-center text-sm text-muted-foreground">
               A carregar...
@@ -189,12 +218,19 @@ export const NotificationBell = memo(function NotificationBell() {
                     Urgente
                   </p>
                   {highPriority.map(notification => (
-                    <NotificationItem 
-                      key={notification.id} 
-                      notification={notification}
-                      onClose={handleClose}
-                      onMarkAsRead={handleMarkAsRead}
-                    />
+                    <div
+                      key={notification.id}
+                      className={cn(
+                        "transition-opacity",
+                        notification.read && "opacity-60"
+                      )}
+                    >
+                      <NotificationItem 
+                        notification={notification}
+                        onClose={handleClose}
+                        onMarkAsRead={handleMarkAsRead}
+                      />
+                    </div>
                   ))}
                 </>
               )}
@@ -206,12 +242,19 @@ export const NotificationBell = memo(function NotificationBell() {
                     Atenção
                   </p>
                   {mediumPriority.map(notification => (
-                    <NotificationItem 
-                      key={notification.id} 
-                      notification={notification}
-                      onClose={handleClose}
-                      onMarkAsRead={handleMarkAsRead}
-                    />
+                    <div
+                      key={notification.id}
+                      className={cn(
+                        "transition-opacity",
+                        notification.read && "opacity-60"
+                      )}
+                    >
+                      <NotificationItem 
+                        notification={notification}
+                        onClose={handleClose}
+                        onMarkAsRead={handleMarkAsRead}
+                      />
+                    </div>
                   ))}
                 </>
               )}
@@ -223,12 +266,19 @@ export const NotificationBell = memo(function NotificationBell() {
                     Informação
                   </p>
                   {lowPriority.map(notification => (
-                    <NotificationItem 
-                      key={notification.id} 
-                      notification={notification}
-                      onClose={handleClose}
-                      onMarkAsRead={handleMarkAsRead}
-                    />
+                    <div
+                      key={notification.id}
+                      className={cn(
+                        "transition-opacity",
+                        notification.read && "opacity-60"
+                      )}
+                    >
+                      <NotificationItem 
+                        notification={notification}
+                        onClose={handleClose}
+                        onMarkAsRead={handleMarkAsRead}
+                      />
+                    </div>
                   ))}
                 </>
               )}
