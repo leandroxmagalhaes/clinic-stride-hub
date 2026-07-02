@@ -22,6 +22,7 @@ const iconMap: Record<NotificationType, React.ElementType> = {
   diary_entry: BookOpen,
   diary_reply: MessageCircle,
   remarcacao: CalendarClock,
+  confirmacao: CheckCircle2,
 };
 
 const priorityStyles: Record<string, string> = {
