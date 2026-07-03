@@ -40,7 +40,7 @@ export default function OAuthConsent() {
         setError(error.message);
         return;
       }
-      const immediate = data?.redirect_url ?? data?.redirect_to;
+      const immediate = data?.redirect_url ?? (data as any)?.redirect_to;
       if (immediate && !data?.client) {
         window.location.href = immediate;
         return;
@@ -63,7 +63,7 @@ export default function OAuthConsent() {
       setError(error.message);
       return;
     }
-    const target = data?.redirect_url ?? data?.redirect_to;
+    const target = data?.redirect_url ?? (data as any)?.redirect_to;
     if (!target) {
       setBusy(false);
       setError("O servidor de autorização não devolveu redirecionamento.");
