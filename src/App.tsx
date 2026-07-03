@@ -65,6 +65,7 @@ const ConfirmacaoResultado = lazyWithRetry(() => import("./pages/ConfirmacaoResu
 const ConfirmarRemarcacao = lazyWithRetry(() => import("./pages/ConfirmarRemarcacao"));
 const SolicitarVaga = lazyWithRetry(() => import("./pages/SolicitarVaga"));
 const SolicitacoesVaga = lazyWithRetry(() => import("./pages/SolicitacoesVaga"));
+const OAuthConsent = lazyWithRetry(() => import("./pages/OAuthConsent"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
