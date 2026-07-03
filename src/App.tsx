@@ -65,6 +65,7 @@ const ConfirmacaoResultado = lazyWithRetry(() => import("./pages/ConfirmacaoResu
 const ConfirmarRemarcacao = lazyWithRetry(() => import("./pages/ConfirmarRemarcacao"));
 const SolicitarVaga = lazyWithRetry(() => import("./pages/SolicitarVaga"));
 const SolicitacoesVaga = lazyWithRetry(() => import("./pages/SolicitacoesVaga"));
+const OAuthConsent = lazyWithRetry(() => import("./pages/OAuthConsent"));
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -122,6 +123,14 @@ const App = () => (
                 <Routes>
                   {/* Public routes */}
                   <Route path="/login" element={<Login />} />
+                  <Route
+                    path="/.lovable/oauth/consent"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <OAuthConsent />
+                      </Suspense>
+                    }
+                  />
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
