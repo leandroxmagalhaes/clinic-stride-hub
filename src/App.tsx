@@ -123,6 +123,14 @@ const App = () => (
                 <Routes>
                   {/* Public routes */}
                   <Route path="/login" element={<Login />} />
+                  <Route
+                    path="/.lovable/oauth/consent"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <OAuthConsent />
+                      </Suspense>
+                    }
+                  />
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
