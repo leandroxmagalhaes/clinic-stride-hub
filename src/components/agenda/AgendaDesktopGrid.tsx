@@ -277,7 +277,7 @@ export function AgendaDesktopGrid({
       <Card className="shadow-card overflow-hidden hidden md:block">
         <CardContent className="p-0">
           <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="overflow-auto max-h-[calc(100vh-230px)] scrollbar-thin">
+            <div className="overflow-auto max-h-[calc(100vh-150px)] scrollbar-thin">
               <div className="min-w-[800px]">
                 {/* ── Header sólido e sticky ── */}
                 <div
@@ -291,14 +291,14 @@ export function AgendaDesktopGrid({
                       <div
                         key={index}
                         className={cn(
-                          "p-3 text-center border-r last:border-r-0",
+                          "px-2 py-1.5 text-center border-r last:border-r-0 flex items-center justify-center gap-1.5",
                           isToday ? "bg-primary/10 dark:bg-primary/20" : "bg-white dark:bg-gray-950",
                         )}
                       >
                         <p className="text-xs text-muted-foreground uppercase tracking-wide">
                           {format(day, "EEE", { locale: ptBR })}
                         </p>
-                        <p className={cn("text-lg font-semibold mt-1", isToday ? "text-primary" : "text-foreground")}>
+                        <p className={cn("text-sm font-semibold", isToday ? "text-primary" : "text-foreground")}>
                           {format(day, "d")}
                         </p>
                       </div>

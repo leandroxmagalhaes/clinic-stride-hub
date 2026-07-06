@@ -304,7 +304,7 @@ export default function Agenda() {
         </div>
       }
     >
-      <div className="space-y-4 animate-fade-in">
+      <div className="space-y-2 animate-fade-in">
         <div className="hidden md:block">
           <AgendaControls
             currentDate={currentDate}
