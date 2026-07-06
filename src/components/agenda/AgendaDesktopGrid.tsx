@@ -277,7 +277,7 @@ export function AgendaDesktopGrid({
       <Card className="shadow-card overflow-hidden hidden md:block">
         <CardContent className="p-0">
           <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="overflow-auto max-h-[600px] scrollbar-thin">
+            <div className="overflow-auto max-h-[calc(100vh-230px)] scrollbar-thin">
               <div className="min-w-[800px]">
                 {/* ── Header sólido e sticky ── */}
                 <div
