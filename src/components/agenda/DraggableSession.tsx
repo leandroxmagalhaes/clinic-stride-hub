@@ -133,8 +133,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       ? `repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(220,38,38,0.20) 5px, rgba(220,38,38,0.20) 7px)`
       : undefined,
     ...positionStyle,
-    minHeight: isCompact ? undefined : "60px",
-    height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "60px"})` : undefined,
+    minHeight: isCompact ? undefined : "44px",
+    height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "44px"})` : undefined,
   };
 
   if (transform) {
