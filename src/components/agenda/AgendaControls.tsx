@@ -67,59 +67,34 @@ export function AgendaControls({
 
   return (
     <Card className="shadow-card">
-      <CardContent className="p-3 sm:p-4">
-        <div className="flex flex-col gap-3">
-          {/* Row 1: Navigation + View Mode */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            {/* Navigation */}
-            <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-between sm:justify-start">
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" onClick={onPrevious} className="h-9 w-9">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" onClick={onNext} className="h-9 w-9">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" onClick={onToday} className="text-primary text-sm px-2 sm:px-3">
-                  Hoje
-                </Button>
-              </div>
-
-              {/* Date display */}
-              <h2 className="font-display font-semibold text-sm sm:text-lg ml-1 sm:ml-2">
-                <span className="md:hidden">{format(currentDate, "d MMM", { locale: ptBR })}</span>
-                <span className="hidden md:inline">
-                  {viewMode === "week"
-                    ? `${format(weekStart, "d MMM", { locale: ptBR })} - ${format(addDays(weekStart, 6), "d MMM yyyy", { locale: ptBR })}`
-                    : format(currentDate, "EEEE, d 'de' MMMM yyyy", { locale: ptBR })}
-                </span>
-              </h2>
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="hidden md:flex items-center gap-2">
-              <Button
-                variant={viewMode === "week" ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleViewModeChange("week")}
-                className="gap-1.5"
-              >
-                <CalendarDays className="h-4 w-4" />
-                Semana
+      <CardContent className="p-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Left: Navigation */}
+          <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" onClick={onPrevious} className="h-9 w-9">
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button
-                variant={viewMode === "day" ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleViewModeChange("day")}
-                className="gap-1.5"
-              >
-                <Calendar className="h-4 w-4" />
-                Dia
+              <Button variant="outline" size="icon" onClick={onNext} className="h-9 w-9">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" onClick={onToday} className="text-primary text-sm px-2 sm:px-3">
+                Hoje
               </Button>
             </div>
+
+            {/* Date display */}
+            <h2 className="font-display font-semibold text-sm sm:text-lg ml-1 sm:ml-2">
+              <span className="md:hidden">{format(currentDate, "d MMM", { locale: ptBR })}</span>
+              <span className="hidden md:inline">
+                {viewMode === "week"
+                  ? `${format(weekStart, "d MMM", { locale: ptBR })} - ${format(addDays(weekStart, 6), "d MMM yyyy", { locale: ptBR })}`
+                  : format(currentDate, "EEEE, d 'de' MMMM yyyy", { locale: ptBR })}
+              </span>
+            </h2>
           </div>
 
-          {/* Row 2: Hour Filter + feedback */}
+          {/* Center: Hour filter + feedback */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Filter className="h-3.5 w-3.5" />
@@ -162,6 +137,28 @@ export function AgendaControls({
               <Check className="h-3.5 w-3.5" />
               <span>Preferência guardada</span>
             </div>
+          </div>
+
+          {/* Right: View Mode Toggle */}
+          <div className="hidden md:flex items-center gap-2 ml-auto">
+            <Button
+              variant={viewMode === "week" ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleViewModeChange("week")}
+              className="gap-1.5"
+            >
+              <CalendarDays className="h-4 w-4" />
+              Semana
+            </Button>
+            <Button
+              variant={viewMode === "day" ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleViewModeChange("day")}
+              className="gap-1.5"
+            >
+              <Calendar className="h-4 w-4" />
+              Dia
+            </Button>
           </div>
         </div>
       </CardContent>
