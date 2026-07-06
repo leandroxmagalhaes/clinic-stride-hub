@@ -1,7 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 
-const HOUR_HEIGHT = 48;
+const HOUR_HEIGHT = 58;
 
 interface DroppableSlotProps {
   id: string;
