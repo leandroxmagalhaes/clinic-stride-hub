@@ -142,7 +142,14 @@ export default function Profissionais() {
       title="Profissionais"
       subtitle={`${professionals.length} profissionais ativos`}
       actions={
-        <Button onClick={() => setIsModalOpen(true)} className="gap-2">
+        <Button
+          onClick={() =>
+            toast.info(
+              "Para adicionar um novo profissional, envie um convite em Definições → Equipa. O perfil será criado automaticamente quando o convite for aceite."
+            )
+          }
+          className="gap-2"
+        >
           <Plus className="h-4 w-4" />
           Novo Profissional
         </Button>
