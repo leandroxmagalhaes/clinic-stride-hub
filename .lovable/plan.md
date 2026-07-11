@@ -1,84 +1,10 @@
-Criar a base de dados para pedidos de vaga públicos (parte 1 de 3).
+## Prompt 2 — Base de dados da origem
 
-Alterações ao esquema:
+Migração única na tabela `solicitacoes_vaga`:
 
-1. Nova tabela `public.solicitacoes_vaga` para registar pedidos de vaga recebidos via formulário público:
-   - `clinic_id`: referência à clínica destinatária
-   - `nome_paciente`, `data_nascimento`, `faixa_etaria`: dados do utente
-   - `nome_responsavel`, `telefone`, `email`: contactos
-   - `tipo_caso`: tipo de caso clínico
-   - `urgente`, `motivo_urgencia`: sinalização de urgência
-   - `observacoes`: notas do utente
-   - `estado`: estado do pedido (`nova`, `em_analise`, `contactada`, `agendada`, `sem_vaga`)
-   - `estado_em`, `notas_internas`: gestão interna da clínica
+1. **`paciente_id`** — `uuid`, opcional, `REFERENCES public.pacientes(id) ON DELETE SET NULL`.
+2. **`origem`** — `text`, `NOT NULL`, `DEFAULT 'novo'`, com `CHECK (origem IN ('novo','ativo','inativo'))`.
 
-2. Segurança:
-   - Ativar RLS na nova tabela.
-   - Permitir a profissionais autenticados da mesma clínica ver e atualizar os pedidos da sua clínica, usando o mesmo padrão da tabela `notifications` (`clinic_id = get_user_clinic_id(auth.uid())`).
-   - Conceder permissões totais ao `service_role` para a edge function pública inserir pedidos na próxima parte.
-   - Não criar política de inserção para anónimos: a inserção será feita exclusivamente pela edge function com service role.
+Sem alterações a RLS, GRANTs, edge functions, painel ou tipos gerados. Linhas existentes ficam automaticamente com `origem = 'novo'` e `paciente_id = NULL`.
 
-3. Adicionar a coluna `solicitacao_vaga_email` à tabela `public.clinic_settings` (texto, opcional), para guardar o endereço de email específico que recebe avisos de novos pedidos de vaga.
-
-Migration SQL:
-
-```sql
--- Nova tabela de solicitações de vaga
-CREATE TABLE public.solicitacoes_vaga (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  clinic_id uuid NOT NULL REFERENCES public.clinics(id) ON DELETE CASCADE,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  nome_paciente text NOT NULL,
-  data_nascimento date NOT NULL,
-  faixa_etaria text NOT NULL,
-  nome_responsavel text,
-  telefone text NOT NULL,
-  email text NOT NULL,
-  tipo_caso text NOT NULL,
-  urgente boolean NOT NULL DEFAULT false,
-  motivo_urgencia text,
-  observacoes text,
-  estado text NOT NULL DEFAULT 'nova',
-  estado_em timestamp with time zone,
-  notas_internas text
-);
-
--- Garantir valores válidos para estado
-ALTER TABLE public.solicitacoes_vaga
-  ADD CONSTRAINT solicitacoes_vaga_estado_check
-  CHECK (estado IN ('nova', 'em_analise', 'contactada', 'agendada', 'sem_vaga'));
-
--- Garantir valores válidos para faixa_etaria
-ALTER TABLE public.solicitacoes_vaga
-  ADD CONSTRAINT solicitacoes_vaga_faixa_etaria_check
-  CHECK (faixa_etaria IN ('bebe', 'crianca', 'adulto', 'idoso'));
-
--- Garantir valores válidos para tipo_caso
-ALTER TABLE public.solicitacoes_vaga
-  ADD CONSTRAINT solicitacoes_vaga_tipo_caso_check
-  CHECK (tipo_caso IN ('respiratorio', 'motora', 'neurodesenvolvimento', 'vestibular'));
-
--- Acesso para a aplicação e edge functions
-GRANT SELECT, UPDATE ON public.solicitacoes_vaga TO authenticated;
-GRANT ALL ON public.solicitacoes_vaga TO service_role;
-
--- RLS e políticas
-ALTER TABLE public.solicitacoes_vaga ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Clinic members can view their requests"
-  ON public.solicitacoes_vaga
-  FOR SELECT
-  TO authenticated
-  USING (clinic_id = public.get_user_clinic_id(auth.uid()));
-
-CREATE POLICY "Clinic members can update their requests"
-  ON public.solicitacoes_vaga
-  FOR UPDATE
-  TO authenticated
-  USING (clinic_id = public.get_user_clinic_id(auth.uid()))
-  WITH CHECK (clinic_id = public.get_user_clinic_id(auth.uid()));
-
--- Coluna de email destino na clinic_settings
-ALTER TABLE public.clinic_settings
-  ADD COLUMN IF NOT EXISTS solicitacao_vaga_email text;
-```
+No fim confirmo: **colunas paciente_id e origem criadas.**

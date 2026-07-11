@@ -2731,6 +2731,8 @@ export type Database = {
           nome_responsavel: string | null
           notas_internas: string | null
           observacoes: string | null
+          origem: string
+          paciente_id: string | null
           telefone: string
           tipo_caso: string
           urgente: boolean
@@ -2749,6 +2751,8 @@ export type Database = {
           nome_responsavel?: string | null
           notas_internas?: string | null
           observacoes?: string | null
+          origem?: string
+          paciente_id?: string | null
           telefone: string
           tipo_caso: string
           urgente?: boolean
@@ -2767,6 +2771,8 @@ export type Database = {
           nome_responsavel?: string | null
           notas_internas?: string | null
           observacoes?: string | null
+          origem?: string
+          paciente_id?: string | null
           telefone?: string
           tipo_caso?: string
           urgente?: boolean
@@ -2778,6 +2784,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clinics"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_vaga_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_vaga_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
           },
         ]
       }
