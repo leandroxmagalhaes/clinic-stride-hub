@@ -87,6 +87,7 @@ export default function SolicitarVaga() {
         body: {
           nome_paciente: nomePaciente.trim(),
           data_nascimento: dataNascimento,
+          nif: semNif ? "" : nif.trim(),
           nome_responsavel: menorIdade ? nomeResponsavel.trim() : null,
           telefone: telefone.trim(),
           email: email.trim(),
