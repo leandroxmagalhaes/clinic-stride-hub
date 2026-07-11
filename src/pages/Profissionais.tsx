@@ -101,13 +101,14 @@ export default function Profissionais() {
     
     try {
       const { error } = await supabase
-        .from("profissionais")
+        .from("profiles")
         .update({
           full_name: formData.full_name.trim(),
           email: formData.email.trim(),
           phone: formData.phone?.trim() || null,
           specialty: formData.specialty?.trim() || null,
-          council_number: formData.crefito?.trim() || null,
+          crefito: formData.crefito?.trim() || null,
+          role: formData.role,
         })
         .eq("id", editingProfessionalId);
 
