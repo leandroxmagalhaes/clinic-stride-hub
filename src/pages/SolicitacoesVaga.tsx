@@ -269,6 +269,20 @@ export default function SolicitacoesVaga() {
             </Select>
           </div>
           <div className="space-y-1.5">
+            <Label className="text-xs">Origem</Label>
+            <Select value={filterOrigem} onValueChange={(v) => setFilterOrigem(v as OrigemFilter)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas</SelectItem>
+                <SelectItem value="ativo">Paciente ativo</SelectItem>
+                <SelectItem value="inativo">Paciente inativo</SelectItem>
+                <SelectItem value="novo">Novo contacto</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-xs">Ordenação</Label>
             <Select value={ordem} onValueChange={(v) => setOrdem(v as any)}>
               <SelectTrigger>
