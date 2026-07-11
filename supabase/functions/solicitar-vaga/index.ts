@@ -142,6 +142,54 @@ serve(async (req) => {
     const clinicName = clinicRow.name || "Respira & Desenvolve";
     const clinicEmail = clinicRow.email as string | null;
 
+    // Reconhecimento automático de utente (nunca por email/telefone)
+    const normalize = (s: string) =>
+      String(s ?? "")
+        .toLowerCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .replace(/\s+/g, " ");
+
+    const nifNorm = nif.replace(/\D+/g, "");
+    const nomeNorm = normalize(nome_paciente);
+
+    let paciente_id: string | null = null;
+    let origem: "novo" | "ativo" | "inativo" = "novo";
+    let possivel_homonimo = false;
+
+    try {
+      const { data: pacientes } = await supabase
+        .from("pacientes")
+        .select("id, full_name, cpf, birth_date, is_active")
+        .eq("clinic_id", clinic_id);
+
+      if (Array.isArray(pacientes) && pacientes.length > 0) {
+        const sameName = pacientes.filter(
+          (p: any) => normalize(p.full_name || "") === nomeNorm && nomeNorm.length > 0,
+        );
+        const strong = sameName.find((p: any) => {
+          const pNif = String(p.cpf || "").replace(/\D+/g, "");
+          const nifMatch = nifNorm.length > 0 && pNif.length > 0 && pNif === nifNorm;
+          const dobMatch =
+            p.birth_date && data_nascimento && String(p.birth_date).slice(0, 10) === data_nascimento;
+          return nifMatch || dobMatch;
+        });
+        if (strong) {
+          paciente_id = strong.id;
+          origem = strong.is_active ? "ativo" : "inativo";
+          possivel_homonimo = false;
+        } else if (sameName.length > 0) {
+          possivel_homonimo = true;
+        }
+      }
+    } catch (e) {
+      console.error("recognition failed (soft):", e);
+      paciente_id = null;
+      origem = "novo";
+      possivel_homonimo = false;
+    }
+
     // Inserir solicitação (individual)
     const { data: inserted, error: insertErr } = await supabase
       .from("solicitacoes_vaga")
@@ -158,6 +206,10 @@ serve(async (req) => {
         motivo_urgencia: motivo_urgencia || null,
         observacoes: observacoes || null,
         estado: "nova",
+        nif: nif || null,
+        paciente_id,
+        origem,
+        possivel_homonimo,
       })
       .select("id")
       .single();
