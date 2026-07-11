@@ -23,7 +23,9 @@ import {
   User,
   Clock,
   FileText,
+  ExternalLink,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { pt } from "date-fns/locale";
 
@@ -46,7 +48,25 @@ interface Solicitacao {
   observacoes: string | null;
   estado: Estado;
   estado_em: string | null;
+  nif: string | null;
+  paciente_id: string | null;
+  origem: "novo" | "ativo" | "inativo" | null;
+  possivel_homonimo: boolean | null;
 }
+
+type OrigemFilter = "todas" | "novo" | "ativo" | "inativo";
+
+const ORIGEM_LABEL: Record<"novo" | "ativo" | "inativo", string> = {
+  ativo: "Paciente ativo",
+  inativo: "Paciente inativo",
+  novo: "Novo contacto",
+};
+
+const ORIGEM_BADGE: Record<"novo" | "ativo" | "inativo", string> = {
+  ativo: "bg-success/15 text-success border border-success/30",
+  inativo: "bg-warning/15 text-warning border border-warning/30",
+  novo: "bg-info/15 text-info border border-info/30",
+};
 
 const ESTADO_LABELS: Record<Estado, string> = {
   nova: "Nova",
@@ -97,6 +117,7 @@ export default function SolicitacoesVaga() {
   const [filterTipo, setFilterTipo] = useState<string>("todos");
   const [soUrgentes, setSoUrgentes] = useState(false);
   const [ordem, setOrdem] = useState<"recentes" | "antigas">("recentes");
+  const [filterOrigem, setFilterOrigem] = useState<OrigemFilter>("todas");
 
   const load = async () => {
     try {
@@ -154,6 +175,10 @@ export default function SolicitacoesVaga() {
       list = list.filter((s) => s.urgente);
     }
 
+    if (filterOrigem !== "todas") {
+      list = list.filter((s) => (s.origem || "novo") === filterOrigem);
+    }
+
     list.sort((a, b) => {
       const da = new Date(a.created_at).getTime();
       const db = new Date(b.created_at).getTime();
@@ -165,7 +190,7 @@ export default function SolicitacoesVaga() {
     }
 
     return list;
-  }, [items, filterEstado, filterTipo, soUrgentes, ordem]);
+  }, [items, filterEstado, filterTipo, soUrgentes, ordem, filterOrigem]);
 
   const counts = useMemo(
     () => ({
@@ -210,7 +235,7 @@ export default function SolicitacoesVaga() {
 
       {/* Filtros */}
       <Card>
-        <CardContent className="p-4 grid gap-3 md:grid-cols-4">
+        <CardContent className="p-4 grid gap-3 md:grid-cols-3 lg:grid-cols-5">
           <div className="space-y-1.5">
             <Label className="text-xs">Estado</Label>
             <Select value={filterEstado} onValueChange={setFilterEstado}>
@@ -240,6 +265,20 @@ export default function SolicitacoesVaga() {
                 <SelectItem value="motora">Fisioterapia motora</SelectItem>
                 <SelectItem value="neurodesenvolvimento">Neurodesenvolvimento</SelectItem>
                 <SelectItem value="vestibular">Reabilitação vestibular</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Origem</Label>
+            <Select value={filterOrigem} onValueChange={(v) => setFilterOrigem(v as OrigemFilter)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas</SelectItem>
+                <SelectItem value="ativo">Paciente ativo</SelectItem>
+                <SelectItem value="inativo">Paciente inativo</SelectItem>
+                <SelectItem value="novo">Novo contacto</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -315,7 +354,26 @@ export default function SolicitacoesVaga() {
                         )}
                         <span>•</span>
                         <Badge variant="outline">{TIPO_LABELS[s.tipo_caso]}</Badge>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${ORIGEM_BADGE[(s.origem || "novo") as "novo" | "ativo" | "inativo"]}`}
+                        >
+                          {ORIGEM_LABEL[(s.origem || "novo") as "novo" | "ativo" | "inativo"]}
+                        </span>
+                        {s.paciente_id && (
+                          <Button asChild size="sm" variant="ghost" className="h-6 px-2 gap-1 text-xs">
+                            <Link to={`/pacientes?id=${s.paciente_id}&edit=true`}>
+                              <ExternalLink className="h-3 w-3" />
+                              Ver ficha
+                            </Link>
+                          </Button>
+                        )}
                       </div>
+                      {s.possivel_homonimo && !s.paciente_id && (
+                        <div className="flex items-center gap-1.5 text-xs text-warning">
+                          <AlertTriangle className="h-3 w-3" />
+                          Nome coincide com paciente existente, verificar.
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span

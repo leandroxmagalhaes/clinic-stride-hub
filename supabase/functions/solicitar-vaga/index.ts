@@ -84,6 +84,7 @@ serve(async (req) => {
     const urgente = Boolean(body.urgente);
     const motivo_urgencia = String(body.motivo_urgencia ?? "").trim();
     const observacoes = String(body.observacoes ?? "").trim();
+    const nif = String(body.nif ?? "").trim();
 
     if (!nome_paciente) return bad("nome_paciente é obrigatório");
     if (!data_nascimento) return bad("data_nascimento é obrigatória");
@@ -141,6 +142,54 @@ serve(async (req) => {
     const clinicName = clinicRow.name || "Respira & Desenvolve";
     const clinicEmail = clinicRow.email as string | null;
 
+    // Reconhecimento automático de utente (nunca por email/telefone)
+    const normalize = (s: string) =>
+      String(s ?? "")
+        .toLowerCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .replace(/\s+/g, " ");
+
+    const nifNorm = nif.replace(/\D+/g, "");
+    const nomeNorm = normalize(nome_paciente);
+
+    let paciente_id: string | null = null;
+    let origem: "novo" | "ativo" | "inativo" = "novo";
+    let possivel_homonimo = false;
+
+    try {
+      const { data: pacientes } = await supabase
+        .from("pacientes")
+        .select("id, full_name, cpf, birth_date, is_active")
+        .eq("clinic_id", clinic_id);
+
+      if (Array.isArray(pacientes) && pacientes.length > 0) {
+        const sameName = pacientes.filter(
+          (p: any) => normalize(p.full_name || "") === nomeNorm && nomeNorm.length > 0,
+        );
+        const strong = sameName.find((p: any) => {
+          const pNif = String(p.cpf || "").replace(/\D+/g, "");
+          const nifMatch = nifNorm.length > 0 && pNif.length > 0 && pNif === nifNorm;
+          const dobMatch =
+            p.birth_date && data_nascimento && String(p.birth_date).slice(0, 10) === data_nascimento;
+          return nifMatch || dobMatch;
+        });
+        if (strong) {
+          paciente_id = strong.id;
+          origem = strong.is_active ? "ativo" : "inativo";
+          possivel_homonimo = false;
+        } else if (sameName.length > 0) {
+          possivel_homonimo = true;
+        }
+      }
+    } catch (e) {
+      console.error("recognition failed (soft):", e);
+      paciente_id = null;
+      origem = "novo";
+      possivel_homonimo = false;
+    }
+
     // Inserir solicitação (individual)
     const { data: inserted, error: insertErr } = await supabase
       .from("solicitacoes_vaga")
@@ -157,6 +206,10 @@ serve(async (req) => {
         motivo_urgencia: motivo_urgencia || null,
         observacoes: observacoes || null,
         estado: "nova",
+        nif: nif || null,
+        paciente_id,
+        origem,
+        possivel_homonimo,
       })
       .select("id")
       .single();
@@ -236,7 +289,10 @@ serve(async (req) => {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;padding:20px;">
     <tr><td style="background-color:#ffffff;border-radius:12px;padding:40px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
       <h1 style="margin:0 0 16px;color:#be123c;font-size:20px;">Novo pedido de vaga${urgente ? " (URGENTE)" : ""}</h1>
+      <p style="margin:0 0 8px;color:#3f3f46;font-size:14px;"><strong>Origem:</strong> ${origem === "ativo" ? "Paciente ativo" : origem === "inativo" ? "Paciente inativo" : "Novo contacto"}</p>
+      ${possivel_homonimo ? `<p style="margin:0 0 12px;color:#b45309;font-size:14px;"><strong>Atenção:</strong> nome coincide com paciente existente, verificar.</p>` : ""}
       <ul style="color:#3f3f46;font-size:14px;line-height:1.7;padding-left:18px;">
+        <li><strong>NIF:</strong> ${escapeHtml(nif || "—")}</li>
         <li><strong>Utente:</strong> ${escapeHtml(nome_paciente)}</li>
         <li><strong>Data de nascimento:</strong> ${escapeHtml(data_nascimento)} (${idade} anos, ${escapeHtml(faixa_etaria)})</li>
         <li><strong>Responsável:</strong> ${escapeHtml(nome_responsavel || "—")}</li>

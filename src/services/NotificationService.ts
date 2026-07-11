@@ -11,7 +11,8 @@ export type NotificationType =
   | 'diary_entry'
   | 'diary_reply'
   | 'remarcacao'
-  | 'confirmacao';
+  | 'confirmacao'
+  | 'solicitacao_vaga';
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
@@ -76,18 +77,27 @@ export class NotificationService {
         return [];
       }
 
-      return (data || []).map((n: any) => ({
-        id: n.id,
-        type: n.type as NotificationType,
-        title: n.title,
-        message: n.message,
-        priority: n.type === 'new_patient' ? 'high' as NotificationPriority : 'medium' as NotificationPriority,
-        link: n.patient_id ? `/pacientes?id=${n.patient_id}&edit=true` : undefined,
-        createdAt: new Date(n.created_at),
-        patientId: n.patient_id,
-        isDbNotification: true,
-        read: n.read,
-      }));
+      return (data || []).map((n: any) => {
+        const type = n.type as NotificationType;
+        let priority: NotificationPriority = 'medium';
+        if (type === 'new_patient') {
+          priority = 'high';
+        } else if (type === 'solicitacao_vaga') {
+          priority = /URGENTE/i.test(String(n.message || '')) ? 'high' : 'medium';
+        }
+        return {
+          id: n.id,
+          type,
+          title: n.title,
+          message: n.message,
+          priority,
+          link: n.patient_id ? `/pacientes?id=${n.patient_id}&edit=true` : (type === 'solicitacao_vaga' ? '/solicitacoes-vaga' : undefined),
+          createdAt: new Date(n.created_at),
+          patientId: n.patient_id,
+          isDbNotification: true,
+          read: n.read,
+        };
+      });
     } catch (error) {
       console.error('Error fetching DB notifications:', error);
       return [];
