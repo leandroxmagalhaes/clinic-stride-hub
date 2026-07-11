@@ -354,7 +354,26 @@ export default function SolicitacoesVaga() {
                         )}
                         <span>•</span>
                         <Badge variant="outline">{TIPO_LABELS[s.tipo_caso]}</Badge>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${ORIGEM_BADGE[(s.origem || "novo") as "novo" | "ativo" | "inativo"]}`}
+                        >
+                          {ORIGEM_LABEL[(s.origem || "novo") as "novo" | "ativo" | "inativo"]}
+                        </span>
+                        {s.paciente_id && (
+                          <Button asChild size="sm" variant="ghost" className="h-6 px-2 gap-1 text-xs">
+                            <Link to={`/pacientes?id=${s.paciente_id}&edit=true`}>
+                              <ExternalLink className="h-3 w-3" />
+                              Ver ficha
+                            </Link>
+                          </Button>
+                        )}
                       </div>
+                      {s.possivel_homonimo && !s.paciente_id && (
+                        <div className="flex items-center gap-1.5 text-xs text-warning">
+                          <AlertTriangle className="h-3 w-3" />
+                          Nome coincide com paciente existente, verificar.
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span
