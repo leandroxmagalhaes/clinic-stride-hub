@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
 
@@ -41,6 +42,8 @@ export default function SolicitarVaga() {
 
   const [nomePaciente, setNomePaciente] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
+  const [nif, setNif] = useState("");
+  const [semNif, setSemNif] = useState(false);
   const [nomeResponsavel, setNomeResponsavel] = useState("");
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
@@ -62,6 +65,7 @@ export default function SolicitarVaga() {
     if (!nomePaciente.trim()) e.nomePaciente = "Indique o nome do paciente.";
     if (!dataNascimento) e.dataNascimento = "Indique a data de nascimento.";
     else if (idade === null || idade < 0 || idade > 120) e.dataNascimento = "Data de nascimento inválida.";
+    if (!semNif && !nif.trim()) e.nif = "Indique o NIF / documento de identificação, ou assinale que ainda não tem.";
     if (menorIdade && !nomeResponsavel.trim()) e.nomeResponsavel = "Indique o nome do responsável.";
     if (!telefone.trim()) e.telefone = "Indique o telefone de contacto.";
     if (!email.trim()) e.email = "Indique o email.";
@@ -83,6 +87,7 @@ export default function SolicitarVaga() {
         body: {
           nome_paciente: nomePaciente.trim(),
           data_nascimento: dataNascimento,
+          nif: semNif ? "" : nif.trim(),
           nome_responsavel: menorIdade ? nomeResponsavel.trim() : null,
           telefone: telefone.trim(),
           email: email.trim(),
@@ -181,6 +186,40 @@ export default function SolicitarVaga() {
                   )}
                   {erros.dataNascimento && <p className="text-xs text-destructive">{erros.dataNascimento}</p>}
                 </div>
+
+                {!semNif && (
+                  <div className="space-y-2">
+                    <Label htmlFor="nif">NIF / Documento de identificação *</Label>
+                    <Input
+                      id="nif"
+                      value={nif}
+                      onChange={(e) => setNif(e.target.value)}
+                      autoComplete="off"
+                    />
+                    {erros.nif && <p className="text-xs text-destructive">{erros.nif}</p>}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="sem-nif"
+                    checked={semNif}
+                    onCheckedChange={(v) => {
+                      const checked = v === true;
+                      setSemNif(checked);
+                      if (checked) {
+                        setNif("");
+                        setErros((prev) => {
+                          const { nif: _omit, ...rest } = prev;
+                          return rest;
+                        });
+                      }
+                    }}
+                  />
+                  <Label htmlFor="sem-nif" className="cursor-pointer text-sm font-normal">
+                    Ainda não tem NIF ou documento
+                  </Label>
+                </div>
+
 
                 {menorIdade && (
                   <div className="space-y-2">
