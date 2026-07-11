@@ -527,7 +527,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const deleteProfessional = async (professionalId: string, reason?: string): Promise<void> => {
     const professional = professionals.find((p) => p.id === professionalId);
     if (!professional) throw new Error("Profissional não encontrado");
-    const { error } = await supabase.from("profissionais").update({ is_active: false }).eq("id", professionalId);
+    const { error } = await supabase.from("profiles").update({ is_active: false }).eq("id", professionalId);
     if (error) throw error;
     await AuditService.log({
       action: "delete",
