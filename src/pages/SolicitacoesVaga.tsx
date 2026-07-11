@@ -117,6 +117,7 @@ export default function SolicitacoesVaga() {
   const [filterTipo, setFilterTipo] = useState<string>("todos");
   const [soUrgentes, setSoUrgentes] = useState(false);
   const [ordem, setOrdem] = useState<"recentes" | "antigas">("recentes");
+  const [filterOrigem, setFilterOrigem] = useState<OrigemFilter>("todas");
 
   const load = async () => {
     try {
