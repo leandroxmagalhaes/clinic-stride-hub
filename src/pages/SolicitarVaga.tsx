@@ -65,6 +65,7 @@ export default function SolicitarVaga() {
     if (!nomePaciente.trim()) e.nomePaciente = "Indique o nome do paciente.";
     if (!dataNascimento) e.dataNascimento = "Indique a data de nascimento.";
     else if (idade === null || idade < 0 || idade > 120) e.dataNascimento = "Data de nascimento inválida.";
+    if (!semNif && !nif.trim()) e.nif = "Indique o NIF / documento de identificação, ou assinale que ainda não tem.";
     if (menorIdade && !nomeResponsavel.trim()) e.nomeResponsavel = "Indique o nome do responsável.";
     if (!telefone.trim()) e.telefone = "Indique o telefone de contacto.";
     if (!email.trim()) e.email = "Indique o email.";
