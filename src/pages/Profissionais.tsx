@@ -58,48 +58,11 @@ export default function Profissionais() {
   };
 
   const handleCreateProfessional = async () => {
-    try {
-      // Get clinic_id from user profile
-      const { getAuthContext } = await import("@/lib/auth-helpers");
-      const { clinicId: clinic_id } = await getAuthContext();
-      const profile = { clinic_id };
-
-      // Insert into database
-      const { data: newProf, error } = await supabase
-        .from("profissionais")
-        .insert({
-          clinic_id: profile.clinic_id,
-          full_name: formData.full_name.trim(),
-          email: formData.email.trim(),
-          phone: formData.phone?.trim() || null,
-          specialty: formData.specialty?.trim() || null,
-          council_number: formData.crefito?.trim() || null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const newProfessional = {
-        id: newProf.id,
-        clinic_id: newProf.clinic_id,
-        full_name: newProf.full_name,
-        email: newProf.email,
-        phone: newProf.phone,
-        role: formData.role,
-        specialty: newProf.specialty,
-        crefito: newProf.council_number,
-        avatar_url: newProf.avatar_url,
-        is_active: newProf.is_active,
-      };
-
-      addProfessional(newProfessional);
-      toast.success("Profissional cadastrado com sucesso!");
-      setIsModalOpen(false);
-      resetForm();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao cadastrar profissional");
-    }
+    toast.info(
+      "Para adicionar um novo profissional, envie um convite em Definições → Equipa. O perfil será criado automaticamente quando o convite for aceite."
+    );
+    setIsModalOpen(false);
+    resetForm();
   };
 
   const resetForm = () => {
@@ -138,13 +101,14 @@ export default function Profissionais() {
     
     try {
       const { error } = await supabase
-        .from("profissionais")
+        .from("profiles")
         .update({
           full_name: formData.full_name.trim(),
           email: formData.email.trim(),
           phone: formData.phone?.trim() || null,
           specialty: formData.specialty?.trim() || null,
-          council_number: formData.crefito?.trim() || null,
+          crefito: formData.crefito?.trim() || null,
+          role: formData.role,
         })
         .eq("id", editingProfessionalId);
 
