@@ -289,7 +289,10 @@ serve(async (req) => {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;padding:20px;">
     <tr><td style="background-color:#ffffff;border-radius:12px;padding:40px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
       <h1 style="margin:0 0 16px;color:#be123c;font-size:20px;">Novo pedido de vaga${urgente ? " (URGENTE)" : ""}</h1>
+      <p style="margin:0 0 8px;color:#3f3f46;font-size:14px;"><strong>Origem:</strong> ${origem === "ativo" ? "Paciente ativo" : origem === "inativo" ? "Paciente inativo" : "Novo contacto"}</p>
+      ${possivel_homonimo ? `<p style="margin:0 0 12px;color:#b45309;font-size:14px;"><strong>Atenção:</strong> nome coincide com paciente existente, verificar.</p>` : ""}
       <ul style="color:#3f3f46;font-size:14px;line-height:1.7;padding-left:18px;">
+        <li><strong>NIF:</strong> ${escapeHtml(nif || "—")}</li>
         <li><strong>Utente:</strong> ${escapeHtml(nome_paciente)}</li>
         <li><strong>Data de nascimento:</strong> ${escapeHtml(data_nascimento)} (${idade} anos, ${escapeHtml(faixa_etaria)})</li>
         <li><strong>Responsável:</strong> ${escapeHtml(nome_responsavel || "—")}</li>
