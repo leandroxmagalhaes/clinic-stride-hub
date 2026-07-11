@@ -187,6 +187,40 @@ export default function SolicitarVaga() {
                   {erros.dataNascimento && <p className="text-xs text-destructive">{erros.dataNascimento}</p>}
                 </div>
 
+                {!semNif && (
+                  <div className="space-y-2">
+                    <Label htmlFor="nif">NIF / Documento de identificação *</Label>
+                    <Input
+                      id="nif"
+                      value={nif}
+                      onChange={(e) => setNif(e.target.value)}
+                      autoComplete="off"
+                    />
+                    {erros.nif && <p className="text-xs text-destructive">{erros.nif}</p>}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="sem-nif"
+                    checked={semNif}
+                    onCheckedChange={(v) => {
+                      const checked = v === true;
+                      setSemNif(checked);
+                      if (checked) {
+                        setNif("");
+                        setErros((prev) => {
+                          const { nif: _omit, ...rest } = prev;
+                          return rest;
+                        });
+                      }
+                    }}
+                  />
+                  <Label htmlFor="sem-nif" className="cursor-pointer text-sm font-normal">
+                    Ainda não tem NIF ou documento
+                  </Label>
+                </div>
+
+
                 {menorIdade && (
                   <div className="space-y-2">
                     <Label htmlFor="responsavel">Nome do responsável *</Label>
