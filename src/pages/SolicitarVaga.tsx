@@ -42,6 +42,8 @@ export default function SolicitarVaga() {
 
   const [nomePaciente, setNomePaciente] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
+  const [nif, setNif] = useState("");
+  const [semNif, setSemNif] = useState(false);
   const [nomeResponsavel, setNomeResponsavel] = useState("");
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
