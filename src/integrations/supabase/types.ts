@@ -2727,12 +2727,14 @@ export type Database = {
           faixa_etaria: string
           id: string
           motivo_urgencia: string | null
+          nif: string | null
           nome_paciente: string
           nome_responsavel: string | null
           notas_internas: string | null
           observacoes: string | null
           origem: string
           paciente_id: string | null
+          possivel_homonimo: boolean
           telefone: string
           tipo_caso: string
           urgente: boolean
@@ -2747,12 +2749,14 @@ export type Database = {
           faixa_etaria: string
           id?: string
           motivo_urgencia?: string | null
+          nif?: string | null
           nome_paciente: string
           nome_responsavel?: string | null
           notas_internas?: string | null
           observacoes?: string | null
           origem?: string
           paciente_id?: string | null
+          possivel_homonimo?: boolean
           telefone: string
           tipo_caso: string
           urgente?: boolean
@@ -2767,12 +2771,14 @@ export type Database = {
           faixa_etaria?: string
           id?: string
           motivo_urgencia?: string | null
+          nif?: string | null
           nome_paciente?: string
           nome_responsavel?: string | null
           notas_internas?: string | null
           observacoes?: string | null
           origem?: string
           paciente_id?: string | null
+          possivel_homonimo?: boolean
           telefone?: string
           tipo_caso?: string
           urgente?: boolean
