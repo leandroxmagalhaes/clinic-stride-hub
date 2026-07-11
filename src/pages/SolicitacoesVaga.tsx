@@ -175,6 +175,10 @@ export default function SolicitacoesVaga() {
       list = list.filter((s) => s.urgente);
     }
 
+    if (filterOrigem !== "todas") {
+      list = list.filter((s) => (s.origem || "novo") === filterOrigem);
+    }
+
     list.sort((a, b) => {
       const da = new Date(a.created_at).getTime();
       const db = new Date(b.created_at).getTime();
@@ -186,7 +190,7 @@ export default function SolicitacoesVaga() {
     }
 
     return list;
-  }, [items, filterEstado, filterTipo, soUrgentes, ordem]);
+  }, [items, filterEstado, filterTipo, soUrgentes, ordem, filterOrigem]);
 
   const counts = useMemo(
     () => ({
