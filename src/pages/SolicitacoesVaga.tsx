@@ -23,7 +23,9 @@ import {
   User,
   Clock,
   FileText,
+  ExternalLink,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { pt } from "date-fns/locale";
 
