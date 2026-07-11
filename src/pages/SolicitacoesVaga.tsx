@@ -48,7 +48,25 @@ interface Solicitacao {
   observacoes: string | null;
   estado: Estado;
   estado_em: string | null;
+  nif: string | null;
+  paciente_id: string | null;
+  origem: "novo" | "ativo" | "inativo" | null;
+  possivel_homonimo: boolean | null;
 }
+
+type OrigemFilter = "todas" | "novo" | "ativo" | "inativo";
+
+const ORIGEM_LABEL: Record<"novo" | "ativo" | "inativo", string> = {
+  ativo: "Paciente ativo",
+  inativo: "Paciente inativo",
+  novo: "Novo contacto",
+};
+
+const ORIGEM_BADGE: Record<"novo" | "ativo" | "inativo", string> = {
+  ativo: "bg-success/15 text-success border border-success/30",
+  inativo: "bg-warning/15 text-warning border border-warning/30",
+  novo: "bg-info/15 text-info border border-info/30",
+};
 
 const ESTADO_LABELS: Record<Estado, string> = {
   nova: "Nova",
