@@ -84,6 +84,7 @@ serve(async (req) => {
     const urgente = Boolean(body.urgente);
     const motivo_urgencia = String(body.motivo_urgencia ?? "").trim();
     const observacoes = String(body.observacoes ?? "").trim();
+    const nif = String(body.nif ?? "").trim();
 
     if (!nome_paciente) return bad("nome_paciente é obrigatório");
     if (!data_nascimento) return bad("data_nascimento é obrigatória");
