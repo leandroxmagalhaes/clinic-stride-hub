@@ -235,7 +235,7 @@ export default function SolicitacoesVaga() {
 
       {/* Filtros */}
       <Card>
-        <CardContent className="p-4 grid gap-3 md:grid-cols-4">
+        <CardContent className="p-4 grid gap-3 md:grid-cols-3 lg:grid-cols-5">
           <div className="space-y-1.5">
             <Label className="text-xs">Estado</Label>
             <Select value={filterEstado} onValueChange={setFilterEstado}>
