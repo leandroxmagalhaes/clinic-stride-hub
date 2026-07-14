@@ -222,6 +222,17 @@ export function PatientDataTab({ patient, onPatientUpdated }: PatientDataTabProp
         </CardContent>
       </Card>
 
+      <PatientPriceCard
+        patientId={patient.id}
+        precoConsulta={(patient as any).preco_consulta ?? null}
+        onChange={(v) => {
+          updatePatient(patient.id, { preco_consulta: v } as any);
+          onPatientUpdated?.({ preco_consulta: v } as any);
+        }}
+      />
+
+
+
       <EditPatientModal
         patient={patient}
         isOpen={isEditOpen}
