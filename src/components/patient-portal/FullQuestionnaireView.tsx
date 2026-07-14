@@ -47,6 +47,12 @@ interface Props {
   onCompletedChange?: (completo: boolean) => void;
   /** Called after the anamnese record (and its history) is deleted. Enables the delete button. */
   onDeleted?: () => void;
+  /**
+   * When provided, loads that specific questionnaire (used by the multi-anamnese
+   * selector). When omitted, falls back to the legacy "one questionnaire per patient"
+   * lookup by paciente_id — kept for backward compatibility with the portal flow.
+   */
+  questionarioId?: string;
 }
 
 interface HistoryEntry {
@@ -164,6 +170,7 @@ export function FullQuestionnaireView({
   startInEditMode,
   onCompletedChange,
   onDeleted,
+  questionarioId,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [questionario, setQuestionario] = useState<any>(null);
@@ -300,11 +307,25 @@ export function FullQuestionnaireView({
   const load = async () => {
     setLoading(true);
     try {
-      const { data: q } = await (supabase as any)
-        .from("portal_questionario")
-        .select("*")
-        .eq("paciente_id", pacienteId)
-        .maybeSingle();
+      // Prefer the explicit questionarioId path (multi-anamnese selector).
+      // Fall back to the legacy per-patient lookup for existing callers.
+      let qResp: any = null;
+      if (questionarioId) {
+        const r = await (supabase as any)
+          .from("portal_questionario")
+          .select("*")
+          .eq("id", questionarioId)
+          .maybeSingle();
+        qResp = r?.data ?? null;
+      } else {
+        const r = await (supabase as any)
+          .from("portal_questionario")
+          .select("*")
+          .eq("paciente_id", pacienteId)
+          .maybeSingle();
+        qResp = r?.data ?? null;
+      }
+      const q = qResp;
 
       // Pull patient fields used both for fallback resolution AND identification autofill.
       let patient: any = null;
@@ -377,7 +398,7 @@ export function FullQuestionnaireView({
     }
   };
 
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [pacienteId]);
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [pacienteId, questionarioId]);
 
   const respostas: Record<string, Record<string, any>> = useMemo(() => {
     const r = questionario?.respostas;
@@ -427,9 +448,9 @@ export function FullQuestionnaireView({
     }
     setSaving(true);
     try {
-      let questionarioId: string | null = questionario?.id || null;
+      let currentId: string | null = questionario?.id || null;
 
-      if (questionarioId) {
+      if (currentId) {
         const updatePayload: Record<string, any> = {
           respostas: draft,
           updated_at: new Date().toISOString(),
@@ -439,10 +460,13 @@ export function FullQuestionnaireView({
         const { error } = await (supabase as any)
           .from("portal_questionario")
           .update(updatePayload)
-          .eq("id", questionarioId);
+          .eq("id", currentId);
         if (error) throw error;
       } else {
-        const upsertPayload: Record<string, any> = {
+        // Create a fresh questionnaire row for this template.
+        // With the multi-anamnese model, uniqueness is (paciente_id, template_id) — a
+        // plain INSERT is correct: the DB rejects duplicates automatically.
+        const insertPayload: Record<string, any> = {
           paciente_id: pacienteId,
           template_id: template.id,
           perfil_tipo: template.identifier,
@@ -452,18 +476,18 @@ export function FullQuestionnaireView({
         };
         const { data: created, error } = await (supabase as any)
           .from("portal_questionario")
-          .upsert(upsertPayload, { onConflict: "paciente_id" })
+          .insert(insertPayload)
           .select("id")
           .maybeSingle();
         if (error) throw error;
-        questionarioId = created?.id || null;
+        currentId = created?.id || null;
       }
 
       let changeCount = 0;
-      if (questionarioId) {
+      if (currentId) {
         const attribution = `${alteradoPor} (${authorRole})`;
         changeCount = await logQuestionnaireChanges({
-          questionarioId,
+          questionarioId: currentId,
           pacienteId,
           before: respostas,
           after: draft,
@@ -724,11 +748,12 @@ export function FullQuestionnaireView({
     if (!questionario?.id) return;
     setDeleting(true);
     try {
-      // Delete history rows first (FK-safe even if no cascade), then the record.
+      // Delete only the history of THIS anamnese (scoped by questionario_id),
+      // preserving history of any other anamneses this patient may have.
       await (supabase as any)
         .from("portal_questionario_historico")
         .delete()
-        .eq("paciente_id", pacienteId);
+        .eq("questionario_id", questionario.id);
       const { error } = await (supabase as any)
         .from("portal_questionario")
         .delete()

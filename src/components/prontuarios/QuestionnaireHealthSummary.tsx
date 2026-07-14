@@ -1,358 +1,241 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useCallback } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Pencil, Save, X, Plus, History, ChevronDown, ChevronUp, ClipboardList } from "lucide-react";
+import { FileText, Plus, ClipboardList, X } from "lucide-react";
 import { toast } from "sonner";
-import { differenceInYears } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { FullQuestionnaireView } from "@/components/patient-portal/FullQuestionnaireView";
-import { QuestionnaireTemplateService, type QuestionnaireTemplate } from "@/services/QuestionnaireTemplateService";
+import {
+  QuestionnaireTemplateService,
+  type QuestionnaireTemplate,
+} from "@/services/QuestionnaireTemplateService";
 
 interface Props {
   pacienteId: string;
   birthDate?: string | null;
 }
 
-const FIELD_LABELS: Record<string, string> = {
-  gestation: "Semanas de gestação",
-  deliveryType: "Tipo de parto",
-  induced: "Parto induzido",
-  instruments: "Instrumentos (ventosa/fórceps)",
-  birthWeight: "Peso ao nascer",
-  birthLength: "Comprimento ao nascer",
-  breastfeeding: "Amamentação",
-  reflux: "Refluxo",
-  colic: "Cólicas",
-  sleep: "Sono",
-  bowel: "Eliminação intestinal",
-  respiratoryInfections: "Infecções respiratórias",
-  posturalPreference: "Preferência postural",
-  vaccines: "Vacinas",
-  allergies: "Alergias",
-  medication: "Medicação",
-  diagnosis: "Diagnóstico médico",
-  reason: "Motivo da consulta",
-  activity: "Atividade física",
-  objective: "Objectivo do tratamento",
-  previousInjuries: "Lesões anteriores",
-  surgeries: "Cirurgias",
-  chronicConditions: "Condições crónicas",
-  fallHistory: "Histórico de quedas",
-  walkingAid: "Auxílio de marcha",
-  autonomy: "Autonomia diária",
-  caregiverName: "Cuidador",
-  schoolDifficulties: "Dificuldades escolares",
-  expectations: "Expectativas",
-  concerns: "Preocupações",
-};
-
-const babyFields = [
-  { key: "gestation", label: "Semanas de gestação", type: "text" },
-  { key: "deliveryType", label: "Tipo de parto", type: "select", options: ["Normal", "Cesárea", "Ventosa", "Fórceps"] },
-  { key: "induced", label: "Parto induzido", type: "boolean" },
-  { key: "instruments", label: "Instrumentos (ventosa/fórceps)", type: "boolean" },
-  { key: "birthWeight", label: "Peso ao nascer", type: "text" },
-  { key: "birthLength", label: "Comprimento ao nascer", type: "text" },
-  { key: "breastfeeding", label: "Amamentação", type: "select", options: ["Exclusiva", "Mista", "Artificial"] },
-  { key: "reflux", label: "Refluxo", type: "boolean" },
-  { key: "colic", label: "Cólicas", type: "boolean" },
-  { key: "sleep", label: "Sono", type: "select", options: ["Bom", "Regular", "Mau"] },
-  { key: "bowel", label: "Eliminação intestinal", type: "select", options: ["Normal", "Obstipação", "Diarreia"] },
-  { key: "respiratoryInfections", label: "Infecções respiratórias", type: "boolean" },
-  { key: "posturalPreference", label: "Preferência postural", type: "text" },
-  { key: "vaccines", label: "Vacinas", type: "text" },
-  { key: "allergies", label: "Alergias", type: "text" },
-  { key: "medication", label: "Medicação", type: "text" },
-  { key: "diagnosis", label: "Diagnóstico médico", type: "text" },
-];
-
-const adultFields = [
-  { key: "reason", label: "Motivo da consulta", type: "textarea" },
-  { key: "activity", label: "Atividade física", type: "text" },
-  { key: "objective", label: "Objectivo do tratamento", type: "textarea" },
-  { key: "previousInjuries", label: "Lesões anteriores", type: "text" },
-  { key: "surgeries", label: "Cirurgias", type: "text" },
-  { key: "medication", label: "Medicação", type: "text" },
-  { key: "allergies", label: "Alergias", type: "text" },
-  { key: "chronicConditions", label: "Condições crónicas", type: "text" },
-];
-
-const elderlyFields = [
-  { key: "chronicConditions", label: "Condições crónicas", type: "text" },
-  { key: "medication", label: "Medicação", type: "text" },
-  { key: "allergies", label: "Alergias", type: "text" },
-  { key: "fallHistory", label: "Histórico de quedas", type: "boolean" },
-  { key: "walkingAid", label: "Auxílio de marcha", type: "select", options: ["Nenhum", "Bengala", "Andarilho", "Cadeira de rodas"] },
-  { key: "autonomy", label: "Autonomia diária", type: "select", options: ["Independente", "Parcialmente dependente", "Dependente"] },
-  { key: "caregiverName", label: "Cuidador", type: "text" },
-];
-
-const childFields = [
-  { key: "reason", label: "Motivo da consulta", type: "textarea" },
-  { key: "activity", label: "Atividade física", type: "text" },
-  { key: "schoolDifficulties", label: "Dificuldades escolares", type: "text" },
-  { key: "surgeries", label: "Cirurgias/internamentos", type: "text" },
-  { key: "allergies", label: "Alergias", type: "text" },
-  { key: "medication", label: "Medicação", type: "text" },
-  { key: "vaccines", label: "Vacinas", type: "text" },
-  { key: "diagnosis", label: "Diagnóstico", type: "text" },
-];
-
-type FieldDef = typeof babyFields[number];
-
-const fieldsByProfile: Record<string, FieldDef[]> = {
-  baby: babyFields,
-  adult: adultFields,
-  elderly: elderlyFields,
-  child: childFields,
-};
-
-function formatValue(val: unknown): string {
-  if (val === null || val === undefined || val === "") return "—";
-  if (Array.isArray(val)) return val.length > 0 ? val.join(", ") : "—";
-  if (typeof val === "boolean") return val ? "Sim" : "Não";
-  return String(val);
-}
-
-function detectProfile(birthDate: string | null | undefined): string | null {
-  if (!birthDate) return null;
-  const age = differenceInYears(new Date(), new Date(birthDate));
-  if (age <= 2) return "baby";
-  if (age <= 12) return "child";
-  if (age >= 65) return "elderly";
-  return "adult";
-}
-
-interface HistoryEntry {
+interface QuestionarioRow {
   id: string;
-  campo_alterado: string;
-  valor_anterior: string | null;
-  valor_novo: string | null;
-  alterado_por: string;
-  created_at: string;
+  template_id: string | null;
+  perfil_tipo: string | null;
+  completo: boolean | null;
+  updated_at: string | null;
+  created_at: string | null;
 }
 
-function ChangeHistorySection({ pacienteId }: { pacienteId: string }) {
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  const loadHistory = async () => {
-    if (history.length > 0) return;
-    setLoading(true);
-    const { data } = await (supabase as any)
-      .from("portal_questionario_historico")
-      .select("*")
-      .eq("paciente_id", pacienteId)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    setHistory(data || []);
-    setLoading(false);
-  };
-
-  return (
-    <Collapsible open={open} onOpenChange={(o) => { setOpen(o); if (o) loadHistory(); }}>
-      <CollapsibleTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-          <History className="h-3.5 w-3.5" />
-          Ver histórico de alterações
-          {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-2">
-        {loading ? (
-          <Skeleton className="h-16 w-full" />
-        ) : history.length === 0 ? (
-          <p className="text-xs text-muted-foreground py-2">Sem alterações registadas.</p>
-        ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {history.map((h) => (
-              <div key={h.id} className="bg-muted/30 rounded-lg p-2.5 text-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{FIELD_LABELS[h.campo_alterado] || h.campo_alterado}</span>
-                  <span className="text-muted-foreground">
-                    {new Date(h.created_at).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="line-through text-destructive">{h.valor_anterior || "—"}</span>
-                  <span className="text-muted-foreground">→</span>
-                  <span className="text-green-600 font-medium">{h.valor_novo || "—"}</span>
-                </div>
-                <p className="text-muted-foreground">por {h.alterado_por}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
+/**
+ * Multi-anamnese view: shows a selector when the patient has one or more filled
+ * questionnaires (one per template) and lets the professional add another
+ * questionnaire from a different model without erasing the existing ones.
+ *
+ * Backward compat: patients that still have exactly one questionnaire continue
+ * to see the same experience — the selector just lists that single entry.
+ */
 export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
   const { user } = useAuth();
-  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [editValues, setEditValues] = useState<Record<string, any>>({});
-  const [editExpectativas, setEditExpectativas] = useState<Record<string, string>>({});
-  const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
-  const [professionalName, setProfessionalName] = useState("Profissional");
-  const [canEditDynamic, setCanEditDynamic] = useState(false);
+  const [questionarios, setQuestionarios] = useState<QuestionarioRow[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([]);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [chosenTemplateId, setChosenTemplateId] = useState<string>("");
   const [creatingFromTemplate, setCreatingFromTemplate] = useState(false);
+  const [addingAnother, setAddingAnother] = useState(false);
+  const [professionalName, setProfessionalName] = useState("Profissional");
+  const [canEditDynamic, setCanEditDynamic] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const { data: q } = await (supabase as any)
-          .from("portal_questionario")
-          .select("*")
-          .eq("paciente_id", pacienteId)
-          .maybeSingle();
-        setData(q);
-      } catch {
-        setData(null);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const loadQuestionarios = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await (supabase as any)
+        .from("portal_questionario")
+        .select("id, template_id, perfil_tipo, completo, updated_at, created_at")
+        .eq("paciente_id", pacienteId)
+        .order("updated_at", { ascending: false });
+      const rows: QuestionarioRow[] = data || [];
+      setQuestionarios(rows);
+      // Keep current selection if still present, otherwise pick the most recent.
+      setSelectedId((prev) => {
+        if (prev && rows.some((r) => r.id === prev)) return prev;
+        return rows[0]?.id ?? null;
+      });
+    } catch (err) {
+      console.error("Failed to load questionarios list", err);
+      setQuestionarios([]);
+      setSelectedId(null);
+    } finally {
+      setLoading(false);
+    }
   }, [pacienteId]);
 
-  // Get professional name + RBAC check
-  // Rule: any clinical professional (admin OR professional) in the clinic can edit
-  // the Anamnese. Secretaries and patients are read-only / blocked.
+  useEffect(() => {
+    void loadQuestionarios();
+  }, [loadQuestionarios]);
+
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: p } = await supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle();
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
       if (p?.full_name) setProfessionalName(p.full_name);
-      const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
       const roleSet = new Set((roles || []).map((r: any) => r.role));
       const isAdmin = roleSet.has("admin");
       const isProfessional = roleSet.has("professional");
       const isSecretary = roleSet.has("secretary");
-      // Allow admins and professionals (any clinic member who treats patients).
-      // Explicitly exclude secretaries (read-only) and patients.
       setCanEditDynamic((isAdmin || isProfessional) && !isSecretary);
     })();
   }, [user, pacienteId]);
 
+  const loadTemplates = useCallback(async () => {
+    if (templatesLoaded) return;
+    setTemplatesLoading(true);
+    try {
+      const list = await QuestionnaireTemplateService.list();
+      setTemplates(list);
+      setTemplatesLoaded(true);
+    } catch (e) {
+      console.warn("Failed to load templates", e);
+      toast.error("Erro ao carregar modelos de questionário");
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, [templatesLoaded]);
+
+  const templateById = (id: string | null | undefined) =>
+    id ? templates.find((t) => t.id === id) || null : null;
+
+  const templateLabel = (row: QuestionarioRow): string => {
+    const t = templateById(row.template_id);
+    if (t?.name) return t.name;
+    // Legacy row without template_id — show a stable fallback.
+    if (row.perfil_tipo) return `Questionário (${row.perfil_tipo})`;
+    return "Questionário de saúde";
+  };
+
+  const formatDate = (iso: string | null) =>
+    iso
+      ? new Date(iso).toLocaleDateString("pt-PT", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : "—";
+
+  // Load templates lazily whenever we might need to render labels or the picker.
+  useEffect(() => {
+    if (questionarios.length > 0 && !templatesLoaded) {
+      void loadTemplates();
+    }
+  }, [questionarios, templatesLoaded, loadTemplates]);
+
+  const suggestedInitialTemplateId = useCallback(async (): Promise<string | null> => {
+    // Prefer the most recent portal invite template, otherwise age-based suggestion.
+    try {
+      const { data: inv } = await (supabase as any)
+        .from("portal_convites")
+        .select("template_id")
+        .eq("paciente_id", pacienteId)
+        .not("template_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (inv?.template_id && templates.some((t) => t.id === inv.template_id)) {
+        return inv.template_id;
+      }
+    } catch {
+      /* ignore */
+    }
+    const suggested = QuestionnaireTemplateService.suggestIdentifierByAge(birthDate);
+    const match =
+      templates.find((t) => t.identifier === suggested) || templates[0];
+    return match?.id ?? null;
+  }, [pacienteId, templates, birthDate]);
+
+  const openInitialPicker = useCallback(async () => {
+    await loadTemplates();
+    const initial = await suggestedInitialTemplateId();
+    if (initial) setChosenTemplateId(initial);
+  }, [loadTemplates, suggestedInitialTemplateId]);
+
+  const openAddAnother = useCallback(async () => {
+    await loadTemplates();
+    setChosenTemplateId("");
+    setAddingAnother(true);
+  }, [loadTemplates]);
+
+  // Templates the patient does NOT yet have (used by "Adicionar outra anamnese").
+  const usedTemplateIds = new Set(
+    questionarios.map((q) => q.template_id).filter(Boolean) as string[]
+  );
+  const availableTemplates = templates.filter((t) => !usedTemplateIds.has(t.id));
+
+  const createQuestionarioFromTemplate = async (templateId: string) => {
+    const tpl = templates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    setCreatingFromTemplate(true);
+    try {
+      const { data: created, error } = await (supabase as any)
+        .from("portal_questionario")
+        .insert({
+          paciente_id: pacienteId,
+          template_id: tpl.id,
+          perfil_tipo: tpl.identifier,
+          respostas: {},
+          completo: false,
+        })
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      const newId: string | null = created?.id ?? null;
+      await loadQuestionarios();
+      if (newId) setSelectedId(newId);
+      setAddingAnother(false);
+      setChosenTemplateId("");
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.message || "";
+      if (msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("unique")) {
+        toast.error("Este utente já tem uma anamnese deste modelo.");
+      } else {
+        toast.error("Erro ao iniciar questionário: " + (msg || "desconhecido"));
+      }
+    } finally {
+      setCreatingFromTemplate(false);
+    }
+  };
+
   if (loading) return <Skeleton className="h-24 w-full" />;
 
-  // Dynamic-template path: render the full questionnaire (all sections, full audit).
-  // We always try to render integrally — FullQuestionnaireView resolves the template
-  // even for legacy records (without template_id) using perfil_tipo / birth_date.
-  if (data) {
-    return (
-      <FullQuestionnaireView
-        pacienteId={pacienteId}
-        alteradoPor={professionalName}
-        authorRole="profissional"
-        canEdit={canEditDynamic}
-        title="Resumo de Saúde"
-        onDeleted={() => {
-          // Reset local state so the template picker reappears.
-          setData(null);
-          setChosenTemplateId("");
-          setTemplates([]);
-          setCreating(false);
-        }}
-      />
-    );
-  }
-
-  // No data — show template picker so the professional fills the SAME questionnaire
-  // model the patient would have used (instead of the legacy minimal form).
-  if ((!data || !data.completo) && !creating) {
-    const loadTemplates = async () => {
-      if (templates.length > 0) return;
-      setTemplatesLoading(true);
-      try {
-        const list = await QuestionnaireTemplateService.list();
-        setTemplates(list);
-        // Pre-select the most recent invite's template, otherwise age-suggested.
-        try {
-          const { data: inv } = await (supabase as any)
-            .from("portal_convites")
-            .select("template_id")
-            .eq("paciente_id", pacienteId)
-            .not("template_id", "is", null)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (inv?.template_id && list.some((t) => t.id === inv.template_id)) {
-            setChosenTemplateId(inv.template_id);
-            return;
-          }
-        } catch { /* ignore */ }
-        const suggested = QuestionnaireTemplateService.suggestIdentifierByAge(birthDate);
-        const match = list.find((t) => t.identifier === suggested) || list[0];
-        if (match) setChosenTemplateId(match.id);
-      } catch (e) {
-        console.warn("Failed to load templates", e);
-        toast.error("Erro ao carregar modelos de questionário");
-      } finally {
-        setTemplatesLoading(false);
-      }
-    };
-
-    const startManualFromTemplate = async () => {
-      if (!chosenTemplateId) {
-        toast.error("Selecione um modelo de questionário");
-        return;
-      }
-      const tpl = templates.find((t) => t.id === chosenTemplateId);
-      if (!tpl) return;
-      setCreatingFromTemplate(true);
-      try {
-        // Create empty questionnaire row pinned to the chosen template.
-        // FullQuestionnaireView will then render it dynamically and let the
-        // professional fill every section (with full audit on save).
-        const { error } = await (supabase as any)
-          .from("portal_questionario")
-          .insert({
-            paciente_id: pacienteId,
-            template_id: tpl.id,
-            perfil_tipo: tpl.identifier,
-            respostas: {},
-            completo: false,
-          });
-        if (error) throw error;
-        // Reload — next render hits the FullQuestionnaireView path.
-        const { data: q } = await (supabase as any)
-          .from("portal_questionario")
-          .select("*")
-          .eq("paciente_id", pacienteId)
-          .maybeSingle();
-        setData(q);
-      } catch (e: any) {
-        console.error(e);
-        toast.error("Erro ao iniciar questionário: " + (e?.message || "desconhecido"));
-      } finally {
-        setCreatingFromTemplate(false);
-      }
-    };
-
+  // ─────────────────────────────────────────────────────────────────────────
+  // No questionnaires yet — original "pick a template and start" flow.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (questionarios.length === 0) {
     return (
       <Card className="border-dashed border-muted-foreground/30">
         <CardContent className="py-6 space-y-4">
           <div className="text-center space-y-2">
             <FileText className="h-8 w-8 mx-auto text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">
-              O utente ainda não preencheu o questionário de saúde no portal.
+              O utente ainda não preencheu nenhum questionário de saúde.
             </p>
             <p className="text-xs text-muted-foreground">
               Selecione qual modelo pretende preencher manualmente:
@@ -362,11 +245,21 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
           <div className="max-w-md mx-auto space-y-2">
             <Select
               value={chosenTemplateId || "__none__"}
-              onValueChange={(v) => setChosenTemplateId(v === "__none__" ? "" : v)}
-              onOpenChange={(open) => { if (open) loadTemplates(); }}
+              onValueChange={(v) =>
+                setChosenTemplateId(v === "__none__" ? "" : v)
+              }
+              onOpenChange={(open) => {
+                if (open) void openInitialPicker();
+              }}
             >
               <SelectTrigger className="h-9">
-                <SelectValue placeholder={templatesLoading ? "A carregar modelos..." : "Escolher modelo de questionário"} />
+                <SelectValue
+                  placeholder={
+                    templatesLoading
+                      ? "A carregar modelos..."
+                      : "Escolher modelo de questionário"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {templates.length === 0 && !templatesLoading && (
@@ -380,7 +273,12 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
                       <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
                       {t.name}
                       {t.is_system && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">sistema</Badge>
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          sistema
+                        </Badge>
                       )}
                     </span>
                   </SelectItem>
@@ -388,22 +286,32 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
               </SelectContent>
             </Select>
 
-            {chosenTemplateId && (() => {
-              const tpl = templates.find((t) => t.id === chosenTemplateId);
-              if (!tpl) return null;
-              return (
-                <p className="text-xs text-muted-foreground">
-                  {tpl.description || "Modelo dinâmico"}
-                  {tpl.estimated_minutes ? ` · ~${tpl.estimated_minutes} min` : ""}
-                </p>
-              );
-            })()}
+            {chosenTemplateId &&
+              (() => {
+                const tpl = templates.find((t) => t.id === chosenTemplateId);
+                if (!tpl) return null;
+                return (
+                  <p className="text-xs text-muted-foreground">
+                    {tpl.description || "Modelo dinâmico"}
+                    {tpl.estimated_minutes
+                      ? ` · ~${tpl.estimated_minutes} min`
+                      : ""}
+                  </p>
+                );
+              })()}
 
             <div className="flex justify-center pt-1">
               <Button
                 size="sm"
-                onClick={startManualFromTemplate}
-                disabled={!chosenTemplateId || creatingFromTemplate || !canEditDynamic}
+                onClick={() =>
+                  chosenTemplateId &&
+                  createQuestionarioFromTemplate(chosenTemplateId)
+                }
+                disabled={
+                  !chosenTemplateId ||
+                  creatingFromTemplate ||
+                  !canEditDynamic
+                }
               >
                 <Plus className="h-4 w-4 mr-1" />
                 {creatingFromTemplate ? "A iniciar..." : "Preencher manualmente"}
@@ -415,293 +323,173 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
     );
   }
 
-  // Determine profile type
-  const perfilTipo: string = creating
-    ? (selectedProfile || "adult")
-    : (data?.perfil_tipo || "adult");
-
-  const perfilSaude: Record<string, unknown> = creating ? {} : (
-    typeof data?.perfil_saude === 'string' ? JSON.parse(data.perfil_saude) : (data?.perfil_saude || {})
-  );
-  const dadosPessoais: Record<string, unknown> = creating ? {} : (
-    typeof data?.dados_pessoais === 'string' ? JSON.parse(data.dados_pessoais) : (data?.dados_pessoais || {})
-  );
-  const expectativas: Record<string, unknown> = creating ? {} : (
-    typeof data?.expectativas === 'string' ? JSON.parse(data.expectativas) : (data?.expectativas || {})
-  );
-
-  const fields = fieldsByProfile[perfilTipo] || adultFields;
-  const allData = creating ? editValues : (editing ? editValues : { ...dadosPessoais, ...perfilSaude });
-
-  const startEdit = () => {
-    setEditValues({ ...dadosPessoais, ...perfilSaude });
-    setEditExpectativas({
-      expectations: String(expectativas.expectations || ""),
-      concerns: String(expectativas.concerns || ""),
-    });
-    setEditing(true);
-  };
-
-  const cancelEdit = () => {
-    setEditing(false);
-    setCreating(false);
-    setEditValues({});
-    setEditExpectativas({});
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      // Record changes in history when editing (not creating)
-      if (data?.id && !creating) {
-        const originalSaude = typeof data.perfil_saude === 'string' ? JSON.parse(data.perfil_saude) : (data.perfil_saude || {});
-        const originalDados = typeof data.dados_pessoais === 'string' ? JSON.parse(data.dados_pessoais) : (data.dados_pessoais || {});
-        const originalExpect = typeof data.expectativas === 'string' ? JSON.parse(data.expectativas) : (data.expectativas || {});
-        const originalAll = { ...originalDados, ...originalSaude };
-
-        const allKeys = new Set([...Object.keys(originalAll), ...Object.keys(editValues)]);
-        for (const key of allKeys) {
-          const oldVal = String(originalAll[key] || "");
-          const newVal = String(editValues[key] || "");
-          if (oldVal !== newVal) {
-            await (supabase as any)
-              .from("portal_questionario_historico")
-              .insert({
-                questionario_id: data.id,
-                paciente_id: pacienteId,
-                campo_alterado: key,
-                valor_anterior: oldVal,
-                valor_novo: newVal,
-                alterado_por: professionalName,
-              });
-          }
-        }
-
-        // Check expectativas changes
-        const expectKeys = ["expectations", "concerns"];
-        for (const key of expectKeys) {
-          const oldVal = String(originalExpect[key] || "");
-          const newVal = String(editExpectativas[key] || "");
-          if (oldVal !== newVal) {
-            await (supabase as any)
-              .from("portal_questionario_historico")
-              .insert({
-                questionario_id: data.id,
-                paciente_id: pacienteId,
-                campo_alterado: key,
-                valor_anterior: oldVal,
-                valor_novo: newVal,
-                alterado_por: professionalName,
-              });
-          }
-        }
-      }
-
-      const payload = {
-        paciente_id: pacienteId,
-        perfil_tipo: perfilTipo,
-        perfil_saude: editValues,
-        dados_pessoais: editValues,
-        expectativas: editExpectativas,
-        completo: true,
-      };
-
-      if (data?.id && !creating) {
-        await (supabase as any)
-          .from("portal_questionario")
-          .update(payload)
-          .eq("id", data.id);
-      } else {
-        await (supabase as any)
-          .from("portal_questionario")
-          .insert(payload);
-      }
-
-      // Reload
-      const { data: q } = await (supabase as any)
-        .from("portal_questionario")
-        .select("*")
-        .eq("paciente_id", pacienteId)
-        .eq("completo", true)
-        .maybeSingle();
-      setData(q);
-      setEditing(false);
-      setCreating(false);
-      toast.success("Questionário guardado com sucesso");
-    } catch {
-      toast.error("Erro ao guardar questionário");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const renderField = (field: FieldDef) => {
-    const isEditing = editing || creating;
-    const value = allData[field.key];
-
-    if (!isEditing) {
-      return (
-        <div key={field.key}>
-          <p className="text-xs text-muted-foreground">{field.label}</p>
-          <p className="text-sm font-medium">{formatValue(value)}</p>
-        </div>
-      );
-    }
-
-    const onChange = (v: any) => setEditValues(prev => ({ ...prev, [field.key]: v }));
-
-    if (field.type === "boolean") {
-      return (
-        <div key={field.key}>
-          <p className="text-xs text-muted-foreground mb-1">{field.label}</p>
-          <Select value={value === true ? "sim" : value === false ? "nao" : ""} onValueChange={v => onChange(v === "sim")}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sim">Sim</SelectItem>
-              <SelectItem value="nao">Não</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      );
-    }
-
-    if (field.type === "select" && field.options) {
-      return (
-        <div key={field.key}>
-          <p className="text-xs text-muted-foreground mb-1">{field.label}</p>
-          <Select value={String(value || "")} onValueChange={onChange}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-            <SelectContent>
-              {field.options.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      );
-    }
-
-    if (field.type === "textarea") {
-      return (
-        <div key={field.key} className="col-span-full">
-          <p className="text-xs text-muted-foreground mb-1">{field.label}</p>
-          <Textarea className="text-sm min-h-[60px]" value={String(value || "")} onChange={e => onChange(e.target.value)} />
-        </div>
-      );
-    }
-
-    return (
-      <div key={field.key}>
-        <p className="text-xs text-muted-foreground mb-1">{field.label}</p>
-        <Input className="h-8 text-sm" value={String(value || "")} onChange={e => onChange(e.target.value)} />
-      </div>
-    );
-  };
-
-  const lastUpdate = data?.updated_at
-    ? new Date(data.updated_at).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
-    : null;
+  // ─────────────────────────────────────────────────────────────────────────
+  // One or more questionnaires — selector + FullQuestionnaireView of the
+  // selected one + "Adicionar outra anamnese".
+  // ─────────────────────────────────────────────────────────────────────────
+  const selected = questionarios.find((q) => q.id === selectedId) || questionarios[0];
 
   return (
-    <Card className="border-blue-200 bg-blue-50/60">
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <FileText className="h-5 w-5 text-blue-600" />
-          <CardTitle className="font-display text-lg text-blue-900">
-            {creating ? "Preencher Questionário de Saúde" : "Resumo de Saúde"}
-          </CardTitle>
-          {!creating && !editing && (
-            <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">
-              Preenchido pelo utente
-            </Badge>
-          )}
-          <div className="ml-auto flex gap-1">
-            {(editing || creating) ? (
-              <>
-                <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>
-                  <X className="h-4 w-4 mr-1" /> Cancelar
-                </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
-                  <Save className="h-4 w-4 mr-1" /> {saving ? "Guardando..." : "Guardar"}
-                </Button>
-              </>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={startEdit}>
-                <Pencil className="h-4 w-4 mr-1" /> Editar
-              </Button>
-            )}
-          </div>
-        </div>
-        {!editing && !creating && (
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <p className="text-xs text-blue-600/70">
-              Informações fornecidas pelo paciente/responsável no portal
-            </p>
-            {lastUpdate && (
-              <span className="text-[10px] text-muted-foreground">
-                · Última atualização: {lastUpdate}
-              </span>
-            )}
-          </div>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Profile selector for manual creation when no birth date */}
-        {creating && !detectProfile(birthDate) && (
-          <div className="mb-3">
-            <p className="text-xs text-muted-foreground mb-1">Selecione o perfil:</p>
-            <Select value={selectedProfile || "adult"} onValueChange={v => { setSelectedProfile(v); setEditValues({}); }}>
-              <SelectTrigger className="h-8 text-sm w-48"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="baby">Bebé (0-2 anos)</SelectItem>
-                <SelectItem value="child">Criança (2-12 anos)</SelectItem>
-                <SelectItem value="adult">Adulto (12-65 anos)</SelectItem>
-                <SelectItem value="elderly">Idoso (65+ anos)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-          {fields.map(renderField)}
-        </div>
-
-        {/* Expectativas */}
-        {(editing || creating) ? (
-          <div className="border-t border-blue-200 pt-3 space-y-2">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">O que espera alcançar</p>
-              <Textarea className="text-sm min-h-[50px]" value={editExpectativas.expectations || ""} onChange={e => setEditExpectativas(p => ({ ...p, expectations: e.target.value }))} />
+    <div className="space-y-3">
+      {/* Selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        {questionarios.length > 1 ? (
+          <>
+            <p className="text-xs text-muted-foreground">Anamnese:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {questionarios.map((q) => {
+                const active = q.id === selected.id;
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => setSelectedId(q.id)}
+                    className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
+                      active
+                        ? "border-primary bg-primary/10 text-primary ring-1 ring-primary"
+                        : "border-border bg-background hover:border-primary/50"
+                    }`}
+                  >
+                    <span className="font-medium">{templateLabel(q)}</span>
+                    <span className="ml-1.5 text-[10px] opacity-70">
+                      · {formatDate(q.updated_at)}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Preocupações</p>
-              <Textarea className="text-sm min-h-[50px]" value={editExpectativas.concerns || ""} onChange={e => setEditExpectativas(p => ({ ...p, concerns: e.target.value }))} />
-            </div>
-          </div>
+          </>
         ) : (
-          (expectativas.expectations || expectativas.concerns) && (
-            <div className="border-t border-blue-200 pt-3 space-y-2">
-              {expectativas.expectations && (
-                <div>
-                  <p className="text-xs text-muted-foreground">O que espera alcançar</p>
-                  <p className="text-sm font-medium">{String(expectativas.expectations)}</p>
-                </div>
-              )}
-              {expectativas.concerns && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Preocupações</p>
-                  <p className="text-sm font-medium">{String(expectativas.concerns)}</p>
-                </div>
-              )}
-            </div>
-          )
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium">{templateLabel(selected)}</span>
+            <span className="ml-1 opacity-70">
+              · atualizado em {formatDate(selected.updated_at)}
+            </span>
+          </p>
         )}
 
-        {/* Change history */}
-        {!editing && !creating && data && (
-          <div className="border-t border-blue-200 pt-3">
-            <ChangeHistorySection pacienteId={pacienteId} />
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        <div className="ml-auto flex items-center gap-1.5">
+          {canEditDynamic && !addingAnother && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openAddAnother}
+              disabled={templatesLoading}
+              className="h-8"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Adicionar outra anamnese
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* "Adicionar outra anamnese" inline picker */}
+      {addingAnother && (
+        <Card className="border-dashed border-primary/40 bg-primary/5">
+          <CardContent className="py-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">Escolha o modelo para a nova anamnese</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAddingAnother(false);
+                  setChosenTemplateId("");
+                }}
+                className="h-8 w-8 p-0"
+                aria-label="Cancelar"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {availableTemplates.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {templatesLoading
+                  ? "A carregar modelos..."
+                  : "Este utente já tem uma anamnese de todos os modelos disponíveis."}
+              </p>
+            ) : (
+              <div className="space-y-2 max-w-md">
+                <Select
+                  value={chosenTemplateId || "__none__"}
+                  onValueChange={(v) =>
+                    setChosenTemplateId(v === "__none__" ? "" : v)
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Escolher modelo de questionário" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableTemplates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        <span className="flex items-center gap-2">
+                          <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
+                          {t.name}
+                          {t.is_system && (
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] px-1.5 py-0"
+                            >
+                              sistema
+                            </Badge>
+                          )}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {chosenTemplateId &&
+                  (() => {
+                    const tpl = availableTemplates.find(
+                      (t) => t.id === chosenTemplateId
+                    );
+                    if (!tpl) return null;
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        {tpl.description || "Modelo dinâmico"}
+                        {tpl.estimated_minutes
+                          ? ` · ~${tpl.estimated_minutes} min`
+                          : ""}
+                      </p>
+                    );
+                  })()}
+
+                <div className="flex justify-end pt-1">
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      chosenTemplateId &&
+                      createQuestionarioFromTemplate(chosenTemplateId)
+                    }
+                    disabled={!chosenTemplateId || creatingFromTemplate}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    {creatingFromTemplate ? "A iniciar..." : "Adicionar"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Selected questionnaire */}
+      <FullQuestionnaireView
+        key={selected.id}
+        pacienteId={pacienteId}
+        questionarioId={selected.id}
+        alteradoPor={professionalName}
+        authorRole="profissional"
+        canEdit={canEditDynamic}
+        title="Resumo de Saúde"
+        onDeleted={() => {
+          // Refresh the list; selector will auto-pick another (or return to picker).
+          void loadQuestionarios();
+        }}
+      />
+    </div>
   );
 }
