@@ -47,6 +47,12 @@ interface Props {
   onCompletedChange?: (completo: boolean) => void;
   /** Called after the anamnese record (and its history) is deleted. Enables the delete button. */
   onDeleted?: () => void;
+  /**
+   * When provided, loads that specific questionnaire (used by the multi-anamnese
+   * selector). When omitted, falls back to the legacy "one questionnaire per patient"
+   * lookup by paciente_id — kept for backward compatibility with the portal flow.
+   */
+  questionarioId?: string;
 }
 
 interface HistoryEntry {
