@@ -105,11 +105,19 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     if (statusLower === "cancelado") {
       return { bg: "#fee2e2", border: "#fca5a5" };
     }
-    // b) Confirmado + agendado
+    // b) Realizado pago
+    if (isRealizado && isPago) {
+      return { bg: "#f4f4f5", border: "#d4d4d8" };
+    }
+    // c) Realizado pendente
+    if (isRealizado && isPendentePagamento) {
+      return { bg: "#ffedd5", border: "#fdba74" };
+    }
+    // d) Confirmado + agendado
     if (confirmado && statusLower === "agendado") {
       return { bg: "#dcfce7", border: "#86efac" };
     }
-    // c) Agendado sem confirmação, hoje ou amanhã
+    // e) Agendado sem confirmação, hoje ou amanhã
     if (statusLower === "agendado" && !confirmado) {
       const start = new Date(session.start_time);
       const now = new Date();
@@ -122,7 +130,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       }
     }
 
-    // d) Fallback: especialidade + idade
+    // f) Fallback: especialidade + idade
     if (isRespiratorio) {
       return isChild
         ? { bg: "#eff6ff", border: "#bfdbfe" }
