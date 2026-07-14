@@ -128,10 +128,17 @@ export function AgendaMobileTimeline({
             // Cores por estado (prioridade sobre a cor do serviço)
             const statusLower = String(session.status ?? "").toLowerCase();
             const confirmado = String(session.confirmacao_estado ?? "").toLowerCase() === "confirmado";
+            const isRealizadoMobile = statusLower === "realizado";
+            const isPagoMobile = isRealizadoMobile && session.payment_status === "pago";
+            const isPendenteMobile = isRealizadoMobile && session.payment_status === "pendente";
             let stateBg: string | null = null;
             let stateBorder: string | null = null;
             if (statusLower === "cancelado") {
               stateBg = "#fee2e2"; stateBorder = "#fca5a5";
+            } else if (isPagoMobile) {
+              stateBg = "#f4f4f5"; stateBorder = "#d4d4d8";
+            } else if (isPendenteMobile) {
+              stateBg = "#ffedd5"; stateBorder = "#fdba74";
             } else if (confirmado && statusLower === "agendado") {
               stateBg = "#dcfce7"; stateBorder = "#86efac";
             } else if (statusLower === "agendado" && !confirmado) {
