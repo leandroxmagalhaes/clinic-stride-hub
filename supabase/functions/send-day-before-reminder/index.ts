@@ -113,7 +113,7 @@ serve(async (req) => {
     const { data: sessions, error: sessionsError } = await supabase
       .from("sessoes")
       .select(`
-        id, start_time, status, clinic_id, confirmation_token,
+        id, start_time, status, clinic_id, confirmation_token, confirmacao_estado,
         pacientes!sessoes_paciente_id_fkey ( full_name, email ),
         profiles!sessoes_profissional_id_fkey ( full_name ),
         servicos!sessoes_servico_id_fkey ( name ),
