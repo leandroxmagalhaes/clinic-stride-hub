@@ -78,3 +78,6 @@ verify_jwt = false
 
 [functions.solicitar-vaga]
 verify_jwt = false
+
+[functions.confirmar-metodo-pagamento]
+verify_jwt = false
