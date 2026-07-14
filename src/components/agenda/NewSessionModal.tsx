@@ -165,6 +165,7 @@ export function NewSessionModal({
       setSelectedServico("");
       setSelectedProfissional("");
       setSessionPrice("");
+      setPatientPrecoConsulta(null);
       setNotes("");
     }
   }, [isOpen]);
