@@ -136,6 +136,7 @@ export function NewSessionModal({
   const [selectedServico, setSelectedServico] = useState("");
   const [selectedProfissional, setSelectedProfissional] = useState("");
   const [sessionPrice, setSessionPrice] = useState<string>("");
+  const [patientPrecoConsulta, setPatientPrecoConsulta] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
 
   const [isSaving, setIsSaving] = useState(false);
