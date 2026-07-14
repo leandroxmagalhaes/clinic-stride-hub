@@ -234,14 +234,15 @@ serve(async (req) => {
 </body>
 </html>`;
 
-        await resend.emails.send({
-          from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
-          to: [patient.email],
-          subject: `Lembrete da sua consulta às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`,
-          html: emailHtml,
-        });
-
-        await supabase.from("reminder_logs").insert({ sessao_id: (session as any).id, canal: "email" });
+        if (!dryRun) {
+          await resend.emails.send({
+            from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
+            to: [patient.email],
+            subject: `Lembrete da sua consulta às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`,
+            html: emailHtml,
+          });
+          await supabase.from("reminder_logs").insert({ sessao_id: (session as any).id, canal: "email" });
+        }
         results.sent++;
       } catch (e) {
         results.errors.push(
@@ -250,7 +251,131 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, results }), {
+    // ============================================================
+    // Follow-up de metodo de pagamento apos a consulta
+    // ============================================================
+    const followupResults = { sent: 0, skipped: 0, errors: [] as string[] };
+    try {
+      const cutoff = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+      const dayFloor = new Date(now.getTime() - 18 * 60 * 60 * 1000).toISOString();
+
+      const { data: pastSessions, error: pastErr } = await supabase
+        .from("sessoes")
+        .select(`
+          id, start_time, end_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, metodo_pagamento_previsto, confirmation_token,
+          pacientes!sessoes_paciente_id_fkey ( full_name, email ),
+          clinics!sessoes_clinic_id_fkey ( name, phone, email )
+        `)
+        .lte("end_time", cutoff)
+        .gte("end_time", dayFloor)
+        .in("status", ["agendado", "confirmado", "realizado"])
+        .eq("payment_status", "pendente")
+        .is("metodo_pagamento_previsto", null);
+
+      if (pastErr) throw new Error(pastErr.message);
+
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+
+      for (const session of pastSessions || []) {
+        try {
+          const s: any = session;
+          const patient = s.pacientes;
+          const clinic = s.clinics;
+          const settings = settingsMap.get(s.clinic_id) || {};
+
+          if (settings.reminder_ativo === false) { followupResults.skipped++; continue; }
+          if (s.isento || s.pack_id) { followupResults.skipped++; continue; }
+          if (!patient?.email) { followupResults.skipped++; continue; }
+          if (!s.confirmation_token) { followupResults.skipped++; continue; }
+
+          const temDados = !!(settings.mbway_numero_1 || settings.iban);
+          if (!temDados) { followupResults.skipped++; continue; }
+
+          const { data: existingLog } = await supabase
+            .from("reminder_logs")
+            .select("id")
+            .eq("sessao_id", s.id)
+            .eq("canal", "email_metodo_followup")
+            .maybeSingle();
+          if (existingLog) { followupResults.skipped++; continue; }
+
+          const tz = settings.timezone || "Europe/Lisbon";
+          const apt = new Date(s.start_time);
+          const formattedTime = apt.toLocaleTimeString("pt-PT", {
+            hour: "2-digit", minute: "2-digit", timeZone: tz,
+          });
+
+          const baseMetodo = `${supabaseUrl}/functions/v1/confirmar-metodo-pagamento?token=${encodeURIComponent(s.confirmation_token)}`;
+
+          const pagamentoHtml = `
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;margin:16px 0;">
+          <tr>
+            <td style="padding:16px 20px;">
+              <p style="margin:0 0 8px;color:#0c4a6e;font-size:14px;font-weight:600;">Como foi ou será efetuado o pagamento?</p>
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 12px;">
+                <tr>
+                  <td style="padding-right:8px;">
+                    <a href="${baseMetodo}&metodo=numerario" style="display:inline-block;background-color:#16a34a;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600;">Numerário</a>
+                  </td>
+                  <td>
+                    <a href="${baseMetodo}&metodo=mbway_transferencia" style="display:inline-block;background-color:#0ea5e9;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600;">MB WAY ou transferência</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:6px 0;color:#0c4a6e;font-size:14px;">
+                <strong>MB WAY:</strong> ${escapeHtml(settings.mbway_nome_1 || "")} — ${escapeHtml(settings.mbway_numero_1 || "")}
+              </p>
+              ${settings.mbway_numero_2 ? `<p style="margin:6px 0;color:#0c4a6e;font-size:13px;">Alternativa (caso o 1.º atinja o limite): ${escapeHtml(settings.mbway_nome_2 || "")} — ${escapeHtml(settings.mbway_numero_2)}</p>` : ""}
+              ${settings.iban ? `<p style="margin:6px 0;color:#0c4a6e;font-size:14px;"><strong>IBAN:</strong> ${escapeHtml(settings.iban_nome || "")} — ${escapeHtml(settings.iban)}</p>` : ""}
+            </td>
+          </tr>
+        </table>`;
+
+          const emailHtml = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f4f4f5;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;padding:20px;">
+    <tr><td style="background-color:#ffffff;border-radius:12px;padding:40px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+      <div style="text-align:center;padding-bottom:24px;border-bottom:1px solid #e4e4e7;">
+        <h1 style="margin:0;color:#0ea5e9;font-size:22px;">Sobre o pagamento da consulta de hoje</h1>
+      </div>
+      <div style="padding:24px 0 8px;">
+        <p style="margin:0;color:#3f3f46;font-size:15px;line-height:1.6;">
+          Olá <strong>${escapeHtml(patient.full_name)}</strong>, obrigado pela presença na consulta de hoje às <strong>${formattedTime}</strong>. Para fecharmos o registo, pode indicar-nos por que forma foi ou será efetuado o pagamento?
+        </p>
+      </div>
+      ${pagamentoHtml}
+      <div style="padding-top:20px;border-top:1px solid #e4e4e7;text-align:center;">
+        <p style="margin:0 0 6px;color:#18181b;font-size:16px;font-weight:600;">${escapeHtml(clinic?.name || "Clínica")}</p>
+        ${clinic?.phone ? `<p style="margin:0 0 4px;color:#71717a;font-size:14px;">📞 ${escapeHtml(clinic.phone)}</p>` : ""}
+        ${clinic?.email ? `<p style="margin:0;color:#71717a;font-size:14px;">✉️ ${escapeHtml(clinic.email)}</p>` : ""}
+      </div>
+    </td></tr>
+  </table>
+</body></html>`;
+
+          if (!dryRun) {
+            await resend.emails.send({
+              from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
+              to: [patient.email],
+              subject: `Sobre o pagamento da consulta de hoje`,
+              html: emailHtml,
+            });
+            await supabase.from("reminder_logs").insert({ sessao_id: s.id, canal: "email_metodo_followup" });
+          }
+          followupResults.sent++;
+        } catch (e) {
+          followupResults.errors.push(
+            `Session ${(session as any).id}: ${e instanceof Error ? e.message : "Unknown error"}`
+          );
+        }
+      }
+    } catch (e) {
+      followupResults.errors.push(`Followup block: ${e instanceof Error ? e.message : "Unknown error"}`);
+    }
+
+    return new Response(JSON.stringify({ success: true, dry_run: dryRun, results, followup: followupResults }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
