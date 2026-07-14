@@ -126,6 +126,26 @@ serve(async (req) => {
         const mostrarPagamento =
           !(session as any).isento && !(session as any).pack_id && !jaPago && temDados;
 
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const tokenSessao = (session as any).confirmation_token;
+        const baseMetodo = tokenSessao
+          ? `${supabaseUrl}/functions/v1/confirmar-metodo-pagamento?token=${encodeURIComponent(tokenSessao)}`
+          : "";
+        const botoesMetodoHtml = tokenSessao
+          ? `
+              <p style="margin:14px 0 8px;color:#0c4a6e;font-size:14px;font-weight:600;">Como vai preferir pagar?</p>
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0;">
+                <tr>
+                  <td style="padding-right:8px;">
+                    <a href="${baseMetodo}&metodo=numerario" style="display:inline-block;background-color:#16a34a;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600;">Numerário</a>
+                  </td>
+                  <td>
+                    <a href="${baseMetodo}&metodo=mbway_transferencia" style="display:inline-block;background-color:#0ea5e9;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600;">MB WAY ou transferência</a>
+                  </td>
+                </tr>
+              </table>`
+          : "";
+
         const pagamentoHtml = mostrarPagamento
           ? `
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;margin:16px 0;">
@@ -150,6 +170,7 @@ serve(async (req) => {
               <p style="margin:10px 0 0;color:#0c4a6e;font-size:13px;line-height:1.5;">
                 Também pode pagar no local, em numerário, sem qualquer problema. Se já efetuou o pagamento, agradecemos que responda só a confirmar.
               </p>
+              ${botoesMetodoHtml}
             </td>
           </tr>
         </table>`
