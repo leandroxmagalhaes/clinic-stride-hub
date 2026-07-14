@@ -643,6 +643,51 @@ export type Database = {
           },
         ]
       }
+      historico_precos_paciente: {
+        Row: {
+          criado_em: string
+          criado_por: string | null
+          id: string
+          motivo: string | null
+          paciente_id: string
+          valor: number
+          valor_anterior: number | null
+        }
+        Insert: {
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          motivo?: string | null
+          paciente_id: string
+          valor: number
+          valor_anterior?: number | null
+        }
+        Update: {
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          motivo?: string | null
+          paciente_id?: string
+          valor?: number
+          valor_anterior?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "historico_precos_paciente_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historico_precos_paciente_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+        ]
+      }
       horarios_reservados: {
         Row: {
           clinic_id: string
@@ -1021,6 +1066,7 @@ export type Database = {
           notes: string | null
           onboarding_completed_at: string | null
           phone: string | null
+          preco_consulta: number | null
           primary_specialty_id: string | null
           privacy_consent_at: string | null
           public_token: string
@@ -1052,6 +1098,7 @@ export type Database = {
           notes?: string | null
           onboarding_completed_at?: string | null
           phone?: string | null
+          preco_consulta?: number | null
           primary_specialty_id?: string | null
           privacy_consent_at?: string | null
           public_token?: string
@@ -1083,6 +1130,7 @@ export type Database = {
           notes?: string | null
           onboarding_completed_at?: string | null
           phone?: string | null
+          preco_consulta?: number | null
           primary_specialty_id?: string | null
           privacy_consent_at?: string | null
           public_token?: string
