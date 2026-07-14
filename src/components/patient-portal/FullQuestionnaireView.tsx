@@ -163,12 +163,14 @@ export function FullQuestionnaireView({
   title,
   startInEditMode,
   onCompletedChange,
+  onDeleted,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [questionario, setQuestionario] = useState<any>(null);
   const [template, setTemplate] = useState<QuestionnaireTemplate | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState<Record<string, Record<string, any>>>({});
   const [patientRecord, setPatientRecord] = useState<any>(null);
 
