@@ -265,31 +265,36 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
           {/* Linha 1: Hora + Status */}
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-1 min-w-0">
-              <div
-                {...attributes}
-                {...listeners}
-                className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
-              >
-                <GripVertical
-                  className={cn(
-                    "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity flex-shrink-0",
-                    isFalta ? "text-orange-400" : "text-muted-foreground",
+              {!isOverlapped && (
+                <>
+                  <div
+                    {...attributes}
+                    {...listeners}
+                    className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+                  >
+                    <GripVertical
+                      className={cn(
+                        "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity flex-shrink-0",
+                        isFalta ? "text-orange-400" : "text-muted-foreground",
+                      )}
+                    />
+                  </div>
+                  {displayTime && (
+                    <span
+                      className={cn(
+                        "text-[10px] font-semibold flex-shrink-0",
+                        isFalta ? "text-orange-600" : "text-muted-foreground",
+                      )}
+                    >
+                      {displayTime}
+                    </span>
                   )}
-                />
-              </div>
-              {displayTime && (
-                <span
-                  className={cn(
-                    "text-[10px] font-semibold flex-shrink-0",
-                    isFalta ? "text-orange-600" : "text-muted-foreground",
-                  )}
-                >
-                  {displayTime}
-                </span>
+                </>
               )}
             </div>
             <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="scale-90 flex-shrink-0" />
           </div>
+
 
           {/* Linha 2: Nome */}
           <p
