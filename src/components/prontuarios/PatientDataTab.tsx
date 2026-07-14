@@ -7,6 +7,7 @@ import { Patient } from "@/services/PatientService";
 import { HealthTag } from "@/services/HealthTagService";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { EditPatientModal } from "@/components/patients/EditPatientModal";
+import { PatientPriceCard } from "@/components/patients/PatientPriceCard";
 import { useData } from "@/contexts/DataContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
