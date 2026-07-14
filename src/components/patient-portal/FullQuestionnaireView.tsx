@@ -307,11 +307,25 @@ export function FullQuestionnaireView({
   const load = async () => {
     setLoading(true);
     try {
-      const { data: q } = await (supabase as any)
-        .from("portal_questionario")
-        .select("*")
-        .eq("paciente_id", pacienteId)
-        .maybeSingle();
+      // Prefer the explicit questionarioId path (multi-anamnese selector).
+      // Fall back to the legacy per-patient lookup for existing callers.
+      let qResp: any = null;
+      if (questionarioId) {
+        const r = await (supabase as any)
+          .from("portal_questionario")
+          .select("*")
+          .eq("id", questionarioId)
+          .maybeSingle();
+        qResp = r?.data ?? null;
+      } else {
+        const r = await (supabase as any)
+          .from("portal_questionario")
+          .select("*")
+          .eq("paciente_id", pacienteId)
+          .maybeSingle();
+        qResp = r?.data ?? null;
+      }
+      const q = qResp;
 
       // Pull patient fields used both for fallback resolution AND identification autofill.
       let patient: any = null;
