@@ -780,6 +780,45 @@ export function FullQuestionnaireView({
                     <Pencil className="h-4 w-4 mr-1" /> Editar
                   </Button>
                 )}
+                {canEdit && onDeleted && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        disabled={deleting}
+                      >
+                        {deleting ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-1" />
+                        )}
+                        Excluir anamnese
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir anamnese preenchida?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta ação apaga definitivamente a anamnese preenchida deste utente,
+                          incluindo o histórico de alterações. Depois poderá escolher outro
+                          modelo de questionário para preencher de novo.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDeleteAnamnese}
+                          disabled={deleting}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Excluir definitivamente
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
               </>
             )}
           </div>
