@@ -484,10 +484,10 @@ export function FullQuestionnaireView({
       }
 
       let changeCount = 0;
-      if (questionarioId) {
+      if (currentId) {
         const attribution = `${alteradoPor} (${authorRole})`;
         changeCount = await logQuestionnaireChanges({
-          questionarioId,
+          questionarioId: currentId,
           pacienteId,
           before: respostas,
           after: draft,
