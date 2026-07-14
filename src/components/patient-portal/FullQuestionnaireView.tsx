@@ -720,6 +720,30 @@ export function FullQuestionnaireView({
     });
   };
 
+  const handleDeleteAnamnese = async () => {
+    if (!questionario?.id) return;
+    setDeleting(true);
+    try {
+      // Delete history rows first (FK-safe even if no cascade), then the record.
+      await (supabase as any)
+        .from("portal_questionario_historico")
+        .delete()
+        .eq("paciente_id", pacienteId);
+      const { error } = await (supabase as any)
+        .from("portal_questionario")
+        .delete()
+        .eq("id", questionario.id);
+      if (error) throw error;
+      toast.success("Anamnese excluída");
+      onDeleted?.();
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Erro ao excluir anamnese: " + (e?.message || "desconhecido"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Card className="border-blue-200 bg-blue-50/40 anamnese-print-area">
       <CardHeader className="pb-3 anamnese-print-hide">
