@@ -82,8 +82,8 @@ interface SessionSlot {
 const TIME_OPTIONS: string[] = (() => {
   const opts: string[] = [];
   for (let h = 7; h <= 21; h++) {
-    for (const m of [0, 30]) {
-      if (h === 21 && m > 30) break;
+    for (const m of [0, 15, 30, 45]) {
+      if (h === 21 && m > 45) break;
       opts.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
     }
   }
@@ -135,6 +135,7 @@ export function NewSessionModal({
   // ── Detalhes ──
   const [selectedServico, setSelectedServico] = useState("");
   const [selectedProfissional, setSelectedProfissional] = useState("");
+  const [sessionPrice, setSessionPrice] = useState<string>("");
   const [notes, setNotes] = useState("");
 
   const [isSaving, setIsSaving] = useState(false);
@@ -162,6 +163,7 @@ export function NewSessionModal({
       setSessionSlots([]);
       setSelectedServico("");
       setSelectedProfissional("");
+      setSessionPrice("");
       setNotes("");
     }
   }, [isOpen]);
@@ -296,6 +298,15 @@ export function NewSessionModal({
     }
   }, [services, professionals]);
 
+  // ── Auto-preencher valor com o preço do serviço ao mudar o serviço ──
+  useEffect(() => {
+    if (!selectedServico) return;
+    const svc = services.find((s) => s.id === selectedServico);
+    if (svc && svc.price !== undefined && svc.price !== null) {
+      setSessionPrice(String(svc.price));
+    }
+  }, [selectedServico, services]);
+
   const handleSelectPatient = useCallback((patient: Patient) => {
     setSelectedPatient(patient);
     setSearchQuery("");
@@ -429,7 +440,7 @@ export function NewSessionModal({
           end_time: endTime.toISOString(),
           status: isPast ? "realizado" : "agendado",
           notes: notes || null,
-          price: selectedService ? Number(selectedService.price) : 0,
+          price: sessionPrice !== "" ? (parseFloat(sessionPrice) || 0) : (selectedService ? Number(selectedService.price) : 0),
           payment_status: "pendente",
           tipo_agendamento: packId ? "pack" : "avulso",
           pack_id: packId,
@@ -772,6 +783,17 @@ export function NewSessionModal({
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="space-y-1 max-w-[180px]">
+                  <Label className="text-xs">Valor por sessão (€)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0,00"
+                    value={sessionPrice}
+                    onChange={(e) => setSessionPrice(e.target.value)}
+                  />
                 </div>
                 <Textarea
                   placeholder="Observações (opcional)"
