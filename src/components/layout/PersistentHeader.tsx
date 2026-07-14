@@ -42,13 +42,7 @@ export const PersistentHeader = memo(function PersistentHeader() {
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="relative hidden lg:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar..."
-            className="w-64 pl-9 h-9 bg-muted/50 border-0 focus-visible:ring-1"
-          />
-        </div>
+
 
         <Button
           variant="ghost"
