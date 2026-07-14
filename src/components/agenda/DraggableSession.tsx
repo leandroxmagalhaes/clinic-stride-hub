@@ -1,6 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, AlertTriangle, Package, Bell } from "lucide-react";
+import { GripVertical, AlertTriangle, Package, Bell, Euro } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import React from "react";
