@@ -263,6 +263,13 @@ export function QuestionnaireHealthSummary({ pacienteId, birthDate }: Props) {
         authorRole="profissional"
         canEdit={canEditDynamic}
         title="Resumo de Saúde"
+        onDeleted={() => {
+          // Reset local state so the template picker reappears.
+          setData(null);
+          setChosenTemplateId("");
+          setTemplates([]);
+          setCreating(false);
+        }}
       />
     );
   }
