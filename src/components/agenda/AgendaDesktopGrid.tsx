@@ -396,6 +396,7 @@ export function AgendaDesktopGrid({
                                 hasCredits={hasCredits}
                                 displayTime={sessionTime}
                                 positionStyle={style}
+                                overlapTotal={item.total}
                               />
                             );
                           } else {
