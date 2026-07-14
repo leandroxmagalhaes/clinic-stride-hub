@@ -1,6 +1,6 @@
 import { memo, useEffect, useState } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { Search, Sun, Moon } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { usePageTitleContext } from '@/contexts/PageTitleContext';
