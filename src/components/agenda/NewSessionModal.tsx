@@ -440,7 +440,7 @@ export function NewSessionModal({
           end_time: endTime.toISOString(),
           status: isPast ? "realizado" : "agendado",
           notes: notes || null,
-          price: selectedService ? Number(selectedService.price) : 0,
+          price: sessionPrice !== "" ? (parseFloat(sessionPrice) || 0) : (selectedService ? Number(selectedService.price) : 0),
           payment_status: "pendente",
           tipo_agendamento: packId ? "pack" : "avulso",
           pack_id: packId,
