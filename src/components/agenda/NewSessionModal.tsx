@@ -784,6 +784,17 @@ export function NewSessionModal({
                     </Select>
                   </div>
                 </div>
+                <div className="space-y-1 max-w-[180px]">
+                  <Label className="text-xs">Valor por sessão (€)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0,00"
+                    value={sessionPrice}
+                    onChange={(e) => setSessionPrice(e.target.value)}
+                  />
+                </div>
                 <Textarea
                   placeholder="Observações (opcional)"
                   value={notes}
