@@ -125,6 +125,26 @@ export function AgendaMobileTimeline({
               : undefined;
             const isPendingPayment = session.payment_status === 'pending' || hasCredits === false;
 
+            // Cores por estado (prioridade sobre a cor do serviço)
+            const statusLower = String(session.status ?? "").toLowerCase();
+            const confirmado = String(session.confirmacao_estado ?? "").toLowerCase() === "confirmado";
+            let stateBg: string | null = null;
+            let stateBorder: string | null = null;
+            if (statusLower === "cancelado") {
+              stateBg = "#fee2e2"; stateBorder = "#fca5a5";
+            } else if (confirmado && statusLower === "agendado") {
+              stateBg = "#dcfce7"; stateBorder = "#86efac";
+            } else if (statusLower === "agendado" && !confirmado) {
+              const startD = new Date(session.start_time);
+              const now = new Date();
+              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+              const sd = new Date(startD.getFullYear(), startD.getMonth(), startD.getDate());
+              if (sd.getTime() === today.getTime() || sd.getTime() === tomorrow.getTime()) {
+                stateBg = "#fef9c3"; stateBorder = "#fde047";
+              }
+            }
+
             return (
               <button
                 key={session.id}
@@ -139,8 +159,8 @@ export function AgendaMobileTimeline({
                     hasCredits === true && "ring-1 ring-success/30"
                   )}
                   style={{ 
-                    backgroundColor: `${session.servico?.color}15`,
-                    borderLeft: `4px solid ${session.servico?.color}`,
+                    backgroundColor: stateBg ?? `${session.servico?.color}15`,
+                    borderLeft: `4px solid ${stateBorder ?? session.servico?.color}`,
                   }}
                 >
                   {hasCredits !== undefined && height > 35 && (

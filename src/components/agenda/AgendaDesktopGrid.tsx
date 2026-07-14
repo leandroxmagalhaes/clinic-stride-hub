@@ -80,7 +80,18 @@ function computeOverlapPositions<T extends { startMin: number; endMin: number }>
   }
   groups.push(currentGroup);
 
-  return groups.flatMap((group) => group.map((item, idx) => ({ ...item, index: idx, total: group.length })));
+  const isCancelled = (it: any) =>
+    it?.type === "session" && String(it?.session?.status ?? "").toLowerCase() === "cancelado";
+
+  return groups.flatMap((group) => {
+    const ordered = [...group].sort((a, b) => {
+      const ca = isCancelled(a) ? 1 : 0;
+      const cb = isCancelled(b) ? 1 : 0;
+      if (ca !== cb) return ca - cb;
+      return a.startMin - b.startMin || a.endMin - b.endMin;
+    });
+    return ordered.map((item, idx) => ({ ...item, index: idx, total: ordered.length }));
+  });
 }
 
 function getItemStyle(
@@ -385,6 +396,7 @@ export function AgendaDesktopGrid({
                                 hasCredits={hasCredits}
                                 displayTime={sessionTime}
                                 positionStyle={style}
+                                overlapTotal={item.total}
                               />
                             );
                           } else {

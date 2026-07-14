@@ -32,6 +32,7 @@ interface DraggableSessionProps {
   hasCredits?: boolean;
   displayTime?: string;
   positionStyle?: React.CSSProperties;
+  overlapTotal?: number;
 }
 
 // ── Formata o nome do serviço: remove "Fisioterapia" e abrevia ──────────────
@@ -55,7 +56,7 @@ function formatServico(name: string): string {
 }
 // ───────────────────────────────────────────────────────────────────────────
 
-export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle }: DraggableSessionProps) {
+export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle, overlapTotal }: DraggableSessionProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: session.id,
     data: { session },
@@ -97,19 +98,46 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   // Respiratório < 13: azul bebé · ≥ 13: azul médio
   // Motora/Outras < 13: lilás claro · ≥ 13: lilás médio
   const cardColors = (() => {
+    const statusLower = String(session.status ?? "").toLowerCase();
+    const confirmado = String(session.confirmacao_estado ?? "").toLowerCase() === "confirmado";
+
+    // a) Cancelado
+    if (statusLower === "cancelado") {
+      return { bg: "#fee2e2", border: "#fca5a5" };
+    }
+    // b) Confirmado + agendado
+    if (confirmado && statusLower === "agendado") {
+      return { bg: "#dcfce7", border: "#86efac" };
+    }
+    // c) Agendado sem confirmação, hoje ou amanhã
+    if (statusLower === "agendado" && !confirmado) {
+      const start = new Date(session.start_time);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      if (startDay.getTime() === today.getTime() || startDay.getTime() === tomorrow.getTime()) {
+        return { bg: "#fef9c3", border: "#fde047" };
+      }
+    }
+
+    // d) Fallback: especialidade + idade
     if (isRespiratorio) {
       return isChild
-        ? { bg: "#eff6ff", border: "#bfdbfe" } // azul quase branco (infantil)
-        : { bg: "#dbeafe", border: "#93c5fd" }; // azul pastel suave (adulto)
+        ? { bg: "#eff6ff", border: "#bfdbfe" }
+        : { bg: "#dbeafe", border: "#93c5fd" };
     } else {
       return isChild
-        ? { bg: "#fdf2f8", border: "#fbcfe8" } // rosa quase branco (infantil)
-        : { bg: "#fce7f3", border: "#f9a8d4" }; // rosa pastel suave (adulto)
+        ? { bg: "#fdf2f8", border: "#fbcfe8" }
+        : { bg: "#fce7f3", border: "#f9a8d4" };
     }
   })();
   // ─────────────────────────────────────────────────────────────────────────
 
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
+  const isOverlapped = (overlapTotal ?? 1) > 1;
+  const isCancelled = String(session.status ?? "").toLowerCase() === "cancelado";
   const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
   // Pack payment pending alert: pack session in the past with pagamento_estado = 'pendente'
@@ -149,6 +177,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
         "rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative",
         isDragging && "opacity-50 shadow-lg z-50 ring-2 ring-primary",
         isFalta && "ring-1 ring-red-400",
+        isOverlapped && isCancelled && "opacity-70",
       )}
       onClick={(e) => {
         e.stopPropagation();
@@ -236,31 +265,36 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
           {/* Linha 1: Hora + Status */}
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-1 min-w-0">
-              <div
-                {...attributes}
-                {...listeners}
-                className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
-              >
-                <GripVertical
-                  className={cn(
-                    "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity flex-shrink-0",
-                    isFalta ? "text-orange-400" : "text-muted-foreground",
+              {!isOverlapped && (
+                <>
+                  <div
+                    {...attributes}
+                    {...listeners}
+                    className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+                  >
+                    <GripVertical
+                      className={cn(
+                        "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity flex-shrink-0",
+                        isFalta ? "text-orange-400" : "text-muted-foreground",
+                      )}
+                    />
+                  </div>
+                  {displayTime && (
+                    <span
+                      className={cn(
+                        "text-[10px] font-semibold flex-shrink-0",
+                        isFalta ? "text-orange-600" : "text-muted-foreground",
+                      )}
+                    >
+                      {displayTime}
+                    </span>
                   )}
-                />
-              </div>
-              {displayTime && (
-                <span
-                  className={cn(
-                    "text-[10px] font-semibold flex-shrink-0",
-                    isFalta ? "text-orange-600" : "text-muted-foreground",
-                  )}
-                >
-                  {displayTime}
-                </span>
+                </>
               )}
             </div>
             <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="scale-90 flex-shrink-0" />
           </div>
+
 
           {/* Linha 2: Nome */}
           <p
