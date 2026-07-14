@@ -170,6 +170,7 @@ export function FullQuestionnaireView({
   startInEditMode,
   onCompletedChange,
   onDeleted,
+  questionarioId,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [questionario, setQuestionario] = useState<any>(null);
