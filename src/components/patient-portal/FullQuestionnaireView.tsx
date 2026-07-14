@@ -748,11 +748,12 @@ export function FullQuestionnaireView({
     if (!questionario?.id) return;
     setDeleting(true);
     try {
-      // Delete history rows first (FK-safe even if no cascade), then the record.
+      // Delete only the history of THIS anamnese (scoped by questionario_id),
+      // preserving history of any other anamneses this patient may have.
       await (supabase as any)
         .from("portal_questionario_historico")
         .delete()
-        .eq("paciente_id", pacienteId);
+        .eq("questionario_id", questionario.id);
       const { error } = await (supabase as any)
         .from("portal_questionario")
         .delete()
