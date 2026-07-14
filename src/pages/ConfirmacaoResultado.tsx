@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, AlertCircle, CalendarClock, Info } from "lucide-react";
 
-type Estado = "confirmado" | "ja-confirmado" | "remarcado" | "erro";
+type Estado = "confirmado" | "ja-confirmado" | "remarcado" | "metodo-registado" | "erro";
 
 const MENSAGENS: Record<Estado, { titulo: string; texto: string; icon: JSX.Element; cor: string; bg: string }> = {
   "confirmado": {
