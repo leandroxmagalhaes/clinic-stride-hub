@@ -45,6 +45,8 @@ interface Props {
   startInEditMode?: boolean;
   /** Notified when the `completo` flag of the questionnaire changes (after Concluir). */
   onCompletedChange?: (completo: boolean) => void;
+  /** Called after the anamnese record (and its history) is deleted. Enables the delete button. */
+  onDeleted?: () => void;
 }
 
 interface HistoryEntry {
