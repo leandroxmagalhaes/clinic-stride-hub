@@ -8,7 +8,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { FileText, Pencil, Save, X, History, ChevronDown, ChevronUp, Loader2, Printer } from "lucide-react";
+import { FileText, Pencil, Save, X, History, ChevronDown, ChevronUp, Loader2, Printer, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -34,6 +45,8 @@ interface Props {
   startInEditMode?: boolean;
   /** Notified when the `completo` flag of the questionnaire changes (after Concluir). */
   onCompletedChange?: (completo: boolean) => void;
+  /** Called after the anamnese record (and its history) is deleted. Enables the delete button. */
+  onDeleted?: () => void;
 }
 
 interface HistoryEntry {
@@ -150,12 +163,14 @@ export function FullQuestionnaireView({
   title,
   startInEditMode,
   onCompletedChange,
+  onDeleted,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [questionario, setQuestionario] = useState<any>(null);
   const [template, setTemplate] = useState<QuestionnaireTemplate | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState<Record<string, Record<string, any>>>({});
   const [patientRecord, setPatientRecord] = useState<any>(null);
 
@@ -705,6 +720,30 @@ export function FullQuestionnaireView({
     });
   };
 
+  const handleDeleteAnamnese = async () => {
+    if (!questionario?.id) return;
+    setDeleting(true);
+    try {
+      // Delete history rows first (FK-safe even if no cascade), then the record.
+      await (supabase as any)
+        .from("portal_questionario_historico")
+        .delete()
+        .eq("paciente_id", pacienteId);
+      const { error } = await (supabase as any)
+        .from("portal_questionario")
+        .delete()
+        .eq("id", questionario.id);
+      if (error) throw error;
+      toast.success("Anamnese excluída");
+      onDeleted?.();
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Erro ao excluir anamnese: " + (e?.message || "desconhecido"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Card className="border-blue-200 bg-blue-50/40 anamnese-print-area">
       <CardHeader className="pb-3 anamnese-print-hide">
@@ -740,6 +779,45 @@ export function FullQuestionnaireView({
                   <Button variant="ghost" size="sm" onClick={startEdit}>
                     <Pencil className="h-4 w-4 mr-1" /> Editar
                   </Button>
+                )}
+                {canEdit && onDeleted && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        disabled={deleting}
+                      >
+                        {deleting ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-1" />
+                        )}
+                        Excluir anamnese
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir anamnese preenchida?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta ação apaga definitivamente a anamnese preenchida deste utente,
+                          incluindo o histórico de alterações. Depois poderá escolher outro
+                          modelo de questionário para preencher de novo.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDeleteAnamnese}
+                          disabled={deleting}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Excluir definitivamente
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 )}
               </>
             )}
