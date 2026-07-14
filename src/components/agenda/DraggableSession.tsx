@@ -1,6 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, AlertTriangle, Package, Bell } from "lucide-react";
+import { GripVertical, AlertTriangle, Package, Bell, Euro } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import React from "react";
@@ -105,11 +105,19 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     if (statusLower === "cancelado") {
       return { bg: "#fee2e2", border: "#fca5a5" };
     }
-    // b) Confirmado + agendado
+    // b) Realizado pago
+    if (isRealizado && isPago) {
+      return { bg: "#f4f4f5", border: "#d4d4d8" };
+    }
+    // c) Realizado pendente
+    if (isRealizado && isPendentePagamento) {
+      return { bg: "#ffedd5", border: "#fdba74" };
+    }
+    // d) Confirmado + agendado
     if (confirmado && statusLower === "agendado") {
       return { bg: "#dcfce7", border: "#86efac" };
     }
-    // c) Agendado sem confirmação, hoje ou amanhã
+    // e) Agendado sem confirmação, hoje ou amanhã
     if (statusLower === "agendado" && !confirmado) {
       const start = new Date(session.start_time);
       const now = new Date();
@@ -122,7 +130,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       }
     }
 
-    // d) Fallback: especialidade + idade
+    // f) Fallback: especialidade + idade
     if (isRespiratorio) {
       return isChild
         ? { bg: "#eff6ff", border: "#bfdbfe" }
@@ -258,6 +266,14 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             {session.paciente?.full_name ?? ""}
           </p>
           <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="scale-75 flex-shrink-0" />
+          {isRealizado && (
+            <Euro
+              className={cn(
+                "h-3 w-3 flex-shrink-0",
+                isPago ? "text-green-600" : isPendentePagamento ? "text-orange-500" : "text-muted-foreground",
+              )}
+            />
+          )}
         </div>
       ) : (
         /* ── Layout normal — 3 linhas fixas ── */
