@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, AlertCircle, CalendarClock, Info } from "lucide-react";
 
-type Estado = "confirmado" | "ja-confirmado" | "remarcado" | "erro";
+type Estado = "confirmado" | "ja-confirmado" | "remarcado" | "metodo-registado" | "erro";
 
 const MENSAGENS: Record<Estado, { titulo: string; texto: string; icon: JSX.Element; cor: string; bg: string }> = {
   "confirmado": {
@@ -27,6 +27,13 @@ const MENSAGENS: Record<Estado, { titulo: string; texto: string; icon: JSX.Eleme
     cor: "#2563eb",
     bg: "#dbeafe",
   },
+  "metodo-registado": {
+    titulo: "Obrigado pela confirmação",
+    texto: "Registámos a forma de pagamento prevista. Até já.",
+    icon: <CheckCircle2 className="h-12 w-12" strokeWidth={1.5} />,
+    cor: "#16a34a",
+    bg: "#dcfce7",
+  },
   "erro": {
     titulo: "Link inválido",
     texto: "Este link expirou ou já foi usado. Por favor contacte a clínica.",
@@ -39,7 +46,7 @@ const MENSAGENS: Record<Estado, { titulo: string; texto: string; icon: JSX.Eleme
 export default function ConfirmacaoResultado() {
   const [params] = useSearchParams();
   const eRaw = params.get("e") || "erro";
-  const estado: Estado = (["confirmado", "ja-confirmado", "remarcado", "erro"].includes(eRaw) ? eRaw : "erro") as Estado;
+  const estado: Estado = (["confirmado", "ja-confirmado", "remarcado", "metodo-registado", "erro"].includes(eRaw) ? eRaw : "erro") as Estado;
   const m = MENSAGENS[estado];
 
   const [clinic, setClinic] = useState<{ name: string; phone: string | null; email: string | null } | null>(null);
