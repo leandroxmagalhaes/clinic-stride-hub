@@ -136,6 +136,7 @@ export function NewSessionModal({
   const [selectedServico, setSelectedServico] = useState("");
   const [selectedProfissional, setSelectedProfissional] = useState("");
   const [sessionPrice, setSessionPrice] = useState<string>("");
+  const [patientPrecoConsulta, setPatientPrecoConsulta] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
 
   const [isSaving, setIsSaving] = useState(false);
@@ -164,6 +165,7 @@ export function NewSessionModal({
       setSelectedServico("");
       setSelectedProfissional("");
       setSessionPrice("");
+      setPatientPrecoConsulta(null);
       setNotes("");
     }
   }, [isOpen]);
@@ -298,21 +300,36 @@ export function NewSessionModal({
     }
   }, [services, professionals]);
 
-  // ── Auto-preencher valor com o preço do serviço ao mudar o serviço ──
+  // ── Auto-preencher valor: preco_consulta do paciente > preço do serviço ──
   useEffect(() => {
+    if (patientPrecoConsulta !== null && patientPrecoConsulta !== undefined) {
+      setSessionPrice(String(patientPrecoConsulta));
+      return;
+    }
     if (!selectedServico) return;
     const svc = services.find((s) => s.id === selectedServico);
     if (svc && svc.price !== undefined && svc.price !== null) {
       setSessionPrice(String(svc.price));
     }
-  }, [selectedServico, services]);
+  }, [selectedServico, services, patientPrecoConsulta]);
 
-  const handleSelectPatient = useCallback((patient: Patient) => {
+  const handleSelectPatient = useCallback(async (patient: Patient) => {
     setSelectedPatient(patient);
     setSearchQuery("");
     setShowDropdown(false);
     fetchActivePacks(patient.id);
     prefillFromLastSession(patient.id);
+    try {
+      const { data } = await (supabase as any)
+        .from("pacientes")
+        .select("preco_consulta")
+        .eq("id", patient.id)
+        .maybeSingle();
+      const pc = data?.preco_consulta;
+      setPatientPrecoConsulta(pc !== null && pc !== undefined ? Number(pc) : null);
+    } catch {
+      setPatientPrecoConsulta(null);
+    }
   }, [fetchActivePacks, prefillFromLastSession]);
 
   const handleClearPatient = useCallback(() => {
@@ -321,6 +338,7 @@ export function NewSessionModal({
     setSelectedPackId("");
     setCobrarAvulso(false);
     setShowNewPack(false);
+    setPatientPrecoConsulta(null);
   }, []);
 
   // ── Criação rápida de paciente ──
