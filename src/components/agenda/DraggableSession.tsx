@@ -98,14 +98,39 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   // Respiratório < 13: azul bebé · ≥ 13: azul médio
   // Motora/Outras < 13: lilás claro · ≥ 13: lilás médio
   const cardColors = (() => {
+    const statusLower = String(session.status ?? "").toLowerCase();
+    const confirmado = String(session.confirmacao_estado ?? "").toLowerCase() === "confirmado";
+
+    // a) Cancelado
+    if (statusLower === "cancelado") {
+      return { bg: "#fee2e2", border: "#fca5a5" };
+    }
+    // b) Confirmado + agendado
+    if (confirmado && statusLower === "agendado") {
+      return { bg: "#dcfce7", border: "#86efac" };
+    }
+    // c) Agendado sem confirmação, hoje ou amanhã
+    if (statusLower === "agendado" && !confirmado) {
+      const start = new Date(session.start_time);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      if (startDay.getTime() === today.getTime() || startDay.getTime() === tomorrow.getTime()) {
+        return { bg: "#fef9c3", border: "#fde047" };
+      }
+    }
+
+    // d) Fallback: especialidade + idade
     if (isRespiratorio) {
       return isChild
-        ? { bg: "#eff6ff", border: "#bfdbfe" } // azul quase branco (infantil)
-        : { bg: "#dbeafe", border: "#93c5fd" }; // azul pastel suave (adulto)
+        ? { bg: "#eff6ff", border: "#bfdbfe" }
+        : { bg: "#dbeafe", border: "#93c5fd" };
     } else {
       return isChild
-        ? { bg: "#fdf2f8", border: "#fbcfe8" } // rosa quase branco (infantil)
-        : { bg: "#fce7f3", border: "#f9a8d4" }; // rosa pastel suave (adulto)
+        ? { bg: "#fdf2f8", border: "#fbcfe8" }
+        : { bg: "#fce7f3", border: "#f9a8d4" };
     }
   })();
   // ─────────────────────────────────────────────────────────────────────────
