@@ -56,7 +56,7 @@ function formatServico(name: string): string {
 }
 // ───────────────────────────────────────────────────────────────────────────
 
-export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle }: DraggableSessionProps) {
+export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle, overlapTotal }: DraggableSessionProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: session.id,
     data: { session },
