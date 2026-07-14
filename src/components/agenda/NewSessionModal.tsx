@@ -338,6 +338,7 @@ export function NewSessionModal({
     setSelectedPackId("");
     setCobrarAvulso(false);
     setShowNewPack(false);
+    setPatientPrecoConsulta(null);
   }, []);
 
   // ── Criação rápida de paciente ──
