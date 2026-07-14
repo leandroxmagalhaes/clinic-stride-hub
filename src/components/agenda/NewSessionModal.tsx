@@ -298,6 +298,15 @@ export function NewSessionModal({
     }
   }, [services, professionals]);
 
+  // ── Auto-preencher valor com o preço do serviço ao mudar o serviço ──
+  useEffect(() => {
+    if (!selectedServico) return;
+    const svc = services.find((s) => s.id === selectedServico);
+    if (svc && svc.price !== undefined && svc.price !== null) {
+      setSessionPrice(String(svc.price));
+    }
+  }, [selectedServico, services]);
+
   const handleSelectPatient = useCallback((patient: Patient) => {
     setSelectedPatient(patient);
     setSearchQuery("");
