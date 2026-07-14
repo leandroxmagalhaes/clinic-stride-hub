@@ -2637,6 +2637,7 @@ export type Database = {
           isento_em: string | null
           isento_motivo: string | null
           isento_por: string | null
+          metodo_pagamento_previsto: string | null
           notes: string | null
           numero_no_pack: number | null
           paciente_id: string
@@ -2669,6 +2670,7 @@ export type Database = {
           isento_em?: string | null
           isento_motivo?: string | null
           isento_por?: string | null
+          metodo_pagamento_previsto?: string | null
           notes?: string | null
           numero_no_pack?: number | null
           paciente_id: string
@@ -2701,6 +2703,7 @@ export type Database = {
           isento_em?: string | null
           isento_motivo?: string | null
           isento_por?: string | null
+          metodo_pagamento_previsto?: string | null
           notes?: string | null
           numero_no_pack?: number | null
           paciente_id?: string
