@@ -398,7 +398,7 @@ export function FullQuestionnaireView({
     }
   };
 
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [pacienteId]);
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [pacienteId, questionarioId]);
 
   const respostas: Record<string, Record<string, any>> = useMemo(() => {
     const r = questionario?.respostas;
