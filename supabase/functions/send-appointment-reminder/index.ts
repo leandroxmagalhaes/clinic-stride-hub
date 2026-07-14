@@ -55,7 +55,7 @@ serve(async (req) => {
     const { data: sessions, error: sessionsError } = await supabase
       .from("sessoes")
       .select(`
-        id, start_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado,
+        id, start_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, confirmation_token,
         pacientes!sessoes_paciente_id_fkey ( full_name, email ),
         profiles!sessoes_profissional_id_fkey ( full_name ),
         servicos!sessoes_servico_id_fkey ( name ),
