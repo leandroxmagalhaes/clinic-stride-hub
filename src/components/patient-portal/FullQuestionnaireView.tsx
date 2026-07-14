@@ -448,9 +448,9 @@ export function FullQuestionnaireView({
     }
     setSaving(true);
     try {
-      let questionarioId: string | null = questionario?.id || null;
+      let currentId: string | null = questionario?.id || null;
 
-      if (questionarioId) {
+      if (currentId) {
         const updatePayload: Record<string, any> = {
           respostas: draft,
           updated_at: new Date().toISOString(),
@@ -460,10 +460,13 @@ export function FullQuestionnaireView({
         const { error } = await (supabase as any)
           .from("portal_questionario")
           .update(updatePayload)
-          .eq("id", questionarioId);
+          .eq("id", currentId);
         if (error) throw error;
       } else {
-        const upsertPayload: Record<string, any> = {
+        // Create a fresh questionnaire row for this template.
+        // With the multi-anamnese model, uniqueness is (paciente_id, template_id) — a
+        // plain INSERT is correct: the DB rejects duplicates automatically.
+        const insertPayload: Record<string, any> = {
           paciente_id: pacienteId,
           template_id: template.id,
           perfil_tipo: template.identifier,
@@ -473,11 +476,11 @@ export function FullQuestionnaireView({
         };
         const { data: created, error } = await (supabase as any)
           .from("portal_questionario")
-          .upsert(upsertPayload, { onConflict: "paciente_id" })
+          .insert(insertPayload)
           .select("id")
           .maybeSingle();
         if (error) throw error;
-        questionarioId = created?.id || null;
+        currentId = created?.id || null;
       }
 
       let changeCount = 0;
