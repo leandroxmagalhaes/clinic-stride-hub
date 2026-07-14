@@ -136,6 +136,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   // ─────────────────────────────────────────────────────────────────────────
 
   const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
+  const isOverlapped = (overlapTotal ?? 1) > 1;
+  const isCancelled = String(session.status ?? "").toLowerCase() === "cancelado";
   const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
   // Pack payment pending alert: pack session in the past with pagamento_estado = 'pendente'
