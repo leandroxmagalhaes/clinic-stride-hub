@@ -82,8 +82,8 @@ interface SessionSlot {
 const TIME_OPTIONS: string[] = (() => {
   const opts: string[] = [];
   for (let h = 7; h <= 21; h++) {
-    for (const m of [0, 30]) {
-      if (h === 21 && m > 30) break;
+    for (const m of [0, 15, 30, 45]) {
+      if (h === 21 && m > 45) break;
       opts.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
     }
   }
