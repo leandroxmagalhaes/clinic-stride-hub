@@ -163,6 +163,7 @@ export function NewSessionModal({
       setSessionSlots([]);
       setSelectedServico("");
       setSelectedProfissional("");
+      setSessionPrice("");
       setNotes("");
     }
   }, [isOpen]);
