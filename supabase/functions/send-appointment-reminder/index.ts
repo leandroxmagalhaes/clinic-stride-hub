@@ -38,6 +38,20 @@ serve(async (req) => {
       });
     }
 
+    // Optional test flags (body or query)
+    let dryRun = false;
+    try {
+      const u = new URL(req.url);
+      if (u.searchParams.get("dry_run") === "1") dryRun = true;
+      if (req.method === "POST") {
+        const raw = await req.clone().text();
+        if (raw) {
+          const b = JSON.parse(raw);
+          if (b?.dry_run === true) dryRun = true;
+        }
+      }
+    } catch (_e) { /* ignore */ }
+
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
     const resend = new Resend(resendApiKey);
 
