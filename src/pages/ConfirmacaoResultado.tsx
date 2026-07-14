@@ -27,6 +27,13 @@ const MENSAGENS: Record<Estado, { titulo: string; texto: string; icon: JSX.Eleme
     cor: "#2563eb",
     bg: "#dbeafe",
   },
+  "metodo-registado": {
+    titulo: "Obrigado pela confirmação",
+    texto: "Registámos a forma de pagamento prevista. Até já.",
+    icon: <CheckCircle2 className="h-12 w-12" strokeWidth={1.5} />,
+    cor: "#16a34a",
+    bg: "#dcfce7",
+  },
   "erro": {
     titulo: "Link inválido",
     texto: "Este link expirou ou já foi usado. Por favor contacte a clínica.",
