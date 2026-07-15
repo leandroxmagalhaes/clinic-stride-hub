@@ -194,12 +194,17 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       }}
     >
       {/* Badge de pagamento — canto inferior direito */}
-      {!isCompact && isPago && (
+      {!isCompact && session.sem_cobranca && (
+        <span className="absolute bottom-1 right-1 z-10 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-zinc-200 text-zinc-700 border border-zinc-300 shadow-sm">
+          Sem cobrança
+        </span>
+      )}
+      {!isCompact && !session.sem_cobranca && isPago && (
         <span className="absolute bottom-1 right-1 z-10 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-green-600 text-white shadow-sm">
           Pago
         </span>
       )}
-      {!isCompact && isPendentePagamento && (
+      {!isCompact && !session.sem_cobranca && isPendentePagamento && (
         <button
           type="button"
           className="absolute bottom-1 right-1 z-10 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-orange-500 hover:bg-orange-600 text-white shadow-sm cursor-pointer"
