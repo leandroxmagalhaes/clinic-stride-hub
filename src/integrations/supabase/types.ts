@@ -2638,6 +2638,7 @@ export type Database = {
           isento_motivo: string | null
           isento_por: string | null
           metodo_pagamento_previsto: string | null
+          motivo_sem_cobranca: string | null
           notes: string | null
           numero_no_pack: number | null
           paciente_id: string
@@ -2649,6 +2650,7 @@ export type Database = {
           payment_status: string | null
           price: number | null
           profissional_id: string
+          sem_cobranca: boolean
           servico_id: string | null
           start_time: string
           status: string
@@ -2671,6 +2673,7 @@ export type Database = {
           isento_motivo?: string | null
           isento_por?: string | null
           metodo_pagamento_previsto?: string | null
+          motivo_sem_cobranca?: string | null
           notes?: string | null
           numero_no_pack?: number | null
           paciente_id: string
@@ -2682,6 +2685,7 @@ export type Database = {
           payment_status?: string | null
           price?: number | null
           profissional_id: string
+          sem_cobranca?: boolean
           servico_id?: string | null
           start_time: string
           status?: string
@@ -2704,6 +2708,7 @@ export type Database = {
           isento_motivo?: string | null
           isento_por?: string | null
           metodo_pagamento_previsto?: string | null
+          motivo_sem_cobranca?: string | null
           notes?: string | null
           numero_no_pack?: number | null
           paciente_id?: string
@@ -2715,6 +2720,7 @@ export type Database = {
           payment_status?: string | null
           price?: number | null
           profissional_id?: string
+          sem_cobranca?: boolean
           servico_id?: string | null
           start_time?: string
           status?: string
