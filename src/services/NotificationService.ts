@@ -12,6 +12,7 @@ export type NotificationType =
   | 'diary_reply'
   | 'remarcacao'
   | 'confirmacao'
+  | 'confirmacao_pendente'
   | 'solicitacao_vaga';
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
