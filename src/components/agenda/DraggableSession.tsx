@@ -24,6 +24,7 @@ interface Session {
   package_id?: string | null;
   tipo_agendamento?: string;
   pagamento_estado?: string;
+  sem_cobranca?: boolean;
 }
 
 interface DraggableSessionProps {
