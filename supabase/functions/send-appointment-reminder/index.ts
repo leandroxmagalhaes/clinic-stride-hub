@@ -69,7 +69,7 @@ serve(async (req) => {
     const { data: sessions, error: sessionsError } = await supabase
       .from("sessoes")
       .select(`
-        id, start_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, confirmation_token,
+        id, start_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, confirmation_token,
         pacientes!sessoes_paciente_id_fkey ( full_name, email ),
         profiles!sessoes_profissional_id_fkey ( full_name ),
         servicos!sessoes_servico_id_fkey ( name ),
@@ -138,7 +138,7 @@ serve(async (req) => {
           (session as any).pagamento_estado === "pago";
         const temDados = !!(settings.mbway_numero_1 || settings.iban);
         const mostrarPagamento =
-          !(session as any).isento && !(session as any).pack_id && !jaPago && temDados;
+          !(session as any).isento && !(session as any).pack_id && !(session as any).sem_cobranca && !jaPago && temDados;
 
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const tokenSessao = (session as any).confirmation_token;
@@ -262,7 +262,7 @@ serve(async (req) => {
       const { data: pastSessions, error: pastErr } = await supabase
         .from("sessoes")
         .select(`
-          id, start_time, end_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, metodo_pagamento_previsto, confirmation_token,
+          id, start_time, end_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, metodo_pagamento_previsto, confirmation_token,
           pacientes!sessoes_paciente_id_fkey ( full_name, email ),
           clinics!sessoes_clinic_id_fkey ( name, phone, email )
         `)
@@ -284,7 +284,7 @@ serve(async (req) => {
           const settings = settingsMap.get(s.clinic_id) || {};
 
           if (settings.reminder_ativo === false) { followupResults.skipped++; continue; }
-          if (s.isento || s.pack_id) { followupResults.skipped++; continue; }
+          if (s.isento || s.pack_id || (s as any).sem_cobranca) { followupResults.skipped++; continue; }
           if (!patient?.email) { followupResults.skipped++; continue; }
           if (!s.confirmation_token) { followupResults.skipped++; continue; }
 

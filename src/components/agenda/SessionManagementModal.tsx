@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -162,6 +163,8 @@ export function SessionManagementModal({
   const [editPaymentStatus, setEditPaymentStatus] = useState("pendente");
   const [editPaymentMethod, setEditPaymentMethod] = useState("");
   const [editPaymentDate, setEditPaymentDate] = useState("");
+  const [editSemCobranca, setEditSemCobranca] = useState(false);
+  const [editMotivoSemCobranca, setEditMotivoSemCobranca] = useState<string>("Cortesia");
   const [patientSearchOpen, setPatientSearchOpen] = useState(false);
   const [patientSearchQuery, setPatientSearchQuery] = useState("");
 
@@ -211,6 +214,8 @@ export function SessionManagementModal({
     setEditPaymentStatus((session as any).pagamento_estado || "pendente");
     setEditPaymentMethod((session as any).pagamento_metodo || "");
     setEditPaymentDate((session as any).pagamento_data || "");
+    setEditSemCobranca(!!(session as any).sem_cobranca);
+    setEditMotivoSemCobranca((session as any).motivo_sem_cobranca || "Cortesia");
   }, [session?.id]);
 
   if (!session) return null;
@@ -268,16 +273,19 @@ export function SessionManagementModal({
         profissional_id: editProfissional,
         servico_id: editServico,
         status: editStatus,
-        price: parseFloat(editPrice) || 0,
+        price: editSemCobranca ? 0 : (parseFloat(editPrice) || 0),
         notes: editNotes,
+        payment_status: editSemCobranca ? "pago" : editPaymentStatus,
       } as any);
       // Update extended fields directly via supabase
       await (supabase as any).from("sessoes").update({
         tipo_agendamento: editTipoAgendamento,
         pack_id: editTipoAgendamento === "pack" && editPackId ? editPackId : null,
-        pagamento_estado: editPaymentStatus,
-        pagamento_metodo: editPaymentStatus !== "pendente" && editPaymentMethod ? editPaymentMethod : null,
-        pagamento_data: editPaymentStatus !== "pendente" && editPaymentDate ? editPaymentDate : null,
+        pagamento_estado: editSemCobranca ? "pago" : editPaymentStatus,
+        pagamento_metodo: !editSemCobranca && editPaymentStatus !== "pendente" && editPaymentMethod ? editPaymentMethod : null,
+        pagamento_data: !editSemCobranca && editPaymentStatus !== "pendente" && editPaymentDate ? editPaymentDate : null,
+        sem_cobranca: editSemCobranca,
+        motivo_sem_cobranca: editSemCobranca ? editMotivoSemCobranca : null,
       }).eq("id", session.id);
       toast.success("Sessão actualizada!");
       setIsEditing(false);
@@ -842,12 +850,34 @@ export function SessionManagementModal({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={editPrice}
+                      value={editSemCobranca ? "0" : editPrice}
                       onChange={(e) => setEditPrice(e.target.value)}
                       className="min-h-[40px]"
                       placeholder="0,00"
+                      disabled={editSemCobranca}
                     />
                   </div>
+                </div>
+
+                {/* Sem cobrança */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Switch id="edit-sem-cobranca" checked={editSemCobranca} onCheckedChange={setEditSemCobranca} />
+                    <Label htmlFor="edit-sem-cobranca" className="text-xs cursor-pointer">Sem cobrança</Label>
+                  </div>
+                  {editSemCobranca && (
+                    <Select value={editMotivoSemCobranca} onValueChange={setEditMotivoSemCobranca}>
+                      <SelectTrigger className="h-8 w-[160px] text-xs">
+                        <SelectValue placeholder="Motivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Cortesia">Cortesia</SelectItem>
+                        <SelectItem value="VIP">VIP</SelectItem>
+                        <SelectItem value="Ação social">Ação social</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 {/* Payment status */}

@@ -34,6 +34,7 @@ interface Session {
   status: string;
   confirmacao_estado?: string;
   payment_status?: string;
+  sem_cobranca?: boolean;
   paciente?: { full_name: string; id?: string };
   profissional?: { full_name: string };
   servico?: { name: string; color: string };
