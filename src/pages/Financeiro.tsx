@@ -137,6 +137,7 @@ export default function Financeiro() {
       const { data, error } = await (supabase as any)
         .from("sessoes")
         .select(`id, start_time, end_time, status, price, payment_status, payment_method, metodo_pagamento_previsto, sem_cobranca, paciente:paciente_id(full_name), servico:servico_id(name)`)
+        .eq("status", "realizado")
         .gte("start_time", period.start.toISOString())
         .lte("start_time", period.end.toISOString())
         .order("start_time", { ascending: false });
