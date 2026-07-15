@@ -471,7 +471,9 @@ export default function Financeiro() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="conferencia">Conferência de Caixa</TabsTrigger>
             <TabsTrigger value="packs">Vendas de Packs</TabsTrigger>
+
           </TabsList>
 
           {/* ── VISÃO GERAL ────────────────────────────────────────────── */}
