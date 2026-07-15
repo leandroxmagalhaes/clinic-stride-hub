@@ -163,6 +163,8 @@ export function SessionManagementModal({
   const [editPaymentStatus, setEditPaymentStatus] = useState("pendente");
   const [editPaymentMethod, setEditPaymentMethod] = useState("");
   const [editPaymentDate, setEditPaymentDate] = useState("");
+  const [editSemCobranca, setEditSemCobranca] = useState(false);
+  const [editMotivoSemCobranca, setEditMotivoSemCobranca] = useState<string>("Cortesia");
   const [patientSearchOpen, setPatientSearchOpen] = useState(false);
   const [patientSearchQuery, setPatientSearchQuery] = useState("");
 
