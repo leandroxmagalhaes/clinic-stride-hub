@@ -850,12 +850,34 @@ export function SessionManagementModal({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={editPrice}
+                      value={editSemCobranca ? "0" : editPrice}
                       onChange={(e) => setEditPrice(e.target.value)}
                       className="min-h-[40px]"
                       placeholder="0,00"
+                      disabled={editSemCobranca}
                     />
                   </div>
+                </div>
+
+                {/* Sem cobrança */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Switch id="edit-sem-cobranca" checked={editSemCobranca} onCheckedChange={setEditSemCobranca} />
+                    <Label htmlFor="edit-sem-cobranca" className="text-xs cursor-pointer">Sem cobrança</Label>
+                  </div>
+                  {editSemCobranca && (
+                    <Select value={editMotivoSemCobranca} onValueChange={setEditMotivoSemCobranca}>
+                      <SelectTrigger className="h-8 w-[160px] text-xs">
+                        <SelectValue placeholder="Motivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Cortesia">Cortesia</SelectItem>
+                        <SelectItem value="VIP">VIP</SelectItem>
+                        <SelectItem value="Ação social">Ação social</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 {/* Payment status */}
