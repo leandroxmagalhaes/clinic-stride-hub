@@ -138,7 +138,7 @@ serve(async (req) => {
           (session as any).pagamento_estado === "pago";
         const temDados = !!(settings.mbway_numero_1 || settings.iban);
         const mostrarPagamento =
-          !(session as any).isento && !(session as any).pack_id && !jaPago && temDados;
+          !(session as any).isento && !(session as any).pack_id && !(session as any).sem_cobranca && !jaPago && temDados;
 
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const tokenSessao = (session as any).confirmation_token;
