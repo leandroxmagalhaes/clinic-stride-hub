@@ -475,6 +475,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       notes: data.notes,
       pack_id: (data as any).pack_id ?? null,
       numero_no_pack: (data as any).numero_no_pack ?? null,
+      sem_cobranca: (data as any).sem_cobranca ?? false,
+      motivo_sem_cobranca: (data as any).motivo_sem_cobranca ?? null,
       paciente: data.paciente,
       profissional: data.profissional,
       servico: data.servico,
