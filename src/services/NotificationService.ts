@@ -12,6 +12,7 @@ export type NotificationType =
   | 'diary_reply'
   | 'remarcacao'
   | 'confirmacao'
+  | 'confirmacao_pendente'
   | 'solicitacao_vaga';
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
@@ -82,8 +83,8 @@ export class NotificationService {
         let priority: NotificationPriority = 'medium';
         if (type === 'new_patient') {
           priority = 'high';
-        } else if (type === 'solicitacao_vaga') {
-          priority = /URGENTE/i.test(String(n.message || '')) ? 'high' : 'medium';
+        } else if (type === 'confirmacao_pendente' || type === 'remarcacao' || type === 'solicitacao_vaga') {
+          priority = 'high';
         }
         return {
           id: n.id,
