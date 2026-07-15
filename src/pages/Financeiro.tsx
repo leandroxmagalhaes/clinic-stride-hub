@@ -66,14 +66,19 @@ function buildPeriod(type: PeriodType, ref: Date = new Date()): Period {
 interface SessionRevenue {
   id: string;
   start_time: string;
+  end_time?: string;
   patient_name: string;
   service_name: string;
   price: number;
   payment_status: "pago" | "pendente";
   payment_method?: string;
+  metodo_pagamento_previsto?: string | null;
+  sem_cobranca?: boolean;
+  status?: string;
   avulso?: boolean;
 }
 // ──────────────────────────────────────────────────────────────────────────────
+
 
 const PAYMENT_METHOD_LABELS: Record<string, { label: string; icon: React.ElementType }> = {
   pix: { label: "PIX", icon: Wallet },
