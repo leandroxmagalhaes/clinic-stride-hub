@@ -205,18 +205,30 @@ export const NotificationBell = memo(function NotificationBell() {
             </div>
           ) : !hasNotifications ? (
             <div className="p-8 text-center">
-              <Bell className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
-              <p className="text-sm text-muted-foreground">
-                Sem notificações
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/60">
+                <Bell className="h-5 w-5 text-muted-foreground/70" />
+              </div>
+              <p className="text-sm font-medium text-foreground">
+                {filter === 'unread' ? 'Tudo em dia!' : 'Sem notificações'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {filter === 'unread'
+                  ? 'Não há alertas por ler neste momento.'
+                  : 'Ainda não há alertas para mostrar.'}
               </p>
             </div>
           ) : (
-            <div className="p-2 space-y-1">
+            <div className="p-2 space-y-2">
               {highPriority.length > 0 && (
-                <>
-                  <p className="px-2 py-1 text-xs font-medium text-destructive uppercase tracking-wide">
-                    Urgente
-                  </p>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between px-2 pt-1 pb-0.5">
+                    <p className="text-[11px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wider">
+                      Urgente
+                    </p>
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-[10px] font-semibold">
+                      {highPriority.length}
+                    </span>
+                  </div>
                   {highPriority.map(notification => (
                     <div
                       key={notification.id}
@@ -225,22 +237,27 @@ export const NotificationBell = memo(function NotificationBell() {
                         notification.read && "opacity-60"
                       )}
                     >
-                      <NotificationItem 
+                      <NotificationItem
                         notification={notification}
                         onClose={handleClose}
                         onMarkAsRead={handleMarkAsRead}
                       />
                     </div>
                   ))}
-                </>
+                </div>
               )}
-              
+
               {mediumPriority.length > 0 && (
-                <>
-                  {highPriority.length > 0 && <Separator className="my-2" />}
-                  <p className="px-2 py-1 text-xs font-medium text-warning uppercase tracking-wide">
-                    Atenção
-                  </p>
+                <div className="space-y-1">
+                  {highPriority.length > 0 && <Separator className="my-1" />}
+                  <div className="flex items-center justify-between px-2 pt-1 pb-0.5">
+                    <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                      Atenção
+                    </p>
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-semibold">
+                      {mediumPriority.length}
+                    </span>
+                  </div>
                   {mediumPriority.map(notification => (
                     <div
                       key={notification.id}
@@ -249,22 +266,27 @@ export const NotificationBell = memo(function NotificationBell() {
                         notification.read && "opacity-60"
                       )}
                     >
-                      <NotificationItem 
+                      <NotificationItem
                         notification={notification}
                         onClose={handleClose}
                         onMarkAsRead={handleMarkAsRead}
                       />
                     </div>
                   ))}
-                </>
+                </div>
               )}
-              
+
               {lowPriority.length > 0 && (
-                <>
-                  {(highPriority.length > 0 || mediumPriority.length > 0) && <Separator className="my-2" />}
-                  <p className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Informação
-                  </p>
+                <div className="space-y-1">
+                  {(highPriority.length > 0 || mediumPriority.length > 0) && <Separator className="my-1" />}
+                  <div className="flex items-center justify-between px-2 pt-1 pb-0.5">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Informativo
+                    </p>
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-muted text-muted-foreground text-[10px] font-semibold">
+                      {lowPriority.length}
+                    </span>
+                  </div>
                   {lowPriority.map(notification => (
                     <div
                       key={notification.id}
@@ -273,14 +295,14 @@ export const NotificationBell = memo(function NotificationBell() {
                         notification.read && "opacity-60"
                       )}
                     >
-                      <NotificationItem 
+                      <NotificationItem
                         notification={notification}
                         onClose={handleClose}
                         onMarkAsRead={handleMarkAsRead}
                       />
                     </div>
                   ))}
-                </>
+                </div>
               )}
             </div>
           )}
