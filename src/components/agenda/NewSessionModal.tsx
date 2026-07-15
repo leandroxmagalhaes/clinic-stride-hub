@@ -815,9 +815,29 @@ export function NewSessionModal({
                     min={0}
                     step="0.01"
                     placeholder="0,00"
-                    value={sessionPrice}
+                    value={semCobranca ? "0" : sessionPrice}
                     onChange={(e) => setSessionPrice(e.target.value)}
+                    disabled={semCobranca}
                   />
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Switch id="sem-cobranca" checked={semCobranca} onCheckedChange={setSemCobranca} />
+                    <Label htmlFor="sem-cobranca" className="text-xs cursor-pointer">Sem cobrança</Label>
+                  </div>
+                  {semCobranca && (
+                    <Select value={motivoSemCobranca} onValueChange={setMotivoSemCobranca}>
+                      <SelectTrigger className="h-8 w-[160px] text-xs">
+                        <SelectValue placeholder="Motivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Cortesia">Cortesia</SelectItem>
+                        <SelectItem value="VIP">VIP</SelectItem>
+                        <SelectItem value="Ação social">Ação social</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <Textarea
                   placeholder="Observações (opcional)"
