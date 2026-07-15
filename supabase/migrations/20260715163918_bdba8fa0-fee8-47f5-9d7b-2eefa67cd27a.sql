@@ -1,0 +1,3 @@
+ALTER TABLE public.sessoes
+ADD COLUMN IF NOT EXISTS sem_cobranca BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS motivo_sem_cobranca TEXT NULL;
