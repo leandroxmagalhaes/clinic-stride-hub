@@ -134,10 +134,9 @@ export default function Financeiro() {
 
   const loadSessionRevenues = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("sessoes")
-        .select(`id, start_time, price, payment_status, payment_method, paciente:paciente_id(full_name), servico:servico_id(name)`)
-        .eq("status", "realizado")
+        .select(`id, start_time, end_time, status, price, payment_status, payment_method, metodo_pagamento_previsto, sem_cobranca, paciente:paciente_id(full_name), servico:servico_id(name)`)
         .gte("start_time", period.start.toISOString())
         .lte("start_time", period.end.toISOString())
         .order("start_time", { ascending: false });
@@ -152,11 +151,15 @@ export default function Financeiro() {
         rows.map((s: any) => ({
           id: s.id,
           start_time: s.start_time,
+          end_time: s.end_time,
           patient_name: s.paciente?.full_name || "Paciente",
           service_name: s.servico?.name || "Serviço",
           price: s.price || 0,
           payment_status: s.payment_status === "pago" ? "pago" : "pendente",
           payment_method: s.payment_method,
+          metodo_pagamento_previsto: s.metodo_pagamento_previsto,
+          sem_cobranca: !!s.sem_cobranca,
+          status: s.status,
           avulso: false,
         }))
       );
@@ -164,6 +167,7 @@ export default function Financeiro() {
       console.error("Erro ao carregar receitas de sessões:", err);
     }
   };
+
 
   // Marca sessão pendente como paga
   const markSessionAsPaid = async (sessionId: string, method: string) => {
