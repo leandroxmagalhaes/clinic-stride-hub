@@ -273,16 +273,19 @@ export function SessionManagementModal({
         profissional_id: editProfissional,
         servico_id: editServico,
         status: editStatus,
-        price: parseFloat(editPrice) || 0,
+        price: editSemCobranca ? 0 : (parseFloat(editPrice) || 0),
         notes: editNotes,
+        payment_status: editSemCobranca ? "pago" : editPaymentStatus,
       } as any);
       // Update extended fields directly via supabase
       await (supabase as any).from("sessoes").update({
         tipo_agendamento: editTipoAgendamento,
         pack_id: editTipoAgendamento === "pack" && editPackId ? editPackId : null,
-        pagamento_estado: editPaymentStatus,
-        pagamento_metodo: editPaymentStatus !== "pendente" && editPaymentMethod ? editPaymentMethod : null,
-        pagamento_data: editPaymentStatus !== "pendente" && editPaymentDate ? editPaymentDate : null,
+        pagamento_estado: editSemCobranca ? "pago" : editPaymentStatus,
+        pagamento_metodo: !editSemCobranca && editPaymentStatus !== "pendente" && editPaymentMethod ? editPaymentMethod : null,
+        pagamento_data: !editSemCobranca && editPaymentStatus !== "pendente" && editPaymentDate ? editPaymentDate : null,
+        sem_cobranca: editSemCobranca,
+        motivo_sem_cobranca: editSemCobranca ? editMotivoSemCobranca : null,
       }).eq("id", session.id);
       toast.success("Sessão actualizada!");
       setIsEditing(false);
