@@ -214,6 +214,8 @@ export function SessionManagementModal({
     setEditPaymentStatus((session as any).pagamento_estado || "pendente");
     setEditPaymentMethod((session as any).pagamento_metodo || "");
     setEditPaymentDate((session as any).pagamento_data || "");
+    setEditSemCobranca(!!(session as any).sem_cobranca);
+    setEditMotivoSemCobranca((session as any).motivo_sem_cobranca || "Cortesia");
   }, [session?.id]);
 
   if (!session) return null;
