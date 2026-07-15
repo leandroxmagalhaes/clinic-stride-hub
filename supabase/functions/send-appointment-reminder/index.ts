@@ -262,7 +262,7 @@ serve(async (req) => {
       const { data: pastSessions, error: pastErr } = await supabase
         .from("sessoes")
         .select(`
-          id, start_time, end_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, metodo_pagamento_previsto, confirmation_token,
+          id, start_time, end_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, metodo_pagamento_previsto, confirmation_token,
           pacientes!sessoes_paciente_id_fkey ( full_name, email ),
           clinics!sessoes_clinic_id_fkey ( name, phone, email )
         `)
