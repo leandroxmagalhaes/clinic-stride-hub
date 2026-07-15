@@ -284,7 +284,7 @@ serve(async (req) => {
           const settings = settingsMap.get(s.clinic_id) || {};
 
           if (settings.reminder_ativo === false) { followupResults.skipped++; continue; }
-          if (s.isento || s.pack_id) { followupResults.skipped++; continue; }
+          if (s.isento || s.pack_id || (s as any).sem_cobranca) { followupResults.skipped++; continue; }
           if (!patient?.email) { followupResults.skipped++; continue; }
           if (!s.confirmation_token) { followupResults.skipped++; continue; }
 
