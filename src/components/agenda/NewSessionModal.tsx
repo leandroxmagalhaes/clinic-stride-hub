@@ -169,6 +169,8 @@ export function NewSessionModal({
       setSessionPrice("");
       setPatientPrecoConsulta(null);
       setNotes("");
+      setSemCobranca(false);
+      setMotivoSemCobranca("Cortesia");
     }
   }, [isOpen]);
 
