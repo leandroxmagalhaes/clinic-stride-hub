@@ -703,7 +703,173 @@ export default function Financeiro() {
             </Card>
           </TabsContent>
 
+          {/* ── CONFERÊNCIA DE CAIXA ──────────────────────────────────── */}
+          <TabsContent value="conferencia">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <CardTitle className="font-display text-lg flex items-center gap-2">
+                      <Scale className="h-5 w-5 text-primary" />
+                      Conferência de Caixa
+                    </CardTitle>
+                    <CardDescription>
+                      Cruze o método indicado pelo cliente com o pagamento confirmado
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="date"
+                      value={conferenciaDate}
+                      onChange={(e) => setConferenciaDate(e.target.value)}
+                      className="h-9 w-auto"
+                    />
+                    <Button variant="outline" size="sm" className="gap-1" onClick={() => loadConferencia(conferenciaDate)}>
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Resumo do dia */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="p-3 rounded-lg border bg-muted/30">
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Previsto do dia</div>
+                    <div className="text-lg font-semibold">{formatCurrency(conferenciaSummary.total)}</div>
+                  </div>
+                  <div className="p-3 rounded-lg border bg-green-50 border-green-200">
+                    <div className="text-[11px] uppercase tracking-wider text-green-700">Já confirmado</div>
+                    <div className="text-lg font-semibold text-green-700">{formatCurrency(conferenciaSummary.confirmado)}</div>
+                  </div>
+                  <div className="p-3 rounded-lg border bg-orange-50 border-orange-200">
+                    <div className="text-[11px] uppercase tracking-wider text-orange-700">Falta conferir</div>
+                    <div className="text-lg font-semibold text-orange-700">{formatCurrency(conferenciaSummary.faltaConferir)}</div>
+                    <div className="text-[11px] text-orange-700/80">{conferenciaSummary.porConferir} por conferir</div>
+                  </div>
+                  <div className="p-3 rounded-lg border bg-muted/30">
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Divergências</div>
+                    <div className="text-lg font-semibold">{conferenciaSummary.divergencias}</div>
+                    <div className="text-[11px] text-muted-foreground">método ≠ indicado</div>
+                  </div>
+                </div>
+
+                {loadingConferencia ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                  </div>
+                ) : conferenciaRows.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-green-500 opacity-60" />
+                    <p className="font-medium">Nada para conferir neste dia</p>
+                    <p className="text-xs mt-1">Sessões cobráveis com hora de fim já passada aparecem aqui.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Hora</TableHead>
+                          <TableHead>Paciente</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
+                          <TableHead>Indicado pelo cliente</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {conferenciaRows.map((s) => {
+                          const previsto = s.metodo_pagamento_previsto;
+                          const previstoLabel =
+                            previsto === "numerario" ? "Numerário" :
+                            previsto === "mbway_transferencia" ? "MB WAY ou transferência" :
+                            "Não indicou";
+                          const isPago = s.payment_status === "pago";
+                          const highlightNumerario = previsto === "numerario";
+                          const highlightMbway = previsto === "mbway_transferencia";
+                          const confirmedLabel = s.payment_method
+                            ? (PAYMENT_METHOD_LABELS[s.payment_method]?.label || s.payment_method)
+                            : "—";
+                          return (
+                            <TableRow key={s.id}>
+                              <TableCell className="text-sm whitespace-nowrap">
+                                {format(new Date(s.start_time), "HH:mm")}
+                              </TableCell>
+                              <TableCell className="text-sm font-medium">{s.patient_name}</TableCell>
+                              <TableCell className="text-right font-semibold">{formatCurrency(s.price)}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={previsto ? "" : "text-muted-foreground"}>
+                                  {previstoLabel}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {isPago ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge className="bg-green-600">Pago</Badge>
+                                    <span className="text-xs text-muted-foreground">{confirmedLabel}</span>
+                                  </div>
+                                ) : (
+                                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-200">Pendente</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {!isPago ? (
+                                  <div className="inline-flex gap-1 flex-wrap justify-end">
+                                    <Button
+                                      size="sm"
+                                      variant={highlightNumerario ? "default" : "outline"}
+                                      className={`gap-1 ${highlightNumerario ? "bg-green-600 hover:bg-green-700" : ""}`}
+                                      onClick={() => markSessionAsPaid(s.id, "numerario")}
+                                    >
+                                      <Banknote className="h-3.5 w-3.5" />
+                                      Numerário
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={highlightMbway ? "default" : "outline"}
+                                      className={`gap-1 ${highlightMbway ? "bg-green-600 hover:bg-green-700" : ""}`}
+                                      onClick={() => markSessionAsPaid(s.id, "mbway_transferencia")}
+                                    >
+                                      <Wallet className="h-3.5 w-3.5" />
+                                      MB WAY / transf.
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="inline-flex gap-1 flex-wrap justify-end items-center">
+                                    <Select
+                                      value={s.payment_method || ""}
+                                      onValueChange={(v) => updateSessionPayment(s.id, { payment_method: v })}
+                                    >
+                                      <SelectTrigger className="h-8 w-[170px] text-xs">
+                                        <SelectValue placeholder="Corrigir método" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="numerario">Numerário</SelectItem>
+                                        <SelectItem value="mbway_transferencia">MB WAY / transferência</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => updateSessionPayment(s.id, { payment_status: "pendente", payment_method: null })}
+                                    >
+                                      Reabrir
+                                    </Button>
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* ── PACKS ─────────────────────────────────────────────────── */}
+
           <TabsContent value="packs">
             <Card>
               <CardHeader>
