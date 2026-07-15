@@ -218,6 +218,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         pack_id: s.pack_id ?? null,
         numero_no_pack: s.numero_no_pack ?? null,
         isento: s.isento ?? false,
+        sem_cobranca: s.sem_cobranca ?? false,
+        motivo_sem_cobranca: s.motivo_sem_cobranca ?? null,
         paciente: s.paciente,
         profissional: s.profissional,
         servico: s.servico,
