@@ -198,7 +198,89 @@ export default function Financeiro() {
   const [receiveSession, setReceiveSession] = useState<SessionRevenue | null>(null);
   const [receiveMethod, setReceiveMethod] = useState("numerario");
 
+  // ── Conferência de Caixa ───────────────────────────────────────────────
+  const [conferenciaDate, setConferenciaDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [conferenciaRows, setConferenciaRows] = useState<SessionRevenue[]>([]);
+  const [loadingConferencia, setLoadingConferencia] = useState(false);
+
+  const loadConferencia = async (dateStr: string) => {
+    setLoadingConferencia(true);
+    try {
+      const start = new Date(dateStr + "T00:00:00");
+      const end = new Date(dateStr + "T23:59:59");
+      const { data, error } = await (supabase as any)
+        .from("sessoes")
+        .select(`id, start_time, end_time, status, price, payment_status, payment_method, metodo_pagamento_previsto, sem_cobranca, paciente:paciente_id(full_name), servico:servico_id(name)`)
+        .gte("start_time", start.toISOString())
+        .lte("start_time", end.toISOString())
+        .order("start_time", { ascending: true });
+      if (error) throw error;
+      const now = new Date();
+      const rows: SessionRevenue[] = (data || [])
+        .filter((s: any) => {
+          if (s.sem_cobranca) return false;
+          if (s.status === "cancelado" || s.status === "cancelada") return false;
+          if (!s.end_time) return false;
+          return new Date(s.end_time) <= now;
+        })
+        .map((s: any) => ({
+          id: s.id,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          patient_name: s.paciente?.full_name || "Paciente",
+          service_name: s.servico?.name || "Serviço",
+          price: s.price || 0,
+          payment_status: s.payment_status === "pago" ? "pago" : "pendente",
+          payment_method: s.payment_method,
+          metodo_pagamento_previsto: s.metodo_pagamento_previsto,
+          sem_cobranca: !!s.sem_cobranca,
+          status: s.status,
+        }));
+      setConferenciaRows(rows);
+    } catch (err) {
+      console.error("Erro ao carregar conferência:", err);
+      toast.error("Erro ao carregar conferência");
+    } finally {
+      setLoadingConferencia(false);
+    }
+  };
+
+  useEffect(() => { loadConferencia(conferenciaDate); }, [conferenciaDate]);
+
+  const updateSessionPayment = async (
+    sessionId: string,
+    patch: { payment_status?: string; payment_method?: string | null }
+  ) => {
+    try {
+      const { error } = await (supabase as any).from("sessoes").update(patch).eq("id", sessionId);
+      if (error) throw error;
+      toast.success("Atualizado");
+      await Promise.all([loadConferencia(conferenciaDate), loadSessionRevenues()]);
+    } catch {
+      toast.error("Erro ao atualizar");
+    }
+  };
+
+  const conferenciaSummary = useMemo(() => {
+    const total = conferenciaRows.reduce((s, r) => s + r.price, 0);
+    const pagas = conferenciaRows.filter((r) => r.payment_status === "pago");
+    const pendentes = conferenciaRows.filter((r) => r.payment_status === "pendente");
+    const confirmado = pagas.reduce((s, r) => s + r.price, 0);
+    const faltaConferir = pendentes.reduce((s, r) => s + r.price, 0);
+    const previstoToMethod = (p?: string | null) =>
+      p === "numerario" ? "numerario" : p === "mbway_transferencia" ? ["mbway", "transferencia", "mbway_transferencia"] : null;
+    const divergencias = pagas.filter((r) => {
+      if (!r.metodo_pagamento_previsto || !r.payment_method) return false;
+      const expected = previstoToMethod(r.metodo_pagamento_previsto);
+      if (!expected) return false;
+      if (Array.isArray(expected)) return !expected.includes(r.payment_method);
+      return r.payment_method !== expected;
+    }).length;
+    return { total, confirmado, faltaConferir, porConferir: pendentes.length, divergencias };
+  }, [conferenciaRows]);
+
   useEffect(() => { loadAll(); }, [period.start.getTime(), period.end.getTime()]);
+
 
   const loadAll = async () => {
     setIsLoadingSupabase(true);
