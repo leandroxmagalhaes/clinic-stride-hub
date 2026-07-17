@@ -207,8 +207,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
         "rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative",
         isDragging && "opacity-50 shadow-lg z-50 ring-2 ring-primary",
         isFalta && "ring-1 ring-red-400",
-        isOverlapped && isCancelled && "opacity-70",
       )}
+
       onClick={(e) => {
         e.stopPropagation();
         onClick(session);
