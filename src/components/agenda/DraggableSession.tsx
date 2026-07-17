@@ -149,6 +149,25 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const isCancelled = String(session.status ?? "").toLowerCase() === "cancelado";
   const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
+  // Passado esmaecido (Google Calendar style). Usa a menor entre 0.65 e 0.7 (cancelada sobreposta).
+  const isPast = new Date(session.end_time) < new Date();
+  const cancelOverlappedOpacity = isOverlapped && isCancelled ? 0.7 : 1;
+  const pastOpacity = isPast ? 0.65 : 1;
+  const effectiveOpacity = Math.min(cancelOverlappedOpacity, pastOpacity);
+
+  // Ícone de estado (compacto)
+  const confirmadoEstado = String(session.confirmacao_estado ?? "").toLowerCase() === "confirmado";
+  const statusLowerCompact = String(session.status ?? "").toLowerCase();
+  let compactStatusIcon: React.ReactNode = null;
+  if (statusLowerCompact === "cancelado") {
+    compactStatusIcon = <XCircle className="h-3 w-3 text-red-600 flex-shrink-0" aria-label="Cancelada" />;
+  } else if (statusLowerCompact === "agendado" && confirmadoEstado) {
+    compactStatusIcon = <CheckCircle2 className="h-3 w-3 text-green-700 flex-shrink-0" aria-label="Confirmada" />;
+  } else if (statusLowerCompact === "agendado" && !confirmadoEstado) {
+    compactStatusIcon = <Clock className="h-3 w-3 text-amber-500 flex-shrink-0" aria-label="Por confirmar" />;
+  }
+
+
   // Pack payment pending alert: pack session in the past with pagamento_estado = 'pendente'
   const isPackPendingPayment = !isCompact
     && (session as any).tipo_agendamento === "pack"
