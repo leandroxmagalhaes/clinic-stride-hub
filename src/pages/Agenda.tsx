@@ -269,7 +269,8 @@ export default function Agenda() {
   if (!prefsLoaded) return null;
 
   return (
-    <div className="relative" style={{ marginRight: quickPanelOpen ? 380 : 0, transition: "margin-right 0.3s ease" }}>
+    <div className="relative -mt-2 lg:-mt-4" style={{ marginRight: quickPanelOpen ? 380 : 0, transition: "margin-right 0.3s ease" }}>
+
     <AppLayout
       title="Agenda"
       subtitle="Gerencie os agendamentos da clínica"
