@@ -11,7 +11,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DraggableSession } from "./DraggableSession";
 import { DroppableSlot, HOUR_HEIGHT } from "./DroppableSlot";
 import { ReservedSlotCard } from "./ReservedSlotCard";
