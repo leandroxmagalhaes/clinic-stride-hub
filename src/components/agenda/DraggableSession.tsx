@@ -70,12 +70,11 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const isPago = isRealizado && session.payment_status === "pago";
   const isPendentePagamento = isRealizado && session.payment_status === "pendente";
 
-  // ── Pack alert — calculado depois de isCompact ───────────────────────────
+  // ── Pack alert ───────────────────────────────────────────────────────────
   const { packs } = useData();
   const _packId = (session as any).package_id ?? session.pack_id;
   const sessionPack = _packId ? packs.find((p) => p.id === _packId) : null;
   const packAlert = sessionPack?.alert_status;
-  // showPackWarning declarado após isCompact abaixo
   // ─────────────────────────────────────────────────────────────────────────
 
   // ── Idade do paciente ─────────────────────────────────────────────────────
@@ -144,8 +143,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   })();
   // ─────────────────────────────────────────────────────────────────────────
 
-  const isCompact = positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48;
   const isOverlapped = (overlapTotal ?? 1) > 1;
+  const isCompact = (positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48) || isOverlapped;
   const isCancelled = String(session.status ?? "").toLowerCase() === "cancelado";
   const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
@@ -167,7 +166,6 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     compactStatusIcon = <Clock className="h-3 w-3 text-amber-500 flex-shrink-0" aria-label="Por confirmar" />;
   }
 
-
   // Pack payment pending alert: pack session in the past with pagamento_estado = 'pendente'
   const isPackPendingPayment = !isCompact
     && (session as any).tipo_agendamento === "pack"
@@ -177,6 +175,13 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const servicoFormatado = formatServico(session.servico?.name ?? "");
   const profissionalNome = session.profissional?.full_name?.split(" ")?.[0] ?? "";
   const servicoLinha = profissionalNome ? `${servicoFormatado} (${profissionalNome})` : servicoFormatado;
+
+  const displayTimeEnd = session.end_time
+    ? new Date(session.end_time).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })
+    : null;
+  const timeRange = displayTime && displayTimeEnd && displayTimeEnd !== displayTime
+    ? `${displayTime} – ${displayTimeEnd}`
+    : displayTime;
 
   const internalStyle: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
@@ -193,7 +198,6 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     minHeight: isCompact ? undefined : "52px",
     height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "52px"})` : undefined,
   };
-
 
   if (transform) {
     internalStyle.transform = CSS.Translate.toString(transform);
@@ -268,27 +272,18 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       )}
 
       {isCompact ? (
-        /* ── Ultra-compacto: tudo numa linha ── */
+        /* ── Ultra-compacto: nome em destaque, sem hora ── */
         <div className="flex items-center gap-1 p-1 min-w-0">
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0">
             <GripVertical className="h-3 w-3 text-muted-foreground opacity-60" />
           </div>
-          {displayTime && (
-            <span
-              className={cn(
-                "text-[10px] font-medium flex-shrink-0",
-                isFalta ? "text-orange-600" : "text-muted-foreground",
-              )}
-            >
-              {displayTime}
-            </span>
-          )}
           {/* Nome truncado numa linha no compacto */}
           <p
             className={cn(
               "font-semibold text-[10px] truncate leading-tight flex-1 min-w-0",
               isFalta ? "text-orange-700" : "text-foreground",
             )}
+            title={session.paciente?.full_name ?? ""}
           >
             {session.paciente?.full_name ?? ""}
           </p>
@@ -303,52 +298,51 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
           )}
         </div>
       ) : (
-        /* ── Layout normal — 3 linhas fixas ── */
+        /* ── Layout normal — nome primeiro, hora abaixo ── */
         <div className="p-2 flex flex-col gap-0.5">
-          {/* Linha 1: Hora + Status */}
-          <div className="flex items-center justify-between gap-1">
+          {/* Linha 1: Nome + Status */}
+          <div className="flex items-center justify-between gap-1 min-w-0">
             <div className="flex items-center gap-1 min-w-0">
               {!isOverlapped && (
-                <>
-                  <div
-                    {...attributes}
-                    {...listeners}
-                    className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
-                  >
-                    <GripVertical
-                      className={cn(
-                        "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity flex-shrink-0",
-                        isFalta ? "text-orange-400" : "text-muted-foreground",
-                      )}
-                    />
-                  </div>
-                  {displayTime && (
-                    <span
-                      className={cn(
-                        "text-[10px] font-semibold flex-shrink-0",
-                        isFalta ? "text-orange-600" : "text-muted-foreground",
-                      )}
-                    >
-                      {displayTime}
-                    </span>
-                  )}
-                </>
+                <div
+                  {...attributes}
+                  {...listeners}
+                  className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+                >
+                  <GripVertical
+                    className={cn(
+                      "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity flex-shrink-0",
+                      isFalta ? "text-orange-400" : "text-muted-foreground",
+                    )}
+                  />
+                </div>
               )}
+              <p
+                className={cn(
+                  "font-semibold text-[11px] leading-tight truncate flex-1 min-w-0",
+                  isFalta ? "text-red-700 line-through opacity-80" : "text-foreground",
+                )}
+                title={session.paciente?.full_name ?? ""}
+              >
+                {session.paciente?.full_name ?? ""}
+              </p>
             </div>
             <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="scale-90 flex-shrink-0" />
           </div>
 
-
-          {/* Linha 2: Nome */}
-          <p
-            className={cn(
-              "font-semibold text-[11px] leading-tight truncate w-full",
-              isFalta ? "text-red-700 line-through opacity-80" : "text-foreground",
-            )}
-            title={session.paciente?.full_name ?? ""}
-          >
-            {session.paciente?.full_name ?? ""}
-          </p>
+          {/* Linha 2: Hora (início – fim) */}
+          {timeRange && (
+            <div className="flex items-center gap-1">
+              <span
+                className={cn(
+                  "text-[10px] font-medium",
+                  isFalta ? "text-orange-600" : "text-muted-foreground",
+                )}
+              >
+                {timeRange}
+              </span>
+            </div>
+          )}
 
           {/* Linha 3: Especialidade (Profissional) — UMA linha, truncado se necessário */}
           {servicoLinha && (
