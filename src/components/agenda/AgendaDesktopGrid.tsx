@@ -223,12 +223,38 @@ export function AgendaDesktopGrid({
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [pendingReschedule, setPendingReschedule] = useState<RescheduleConfirmation | null>(null);
   const firstHour = hours[0] ?? 0;
+  const lastHour = hours[hours.length - 1] ?? 23;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const didInitialScroll = useRef(false);
+
+  const [now, setNow] = useState<Date>(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const todayVisible = weekDays.some((d) => isSameDay(d, now));
+  const nowHour = now.getHours();
+  const nowInRange = todayVisible && nowHour >= firstHour && nowHour <= lastHour;
+  const nowTop = nowInRange
+    ? (((nowHour - firstHour) * 60 + now.getMinutes()) / 60) * HOUR_HEIGHT
+    : null;
+
+  // Auto-scroll to now line on mount when today is visible
+  useEffect(() => {
+    if (didInitialScroll.current) return;
+    if (!scrollRef.current || nowTop == null) return;
+    const target = Math.max(0, nowTop - HOUR_HEIGHT * 2);
+    scrollRef.current.scrollTo({ top: target, behavior: "auto" });
+    didInitialScroll.current = true;
+  }, [nowTop]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
     }),
   );
+
 
   const getSessionsForDay = (date: Date) => sessions.filter((s) => isSameDay(s.start_time, date));
 
