@@ -1,6 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, AlertTriangle, Package, Bell, Euro } from "lucide-react";
+import { GripVertical, AlertTriangle, Package, Bell, Euro, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import React from "react";
@@ -149,6 +149,25 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   const isCancelled = String(session.status ?? "").toLowerCase() === "cancelado";
   const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
+  // Passado esmaecido (Google Calendar style). Usa a menor entre 0.65 e 0.7 (cancelada sobreposta).
+  const isPast = new Date(session.end_time) < new Date();
+  const cancelOverlappedOpacity = isOverlapped && isCancelled ? 0.7 : 1;
+  const pastOpacity = isPast ? 0.65 : 1;
+  const effectiveOpacity = Math.min(cancelOverlappedOpacity, pastOpacity);
+
+  // Ícone de estado (compacto)
+  const confirmadoEstado = String(session.confirmacao_estado ?? "").toLowerCase() === "confirmado";
+  const statusLowerCompact = String(session.status ?? "").toLowerCase();
+  let compactStatusIcon: React.ReactNode = null;
+  if (statusLowerCompact === "cancelado") {
+    compactStatusIcon = <XCircle className="h-3 w-3 text-red-600 flex-shrink-0" aria-label="Cancelada" />;
+  } else if (statusLowerCompact === "agendado" && confirmadoEstado) {
+    compactStatusIcon = <CheckCircle2 className="h-3 w-3 text-green-700 flex-shrink-0" aria-label="Confirmada" />;
+  } else if (statusLowerCompact === "agendado" && !confirmadoEstado) {
+    compactStatusIcon = <Clock className="h-3 w-3 text-amber-500 flex-shrink-0" aria-label="Por confirmar" />;
+  }
+
+
   // Pack payment pending alert: pack session in the past with pagamento_estado = 'pendente'
   const isPackPendingPayment = !isCompact
     && (session as any).tipo_agendamento === "pack"
@@ -170,9 +189,11 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       ? `repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(220,38,38,0.20) 5px, rgba(220,38,38,0.20) 7px)`
       : undefined,
     ...positionStyle,
+    opacity: effectiveOpacity,
     minHeight: isCompact ? undefined : "52px",
     height: positionStyle?.height ? `max(${positionStyle.height}, ${isCompact ? "24px" : "52px"})` : undefined,
   };
+
 
   if (transform) {
     internalStyle.transform = CSS.Translate.toString(transform);
@@ -186,8 +207,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
         "rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative",
         isDragging && "opacity-50 shadow-lg z-50 ring-2 ring-primary",
         isFalta && "ring-1 ring-red-400",
-        isOverlapped && isCancelled && "opacity-70",
       )}
+
       onClick={(e) => {
         e.stopPropagation();
         onClick(session);
@@ -271,7 +292,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
           >
             {session.paciente?.full_name ?? ""}
           </p>
-          <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="scale-75 flex-shrink-0" />
+          {compactStatusIcon}
           {isRealizado && (
             <Euro
               className={cn(

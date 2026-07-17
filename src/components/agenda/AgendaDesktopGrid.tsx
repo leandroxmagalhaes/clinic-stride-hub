@@ -11,7 +11,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DraggableSession } from "./DraggableSession";
 import { DroppableSlot, HOUR_HEIGHT } from "./DroppableSlot";
 import { ReservedSlotCard } from "./ReservedSlotCard";
@@ -223,12 +223,38 @@ export function AgendaDesktopGrid({
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [pendingReschedule, setPendingReschedule] = useState<RescheduleConfirmation | null>(null);
   const firstHour = hours[0] ?? 0;
+  const lastHour = hours[hours.length - 1] ?? 23;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const didInitialScroll = useRef(false);
+
+  const [now, setNow] = useState<Date>(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const todayVisible = weekDays.some((d) => isSameDay(d, now));
+  const nowHour = now.getHours();
+  const nowInRange = todayVisible && nowHour >= firstHour && nowHour <= lastHour;
+  const nowTop = nowInRange
+    ? (((nowHour - firstHour) * 60 + now.getMinutes()) / 60) * HOUR_HEIGHT
+    : null;
+
+  // Auto-scroll to now line on mount when today is visible
+  useEffect(() => {
+    if (didInitialScroll.current) return;
+    if (!scrollRef.current || nowTop == null) return;
+    const target = Math.max(0, nowTop - HOUR_HEIGHT * 2);
+    scrollRef.current.scrollTo({ top: target, behavior: "auto" });
+    didInitialScroll.current = true;
+  }, [nowTop]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
     }),
   );
+
 
   const getSessionsForDay = (date: Date) => sessions.filter((s) => isSameDay(s.start_time, date));
 
@@ -289,8 +315,9 @@ export function AgendaDesktopGrid({
       <Card className="shadow-card overflow-hidden hidden md:block">
         <CardContent className="p-0">
           <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="overflow-auto max-h-[calc(100vh-150px)] scrollbar-thin">
+            <div ref={scrollRef} className="overflow-auto max-h-[calc(100vh-120px)] scrollbar-thin">
               <div className="min-w-[800px]">
+
                 {/* ── Header sólido e sticky ── */}
                 <div
                   className="grid sticky top-0 z-20 border-b bg-white dark:bg-gray-950 shadow-sm"
@@ -303,7 +330,8 @@ export function AgendaDesktopGrid({
                       <div
                         key={index}
                         className={cn(
-                          "px-2 py-1.5 text-center border-r last:border-r-0 flex items-center justify-center gap-1.5",
+                          "px-2 py-1 text-center border-r last:border-r-0 flex items-center justify-center gap-1.5",
+
                           isToday ? "bg-primary/10 dark:bg-primary/20" : "bg-white dark:bg-gray-950",
                         )}
                       >
@@ -413,7 +441,20 @@ export function AgendaDesktopGrid({
                             );
                           }
                         })}
+
+                        {/* Linha do agora — só na coluna de hoje */}
+                        {isToday && nowTop != null && (
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 z-30"
+                            style={{ top: `${nowTop}px` }}
+                          >
+                            <div className="relative h-0.5 bg-red-500">
+                              <div className="absolute -left-1 -top-[3px] w-2 h-2 rounded-full bg-red-500" />
+                            </div>
+                          </div>
+                        )}
                       </div>
+
                     );
                   })}
                 </div>

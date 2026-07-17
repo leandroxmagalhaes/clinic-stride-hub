@@ -153,13 +153,15 @@ export function AgendaMobileTimeline({
               }
             }
 
+            const isPast = new Date(session.end_time) < new Date();
             return (
               <button
                 key={session.id}
                 onClick={() => onSessionClick(session)}
                 className="absolute left-16 right-2 text-left rounded-lg overflow-hidden hover:opacity-90 transition-all z-10"
-                style={{ top: `${top}px`, height: `${height}px` }}
+                style={{ top: `${top}px`, height: `${height}px`, opacity: isPast ? 0.65 : 1 }}
               >
+
                 <div 
                   className={cn(
                     "h-full p-2 relative",

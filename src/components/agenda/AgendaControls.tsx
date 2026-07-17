@@ -67,7 +67,8 @@ export function AgendaControls({
 
   return (
     <Card className="shadow-card">
-      <CardContent className="p-2">
+      <CardContent className="p-1.5">
+
         <div className="flex flex-wrap items-center gap-3">
           {/* Left: Navigation */}
           <div className="flex items-center gap-1 sm:gap-2">
