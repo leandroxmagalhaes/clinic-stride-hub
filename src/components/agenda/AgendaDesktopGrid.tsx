@@ -330,7 +330,8 @@ export function AgendaDesktopGrid({
                       <div
                         key={index}
                         className={cn(
-                          "px-2 py-1.5 text-center border-r last:border-r-0 flex items-center justify-center gap-1.5",
+                          "px-2 py-1 text-center border-r last:border-r-0 flex items-center justify-center gap-1.5",
+
                           isToday ? "bg-primary/10 dark:bg-primary/20" : "bg-white dark:bg-gray-950",
                         )}
                       >
