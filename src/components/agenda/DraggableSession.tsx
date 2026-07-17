@@ -292,7 +292,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
           >
             {session.paciente?.full_name ?? ""}
           </p>
-          <StatusBadge status={(session.confirmacao_estado === "confirmado" && session.status === "agendado" ? "confirmado" : session.status) as any} className="scale-75 flex-shrink-0" />
+          {compactStatusIcon}
           {isRealizado && (
             <Euro
               className={cn(
