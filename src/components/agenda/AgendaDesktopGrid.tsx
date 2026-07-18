@@ -111,6 +111,7 @@ function computeOverlapPositions<T extends { startMin: number; endMin: number }>
         const widthPct = 100 / activeSorted.length;
         return {
           ...item,
+          overlapTotal: activeSorted.length,
           style: {
             position: "absolute" as const,
             top: `${b.top}px`,
@@ -126,6 +127,7 @@ function computeOverlapPositions<T extends { startMin: number; endMin: number }>
         return {
           ...item,
           asStrip: true,
+          overlapTotal: 1,
           style: {
             position: "absolute" as const,
             top: `${b.top}px`,
@@ -145,6 +147,7 @@ function computeOverlapPositions<T extends { startMin: number; endMin: number }>
       const b = baseStyle(item.startMin, item.endMin, firstHour);
       return {
         ...item,
+        overlapTotal: ordered.length,
         style: {
           position: "absolute" as const,
           top: `${b.top}px`,
