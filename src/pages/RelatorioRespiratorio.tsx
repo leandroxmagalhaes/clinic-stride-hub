@@ -1535,7 +1535,7 @@ export default function RelatorioRespiratório({ pacienteId, patientName }: { pa
             backdropFilter: "blur(12px)",
           }}
         >
-          <HistoricoRelatorios patientName={patientName} onOpen={handleOpenReport} onNew={handleNew} onPreview={(r) => {
+          <HistoricoRelatorios pacienteId={pacienteId} patientName={patientName} onOpen={handleOpenReport} onNew={handleNew} onPreview={(r) => {
             setData({ ...EMPTY_DATA, ...r.data });
             setEditingId(r.id);
             setStep(4);
