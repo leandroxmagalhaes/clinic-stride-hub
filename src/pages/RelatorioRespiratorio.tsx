@@ -4,6 +4,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { getAuthContext } from "@/lib/auth-helpers";
 import { toast } from "sonner";
 
+/* Converte dd/mm/aaaa para aaaa-mm-dd; passa-through se ja ISO; senao devolve hoje. */
+function toIsoDate(valor?: string): string {
+  const v = (valor ?? "").trim();
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  return new Date().toISOString().slice(0, 10);
+}
+
 /* ─── Paleta ────────────────────────────────────────────────────────────── */
 const G = {
   gold: "#B8933A",
@@ -1224,7 +1233,8 @@ function StepRelatorio({ data, secoes, onEdit, onSave = null }) {
    APP ROOT
 ═══════════════════════════════════════════════════════════════════════════ */
 /* ─── Histórico ──────────────────────────────────────────────────────────── */
-function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void; patientName?: string }) {
+
+function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName, pacienteId }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void; patientName?: string; pacienteId?: string }) {
   const { user } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1233,17 +1243,21 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName }: { onOpen
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await (supabase as any)
+    let query = (supabase as any)
       .from("respiratory_reports")
-      .select("id, patient_name, report_date, data, created_at")
+      .select("id, patient_name, report_date, data, created_at, patient_id")
       .order("created_at", { ascending: false });
+    if (pacienteId) {
+      query = query.eq("patient_id", pacienteId);
+    }
+    const { data, error } = await query;
     if (error) {
       console.error("Erro ao carregar relatórios:", error);
       toast.error("Erro ao carregar histórico de relatórios");
     }
     if (data) setReports(data);
     setLoading(false);
-  }, []);
+  }, [pacienteId]);
 
   useEffect(() => {
     fetchReports();
@@ -1264,11 +1278,15 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName }: { onOpen
     }
   };
 
-  // Filtro por paciente actual (se embebido no prontuário) + filtro de pesquisa
-  const scoped = patientName
-    ? reports.filter((r) => (r.patient_name || "").toLowerCase().includes(patientName.toLowerCase()))
-    : reports;
-  const filtered = scoped.filter((r) => r.patient_name.toLowerCase().includes(search.toLowerCase()));
+  // Filtro por paciente actual: se pacienteId existir, a query ja filtrou por patient_id;
+  // adicionalmente inclui relatorios legacy (patient_id nulo) cujo nome bate com patientName.
+  // Como .eq restringe demasiado, refazemos filtragem em memoria quando ha pacienteId.
+  const scoped = pacienteId
+    ? reports.filter((r) => r.patient_id === pacienteId || (r.patient_id == null && patientName && (r.patient_name || "").toLowerCase().includes(patientName.toLowerCase())))
+    : patientName
+      ? reports.filter((r) => (r.patient_name || "").toLowerCase().includes(patientName.toLowerCase()))
+      : reports;
+  const filtered = scoped.filter((r) => (r.patient_name || "").toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div>
@@ -1288,7 +1306,7 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName }: { onOpen
             📋 Histórico de Relatórios
           </h2>
           <p style={{ color: G.muted, fontSize: 13, margin: 0 }}>
-            {reports.length} relatório{reports.length !== 1 ? "s" : ""} guardado{reports.length !== 1 ? "s" : ""}
+            {scoped.length} relatório{scoped.length !== 1 ? "s" : ""} guardado{scoped.length !== 1 ? "s" : ""}
           </p>
         </div>
         <button onClick={onNew} style={btn("primary", { fontSize: 14 })}>
@@ -1444,10 +1462,11 @@ export default function RelatorioRespiratório({ pacienteId, patientName }: { pa
       }
       const reportData = {
         patient_name: data.nome || "Sem nome",
-        report_date: data.data || new Date().toISOString().slice(0, 10),
+        report_date: toIsoDate(data.data),
         data: data,
         created_by: userId,
         clinic_id: clinicId,
+        patient_id: pacienteId || null,
       };
       if (editingId) {
         const { error } = await (supabase as any).from("respiratory_reports").update(reportData).eq("id", editingId);
@@ -1510,7 +1529,7 @@ export default function RelatorioRespiratório({ pacienteId, patientName }: { pa
             backdropFilter: "blur(12px)",
           }}
         >
-          <HistoricoRelatorios patientName={patientName} onOpen={handleOpenReport} onNew={handleNew} onPreview={(r) => {
+          <HistoricoRelatorios pacienteId={pacienteId} patientName={patientName} onOpen={handleOpenReport} onNew={handleNew} onPreview={(r) => {
             setData({ ...EMPTY_DATA, ...r.data });
             setEditingId(r.id);
             setStep(4);

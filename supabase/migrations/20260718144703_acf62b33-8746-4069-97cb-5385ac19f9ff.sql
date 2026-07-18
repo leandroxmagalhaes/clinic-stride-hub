@@ -1,0 +1,2 @@
+ALTER TABLE public.respiratory_reports ADD COLUMN IF NOT EXISTS patient_id uuid REFERENCES public.pacientes(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_respiratory_reports_patient_id ON public.respiratory_reports(patient_id);
