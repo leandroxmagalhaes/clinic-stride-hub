@@ -2415,6 +2415,7 @@ export type Database = {
           created_by: string | null
           data: Json
           id: string
+          patient_id: string | null
           patient_name: string
           report_date: string
           updated_at: string | null
@@ -2425,6 +2426,7 @@ export type Database = {
           created_by?: string | null
           data: Json
           id?: string
+          patient_id?: string | null
           patient_name: string
           report_date?: string
           updated_at?: string | null
@@ -2435,6 +2437,7 @@ export type Database = {
           created_by?: string | null
           data?: Json
           id?: string
+          patient_id?: string | null
           patient_name?: string
           report_date?: string
           updated_at?: string | null
@@ -2446,6 +2449,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clinics"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "respiratory_reports_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "respiratory_reports_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
           },
         ]
       }
