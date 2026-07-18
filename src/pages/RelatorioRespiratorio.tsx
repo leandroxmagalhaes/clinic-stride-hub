@@ -1276,6 +1276,7 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName, pacienteId
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [mode, setMode] = useState<"list" | "compare">("list");
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
