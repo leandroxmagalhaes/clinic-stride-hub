@@ -261,6 +261,81 @@ export default function Automacoes() {
 
   const isLoading = clinicSettingsQuery.isLoading || automacoesQuery.isLoading;
 
+  // ============ Automation flows (moved from Engajamento) ============
+  const fetchAutomationFlows = async () => {
+    try {
+      const flows = await AutomationService.getFlows();
+      setAutomationFlows(flows);
+    } catch (error) {
+      console.error('Error fetching automation flows:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('clinic_id')
+          .eq('user_id', user.id)
+          .single();
+        setClinicIdState(data?.clinic_id || null);
+      } catch (err) {
+        console.error('Error fetching clinic id:', err);
+      }
+      fetchAutomationFlows();
+    })();
+  }, [user]);
+
+  const handleToggleFlow = async (id: string, isActive: boolean) => {
+    const success = await AutomationService.toggleFlowStatus(id, isActive);
+    if (success) {
+      setAutomationFlows(prev => prev.map(f => f.id === id ? { ...f, is_active: isActive } : f));
+      toast.success(isActive ? 'Fluxo ativado' : 'Fluxo desativado');
+    } else {
+      toast.error('Erro ao alterar status do fluxo');
+    }
+  };
+
+  const handleSaveFlow = async (
+    data: Omit<AutomationFlow, 'id' | 'clinic_id' | 'created_at' | 'updated_at'>,
+    existingId?: string
+  ) => {
+    if (existingId) {
+      const success = await AutomationService.updateFlow(existingId, data);
+      if (success) {
+        await fetchAutomationFlows();
+        toast.success('Fluxo atualizado com sucesso');
+      } else {
+        toast.error('Erro ao atualizar fluxo');
+      }
+    } else {
+      if (!clinicIdState) {
+        toast.error('Clínica não encontrada');
+        return;
+      }
+      const flow = await AutomationService.createFlow(clinicIdState, data);
+      if (flow) {
+        setAutomationFlows(prev => [flow, ...prev]);
+        toast.success('Fluxo criado com sucesso');
+      } else {
+        toast.error('Erro ao criar fluxo');
+      }
+    }
+  };
+
+  const handleDeleteFlow = async (id: string) => {
+    const success = await AutomationService.deleteFlow(id);
+    if (success) {
+      setAutomationFlows(prev => prev.filter(f => f.id !== id));
+      toast.success('Fluxo eliminado com sucesso');
+    } else {
+      toast.error('Erro ao eliminar fluxo');
+    }
+  };
+
+
   return (
     <AppLayout
       title="Central de Automações"
