@@ -1325,6 +1325,16 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName, pacienteId
       : reports;
   const filtered = scoped.filter((r) => (r.patient_name || "").toLowerCase().includes(search.toLowerCase()));
 
+  if (mode === "compare") {
+    return (
+      <ComparativoEvolutivo
+        reports={scoped}
+        patientName={patientName}
+        onBack={() => setMode("list")}
+      />
+    );
+  }
+
   return (
     <div>
       {/* Topo */}
@@ -1346,10 +1356,18 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName, pacienteId
             {scoped.length} relatório{scoped.length !== 1 ? "s" : ""} guardado{scoped.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <button onClick={onNew} style={btn("primary", { fontSize: 14 })}>
-          ➕ Novo Relatório
-        </button>
+        <div style={{ display: "flex" as const, gap: 8, flexWrap: "wrap" as const }}>
+          {scoped.length >= 2 && (
+            <button onClick={() => setMode("compare")} style={btn("outline", { fontSize: 13 })}>
+              📊 Comparativo Evolutivo
+            </button>
+          )}
+          <button onClick={onNew} style={btn("primary", { fontSize: 14 })}>
+            ➕ Novo Relatório
+          </button>
+        </div>
       </div>
+
 
       {/* Pesquisa */}
       <input
