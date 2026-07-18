@@ -210,7 +210,8 @@ export class SessionService {
     existingSessions: Session[],
   ): { success: boolean; error?: string; updatedSession?: Session } {
     const otherSessions = existingSessions.filter((s) => s.id !== session.id);
-    const conflict = this.checkConflict(otherSessions, session.profissional_id, newDate, newHour);
+    const durationMinutes = session.servico?.duration_minutes || 60;
+    const conflict = this.checkConflict(otherSessions, session.profissional_id, newDate, newHour, 0, durationMinutes);
 
     if (conflict.hasConflict) {
       return { success: false, error: conflict.message };
