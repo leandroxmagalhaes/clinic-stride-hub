@@ -75,7 +75,7 @@ function baseStyle(startMin: number, endMin: number, firstHour: number): { top: 
 function computeOverlapPositions<T extends { startMin: number; endMin: number }>(
   items: T[],
   firstHour: number,
-): (T & { style: React.CSSProperties; asStrip?: boolean })[] {
+): (T & { style: React.CSSProperties; asStrip?: boolean; overlapTotal: number })[] {
   if (items.length === 0) return [];
   const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 
