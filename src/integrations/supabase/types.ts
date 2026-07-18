@@ -108,6 +108,47 @@ export type Database = {
           },
         ]
       }
+      automacoes_config: {
+        Row: {
+          ativo: boolean
+          chave: string
+          clinic_id: string
+          config: Json
+          created_at: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          chave: string
+          clinic_id: string
+          config?: Json
+          created_at?: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          chave?: string
+          clinic_id?: string
+          config?: Json
+          created_at?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automacoes_config_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_flows: {
         Row: {
           attachment_url: string | null
