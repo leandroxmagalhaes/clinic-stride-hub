@@ -790,7 +790,27 @@ export default function Automacoes() {
         {/* Lembretes personalizados */}
         <CustomRemindersSection />
 
+        {/* Fluxos de Automação (movido do Engajamento) */}
+        <div className="space-y-6 pt-2">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Zap className="h-5 w-5" /> Fluxos de Automação
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Fluxos de mensagens automáticas por gatilho (boas-vindas, aniversário, inatividade, entre outros).
+            </p>
+          </div>
+          <AutomationDashboard flows={automationFlows} />
+          <AutomationFlowsList
+            flows={automationFlows}
+            onToggle={handleToggleFlow}
+            onSave={handleSaveFlow}
+            onDelete={handleDeleteFlow}
+          />
+        </div>
+
       </div>
+
     </AppLayout>
   );
 }
