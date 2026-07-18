@@ -306,9 +306,13 @@ const App = () => (
                   />
                   <Route
                     path="/configuracoes/lembrete"
+                    element={<Navigate to="/automacoes" replace />}
+                  />
+                  <Route
+                    path="/automacoes"
                     element={
                       <ProtectedPage module="configuracoes">
-                        <DefinicoesLembrete />
+                        <Automacoes />
                       </ProtectedPage>
                     }
                   />
