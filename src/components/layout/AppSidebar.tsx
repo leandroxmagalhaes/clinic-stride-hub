@@ -18,6 +18,7 @@ import {
   Banknote,
   Package,
   Inbox,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -124,6 +125,7 @@ const managementNavItems: NavItem[] = [
   { title: "Pagamentos", url: "/pagamentos", icon: Banknote },
   { title: "Packs", url: "/packs", icon: Package },
   { title: "Solicitações de Vaga", url: "/solicitacoes-vaga", icon: Inbox },
+  { title: "Automações", url: "/automacoes", icon: Zap },
   { title: "Engajamento", url: "/engajamento", icon: Heart, module: "engajamento" },
   // Mensagens removido do menu — agora dentro do prontuário e via atalho flutuante
 ];

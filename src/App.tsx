@@ -60,7 +60,7 @@ const PortalMensagens = lazyWithRetry(() => import("./pages/PortalMensagens"));
 const Mensagens = lazyWithRetry(() => import("./pages/Mensagens"));
 const Pagamentos = lazyWithRetry(() => import("./pages/Pagamentos"));
 const Packs = lazyWithRetry(() => import("./pages/Packs"));
-const DefinicoesLembrete = lazyWithRetry(() => import("./pages/DefinicoesLembrete"));
+const Automacoes = lazyWithRetry(() => import("./pages/Automacoes"));
 const ConfirmacaoResultado = lazyWithRetry(() => import("./pages/ConfirmacaoResultado"));
 const ConfirmarRemarcacao = lazyWithRetry(() => import("./pages/ConfirmarRemarcacao"));
 const SolicitarVaga = lazyWithRetry(() => import("./pages/SolicitarVaga"));
@@ -306,9 +306,13 @@ const App = () => (
                   />
                   <Route
                     path="/configuracoes/lembrete"
+                    element={<Navigate to="/automacoes" replace />}
+                  />
+                  <Route
+                    path="/automacoes"
                     element={
                       <ProtectedPage module="configuracoes">
-                        <DefinicoesLembrete />
+                        <Automacoes />
                       </ProtectedPage>
                     }
                   />
