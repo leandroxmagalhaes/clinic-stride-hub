@@ -1,8 +1,44 @@
-import React, { useState, useCallback, useRef, useEffect, CSSProperties } from "react";
+import React, { useState, useCallback, useRef, useEffect, useMemo, CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getAuthContext } from "@/lib/auth-helpers";
 import { toast } from "sonner";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RTooltip,
+  ResponsiveContainer,
+} from "recharts";
+
+/* Converte string com virgula/ponto e unidades coladas em numero. Devolve null se nao houver digitos. */
+function parseNumeric(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return isFinite(v) ? v : null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const m = s.replace(",", ".").match(/-?\d+(?:\.\d+)?/);
+  if (!m) return null;
+  const n = parseFloat(m[0]);
+  return isFinite(n) ? n : null;
+}
+
+const COMPARE_PARAMS: { key: string; label: string }[] = [
+  { key: "pnv", label: "PNV" },
+  { key: "sindex_best", label: "S-Index (melhor)" },
+  { key: "sindex_avg", label: "S-Index (médio)" },
+  { key: "percentagem_pnv", label: "% do PNV" },
+  { key: "pif", label: "PIF" },
+  { key: "volume", label: "Volume" },
+  { key: "respiracoes", label: "Respirações" },
+  { key: "carga_alvo", label: "Carga alvo" },
+  { key: "peso", label: "Peso" },
+  { key: "sindex_session_avg", label: "S-Index (média sessão)" },
+  { key: "pif_session_avg", label: "PIF (média sessão)" },
+  { key: "volume_session_avg", label: "Volume (média sessão)" },
+];
 
 /* Converte dd/mm/aaaa para aaaa-mm-dd; passa-through se ja ISO; senao devolve hoje. */
 function toIsoDate(valor?: string): string {
@@ -1234,12 +1270,275 @@ function StepRelatorio({ data, secoes, onEdit, onSave = null }) {
 ═══════════════════════════════════════════════════════════════════════════ */
 /* ─── Histórico ──────────────────────────────────────────────────────────── */
 
+function ComparativoEvolutivo({
+  reports,
+  patientName,
+  onBack,
+}: {
+  reports: any[];
+  patientName?: string;
+  onBack: () => void;
+}) {
+  // Ordenar cronologicamente: mais antigo -> mais recente
+  const ordered = useMemo(() => {
+    return [...reports].sort((a, b) => {
+      const da = new Date(a.report_date || a.created_at || 0).getTime();
+      const db = new Date(b.report_date || b.created_at || 0).getTime();
+      return da - db;
+    });
+  }, [reports]);
+
+  const [selectedParam, setSelectedParam] = useState<string>("sindex_avg");
+
+  const fmtDate = (d: string) =>
+    new Date(d).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "2-digit" });
+
+  const fmtNum = (n: number) => {
+    const abs = Math.abs(n);
+    const dec = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+    return n.toFixed(dec).replace(".", ",");
+  };
+
+  const renderDelta = (curr: number | null, prev: number | null) => {
+    if (curr === null || prev === null) {
+      return <span style={{ color: G.muted }}>—</span>;
+    }
+    const d = curr - prev;
+    if (Math.abs(d) < 1e-9) {
+      return <span style={{ color: G.muted, fontWeight: 600 }}>0</span>;
+    }
+    const up = d > 0;
+    const color = up ? "#2D7A4F" : "#B8860B";
+    const arrow = up ? "▲" : "▼";
+    const sign = up ? "+" : "−";
+    return (
+      <span style={{ color, fontWeight: 700, whiteSpace: "nowrap" as const }}>
+        {arrow} {sign}
+        {fmtNum(Math.abs(d))}
+      </span>
+    );
+  };
+
+  const chartData = useMemo(() => {
+    return ordered.map((r) => ({
+      date: fmtDate(r.report_date || r.created_at),
+      value: parseNumeric(r.data?.[selectedParam]),
+    }));
+  }, [ordered, selectedParam]);
+
+  const selectedLabel =
+    COMPARE_PARAMS.find((p) => p.key === selectedParam)?.label || selectedParam;
+
+  const th: CSSProperties = {
+    padding: "10px 12px",
+    background: G.goldBg,
+    color: G.dark,
+    fontWeight: 700,
+    fontSize: 12,
+    textAlign: "center" as const,
+    borderBottom: `2px solid ${G.border}`,
+    whiteSpace: "nowrap" as const,
+  };
+  const td: CSSProperties = {
+    padding: "9px 12px",
+    fontSize: 13,
+    color: G.ink,
+    borderBottom: `1px solid ${G.borderLight}`,
+    textAlign: "center" as const,
+    whiteSpace: "nowrap" as const,
+  };
+  const tdLabel: CSSProperties = {
+    ...td,
+    textAlign: "left" as const,
+    fontWeight: 700,
+    color: G.dark,
+    background: "#FCFAF3",
+    position: "sticky" as const,
+    left: 0,
+    zIndex: 1,
+  };
+  const tdDelta: CSSProperties = {
+    ...td,
+    background: "#FBF6E3",
+    fontSize: 12,
+  };
+
+  return (
+    <div>
+      {/* Cabeçalho */}
+      <div
+        style={{
+          display: "flex" as const,
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 20,
+          flexWrap: "wrap" as const,
+          gap: 12,
+        }}
+      >
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: G.dark, margin: "0 0 4px" }}>
+            📊 Comparativo Evolutivo
+          </h2>
+          <p style={{ color: G.muted, fontSize: 13, margin: 0 }}>
+            {patientName || "Utente"} · {ordered.length} avaliações
+          </p>
+        </div>
+        <button onClick={onBack} style={btn("ghost", { fontSize: 13 })}>
+          ← Voltar ao Histórico
+        </button>
+      </div>
+
+      {/* Tabela */}
+      <div
+        style={{
+          overflowX: "auto" as const,
+          border: `1px solid ${G.border}`,
+          borderRadius: 12,
+          background: G.white,
+          marginBottom: 28,
+        }}
+      >
+        <table style={{ width: "100%", borderCollapse: "collapse" as const, minWidth: 640 }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: "left" as const, position: "sticky" as const, left: 0, zIndex: 2 }}>
+                Parâmetro
+              </th>
+              {ordered.map((r, i) => (
+                <React.Fragment key={r.id}>
+                  <th style={th}>
+                    <div style={{ fontSize: 11, color: G.muted, fontWeight: 600 }}>Aval. {i + 1}</div>
+                    <div>{fmtDate(r.report_date || r.created_at)}</div>
+                  </th>
+                  {i < ordered.length - 1 && (
+                    <th style={{ ...th, background: "#FBF6E3", fontSize: 11 }}>Δ</th>
+                  )}
+                </React.Fragment>
+              ))}
+              {ordered.length >= 2 && (
+                <th style={{ ...th, background: "#F5E9C1", fontSize: 11 }}>Δ Total</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {COMPARE_PARAMS.map((p) => {
+              const values = ordered.map((r) => parseNumeric(r.data?.[p.key]));
+              const firstIdx = values.findIndex((v) => v !== null);
+              const lastIdx = (() => {
+                for (let i = values.length - 1; i >= 0; i--) if (values[i] !== null) return i;
+                return -1;
+              })();
+              return (
+                <tr key={p.key}>
+                  <td style={tdLabel}>{p.label}</td>
+                  {ordered.map((_r, i) => {
+                    const v = values[i];
+                    return (
+                      <React.Fragment key={i}>
+                        <td style={td}>
+                          {v === null ? (
+                            <span style={{ color: G.muted }}>—</span>
+                          ) : (
+                            fmtNum(v)
+                          )}
+                        </td>
+                        {i < ordered.length - 1 && (
+                          <td style={tdDelta}>{renderDelta(values[i + 1], values[i])}</td>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                  {ordered.length >= 2 && (
+                    <td style={{ ...tdDelta, background: "#F5E9C1" }}>
+                      {firstIdx >= 0 && lastIdx > firstIdx
+                        ? renderDelta(values[lastIdx], values[firstIdx])
+                        : <span style={{ color: G.muted }}>—</span>}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Gráfico */}
+      <div style={{ ...card({ padding: "20px 24px" }) }}>
+        <div
+          style={{
+            display: "flex" as const,
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap" as const,
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: G.dark, margin: 0 }}>
+            Evolução — {selectedLabel}
+          </h3>
+          <select
+            value={selectedParam}
+            onChange={(e) => setSelectedParam(e.target.value)}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: `1px solid ${G.border}`,
+              background: G.white,
+              color: G.dark,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer" as const,
+            }}
+          >
+            {COMPARE_PARAMS.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ width: "100%", height: 280 }}>
+          <ResponsiveContainer>
+            <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+              <CartesianGrid stroke={G.borderLight} strokeDasharray="3 3" />
+              <XAxis dataKey="date" stroke={G.muted} tick={{ fontSize: 11 }} />
+              <YAxis stroke={G.muted} tick={{ fontSize: 11 }} />
+              <RTooltip
+                contentStyle={{
+                  background: G.white,
+                  border: `1px solid ${G.border}`,
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                formatter={(v: any) => (v == null ? "—" : fmtNum(Number(v)))}
+              />
+              <Line
+                type="linear"
+                dataKey="value"
+                stroke={G.gold}
+                strokeWidth={2.5}
+                dot={{ r: 4, fill: G.gold, stroke: G.dark, strokeWidth: 1 }}
+                activeDot={{ r: 6 }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName, pacienteId }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void; patientName?: string; pacienteId?: string }) {
   const { user } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [mode, setMode] = useState<"list" | "compare">("list");
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -1288,6 +1587,16 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName, pacienteId
       : reports;
   const filtered = scoped.filter((r) => (r.patient_name || "").toLowerCase().includes(search.toLowerCase()));
 
+  if (mode === "compare") {
+    return (
+      <ComparativoEvolutivo
+        reports={scoped}
+        patientName={patientName}
+        onBack={() => setMode("list")}
+      />
+    );
+  }
+
   return (
     <div>
       {/* Topo */}
@@ -1309,10 +1618,18 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName, pacienteId
             {scoped.length} relatório{scoped.length !== 1 ? "s" : ""} guardado{scoped.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <button onClick={onNew} style={btn("primary", { fontSize: 14 })}>
-          ➕ Novo Relatório
-        </button>
+        <div style={{ display: "flex" as const, gap: 8, flexWrap: "wrap" as const }}>
+          {scoped.length >= 2 && (
+            <button onClick={() => setMode("compare")} style={btn("outline", { fontSize: 13 })}>
+              📊 Comparativo Evolutivo
+            </button>
+          )}
+          <button onClick={onNew} style={btn("primary", { fontSize: 14 })}>
+            ➕ Novo Relatório
+          </button>
+        </div>
       </div>
+
 
       {/* Pesquisa */}
       <input
