@@ -144,7 +144,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   // ─────────────────────────────────────────────────────────────────────────
 
   const isOverlapped = (overlapTotal ?? 1) > 1;
-  const isCompact = (positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 48) || isOverlapped;
+  const isCompact = (positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 40) || isOverlapped;
   const isCancelled = String(session.status ?? "").toLowerCase() === "cancelado";
   const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
@@ -208,7 +208,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
       ref={setNodeRef}
       style={internalStyle}
       className={cn(
-        "rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative",
+        "rounded-md text-xs cursor-grab hover:opacity-90 transition-all hover:shadow-md group/session select-none relative overflow-hidden",
         isDragging && "opacity-50 shadow-lg z-50 ring-2 ring-primary",
         isFalta && "ring-1 ring-red-400",
       )}
@@ -299,7 +299,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
         </div>
       ) : (
         /* ── Layout normal — nome primeiro, hora abaixo ── */
-        <div className="p-2 flex flex-col gap-0.5">
+        <div className="px-1.5 py-0.5 flex flex-col gap-0">
           {/* Linha 1: Nome + Status */}
           <div className="flex items-center justify-between gap-1 min-w-0">
             <div className="flex items-center gap-1 min-w-0">
@@ -319,7 +319,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
               )}
               <p
                 className={cn(
-                  "font-semibold text-[11px] leading-tight truncate flex-1 min-w-0",
+                  "font-semibold text-[11px] leading-none truncate flex-1 min-w-0",
                   isFalta ? "text-red-700 line-through opacity-80" : "text-foreground",
                 )}
                 title={session.paciente?.full_name ?? ""}
@@ -335,7 +335,7 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             <div className="flex items-center gap-1">
               <span
                 className={cn(
-                  "text-[10px] font-medium",
+                  "text-[9px] leading-none font-medium",
                   isFalta ? "text-orange-600" : "text-muted-foreground",
                 )}
               >
