@@ -206,6 +206,21 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     internalStyle.transform = CSS.Translate.toString(transform);
   }
 
+  if (asStrip) {
+    const stripTitle = `Cancelada: ${session.paciente?.full_name ?? ""}, ${displayTime ?? ""}`.trim();
+    return (
+      <div
+        style={{ ...positionStyle }}
+        className="rounded-sm bg-red-500/80 hover:bg-red-500 cursor-pointer shadow-sm"
+        title={stripTitle}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick(session);
+        }}
+      />
+    );
+  }
+
   return (
     <div
       ref={setNodeRef}
