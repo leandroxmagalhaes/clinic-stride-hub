@@ -110,6 +110,39 @@ serve(async (req) => {
     const settingsMap = new Map<string, any>();
     for (const r of settingsRows || []) settingsMap.set((r as any).clinic_id, r);
 
+    // ---------- Central de Automações: confirmacao_vespera ----------
+    const automacaoMap = new Map<string, { ativo: boolean; horaCorteMin: number; horaSegundaMin: number; horaAlertaMin: number }>();
+    const parseHoraToMin = (v: unknown, fallback: number): number => {
+      try {
+        if (v == null) return fallback;
+        const s = String(v).trim();
+        if (!s) return fallback;
+        const parts = s.split(":");
+        const h = Number(parts[0]);
+        const m = parts.length > 1 ? Number(parts[1]) : 0;
+        if (!Number.isFinite(h) || h < 0 || h > 23) return fallback;
+        if (!Number.isFinite(m) || m < 0 || m > 59) return fallback;
+        return h * 60 + m;
+      } catch { return fallback; }
+    };
+    try {
+      const { data: autoRows } = await supabase
+        .from("automacoes_config")
+        .select("clinic_id, ativo, config")
+        .eq("chave", "confirmacao_vespera");
+      for (const r of autoRows || []) {
+        const cfg = (r as any).config || {};
+        automacaoMap.set((r as any).clinic_id, {
+          ativo: (r as any).ativo !== false,
+          horaCorteMin: parseHoraToMin(cfg.hora_corte, 14 * 60),
+          horaSegundaMin: parseHoraToMin(cfg.hora_segunda, 18 * 60),
+          horaAlertaMin: parseHoraToMin(cfg.hora_alerta, 20 * 60),
+        });
+      }
+    } catch (_e) { /* fallback silencioso */ }
+    const getAutomacao = (clinicId: string) =>
+      automacaoMap.get(clinicId) || { ativo: true, horaCorteMin: 14 * 60, horaSegundaMin: 18 * 60, horaAlertaMin: 20 * 60 };
+
     const { data: sessions, error: sessionsError } = await supabase
       .from("sessoes")
       .select(`
