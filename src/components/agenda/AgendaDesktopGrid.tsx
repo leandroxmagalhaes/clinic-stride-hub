@@ -59,9 +59,23 @@ interface AgendaDesktopGridProps {
 }
 
 // --- Overlap logic ---
+const STRIP_W = 10;
+const STRIP_GAP = 2;
+const RESERVE = 12;
+
+function baseStyle(startMin: number, endMin: number, firstHour: number): { top: number; height: number } {
+  const offsetMin = startMin - firstHour * 60;
+  const durationMin = endMin - startMin;
+  return {
+    top: (offsetMin / 60) * HOUR_HEIGHT,
+    height: Math.max((durationMin / 60) * HOUR_HEIGHT, 20),
+  };
+}
+
 function computeOverlapPositions<T extends { startMin: number; endMin: number }>(
   items: T[],
-): (T & { index: number; total: number })[] {
+  firstHour: number,
+): (T & { style: React.CSSProperties; asStrip?: boolean })[] {
   if (items.length === 0) return [];
   const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 
@@ -85,33 +99,63 @@ function computeOverlapPositions<T extends { startMin: number; endMin: number }>
     it?.type === "session" && String(it?.session?.status ?? "").toLowerCase() === "cancelado";
 
   return groups.flatMap((group) => {
-    const ordered = [...group].sort((a, b) => {
-      const ca = isCancelled(a) ? 1 : 0;
-      const cb = isCancelled(b) ? 1 : 0;
-      if (ca !== cb) return ca - cb;
-      return a.startMin - b.startMin || a.endMin - b.endMin;
-    });
-    return ordered.map((item, idx) => ({ ...item, index: idx, total: ordered.length }));
-  });
-}
+    const cancelled = group.filter((it) => isCancelled(it));
+    const active = group.filter((it) => !isCancelled(it));
 
-function getItemStyle(
-  startMin: number,
-  endMin: number,
-  firstHour: number,
-  index: number,
-  total: number,
-): React.CSSProperties {
-  const offsetMin = startMin - firstHour * 60;
-  const durationMin = endMin - startMin;
-  return {
-    position: "absolute" as const,
-    top: `${(offsetMin / 60) * HOUR_HEIGHT}px`,
-    height: `${Math.max((durationMin / 60) * HOUR_HEIGHT, 20)}px`,
-    left: `${(index / total) * 100}%`,
-    width: `${(1 / total) * 100}%`,
-    zIndex: 10,
-  };
+    // Mixed group: cancelled become strips on the right
+    if (active.length > 0 && cancelled.length > 0) {
+      const activeSorted = [...active].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+      const cancelledSorted = [...cancelled].sort((a, b) => a.startMin - b.startMin);
+      const activeOut = activeSorted.map((item, idx) => {
+        const b = baseStyle(item.startMin, item.endMin, firstHour);
+        const widthPct = 100 / activeSorted.length;
+        return {
+          ...item,
+          style: {
+            position: "absolute" as const,
+            top: `${b.top}px`,
+            height: `${b.height}px`,
+            left: `calc(${idx * widthPct}% )`,
+            width: `calc(${widthPct}% - ${RESERVE / activeSorted.length}px)`,
+            zIndex: 10,
+          } as React.CSSProperties,
+        };
+      });
+      const stripOut = cancelledSorted.map((item, idx) => {
+        const b = baseStyle(item.startMin, item.endMin, firstHour);
+        return {
+          ...item,
+          asStrip: true,
+          style: {
+            position: "absolute" as const,
+            top: `${b.top}px`,
+            height: `${b.height}px`,
+            right: `${idx * (STRIP_W + STRIP_GAP)}px`,
+            width: `${STRIP_W}px`,
+            zIndex: 11,
+          } as React.CSSProperties,
+        };
+      });
+      return [...activeOut, ...stripOut];
+    }
+
+    // Only actives or only cancelled → normal split
+    const ordered = [...group].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+    return ordered.map((item, idx) => {
+      const b = baseStyle(item.startMin, item.endMin, firstHour);
+      return {
+        ...item,
+        style: {
+          position: "absolute" as const,
+          top: `${b.top}px`,
+          height: `${b.height}px`,
+          left: `${(idx / ordered.length) * 100}%`,
+          width: `${(1 / ordered.length) * 100}%`,
+          zIndex: 10,
+        } as React.CSSProperties,
+      };
+    });
+  });
 }
 
 // Statuses que NÃO podem ser arrastados
