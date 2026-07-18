@@ -436,7 +436,7 @@ export function AgendaDesktopGrid({
                     });
 
                     const allItems = [...sessionItems, ...reservationItems];
-                    const positioned = computeOverlapPositions(allItems);
+                    const positioned = computeOverlapPositions(allItems, firstHour);
 
                     return (
                       <div
