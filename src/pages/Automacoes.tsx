@@ -91,8 +91,12 @@ interface AutomacaoRow {
 
 export default function Automacoes() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [settings, setSettings] = useState<ReminderSettings>(EMPTY);
+  const [automationFlows, setAutomationFlows] = useState<AutomationFlow[]>([]);
+  const [clinicIdState, setClinicIdState] = useState<string | null>(null);
+
 
   // véspera
   const [vespera, setVespera] = useState({
