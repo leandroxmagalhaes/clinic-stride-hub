@@ -302,6 +302,12 @@ serve(async (req) => {
           const clinic = s.clinics;
           const settings = settingsMap.get(s.clinic_id) || {};
 
+          const followupCfg = getFollowup(s.clinic_id);
+          if (!followupCfg.ativo) { followupResults.skipped++; continue; }
+          // Só depois de passado o atraso configurado desde o fim da consulta
+          const endMs = new Date(s.end_time).getTime();
+          if (now.getTime() - endMs < followupCfg.atrasoMin * 60 * 1000) { followupResults.skipped++; continue; }
+
           if (settings.reminder_ativo === false) { followupResults.skipped++; continue; }
           if (s.isento || s.pack_id || (s as any).sem_cobranca) { followupResults.skipped++; continue; }
           if (!patient?.email) { followupResults.skipped++; continue; }
