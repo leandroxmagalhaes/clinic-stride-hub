@@ -110,6 +110,39 @@ serve(async (req) => {
     const settingsMap = new Map<string, any>();
     for (const r of settingsRows || []) settingsMap.set((r as any).clinic_id, r);
 
+    // ---------- Central de Automações: confirmacao_vespera ----------
+    const automacaoMap = new Map<string, { ativo: boolean; horaCorteMin: number; horaSegundaMin: number; horaAlertaMin: number }>();
+    const parseHoraToMin = (v: unknown, fallback: number): number => {
+      try {
+        if (v == null) return fallback;
+        const s = String(v).trim();
+        if (!s) return fallback;
+        const parts = s.split(":");
+        const h = Number(parts[0]);
+        const m = parts.length > 1 ? Number(parts[1]) : 0;
+        if (!Number.isFinite(h) || h < 0 || h > 23) return fallback;
+        if (!Number.isFinite(m) || m < 0 || m > 59) return fallback;
+        return h * 60 + m;
+      } catch { return fallback; }
+    };
+    try {
+      const { data: autoRows } = await supabase
+        .from("automacoes_config")
+        .select("clinic_id, ativo, config")
+        .eq("chave", "confirmacao_vespera");
+      for (const r of autoRows || []) {
+        const cfg = (r as any).config || {};
+        automacaoMap.set((r as any).clinic_id, {
+          ativo: (r as any).ativo !== false,
+          horaCorteMin: parseHoraToMin(cfg.hora_corte, 14 * 60),
+          horaSegundaMin: parseHoraToMin(cfg.hora_segunda, 18 * 60),
+          horaAlertaMin: parseHoraToMin(cfg.hora_alerta, 20 * 60),
+        });
+      }
+    } catch (_e) { /* fallback silencioso */ }
+    const getAutomacao = (clinicId: string) =>
+      automacaoMap.get(clinicId) || { ativo: true, horaCorteMin: 14 * 60, horaSegundaMin: 18 * 60, horaAlertaMin: 20 * 60 };
+
     const { data: sessions, error: sessionsError } = await supabase
       .from("sessoes")
       .select(`
@@ -141,7 +174,8 @@ serve(async (req) => {
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
 
-        if (settings.confirmacao_dia_anterior_ativo === false) {
+        const automacao = getAutomacao((session as any).clinic_id);
+        if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) {
           results.skipped++;
           continue;
         }
@@ -156,15 +190,16 @@ serve(async (req) => {
           const lh = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
           const lm = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
           const nowLocalMin = lh * 60 + lm;
-          const [chH, chM] = String(settings.confirmacao_hora_corte || "14:00")
-            .split(":")
-            .map((n) => Number(n));
-          const cutoffMin = (chH || 0) * 60 + (chM || 0);
-          if (nowLocalMin < cutoffMin) {
+          // Se admin definiu no clinic_settings, respeita; senão usa a Central
+          const cutoffFromSettings = settings.confirmacao_hora_corte
+            ? parseHoraToMin(settings.confirmacao_hora_corte, automacao.horaCorteMin)
+            : automacao.horaCorteMin;
+          if (nowLocalMin < cutoffFromSettings) {
             results.pending++;
             continue;
           }
         }
+
 
         const targetDate =
           targetDateOverride ||
@@ -322,14 +357,16 @@ serve(async (req) => {
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
 
-        if (settings.confirmacao_dia_anterior_ativo === false) { results2.skipped++; continue; }
+        const automacao = getAutomacao((session as any).clinic_id);
+        if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) { results2.skipped++; continue; }
 
         // Só sessões ainda por confirmar
         if ((session as any).status !== "agendado") { results2.skipped++; continue; }
         if ((session as any).confirmacao_estado === "confirmado") { results2.skipped++; continue; }
 
         if (!ignoreCutoff) {
-          if (localMinutes(tz) < 18 * 60) { results2.pending++; continue; }
+          if (localMinutes(tz) < automacao.horaSegundaMin) { results2.pending++; continue; }
+
         }
 
         const targetDate = targetDateOverride ||
@@ -446,12 +483,13 @@ serve(async (req) => {
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
 
-        if (settings.confirmacao_dia_anterior_ativo === false) { results3.skipped++; continue; }
+        const automacao = getAutomacao((session as any).clinic_id);
+        if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) { results3.skipped++; continue; }
         if ((session as any).status !== "agendado") { results3.skipped++; continue; }
         if ((session as any).confirmacao_estado === "confirmado") { results3.skipped++; continue; }
 
         if (!ignoreCutoff) {
-          if (localMinutes(tz) < 20 * 60) { results3.pending++; continue; }
+          if (localMinutes(tz) < automacao.horaAlertaMin) { results3.pending++; continue; }
         }
 
         const targetDate = targetDateOverride ||
