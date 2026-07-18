@@ -357,14 +357,16 @@ serve(async (req) => {
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
 
-        if (settings.confirmacao_dia_anterior_ativo === false) { results2.skipped++; continue; }
+        const automacao = getAutomacao((session as any).clinic_id);
+        if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) { results2.skipped++; continue; }
 
         // Só sessões ainda por confirmar
         if ((session as any).status !== "agendado") { results2.skipped++; continue; }
         if ((session as any).confirmacao_estado === "confirmado") { results2.skipped++; continue; }
 
         if (!ignoreCutoff) {
-          if (localMinutes(tz) < 18 * 60) { results2.pending++; continue; }
+          if (localMinutes(tz) < automacao.horaSegundaMin) { results2.pending++; continue; }
+
         }
 
         const targetDate = targetDateOverride ||
