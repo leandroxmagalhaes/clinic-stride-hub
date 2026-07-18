@@ -704,21 +704,8 @@ export default function Automacoes() {
         </Card>
 
         {/* Lembretes personalizados */}
-        <Card className="border-dashed">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5" /> Lembretes personalizados
-            </CardTitle>
-            <CardDescription>
-              Em breve poderá criar os seus próprios lembretes e fluxos automáticos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center rounded-lg border border-dashed p-8 text-sm text-muted-foreground">
-              Em breve
-            </div>
-          </CardContent>
-        </Card>
+        <CustomRemindersSection />
+
       </div>
     </AppLayout>
   );
