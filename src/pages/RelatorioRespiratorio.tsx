@@ -1,8 +1,44 @@
-import React, { useState, useCallback, useRef, useEffect, CSSProperties } from "react";
+import React, { useState, useCallback, useRef, useEffect, useMemo, CSSProperties } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getAuthContext } from "@/lib/auth-helpers";
 import { toast } from "sonner";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RTooltip,
+  ResponsiveContainer,
+} from "recharts";
+
+/* Converte string com virgula/ponto e unidades coladas em numero. Devolve null se nao houver digitos. */
+function parseNumeric(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return isFinite(v) ? v : null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const m = s.replace(",", ".").match(/-?\d+(?:\.\d+)?/);
+  if (!m) return null;
+  const n = parseFloat(m[0]);
+  return isFinite(n) ? n : null;
+}
+
+const COMPARE_PARAMS: { key: string; label: string }[] = [
+  { key: "pnv", label: "PNV" },
+  { key: "sindex_best", label: "S-Index (melhor)" },
+  { key: "sindex_avg", label: "S-Index (médio)" },
+  { key: "percentagem_pnv", label: "% do PNV" },
+  { key: "pif", label: "PIF" },
+  { key: "volume", label: "Volume" },
+  { key: "respiracoes", label: "Respirações" },
+  { key: "carga_alvo", label: "Carga alvo" },
+  { key: "peso", label: "Peso" },
+  { key: "sindex_session_avg", label: "S-Index (média sessão)" },
+  { key: "pif_session_avg", label: "PIF (média sessão)" },
+  { key: "volume_session_avg", label: "Volume (média sessão)" },
+];
 
 /* Converte dd/mm/aaaa para aaaa-mm-dd; passa-through se ja ISO; senao devolve hoje. */
 function toIsoDate(valor?: string): string {
