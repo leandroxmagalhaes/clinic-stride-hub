@@ -145,9 +145,11 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   // ─────────────────────────────────────────────────────────────────────────
 
   const isOverlapped = (overlapTotal ?? 1) > 1;
-  const isCompact = (positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 40) || isOverlapped;
+  const heightNum = positionStyle?.height != null ? parseFloat(String(positionStyle.height)) : NaN;
+  const isCompact = (Number.isFinite(heightNum) && heightNum < 40) || isOverlapped;
+  const isSlim = !isCompact && Number.isFinite(heightNum) && heightNum >= 40 && heightNum < 50 && !isOverlapped;
   const isCancelled = String(session.status ?? "").toLowerCase() === "cancelado";
-  const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
+  const showPackWarning = !isCompact && !isSlim && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
   // Passado esmaecido (Google Calendar style). Usa a menor entre 0.65 e 0.7 (cancelada sobreposta).
   const isPast = new Date(session.end_time) < new Date();
