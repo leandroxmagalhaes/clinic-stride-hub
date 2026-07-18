@@ -18,6 +18,7 @@ import {
   Banknote,
   Package,
   Inbox,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
