@@ -1240,19 +1240,30 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName }: { onOpen
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
 
+function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName, pacienteId }: { onOpen: (r: any) => void; onNew: () => void; onPreview: (r: any) => void; patientName?: string; pacienteId?: string }) {
+  const { user } = useAuth();
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [deleting, setDeleting] = useState<string | null>(null);
+
   const fetchReports = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await (supabase as any)
+    let query = (supabase as any)
       .from("respiratory_reports")
-      .select("id, patient_name, report_date, data, created_at")
+      .select("id, patient_name, report_date, data, created_at, patient_id")
       .order("created_at", { ascending: false });
+    if (pacienteId) {
+      query = query.eq("patient_id", pacienteId);
+    }
+    const { data, error } = await query;
     if (error) {
       console.error("Erro ao carregar relatórios:", error);
       toast.error("Erro ao carregar histórico de relatórios");
     }
     if (data) setReports(data);
     setLoading(false);
-  }, []);
+  }, [pacienteId]);
 
   useEffect(() => {
     fetchReports();
@@ -1273,11 +1284,15 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName }: { onOpen
     }
   };
 
-  // Filtro por paciente actual (se embebido no prontuário) + filtro de pesquisa
-  const scoped = patientName
-    ? reports.filter((r) => (r.patient_name || "").toLowerCase().includes(patientName.toLowerCase()))
-    : reports;
-  const filtered = scoped.filter((r) => r.patient_name.toLowerCase().includes(search.toLowerCase()));
+  // Filtro por paciente actual: se pacienteId existir, a query ja filtrou por patient_id;
+  // adicionalmente inclui relatorios legacy (patient_id nulo) cujo nome bate com patientName.
+  // Como .eq restringe demasiado, refazemos filtragem em memoria quando ha pacienteId.
+  const scoped = pacienteId
+    ? reports.filter((r) => r.patient_id === pacienteId || (r.patient_id == null && patientName && (r.patient_name || "").toLowerCase().includes(patientName.toLowerCase())))
+    : patientName
+      ? reports.filter((r) => (r.patient_name || "").toLowerCase().includes(patientName.toLowerCase()))
+      : reports;
+  const filtered = scoped.filter((r) => (r.patient_name || "").toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div>
