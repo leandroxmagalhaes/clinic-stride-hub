@@ -483,12 +483,13 @@ serve(async (req) => {
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
 
-        if (settings.confirmacao_dia_anterior_ativo === false) { results3.skipped++; continue; }
+        const automacao = getAutomacao((session as any).clinic_id);
+        if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) { results3.skipped++; continue; }
         if ((session as any).status !== "agendado") { results3.skipped++; continue; }
         if ((session as any).confirmacao_estado === "confirmado") { results3.skipped++; continue; }
 
         if (!ignoreCutoff) {
-          if (localMinutes(tz) < 20 * 60) { results3.pending++; continue; }
+          if (localMinutes(tz) < automacao.horaAlertaMin) { results3.pending++; continue; }
         }
 
         const targetDate = targetDateOverride ||
