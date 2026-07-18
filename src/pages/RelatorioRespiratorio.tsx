@@ -4,6 +4,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { getAuthContext } from "@/lib/auth-helpers";
 import { toast } from "sonner";
 
+/* Converte dd/mm/aaaa para aaaa-mm-dd; passa-through se ja ISO; senao devolve hoje. */
+function toIsoDate(valor?: string): string {
+  const v = (valor ?? "").trim();
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  return new Date().toISOString().slice(0, 10);
+}
+
 /* ─── Paleta ────────────────────────────────────────────────────────────── */
 const G = {
   gold: "#B8933A",
