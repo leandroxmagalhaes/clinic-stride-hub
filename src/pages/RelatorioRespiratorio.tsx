@@ -1312,7 +1312,7 @@ function HistoricoRelatorios({ onOpen, onNew, onPreview, patientName, pacienteId
             📋 Histórico de Relatórios
           </h2>
           <p style={{ color: G.muted, fontSize: 13, margin: 0 }}>
-            {reports.length} relatório{reports.length !== 1 ? "s" : ""} guardado{reports.length !== 1 ? "s" : ""}
+            {scoped.length} relatório{scoped.length !== 1 ? "s" : ""} guardado{scoped.length !== 1 ? "s" : ""}
           </p>
         </div>
         <button onClick={onNew} style={btn("primary", { fontSize: 14 })}>
