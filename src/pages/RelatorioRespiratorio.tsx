@@ -1453,10 +1453,11 @@ export default function RelatorioRespiratório({ pacienteId, patientName }: { pa
       }
       const reportData = {
         patient_name: data.nome || "Sem nome",
-        report_date: data.data || new Date().toISOString().slice(0, 10),
+        report_date: toIsoDate(data.data),
         data: data,
         created_by: userId,
         clinic_id: clinicId,
+        patient_id: pacienteId || null,
       };
       if (editingId) {
         const { error } = await (supabase as any).from("respiratory_reports").update(reportData).eq("id", editingId);
