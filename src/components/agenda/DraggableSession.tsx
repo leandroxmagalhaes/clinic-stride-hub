@@ -34,6 +34,7 @@ interface DraggableSessionProps {
   displayTime?: string;
   positionStyle?: React.CSSProperties;
   overlapTotal?: number;
+  asStrip?: boolean;
 }
 
 // ── Formata o nome do serviço: remove "Fisioterapia" e abrevia ──────────────
@@ -57,7 +58,7 @@ function formatServico(name: string): string {
 }
 // ───────────────────────────────────────────────────────────────────────────
 
-export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle, overlapTotal }: DraggableSessionProps) {
+export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle, overlapTotal, asStrip }: DraggableSessionProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: session.id,
     data: { session },
@@ -144,9 +145,11 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
   // ─────────────────────────────────────────────────────────────────────────
 
   const isOverlapped = (overlapTotal ?? 1) > 1;
-  const isCompact = (positionStyle?.height != null && parseFloat(String(positionStyle.height)) < 40) || isOverlapped;
+  const heightNum = positionStyle?.height != null ? parseFloat(String(positionStyle.height)) : NaN;
+  const isCompact = (Number.isFinite(heightNum) && heightNum < 40) || isOverlapped;
+  const isSlim = !isCompact && Number.isFinite(heightNum) && heightNum >= 40 && heightNum < 50 && !isOverlapped;
   const isCancelled = String(session.status ?? "").toLowerCase() === "cancelado";
-  const showPackWarning = !isCompact && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
+  const showPackWarning = !isCompact && !isSlim && (packAlert === "ultima_sessao" || packAlert === "penultima_sessao");
 
   // Passado esmaecido (Google Calendar style). Usa a menor entre 0.65 e 0.7 (cancelada sobreposta).
   const isPast = new Date(session.end_time) < new Date();
@@ -201,6 +204,21 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
 
   if (transform) {
     internalStyle.transform = CSS.Translate.toString(transform);
+  }
+
+  if (asStrip) {
+    const stripTitle = `Cancelada: ${session.paciente?.full_name ?? ""}, ${displayTime ?? ""}`.trim();
+    return (
+      <div
+        style={{ ...positionStyle }}
+        className="rounded-sm bg-red-500/80 hover:bg-red-500 cursor-pointer shadow-sm"
+        title={stripTitle}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick(session);
+        }}
+      />
+    );
   }
 
   return (
@@ -295,6 +313,44 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
                 isPago ? "text-green-600" : isPendentePagamento ? "text-orange-500" : "text-muted-foreground",
               )}
             />
+          )}
+        </div>
+      ) : isSlim ? (
+        /* ── Slim (45 min): duas linhas, nome + ícone e hora ── */
+        <div className="px-1.5 py-0.5 flex flex-col gap-0">
+          <div className="flex items-center gap-1 min-w-0">
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+            >
+              <GripVertical
+                className={cn(
+                  "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity flex-shrink-0",
+                  isFalta ? "text-orange-400" : "text-muted-foreground",
+                )}
+              />
+            </div>
+            <p
+              className={cn(
+                "font-semibold text-[11px] leading-none truncate flex-1 min-w-0",
+                isFalta ? "text-red-700 line-through opacity-80" : "text-foreground",
+              )}
+              title={session.paciente?.full_name ?? ""}
+            >
+              {session.paciente?.full_name ?? ""}
+            </p>
+            {compactStatusIcon}
+          </div>
+          {timeRange && (
+            <span
+              className={cn(
+                "text-[9px] leading-none font-medium mt-0.5",
+                isFalta ? "text-orange-600" : "text-muted-foreground",
+              )}
+            >
+              {timeRange}
+            </span>
           )}
         </div>
       ) : (
