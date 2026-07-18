@@ -81,3 +81,6 @@ verify_jwt = false
 
 [functions.confirmar-metodo-pagamento]
 verify_jwt = false
+
+[functions.process-custom-reminders]
+verify_jwt = false
