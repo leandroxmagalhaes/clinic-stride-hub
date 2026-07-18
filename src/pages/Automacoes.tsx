@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthContext } from "@/lib/auth-helpers";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { CustomRemindersSection } from "@/components/automacoes/CustomRemindersSection";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
