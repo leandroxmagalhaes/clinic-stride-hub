@@ -315,6 +315,44 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
             />
           )}
         </div>
+      ) : isSlim ? (
+        /* ── Slim (45 min): duas linhas, nome + ícone e hora ── */
+        <div className="px-1.5 py-0.5 flex flex-col gap-0">
+          <div className="flex items-center gap-1 min-w-0">
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+            >
+              <GripVertical
+                className={cn(
+                  "h-3 w-3 opacity-60 group-hover/session:opacity-100 transition-opacity flex-shrink-0",
+                  isFalta ? "text-orange-400" : "text-muted-foreground",
+                )}
+              />
+            </div>
+            <p
+              className={cn(
+                "font-semibold text-[11px] leading-none truncate flex-1 min-w-0",
+                isFalta ? "text-red-700 line-through opacity-80" : "text-foreground",
+              )}
+              title={session.paciente?.full_name ?? ""}
+            >
+              {session.paciente?.full_name ?? ""}
+            </p>
+            {compactStatusIcon}
+          </div>
+          {timeRange && (
+            <span
+              className={cn(
+                "text-[9px] leading-none font-medium mt-0.5",
+                isFalta ? "text-orange-600" : "text-muted-foreground",
+              )}
+            >
+              {timeRange}
+            </span>
+          )}
+        </div>
       ) : (
         /* ── Layout normal — nome primeiro, hora abaixo ── */
         <div className="px-1.5 py-0.5 flex flex-col gap-0">
