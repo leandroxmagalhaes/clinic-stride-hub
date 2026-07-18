@@ -174,7 +174,8 @@ serve(async (req) => {
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
 
-        if (settings.confirmacao_dia_anterior_ativo === false) {
+        const automacao = getAutomacao((session as any).clinic_id);
+        if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) {
           results.skipped++;
           continue;
         }
@@ -189,15 +190,16 @@ serve(async (req) => {
           const lh = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
           const lm = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
           const nowLocalMin = lh * 60 + lm;
-          const [chH, chM] = String(settings.confirmacao_hora_corte || "14:00")
-            .split(":")
-            .map((n) => Number(n));
-          const cutoffMin = (chH || 0) * 60 + (chM || 0);
-          if (nowLocalMin < cutoffMin) {
+          // Se admin definiu no clinic_settings, respeita; senão usa a Central
+          const cutoffFromSettings = settings.confirmacao_hora_corte
+            ? parseHoraToMin(settings.confirmacao_hora_corte, automacao.horaCorteMin)
+            : automacao.horaCorteMin;
+          if (nowLocalMin < cutoffFromSettings) {
             results.pending++;
             continue;
           }
         }
+
 
         const targetDate =
           targetDateOverride ||
