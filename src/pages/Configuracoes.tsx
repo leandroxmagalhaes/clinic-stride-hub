@@ -129,26 +129,20 @@ export default function Configuracoes() {
           <TabsContent value="automacao" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Zap className="h-4 w-4" />
-                  Definições do lembrete
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  Central de Automações
                 </CardTitle>
                 <CardDescription>
-                  Saudação, antecedência e dados de pagamento do e-mail automático enviado antes da consulta.
+                  Todas as automações (canais, lembretes, confirmação de véspera e follow-up de pagamento) foram unificadas numa única página.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button asChild variant="outline">
-                  <Link to="/configuracoes/lembrete">Abrir definições do lembrete</Link>
+                <Button asChild>
+                  <Link to="/automacoes">Abrir Central de Automações</Link>
                 </Button>
               </CardContent>
             </Card>
-            <AutomationSettingsForm
-              settings={settings}
-              isLoading={isLoading}
-              isSaving={isSaving}
-              onSave={handleSaveAutomation}
-            />
           </TabsContent>
 
           {/* Team Tab */}
