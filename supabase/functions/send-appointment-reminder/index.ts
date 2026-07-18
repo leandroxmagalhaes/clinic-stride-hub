@@ -256,7 +256,26 @@ serve(async (req) => {
     // ============================================================
     const followupResults = { sent: 0, skipped: 0, errors: [] as string[] };
     try {
-      const cutoff = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+      // Central de Automações: followup_pagamento
+      const followupMap = new Map<string, { ativo: boolean; atrasoMin: number }>();
+      try {
+        const { data: autoRows } = await supabase
+          .from("automacoes_config")
+          .select("clinic_id, ativo, config")
+          .eq("chave", "followup_pagamento");
+        for (const r of autoRows || []) {
+          const cfg = (r as any).config || {};
+          const raw = Number(cfg.atraso_minutos);
+          followupMap.set((r as any).clinic_id, {
+            ativo: (r as any).ativo !== false,
+            atrasoMin: Number.isFinite(raw) && raw >= 0 ? raw : 30,
+          });
+        }
+      } catch (_e) { /* fallback silencioso */ }
+      const getFollowup = (clinicId: string) =>
+        followupMap.get(clinicId) || { ativo: true, atrasoMin: 30 };
+
+      const cutoff = now.toISOString();
       const dayFloor = new Date(now.getTime() - 18 * 60 * 60 * 1000).toISOString();
 
       const { data: pastSessions, error: pastErr } = await supabase
