@@ -456,7 +456,7 @@ export function AgendaDesktopGrid({
                         ))}
 
                         {positioned.map((item) => {
-                          const style = getItemStyle(item.startMin, item.endMin, firstHour, item.index, item.total);
+                          const style = item.style;
 
                           if (item.type === "session") {
                             const s = item.session;
@@ -472,7 +472,8 @@ export function AgendaDesktopGrid({
                                 hasCredits={hasCredits}
                                 displayTime={sessionTime}
                                 positionStyle={style}
-                                overlapTotal={item.total}
+                                overlapTotal={item.overlapTotal}
+                                asStrip={item.asStrip}
                               />
                             );
                           } else {
