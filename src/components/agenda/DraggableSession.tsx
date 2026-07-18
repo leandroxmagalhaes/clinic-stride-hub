@@ -34,6 +34,7 @@ interface DraggableSessionProps {
   displayTime?: string;
   positionStyle?: React.CSSProperties;
   overlapTotal?: number;
+  asStrip?: boolean;
 }
 
 // ── Formata o nome do serviço: remove "Fisioterapia" e abrevia ──────────────
