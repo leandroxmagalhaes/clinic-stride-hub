@@ -407,7 +407,7 @@ export function CustomRemindersSection() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar lembrete</AlertdialogTitle_placeholder />
+            <AlertDialogTitle>Eliminar lembrete</AlertDialogTitle>
             <AlertDialogDescription>
               Tem a certeza que quer eliminar “{confirmDelete?.nome}”? Esta ação não
               pode ser desfeita.
