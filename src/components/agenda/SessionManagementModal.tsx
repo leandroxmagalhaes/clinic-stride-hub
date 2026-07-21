@@ -309,9 +309,17 @@ export function SessionManagementModal({
   };
 
   const handleClickFinalize = () => {
-    setFinalizePayment("pago");
-    setFinalizeMethod("numerario");
-    setShowFinalizeDialog(true);
+    const finalPack = sessionPack || activePack;
+    const packPago = !!finalPack && finalPack.payment_status === "pago";
+    if (packPago) {
+      // Pack já pago: finalizar sem perguntar método/valor
+      setFinalizePayment("pago");
+      handleConfirmFinalize();
+    } else {
+      setFinalizePayment("pago");
+      setFinalizeMethod("numerario");
+      setShowFinalizeDialog(true);
+    }
   };
 
   const handleConfirmFinalize = async () => {
