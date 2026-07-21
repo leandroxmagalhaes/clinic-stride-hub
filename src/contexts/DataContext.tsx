@@ -338,7 +338,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         console.error("Error fetching packs:", error);
         return;
       }
-      setPacks((data || []).map((p) => enrichPack(p)));
+      setRawPacks(data || []);
     } catch (err) {
       console.error("Exception fetching packs:", err);
     } finally {
