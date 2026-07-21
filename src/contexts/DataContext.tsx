@@ -654,7 +654,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const deletePack = async (id: string): Promise<void> => {
     const { error } = await supabase.from("packs").delete().eq("id", id);
     if (error) throw error;
-    setPacks((prev) => prev.filter((p) => p.id !== id));
+    setRawPacks((prev) => prev.filter((p) => p.id !== id));
     await fetchSessions();
   };
 
