@@ -584,6 +584,16 @@ export function SessionManagementModal({
                   </Button>
                 </div>
               )}
+
+              {/* Coberto pelo pack */}
+              {cobertoPorPackPago && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">
+                  <Package className="h-4 w-4 shrink-0" />
+                  <span>
+                    Valor coberto pelo <strong>Pack {sessionPack!.numero_pack}</strong> pago · sem cobrança individual
+                  </span>
+                </div>
+              )}
             </div>
 
             <Separator />
