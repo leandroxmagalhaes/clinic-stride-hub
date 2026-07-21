@@ -315,7 +315,7 @@ export function NewSessionModal({
     } catch {
       setPatientPrecoConsulta(null);
     }
-  }, [fetchActivePacks, prefillFromLastSession]);
+  }, [prefillFromLastSession]);
 
   const handleClearPatient = useCallback(() => {
     setSelectedPatient(null);
