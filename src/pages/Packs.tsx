@@ -105,10 +105,10 @@ export default function Packs() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Utente</TableHead>
+                <TableHead>Utente</TableHead>
                   <TableHead>Pack nº</TableHead>
-                  <TableHead>Usadas/Total</TableHead>
-                  <TableHead>Restantes</TableHead>
+                  <TableHead>Realizadas / Agendadas / Total</TableHead>
+                  <TableHead>Disponíveis</TableHead>
                   <TableHead>Validade</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Pagamento</TableHead>
@@ -129,8 +129,8 @@ export default function Packs() {
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">{name}</TableCell>
                         <TableCell>#{p.numero_pack}</TableCell>
-                        <TableCell>{p.sessoes_usadas} / {p.total_sessoes}</TableCell>
-                        <TableCell>{p.sessoes_restantes}</TableCell>
+                        <TableCell>{p.sessoes_usadas} / {p.sessoes_agendadas} / {p.total_sessoes}</TableCell>
+                        <TableCell>{p.sessoes_disponiveis}</TableCell>
                         <TableCell>{format(parseISO(p.data_validade), "dd/MM/yyyy")}</TableCell>
                         <TableCell>{statusBadge(p)}</TableCell>
                         <TableCell>{paymentBadge(p)}</TableCell>

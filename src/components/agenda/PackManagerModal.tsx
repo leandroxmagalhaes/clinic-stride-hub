@@ -446,9 +446,8 @@ export function PackManagerModal({ isOpen, onClose, pacienteId, pacienteNome, em
                   <div className="mt-2 space-y-0.5">
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>
-                        {pack.sessoes_usadas} / {pack.quantidade_sessoes} sessões
+                        {pack.sessoes_usadas} realizadas · {pack.sessoes_agendadas} agendadas · {pack.sessoes_disponiveis} disponíveis · {pack.quantidade_sessoes} total
                       </span>
-                      <span>{pack.sessoes_restantes} restantes</span>
                     </div>
                     <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
