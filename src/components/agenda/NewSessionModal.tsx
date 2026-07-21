@@ -609,11 +609,7 @@ export function NewSessionModal({
             <>
               {/* ═══ PACK (automático) ═══ */}
               <section className="space-y-2">
-                {isLoadingPacks ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Verificando packs...
-                  </div>
-                ) : linkedPack ? (
+                {linkedPack ? (
                   <div className="border border-green-200 bg-green-50 rounded-lg px-3 py-2.5 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-medium text-green-900">
