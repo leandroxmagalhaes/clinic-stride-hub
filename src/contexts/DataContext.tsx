@@ -175,6 +175,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
   };
 
+  // ── Derived packs: single source of truth, recomputed from rawPacks + sessions
+  const packs = useMemo<Pack[]>(
+    () => rawPacks.map((p) => enrichPack(p, sessions)),
+    [rawPacks, sessions],
+  );
+
   // ── Fetch patients ────────────────────────────────────────────────────────
   const fetchPatients = async (silent = false) => {
     if (!silent) setPatientsLoading(true);
