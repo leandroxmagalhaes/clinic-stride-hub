@@ -384,6 +384,10 @@ export function NewSessionModal({
   );
   const packRestantes = linkedPack ? linkedPack.total_sessoes - linkedPack.sessoes_usadas : 0;
   const excedePack = !!linkedPack && quantidade > packRestantes;
+  const packPago = useMemo(
+    () => !!linkedPack && linkedPack.payment_status === "pago" && !cobrarAvulso,
+    [linkedPack, cobrarAvulso],
+  );
 
   const handleQtyButton = (n: number) => {
     setQuantidade(n);
@@ -462,10 +466,12 @@ export function NewSessionModal({
           end_time: endTime.toISOString(),
           status: isPast ? "realizado" : "agendado",
           notes: notes || null,
-          price: semCobranca ? 0 : (sessionPrice !== "" ? (parseFloat(sessionPrice) || 0) : (selectedService ? Number(selectedService.price) : 0)),
-          payment_status: semCobranca ? "pago" : "pendente",
-          sem_cobranca: semCobranca,
-          motivo_sem_cobranca: semCobranca ? motivoSemCobranca : null,
+          price: packPago
+            ? 0
+            : (semCobranca ? 0 : (sessionPrice !== "" ? (parseFloat(sessionPrice) || 0) : (selectedService ? Number(selectedService.price) : 0))),
+          payment_status: packPago ? "pago" : (semCobranca ? "pago" : "pendente"),
+          sem_cobranca: packPago ? false : semCobranca,
+          motivo_sem_cobranca: packPago ? null : (semCobranca ? motivoSemCobranca : null),
           tipo_agendamento: packId ? "pack" : "avulso",
           pack_id: packId,
           created_by: userId,
