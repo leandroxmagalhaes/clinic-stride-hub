@@ -384,6 +384,10 @@ export function NewSessionModal({
   );
   const packRestantes = linkedPack ? linkedPack.total_sessoes - linkedPack.sessoes_usadas : 0;
   const excedePack = !!linkedPack && quantidade > packRestantes;
+  const packPago = useMemo(
+    () => !!linkedPack && linkedPack.payment_status === "pago" && !cobrarAvulso,
+    [linkedPack, cobrarAvulso],
+  );
 
   const handleQtyButton = (n: number) => {
     setQuantidade(n);
