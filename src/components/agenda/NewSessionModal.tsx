@@ -466,10 +466,12 @@ export function NewSessionModal({
           end_time: endTime.toISOString(),
           status: isPast ? "realizado" : "agendado",
           notes: notes || null,
-          price: semCobranca ? 0 : (sessionPrice !== "" ? (parseFloat(sessionPrice) || 0) : (selectedService ? Number(selectedService.price) : 0)),
-          payment_status: semCobranca ? "pago" : "pendente",
-          sem_cobranca: semCobranca,
-          motivo_sem_cobranca: semCobranca ? motivoSemCobranca : null,
+          price: packPago
+            ? 0
+            : (semCobranca ? 0 : (sessionPrice !== "" ? (parseFloat(sessionPrice) || 0) : (selectedService ? Number(selectedService.price) : 0))),
+          payment_status: packPago ? "pago" : (semCobranca ? "pago" : "pendente"),
+          sem_cobranca: packPago ? false : semCobranca,
+          motivo_sem_cobranca: packPago ? null : (semCobranca ? motivoSemCobranca : null),
           tipo_agendamento: packId ? "pack" : "avulso",
           pack_id: packId,
           created_by: userId,
