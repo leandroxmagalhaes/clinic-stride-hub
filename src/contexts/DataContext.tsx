@@ -629,7 +629,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .single();
     if (error) throw error;
     const enriched = enrichPack(created, sessions);
-    setPacks((prev) => [enriched, ...prev]);
+    setRawPacks((prev) => [created, ...prev]);
     return enriched;
   };
 
