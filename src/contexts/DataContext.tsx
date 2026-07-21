@@ -47,6 +47,8 @@ export interface Pack {
   updated_at: string;
   // computed
   sessoes_usadas: number;
+  sessoes_agendadas: number;
+  sessoes_disponiveis: number;
   sessoes_restantes: number;
   alert_status: "activo" | "penultima_sessao" | "ultima_sessao" | "esgotado";
   // compat aliases (deprecated, kept to ease migration)
@@ -154,10 +156,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
         !s.isento &&
         ["realizado", "finalizado", "falta_cobrada"].includes(s.status),
     ).length;
+    const agendadas = sessionList.filter(
+      (s: any) =>
+        s.pack_id === p.id &&
+        !s.isento &&
+        ["agendado", "confirmado"].includes(s.status),
+    ).length;
     const total = p.total_sessoes ?? 0;
     return {
       ...p,
       sessoes_usadas: usadas,
+      sessoes_agendadas: agendadas,
+      sessoes_disponiveis: Math.max(total - usadas - agendadas, 0),
       sessoes_restantes: Math.max(total - usadas, 0),
       alert_status: computeAlertStatus(total, usadas),
       quantidade_sessoes: total,
