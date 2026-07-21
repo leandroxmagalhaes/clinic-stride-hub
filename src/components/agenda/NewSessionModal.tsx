@@ -155,7 +155,6 @@ export function NewSessionModal({
       setQuickName("");
       setQuickPhone("");
       setQuickEmail("");
-      setActivePacks([]);
       setSelectedPackId("");
       setCobrarAvulso(false);
       setShowNewPack(false);
