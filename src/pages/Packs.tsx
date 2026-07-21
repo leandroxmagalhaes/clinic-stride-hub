@@ -1,6 +1,5 @@
 // Packs — Painel global de packs por paciente
 import { useMemo, useState } from "react";
-import { PersistentLayout } from "@/components/layout/PersistentLayout";
 import { useData, Pack } from "@/contexts/DataContext";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
