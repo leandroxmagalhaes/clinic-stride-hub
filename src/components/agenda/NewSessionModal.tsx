@@ -319,7 +319,6 @@ export function NewSessionModal({
 
   const handleClearPatient = useCallback(() => {
     setSelectedPatient(null);
-    setActivePacks([]);
     setSelectedPackId("");
     setCobrarAvulso(false);
     setShowNewPack(false);
