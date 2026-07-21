@@ -302,7 +302,7 @@ export function NewSessionModal({
     setSelectedPatient(patient);
     setSearchQuery("");
     setShowDropdown(false);
-    fetchActivePacks(patient.id);
+    setSelectedPackId("");
     prefillFromLastSession(patient.id);
     try {
       const { data } = await (supabase as any)
