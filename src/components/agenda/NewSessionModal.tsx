@@ -238,50 +238,31 @@ export function NewSessionModal({
     return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
   }, [searchQuery]);
 
-  // ── Packs ativos do paciente ──
-  const fetchActivePacks = useCallback(async (patientId: string) => {
-    setIsLoadingPacks(true);
-    try {
-      const { data: packsData } = await (supabase as any)
-        .from("packs")
-        .select("id, numero_pack, total_sessoes, valor_total, payment_status, data_validade")
-        .eq("paciente_id", patientId)
-        .eq("status", "ativo")
-        .order("numero_pack", { ascending: false });
-      const packIds = (packsData || []).map((p: any) => p.id);
-      const usageMap: Record<string, number> = {};
-      if (packIds.length > 0) {
-        const { data: sessRows } = await (supabase as any)
-          .from("sessoes")
-          .select("pack_id, status, isento")
-          .in("pack_id", packIds);
-        (sessRows || []).forEach((s: any) => {
-          if (s.isento) return;
-          if (!["realizado", "finalizado", "falta_cobrada"].includes(s.status)) return;
-          usageMap[s.pack_id] = (usageMap[s.pack_id] || 0) + 1;
-        });
-      }
-      const packs: ActivePack[] = (packsData || []).map((p: any) => ({
+  // ── Packs ativos do paciente (derivados do DataContext) ──
+  const activePacks = useMemo<ActivePack[]>(() => {
+    if (!selectedPatient) return [];
+    return contextPacks
+      .filter((p) => p.paciente_id === selectedPatient.id && p.status === "ativo")
+      .sort((a, b) => b.numero_pack - a.numero_pack)
+      .map((p) => ({
         id: p.id,
         numero_pack: p.numero_pack,
         total_sessoes: p.total_sessoes,
-        sessoes_usadas: usageMap[p.id] || 0,
+        sessoes_usadas: p.sessoes_usadas,
+        sessoes_disponiveis: p.sessoes_disponiveis,
         valor_total: p.valor_total,
         payment_status: p.payment_status,
         data_validade: p.data_validade,
       }));
-      setActivePacks(packs);
-      // Vínculo automático: pack mais recente com saldo
-      const withBalance = packs.find((p) => p.sessoes_usadas < p.total_sessoes);
-      setSelectedPackId(withBalance ? withBalance.id : "");
-    } catch (err) {
-      console.error("Error fetching packs:", err);
-      setActivePacks([]);
-      setSelectedPackId("");
-    } finally {
-      setIsLoadingPacks(false);
-    }
-  }, []);
+  }, [contextPacks, selectedPatient]);
+
+  // Vínculo automático: pack mais recente com saldo
+  useEffect(() => {
+    if (!selectedPatient) return;
+    if (selectedPackId) return;
+    const withBalance = activePacks.find((p) => p.sessoes_disponiveis > 0);
+    if (withBalance) setSelectedPackId(withBalance.id);
+  }, [activePacks, selectedPatient, selectedPackId]);
 
   // ── Pré-preencher serviço/profissional da última sessão ──
   const prefillFromLastSession = useCallback(async (patientId: string) => {
