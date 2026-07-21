@@ -648,7 +648,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (data.status !== undefined) updateData.status = data.status;
     const { error } = await (supabase as any).from("packs").update(updateData).eq("id", id);
     if (error) throw error;
-    setPacks((prev) => prev.map((p) => (p.id === id ? enrichPack({ ...p, ...updateData }, sessions) : p)));
+    setRawPacks((prev) => prev.map((p) => (p.id === id ? { ...p, ...updateData } : p)));
   };
 
   const deletePack = async (id: string): Promise<void> => {
