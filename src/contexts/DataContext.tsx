@@ -132,7 +132,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [evolutionsLoading, setEvolutionsLoading] = useState(true);
   const [services, setServices] = useState<Service[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
-  const [packs, setPacks] = useState<Pack[]>([]);
+  const [rawPacks, setRawPacks] = useState<any[]>([]);
   const [packsLoading, setPacksLoading] = useState(true);
   const [creditBalances, setCreditBalances] = useState<Map<string, number>>(new Map());
 
