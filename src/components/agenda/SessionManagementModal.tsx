@@ -229,14 +229,15 @@ export function SessionManagementModal({
   const sessionDateISO = format(new Date(session.start_time), "yyyy-MM-dd");
   const sessionPrice: number = (session as any).price || (session.servico as any)?.price || 0;
   const currentPaymentStatus = (session as any).payment_status;
-  const isPago = currentStatus === "realizado" && currentPaymentStatus === "pago";
-  const isPendente = currentStatus === "realizado" && currentPaymentStatus === "pendente";
-  const isTerminalStatus = ["realizado", "cancelado", "falta"].includes(currentStatus);
 
   // Pack activo do paciente
   const activePack = getActivePack(session.paciente_id);
   const sessionPackId = (session as any).pack_id ?? (session as any).package_id;
   const sessionPack = sessionPackId ? packs.find((p) => p.id === sessionPackId) : null;
+  const cobertoPorPackPago = !!sessionPack && sessionPack.payment_status === "pago";
+  const isPago = currentStatus === "realizado" && (currentPaymentStatus === "pago" || cobertoPorPackPago);
+  const isPendente = currentStatus === "realizado" && currentPaymentStatus === "pendente" && !cobertoPorPackPago;
+  const isTerminalStatus = ["realizado", "cancelado", "falta"].includes(currentStatus);
 
   const trySetPaymentMethod = async (sessionId: string, method: string) => {
     const dbMethod = METHOD_MAP[method] ?? null;
@@ -308,17 +309,30 @@ export function SessionManagementModal({
   };
 
   const handleClickFinalize = () => {
-    setFinalizePayment("pago");
-    setFinalizeMethod("numerario");
-    setShowFinalizeDialog(true);
+    const finalPack = sessionPack || activePack;
+    const packPago = !!finalPack && finalPack.payment_status === "pago";
+    if (packPago) {
+      // Pack já pago: finalizar sem perguntar método/valor
+      setFinalizePayment("pago");
+      handleConfirmFinalize();
+    } else {
+      setFinalizePayment("pago");
+      setFinalizeMethod("numerario");
+      setShowFinalizeDialog(true);
+    }
   };
 
   const handleConfirmFinalize = async () => {
     setIsLoading(true);
     setShowFinalizeDialog(false);
+    const finalPack = sessionPack || activePack;
+    const packPago = !!finalPack && finalPack.payment_status === "pago";
+    const effectivePaymentStatus = packPago ? "pago" : finalizePayment;
     try {
-      await onUpdateSession(session.id, { status: "realizado", payment_status: finalizePayment });
-      await trySetPaymentMethod(session.id, finalizeMethod);
+      await onUpdateSession(session.id, { status: "realizado", payment_status: effectivePaymentStatus });
+      if (!packPago) {
+        await trySetPaymentMethod(session.id, finalizeMethod);
+      }
       // Incrementar pack se sessão está associada
       if (sessionPackId) await incrementPackUsage(sessionPackId);
       else if (activePack) {
@@ -329,7 +343,9 @@ export function SessionManagementModal({
           .eq("id", session.id);
         await incrementPackUsage(activePack.id);
       }
-      if (finalizePayment === "pago") {
+      if (packPago) {
+        toast.success(`Sessão finalizada · coberta pelo Pack ${finalPack!.numero_pack} pago`);
+      } else if (effectivePaymentStatus === "pago") {
         toast.success(sessionPrice > 0 ? `Pago · ${sessionPrice.toFixed(2)}€` : "Sessão finalizada e paga!");
       } else {
         toast.warning("Sessão finalizada · Pagamento pendente → Contas a Receber");
@@ -491,7 +507,13 @@ export function SessionManagementModal({
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-lg font-semibold">{patientName}</span>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {isPago && (
+                  {cobertoPorPackPago && (
+                    <Badge className="bg-green-600 text-white text-xs gap-1">
+                      <Package className="h-3 w-3" />
+                      Incluído no pack
+                    </Badge>
+                  )}
+                  {isPago && !cobertoPorPackPago && (
                     <Badge className="bg-green-600 text-white text-xs gap-1">
                       <CircleDollarSign className="h-3 w-3" />
                       Pago
@@ -575,6 +597,16 @@ export function SessionManagementModal({
                     <CircleDollarSign className="h-3.5 w-3.5" />
                     💶 Pagamento
                   </Button>
+                </div>
+              )}
+
+              {/* Coberto pelo pack */}
+              {cobertoPorPackPago && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">
+                  <Package className="h-4 w-4 shrink-0" />
+                  <span>
+                    Valor coberto pelo <strong>Pack {sessionPack!.numero_pack}</strong> pago · sem cobrança individual
+                  </span>
                 </div>
               )}
             </div>
