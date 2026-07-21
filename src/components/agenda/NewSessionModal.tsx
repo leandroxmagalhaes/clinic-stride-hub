@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthContext } from "@/lib/auth-helpers";
 import { checkAppointmentCreatedTrigger } from "@/services/AutomationEngine";
+import { useData } from "@/contexts/DataContext";
 
 // Mantido para compatibilidade com importações existentes
 export interface PackageSubmitData {
