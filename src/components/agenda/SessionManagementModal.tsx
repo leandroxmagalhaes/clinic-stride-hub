@@ -492,7 +492,13 @@ export function SessionManagementModal({
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-lg font-semibold">{patientName}</span>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {isPago && (
+                  {cobertoPorPackPago && (
+                    <Badge className="bg-green-600 text-white text-xs gap-1">
+                      <Package className="h-3 w-3" />
+                      Incluído no pack
+                    </Badge>
+                  )}
+                  {isPago && !cobertoPorPackPago && (
                     <Badge className="bg-green-600 text-white text-xs gap-1">
                       <CircleDollarSign className="h-3 w-3" />
                       Pago
