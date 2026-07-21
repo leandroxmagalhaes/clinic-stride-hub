@@ -325,9 +325,14 @@ export function SessionManagementModal({
   const handleConfirmFinalize = async () => {
     setIsLoading(true);
     setShowFinalizeDialog(false);
+    const finalPack = sessionPack || activePack;
+    const packPago = !!finalPack && finalPack.payment_status === "pago";
+    const effectivePaymentStatus = packPago ? "pago" : finalizePayment;
     try {
-      await onUpdateSession(session.id, { status: "realizado", payment_status: finalizePayment });
-      await trySetPaymentMethod(session.id, finalizeMethod);
+      await onUpdateSession(session.id, { status: "realizado", payment_status: effectivePaymentStatus });
+      if (!packPago) {
+        await trySetPaymentMethod(session.id, finalizeMethod);
+      }
       // Incrementar pack se sessão está associada
       if (sessionPackId) await incrementPackUsage(sessionPackId);
       else if (activePack) {
@@ -338,7 +343,9 @@ export function SessionManagementModal({
           .eq("id", session.id);
         await incrementPackUsage(activePack.id);
       }
-      if (finalizePayment === "pago") {
+      if (packPago) {
+        toast.success(`Sessão finalizada · coberta pelo Pack ${finalPack!.numero_pack} pago`);
+      } else if (effectivePaymentStatus === "pago") {
         toast.success(sessionPrice > 0 ? `Pago · ${sessionPrice.toFixed(2)}€` : "Sessão finalizada e paga!");
       } else {
         toast.warning("Sessão finalizada · Pagamento pendente → Contas a Receber");
