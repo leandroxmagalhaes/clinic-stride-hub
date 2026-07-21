@@ -229,14 +229,15 @@ export function SessionManagementModal({
   const sessionDateISO = format(new Date(session.start_time), "yyyy-MM-dd");
   const sessionPrice: number = (session as any).price || (session.servico as any)?.price || 0;
   const currentPaymentStatus = (session as any).payment_status;
-  const isPago = currentStatus === "realizado" && currentPaymentStatus === "pago";
-  const isPendente = currentStatus === "realizado" && currentPaymentStatus === "pendente";
-  const isTerminalStatus = ["realizado", "cancelado", "falta"].includes(currentStatus);
 
   // Pack activo do paciente
   const activePack = getActivePack(session.paciente_id);
   const sessionPackId = (session as any).pack_id ?? (session as any).package_id;
   const sessionPack = sessionPackId ? packs.find((p) => p.id === sessionPackId) : null;
+  const cobertoPorPackPago = !!sessionPack && sessionPack.payment_status === "pago";
+  const isPago = currentStatus === "realizado" && (currentPaymentStatus === "pago" || cobertoPorPackPago);
+  const isPendente = currentStatus === "realizado" && currentPaymentStatus === "pendente" && !cobertoPorPackPago;
+  const isTerminalStatus = ["realizado", "cancelado", "falta"].includes(currentStatus);
 
   const trySetPaymentMethod = async (sessionId: string, method: string) => {
     const dbMethod = METHOD_MAP[method] ?? null;
