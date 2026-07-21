@@ -59,6 +59,7 @@ interface ActivePack {
   numero_pack: number;
   total_sessoes: number;
   sessoes_usadas: number;
+  sessoes_disponiveis: number;
   valor_total: number;
   payment_status: string;
   data_validade: string | null;
