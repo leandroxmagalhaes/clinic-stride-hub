@@ -119,9 +119,8 @@ export function NewSessionModal({
   const [quickEmail, setQuickEmail] = useState("");
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
-  // ── Packs ──
-  const [activePacks, setActivePacks] = useState<ActivePack[]>([]);
-  const [isLoadingPacks, setIsLoadingPacks] = useState(false);
+  // ── Packs (fonte única: DataContext) ──
+  const { packs: contextPacks } = useData();
   const [selectedPackId, setSelectedPackId] = useState<string>("");
   const [cobrarAvulso, setCobrarAvulso] = useState(false);
   const [showNewPack, setShowNewPack] = useState(false);
