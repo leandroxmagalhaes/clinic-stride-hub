@@ -389,7 +389,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setSessions([]);
         setProfessionals([]);
         setEvolutions([]);
-        setPacks([]);
+        setRawPacks([]);
       } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const userId = session?.user?.id ?? null;
         setTimeout(() => {
