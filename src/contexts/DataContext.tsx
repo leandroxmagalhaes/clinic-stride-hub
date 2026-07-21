@@ -1,6 +1,6 @@
 // DataContext - Centralized state management with 100% Supabase integration
 // v2 — Sistema de Packs + Credit compatibility layer
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
@@ -132,7 +132,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [evolutionsLoading, setEvolutionsLoading] = useState(true);
   const [services, setServices] = useState<Service[]>([]);
   const [servicesLoading, setServicesLoading] = useState(true);
-  const [packs, setPacks] = useState<Pack[]>([]);
+  const [rawPacks, setRawPacks] = useState<any[]>([]);
   const [packsLoading, setPacksLoading] = useState(true);
   const [creditBalances, setCreditBalances] = useState<Map<string, number>>(new Map());
 
@@ -174,6 +174,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       is_active: p.status === "ativo",
     };
   };
+
+  // ── Derived packs: single source of truth, recomputed from rawPacks + sessions
+  const packs = useMemo<Pack[]>(
+    () => rawPacks.map((p) => enrichPack(p, sessions)),
+    [rawPacks, sessions],
+  );
 
   // ── Fetch patients ────────────────────────────────────────────────────────
   const fetchPatients = async (silent = false) => {
@@ -338,7 +344,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         console.error("Error fetching packs:", error);
         return;
       }
-      setPacks((data || []).map((p) => enrichPack(p)));
+      setRawPacks(data || []);
     } catch (err) {
       console.error("Exception fetching packs:", err);
     } finally {
@@ -389,7 +395,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setSessions([]);
         setProfessionals([]);
         setEvolutions([]);
-        setPacks([]);
+        setRawPacks([]);
       } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const userId = session?.user?.id ?? null;
         setTimeout(() => {
@@ -629,7 +635,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .single();
     if (error) throw error;
     const enriched = enrichPack(created, sessions);
-    setPacks((prev) => [enriched, ...prev]);
+    setRawPacks((prev) => [created, ...prev]);
     return enriched;
   };
 
@@ -648,13 +654,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (data.status !== undefined) updateData.status = data.status;
     const { error } = await (supabase as any).from("packs").update(updateData).eq("id", id);
     if (error) throw error;
-    setPacks((prev) => prev.map((p) => (p.id === id ? enrichPack({ ...p, ...updateData }, sessions) : p)));
+    setRawPacks((prev) => prev.map((p) => (p.id === id ? { ...p, ...updateData } : p)));
   };
 
   const deletePack = async (id: string): Promise<void> => {
     const { error } = await supabase.from("packs").delete().eq("id", id);
     if (error) throw error;
-    setPacks((prev) => prev.filter((p) => p.id !== id));
+    setRawPacks((prev) => prev.filter((p) => p.id !== id));
     await fetchSessions();
   };
 
