@@ -64,7 +64,7 @@ export default function Packs() {
   };
 
   return (
-    <PersistentLayout>
+    <>
       <div className="container max-w-7xl mx-auto py-6 px-4 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
