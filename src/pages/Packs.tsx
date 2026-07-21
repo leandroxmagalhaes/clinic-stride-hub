@@ -161,6 +161,6 @@ export default function Packs() {
           pacienteNome={openPatient.name}
         />
       )}
-    </PersistentLayout>
+    </>
   );
 }
