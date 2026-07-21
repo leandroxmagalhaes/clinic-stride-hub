@@ -1,6 +1,6 @@
 // DataContext - Centralized state management with 100% Supabase integration
 // v2 — Sistema de Packs + Credit compatibility layer
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
 import { Patient } from "@/services/PatientService";
 import { Session } from "@/services/SessionService";
 import { Professional } from "@/services/ProfessionalService";
