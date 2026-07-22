@@ -1261,6 +1261,38 @@ export type Database = {
         }
         Relationships: []
       }
+      pack_reminder_logs: {
+        Row: {
+          canal: string
+          created_at: string
+          enviado_em: string
+          id: string
+          pack_id: string
+        }
+        Insert: {
+          canal: string
+          created_at?: string
+          enviado_em?: string
+          id?: string
+          pack_id: string
+        }
+        Update: {
+          canal?: string
+          created_at?: string
+          enviado_em?: string
+          id?: string
+          pack_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pack_reminder_logs_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "packs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       packs: {
         Row: {
           clinic_id: string
