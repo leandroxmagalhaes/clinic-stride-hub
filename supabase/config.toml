@@ -84,3 +84,6 @@ verify_jwt = false
 
 [functions.process-custom-reminders]
 verify_jwt = false
+
+[functions.process-pack-billing]
+verify_jwt = false
