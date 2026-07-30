@@ -236,12 +236,29 @@ serve(async (req) => {
 </html>`;
 
         if (!dryRun) {
-          await resend.emails.send({
+        if (!dryRun) {
+          const assunto = `Lembrete da sua consulta às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`;
+
+          const envio = await resend.emails.send({
             from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
             to: [patient.email],
-            subject: `Lembrete da sua consulta às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`,
+            subject: assunto,
             html: emailHtml,
           });
+
+          await registarComunicacao(supabase, {
+            clinic_id: (session as any).clinic_id,
+            paciente_id: (session as any).paciente_id,
+            sessao_id: (session as any).id,
+            tipo: "lembrete_pagamento_3h",
+            assunto,
+            destinatario: patient.email,
+            estado: (envio as any)?.error ? "falhado" : "enviado",
+            erro: (envio as any)?.error?.message ?? null,
+            provider_id: (envio as any)?.data?.id ?? null,
+            origem: "send-appointment-reminder",
+          });
+
           await supabase.from("reminder_logs").insert({ sessao_id: (session as any).id, canal: "email" });
         }
         results.sent++;
