@@ -315,12 +315,28 @@ serve(async (req) => {
           continue;
         }
 
-        await resend.emails.send({
+        const assunto = `Confirma a consulta de amanhã às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`;
+
+        const envio = await resend.emails.send({
           from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
           to: [patient.email],
-          subject: `Confirma a consulta de amanhã às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`,
+          subject: assunto,
           html: emailHtml,
         });
+
+        await registarComunicacao(supabase, {
+          clinic_id: (session as any).clinic_id,
+          paciente_id: (session as any).paciente_id,
+          sessao_id: (session as any).id,
+          tipo: "confirmacao_vespera",
+          assunto,
+          destinatario: patient.email,
+          estado: (envio as any)?.error ? "falhado" : "enviado",
+          erro: (envio as any)?.error?.message ?? null,
+          provider_id: (envio as any)?.data?.id ?? null,
+          origem: "send-day-before-reminder",
+        });
+
 
         if (!force) {
           await supabase
