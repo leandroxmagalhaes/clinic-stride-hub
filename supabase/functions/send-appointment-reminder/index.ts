@@ -236,7 +236,6 @@ serve(async (req) => {
 </html>`;
 
         if (!dryRun) {
-        if (!dryRun) {
           const assunto = `Lembrete da sua consulta às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`;
 
           const envio = await resend.emails.send({
