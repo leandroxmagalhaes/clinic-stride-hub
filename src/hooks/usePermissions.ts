@@ -15,6 +15,7 @@ export type PermissionModule =
   | 'comercial'
   | 'financeiro'
   | 'engajamento'
+  | 'comunicacoes'
   | 'configuracoes'
   | 'equipe'
   | 'permissoes';
