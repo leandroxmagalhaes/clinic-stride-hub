@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { registarComunicacao } from "../_shared/registarComunicacao.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -69,7 +70,7 @@ serve(async (req) => {
     const { data: sessions, error: sessionsError } = await supabase
       .from("sessoes")
       .select(`
-        id, start_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, confirmation_token,
+        id, paciente_id, start_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, confirmation_token,
         pacientes!sessoes_paciente_id_fkey ( full_name, email ),
         profiles!sessoes_profissional_id_fkey ( full_name ),
         servicos!sessoes_servico_id_fkey ( name ),
@@ -235,12 +236,29 @@ serve(async (req) => {
 </html>`;
 
         if (!dryRun) {
-          await resend.emails.send({
+        if (!dryRun) {
+          const assunto = `Lembrete da sua consulta às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`;
+
+          const envio = await resend.emails.send({
             from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
             to: [patient.email],
-            subject: `Lembrete da sua consulta às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`,
+            subject: assunto,
             html: emailHtml,
           });
+
+          await registarComunicacao(supabase, {
+            clinic_id: (session as any).clinic_id,
+            paciente_id: (session as any).paciente_id,
+            sessao_id: (session as any).id,
+            tipo: "lembrete_pagamento_3h",
+            assunto,
+            destinatario: patient.email,
+            estado: (envio as any)?.error ? "falhado" : "enviado",
+            erro: (envio as any)?.error?.message ?? null,
+            provider_id: (envio as any)?.data?.id ?? null,
+            origem: "send-appointment-reminder",
+          });
+
           await supabase.from("reminder_logs").insert({ sessao_id: (session as any).id, canal: "email" });
         }
         results.sent++;
@@ -281,7 +299,7 @@ serve(async (req) => {
       const { data: pastSessions, error: pastErr } = await supabase
         .from("sessoes")
         .select(`
-          id, start_time, end_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, metodo_pagamento_previsto, confirmation_token,
+          id, paciente_id, start_time, end_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, metodo_pagamento_previsto, confirmation_token,
           pacientes!sessoes_paciente_id_fkey ( full_name, email ),
           clinics!sessoes_clinic_id_fkey ( name, phone, email )
         `)
@@ -381,12 +399,28 @@ serve(async (req) => {
 </body></html>`;
 
           if (!dryRun) {
-            await resend.emails.send({
+            const assunto = `Sobre o pagamento da consulta de hoje`;
+
+            const envio = await resend.emails.send({
               from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
               to: [patient.email],
-              subject: `Sobre o pagamento da consulta de hoje`,
+              subject: assunto,
               html: emailHtml,
             });
+
+            await registarComunicacao(supabase, {
+              clinic_id: (s as any).clinic_id,
+              paciente_id: (s as any).paciente_id,
+              sessao_id: s.id,
+              tipo: "seguimento_metodo_pagamento",
+              assunto,
+              destinatario: patient.email,
+              estado: (envio as any)?.error ? "falhado" : "enviado",
+              erro: (envio as any)?.error?.message ?? null,
+              provider_id: (envio as any)?.data?.id ?? null,
+              origem: "send-appointment-reminder",
+            });
+
             await supabase.from("reminder_logs").insert({ sessao_id: s.id, canal: "email_metodo_followup" });
           }
           followupResults.sent++;

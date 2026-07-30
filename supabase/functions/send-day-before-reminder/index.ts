@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { registarComunicacao } from "../_shared/registarComunicacao.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -146,7 +147,7 @@ serve(async (req) => {
     const { data: sessions, error: sessionsError } = await supabase
       .from("sessoes")
       .select(`
-        id, start_time, status, clinic_id, confirmation_token, confirmacao_estado,
+        id, paciente_id, start_time, status, clinic_id, confirmation_token, confirmacao_estado,
         pacientes!sessoes_paciente_id_fkey ( full_name, email ),
         profiles!sessoes_profissional_id_fkey ( full_name ),
         servicos!sessoes_servico_id_fkey ( name ),
@@ -314,12 +315,28 @@ serve(async (req) => {
           continue;
         }
 
-        await resend.emails.send({
+        const assunto = `Confirma a consulta de amanhã às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`;
+
+        const envio = await resend.emails.send({
           from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
           to: [patient.email],
-          subject: `Confirma a consulta de amanhã às ${formattedTime} — ${clinic?.name || "Respira & Desenvolve"}`,
+          subject: assunto,
           html: emailHtml,
         });
+
+        await registarComunicacao(supabase, {
+          clinic_id: (session as any).clinic_id,
+          paciente_id: (session as any).paciente_id,
+          sessao_id: (session as any).id,
+          tipo: "confirmacao_vespera",
+          assunto,
+          destinatario: patient.email,
+          estado: (envio as any)?.error ? "falhado" : "enviado",
+          erro: (envio as any)?.error?.message ?? null,
+          provider_id: (envio as any)?.data?.id ?? null,
+          origem: "send-day-before-reminder",
+        });
+
 
         if (!force) {
           await supabase
@@ -453,12 +470,28 @@ serve(async (req) => {
           continue;
         }
 
-        await resend.emails.send({
+        const assunto = `Última chamada — confirme a consulta de amanhã às ${formattedTime}`;
+
+        const envio = await resend.emails.send({
           from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
           to: [patient.email],
-          subject: `Última chamada — confirme a consulta de amanhã às ${formattedTime}`,
+          subject: assunto,
           html: emailHtml,
         });
+
+        await registarComunicacao(supabase, {
+          clinic_id: (session as any).clinic_id,
+          paciente_id: (session as any).paciente_id,
+          sessao_id: (session as any).id,
+          tipo: "ultima_chamada_vespera",
+          assunto,
+          destinatario: patient.email,
+          estado: (envio as any)?.error ? "falhado" : "enviado",
+          erro: (envio as any)?.error?.message ?? null,
+          provider_id: (envio as any)?.data?.id ?? null,
+          origem: "send-day-before-reminder",
+        });
+
 
         if (!force) {
           await supabase

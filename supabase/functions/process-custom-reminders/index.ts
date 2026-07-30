@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { registarComunicacao } from "../_shared/registarComunicacao.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -143,7 +144,7 @@ serve(async (req) => {
         const query = supabase
           .from("sessoes")
           .select(`
-            id, start_time, end_time, status, confirmacao_estado,
+            id, paciente_id, start_time, end_time, status, confirmacao_estado,
             payment_status, sem_cobranca, clinic_id,
             pacientes!sessoes_paciente_id_fkey ( full_name, email ),
             profiles!sessoes_profissional_id_fkey ( full_name ),
@@ -276,12 +277,28 @@ serve(async (req) => {
               continue;
             }
 
-            const { error: sendErr } = await resend.emails.send({
+            const envio = await resend.emails.send({
               from: "Respira & Desenvolve <noreply@respiraedesenvolve.com>",
               to: [patient.email],
               subject: assuntoFinal,
               html,
             });
+            const sendErr = (envio as any)?.error;
+
+            await registarComunicacao(supabase, {
+              clinic_id: session.clinic_id,
+              paciente_id: session.paciente_id,
+              sessao_id: session.id,
+              tipo: "lembrete_personalizado",
+              assunto: assuntoFinal,
+              destinatario: patient.email,
+              estado: sendErr ? "falhado" : "enviado",
+              erro: sendErr ? (sendErr.message || String(sendErr)) : null,
+              provider_id: (envio as any)?.data?.id ?? null,
+              origem: "process-custom-reminders",
+              metadata: { regra: rule.chave },
+            });
+
             if (sendErr) throw new Error(sendErr.message || String(sendErr));
 
             await supabase.from("reminder_logs").insert({
