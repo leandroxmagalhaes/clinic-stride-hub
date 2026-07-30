@@ -144,7 +144,7 @@ serve(async (req) => {
         const query = supabase
           .from("sessoes")
           .select(`
-            id, start_time, end_time, status, confirmacao_estado,
+            id, paciente_id, start_time, end_time, status, confirmacao_estado,
             payment_status, sem_cobranca, clinic_id,
             pacientes!sessoes_paciente_id_fkey ( full_name, email ),
             profiles!sessoes_profissional_id_fkey ( full_name ),
