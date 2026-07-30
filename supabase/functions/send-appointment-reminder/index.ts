@@ -399,12 +399,28 @@ serve(async (req) => {
 </body></html>`;
 
           if (!dryRun) {
-            await resend.emails.send({
+            const assunto = `Sobre o pagamento da consulta de hoje`;
+
+            const envio = await resend.emails.send({
               from: `${clinic?.name || "Respira & Desenvolve"} <noreply@respiraedesenvolve.com>`,
               to: [patient.email],
-              subject: `Sobre o pagamento da consulta de hoje`,
+              subject: assunto,
               html: emailHtml,
             });
+
+            await registarComunicacao(supabase, {
+              clinic_id: (s as any).clinic_id,
+              paciente_id: (s as any).paciente_id,
+              sessao_id: s.id,
+              tipo: "seguimento_metodo_pagamento",
+              assunto,
+              destinatario: patient.email,
+              estado: (envio as any)?.error ? "falhado" : "enviado",
+              erro: (envio as any)?.error?.message ?? null,
+              provider_id: (envio as any)?.data?.id ?? null,
+              origem: "send-appointment-reminder",
+            });
+
             await supabase.from("reminder_logs").insert({ sessao_id: s.id, canal: "email_metodo_followup" });
           }
           followupResults.sent++;
