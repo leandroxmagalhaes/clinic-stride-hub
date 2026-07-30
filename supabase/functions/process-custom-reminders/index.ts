@@ -277,12 +277,28 @@ serve(async (req) => {
               continue;
             }
 
-            const { error: sendErr } = await resend.emails.send({
+            const envio = await resend.emails.send({
               from: "Respira & Desenvolve <noreply@respiraedesenvolve.com>",
               to: [patient.email],
               subject: assuntoFinal,
               html,
             });
+            const sendErr = (envio as any)?.error;
+
+            await registarComunicacao(supabase, {
+              clinic_id: session.clinic_id,
+              paciente_id: session.paciente_id,
+              sessao_id: session.id,
+              tipo: "lembrete_personalizado",
+              assunto: assuntoFinal,
+              destinatario: patient.email,
+              estado: sendErr ? "falhado" : "enviado",
+              erro: sendErr ? (sendErr.message || String(sendErr)) : null,
+              provider_id: (envio as any)?.data?.id ?? null,
+              origem: "process-custom-reminders",
+              metadata: { regra: rule.chave },
+            });
+
             if (sendErr) throw new Error(sendErr.message || String(sendErr));
 
             await supabase.from("reminder_logs").insert({
