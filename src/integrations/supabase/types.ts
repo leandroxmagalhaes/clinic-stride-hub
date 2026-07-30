@@ -460,6 +460,107 @@ export type Database = {
         }
         Relationships: []
       }
+      comunicacoes: {
+        Row: {
+          aberto_em: string | null
+          assunto: string | null
+          canal: string
+          clicado_em: string | null
+          clinic_id: string
+          created_at: string
+          destinatario: string | null
+          devolvido_em: string | null
+          disparado_por: string | null
+          entregue_em: string | null
+          enviado_em: string
+          erro: string | null
+          estado: string
+          id: string
+          metadata: Json
+          origem: string | null
+          paciente_id: string | null
+          provider: string | null
+          provider_id: string | null
+          sessao_id: string | null
+          tipo: string
+        }
+        Insert: {
+          aberto_em?: string | null
+          assunto?: string | null
+          canal?: string
+          clicado_em?: string | null
+          clinic_id: string
+          created_at?: string
+          destinatario?: string | null
+          devolvido_em?: string | null
+          disparado_por?: string | null
+          entregue_em?: string | null
+          enviado_em?: string
+          erro?: string | null
+          estado?: string
+          id?: string
+          metadata?: Json
+          origem?: string | null
+          paciente_id?: string | null
+          provider?: string | null
+          provider_id?: string | null
+          sessao_id?: string | null
+          tipo: string
+        }
+        Update: {
+          aberto_em?: string | null
+          assunto?: string | null
+          canal?: string
+          clicado_em?: string | null
+          clinic_id?: string
+          created_at?: string
+          destinatario?: string | null
+          devolvido_em?: string | null
+          disparado_por?: string | null
+          entregue_em?: string | null
+          enviado_em?: string
+          erro?: string | null
+          estado?: string
+          id?: string
+          metadata?: Json
+          origem?: string | null
+          paciente_id?: string | null
+          provider?: string | null
+          provider_id?: string | null
+          sessao_id?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comunicacoes_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comunicacoes_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comunicacoes_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+          {
+            foreignKeyName: "comunicacoes_sessao_id_fkey"
+            columns: ["sessao_id"]
+            isOneToOne: false
+            referencedRelation: "sessoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       copilot_messages: {
         Row: {
           clinic_id: string
