@@ -15,6 +15,7 @@ export type PermissionModule =
   | 'comercial'
   | 'financeiro'
   | 'engajamento'
+  | 'comunicacoes'
   | 'configuracoes'
   | 'equipe'
   | 'permissoes';
@@ -115,6 +116,9 @@ export function usePermissions() {
 
       // 3. Fall back to hardcoded role-based defaults
       if (isSecretary) {
+        if (module === 'comunicacoes') {
+          return { canView: false, canEdit: false, canDelete: false, canViewFinancialDetails: false };
+        }
         return {
           canView: true,
           canEdit: module !== 'configuracoes',
@@ -124,7 +128,7 @@ export function usePermissions() {
       }
 
       if (isFisioterapeuta) {
-        const restrictedModules: PermissionModule[] = ['profissionais', 'comercial', 'financeiro', 'configuracoes', 'equipe'];
+        const restrictedModules: PermissionModule[] = ['profissionais', 'comercial', 'financeiro', 'configuracoes', 'equipe', 'comunicacoes'];
         const viewOnlyModules: PermissionModule[] = ['servicos', 'engajamento'];
         
         if (restrictedModules.includes(module)) {
@@ -149,6 +153,7 @@ export function usePermissions() {
       comercial: getModulePermissions('comercial'),
       financeiro: getModulePermissions('financeiro'),
       engajamento: getModulePermissions('engajamento'),
+      comunicacoes: getModulePermissions('comunicacoes'),
       configuracoes: getModulePermissions('configuracoes'),
       equipe: getModulePermissions('equipe'),
       permissoes: getModulePermissions('permissoes'),

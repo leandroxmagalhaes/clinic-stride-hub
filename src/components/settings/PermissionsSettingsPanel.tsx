@@ -20,7 +20,7 @@ type PermissionValue = boolean | 'own';
 
 const MODULE_KEYS = [
   'dashboard', 'agenda', 'pacientes', 'prontuarios', 'profissionais',
-  'servicos', 'comercial', 'financeiro', 'engajamento', 'configuracoes', 'equipe',
+  'servicos', 'comercial', 'financeiro', 'engajamento', 'comunicacoes', 'configuracoes', 'equipe',
 ] as const;
 
 const MODULE_LABELS: Record<string, string> = {
@@ -33,6 +33,7 @@ const MODULE_LABELS: Record<string, string> = {
   comercial: 'Comercial',
   financeiro: 'Financeiro',
   engajamento: 'Engajamento',
+  comunicacoes: 'Comunicações',
   configuracoes: 'Configurações',
   equipe: 'Equipe',
 };
