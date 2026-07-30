@@ -312,11 +312,20 @@ const App = () => (
                   <Route
                     path="/automacoes"
                     element={
-                      <ProtectedPage module="configuracoes">
+                      <ProtectedPage module="comunicacoes">
                         <Automacoes />
                       </ProtectedPage>
                     }
                   />
+                  <Route
+                    path="/comunicacoes"
+                    element={
+                      <ProtectedPage module="comunicacoes">
+                        <Comunicacoes />
+                      </ProtectedPage>
+                    }
+                  />
+
 
 
 
