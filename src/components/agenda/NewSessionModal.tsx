@@ -200,7 +200,7 @@ export function NewSessionModal({
       }
       return slots;
     });
-  }, [quantidade, selectedSlot]);
+  }, [quantidade, selectedSlot, isOpen]);
 
   // ── Busca de paciente com debounce ──
   useEffect(() => {
