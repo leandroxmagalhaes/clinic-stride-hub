@@ -163,7 +163,14 @@ export function NewSessionModal({
       setNovoPackPago(false);
       setQuantidade(1);
       setCustomQty("");
-      setSessionSlots([]);
+      setSessionSlots(
+        selectedSlot
+          ? [{
+              date: format(selectedSlot.date, "yyyy-MM-dd"),
+              time: `${String(selectedSlot.hour).padStart(2, "0")}:${String(selectedSlot.minute ?? 0).padStart(2, "0")}`,
+            }]
+          : [{ date: "", time: "" }]
+      );
       setSelectedServico("");
       setSelectedProfissional("");
       setSessionPrice("");
