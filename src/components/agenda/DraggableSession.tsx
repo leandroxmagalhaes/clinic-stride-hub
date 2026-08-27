@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import React from "react";
 import { useData } from "@/contexts/DataContext";
+import { HOUR_HEIGHT } from "./DroppableSlot";
 
 interface Session {
   id: string;
