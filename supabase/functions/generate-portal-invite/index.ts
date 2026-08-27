@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       if (clinic?.name) clinicName = clinic.name;
     }
 
-    const baseUrl = "https://clinic-stride-hub.lovable.app";
+    const baseUrl = "https://physione.app";
     const link = `${baseUrl}/portal/${link_token}`;
 
     let email_sent = false;
