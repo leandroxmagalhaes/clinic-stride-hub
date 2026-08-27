@@ -54,6 +54,7 @@ interface AgendaDesktopGridProps {
   onSlotClick: (date: Date, hour: number) => void;
   onSessionClick: (session: Session) => void;
   onSessionReschedule?: (sessionId: string, newDate: Date, newHour: number) => void;
+  onSessionResize?: (sessionId: string, newStart: Date, newEnd: Date) => void;
   onReservedSlotClick?: (reservation: ReservedSlot) => void;
   getCreditBalance?: (patientId: string) => number;
 }
