@@ -8,7 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, Loader2, User, Phone, FileText, ShieldCheck, Copy, AlertTriangle } from "lucide-react";
+import { CheckCircle, Loader2, User, Phone, FileText, ShieldCheck, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface PatientData {
@@ -113,6 +113,7 @@ export default function PreRegisto() {
   const [error, setError] = useState<string | null>(null);
   const [clinic, setClinic] = useState<ClinicInfo>({ name: "", logo_url: "", primary_color: "#10B981", clinic_id: "" });
   const [noNif, setNoNif] = useState(false);
+  const [faturacaoDiferente, setFaturacaoDiferente] = useState(false);
 
   const [form, setForm] = useState<PatientData>({
     full_name: "",
@@ -291,6 +292,14 @@ export default function PreRegisto() {
         data_consent: p.data_consent || false,
         onboarding_completed_at: p.onboarding_completed_at || null,
       });
+      setFaturacaoDiferente(
+        Boolean(p.billing_name) ||
+          Boolean(p.billing_nif) ||
+          Boolean(
+            p.billing_address &&
+              Object.values(p.billing_address).some((v) => v && String(v).trim() !== "")
+          )
+      );
       if (p.onboarding_completed_at) {
         setSuccess(true);
       }
@@ -313,15 +322,6 @@ export default function PreRegisto() {
         [field]: value,
       },
     }));
-  };
-
-  const replicarDados = () => {
-    setForm((prev) => ({
-      ...prev,
-      billing_name: prev.full_name,
-      billing_nif: prev.cpf,
-    }));
-    toast({ title: "Dados replicados com sucesso" });
   };
 
   const handleSubmit = async () => {
@@ -358,6 +358,9 @@ export default function PreRegisto() {
 
     setSubmitting(true);
     try {
+      const payload = faturacaoDiferente
+        ? form
+        : { ...form, billing_name: null, billing_nif: null, billing_address: null };
       let queryParam: string;
       if (isSlugMode) {
         queryParam = `slug=${slug}`;
@@ -373,7 +376,7 @@ export default function PreRegisto() {
           "Content-Type": "application/json",
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -613,87 +616,96 @@ export default function PreRegisto() {
               </div>
             </AccordionTrigger>
             <AccordionContent className="space-y-4 pb-4">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={replicarDados}
-                disabled={disabled}
-                className="gap-2"
-              >
-                <Copy className="h-3.5 w-3.5" />
-                Replicar dados cadastrais
-              </Button>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="billing_name">Nome na Fatura</Label>
-                  <Input
-                    id="billing_name"
-                    value={form.billing_name || ""}
-                    onChange={(e) => updateField("billing_name", e.target.value)}
-                    disabled={disabled}
-                    maxLength={200}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="billing_nif">NIF da Fatura</Label>
-                  <Input
-                    id="billing_nif"
-                    value={form.billing_nif || ""}
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/\D/g, "").slice(0, 9);
-                      updateField("billing_nif", v);
-                    }}
-                    disabled={disabled}
-                    maxLength={9}
-                    inputMode="numeric"
-                  />
-                </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="faturacao_diferente"
+                  checked={faturacaoDiferente}
+                  onCheckedChange={(checked) => setFaturacaoDiferente(!!checked)}
+                  disabled={disabled}
+                />
+                <Label htmlFor="faturacao_diferente" className="text-sm font-normal text-muted-foreground cursor-pointer">
+                  Os dados de faturação são diferentes dos meus dados pessoais
+                </Label>
               </div>
-              <div>
-                <Label>Morada</Label>
-                <div className="space-y-2 mt-1">
-                  <Input
-                    placeholder="Rua"
-                    value={form.billing_address?.rua || ""}
-                    onChange={(e) => updateBillingAddress("rua", e.target.value)}
-                    disabled={disabled}
-                    maxLength={200}
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Número"
-                      value={form.billing_address?.numero || ""}
-                      onChange={(e) => updateBillingAddress("numero", e.target.value)}
-                      disabled={disabled}
-                      maxLength={20}
-                    />
-                    <Input
-                      placeholder="Andar"
-                      value={form.billing_address?.andar || ""}
-                      onChange={(e) => updateBillingAddress("andar", e.target.value)}
-                      disabled={disabled}
-                      maxLength={20}
-                    />
+              {!faturacaoDiferente && (
+                <p className="text-xs text-muted-foreground">
+                  A fatura será emitida com os dados pessoais indicados acima.
+                </p>
+              )}
+              {faturacaoDiferente && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="billing_name">Nome na Fatura</Label>
+                      <Input
+                        id="billing_name"
+                        value={form.billing_name || ""}
+                        onChange={(e) => updateField("billing_name", e.target.value)}
+                        disabled={disabled}
+                        maxLength={200}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="billing_nif">NIF da Fatura</Label>
+                      <Input
+                        id="billing_nif"
+                        value={form.billing_nif || ""}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 9);
+                          updateField("billing_nif", v);
+                        }}
+                        disabled={disabled}
+                        maxLength={9}
+                        inputMode="numeric"
+                      />
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Código Postal"
-                      value={form.billing_address?.codigo_postal || ""}
-                      onChange={(e) => updateBillingAddress("codigo_postal", e.target.value)}
-                      disabled={disabled}
-                      maxLength={10}
-                    />
-                    <Input
-                      placeholder="Localidade"
-                      value={form.billing_address?.localidade || ""}
-                      onChange={(e) => updateBillingAddress("localidade", e.target.value)}
-                      disabled={disabled}
-                      maxLength={100}
-                    />
+                  <div>
+                    <Label>Morada</Label>
+                    <div className="space-y-2 mt-1">
+                      <Input
+                        placeholder="Rua"
+                        value={form.billing_address?.rua || ""}
+                        onChange={(e) => updateBillingAddress("rua", e.target.value)}
+                        disabled={disabled}
+                        maxLength={200}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="Número"
+                          value={form.billing_address?.numero || ""}
+                          onChange={(e) => updateBillingAddress("numero", e.target.value)}
+                          disabled={disabled}
+                          maxLength={20}
+                        />
+                        <Input
+                          placeholder="Andar"
+                          value={form.billing_address?.andar || ""}
+                          onChange={(e) => updateBillingAddress("andar", e.target.value)}
+                          disabled={disabled}
+                          maxLength={20}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="Código Postal"
+                          value={form.billing_address?.codigo_postal || ""}
+                          onChange={(e) => updateBillingAddress("codigo_postal", e.target.value)}
+                          disabled={disabled}
+                          maxLength={10}
+                        />
+                        <Input
+                          placeholder="Localidade"
+                          value={form.billing_address?.localidade || ""}
+                          onChange={(e) => updateBillingAddress("localidade", e.target.value)}
+                          disabled={disabled}
+                          maxLength={100}
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
             </AccordionContent>
           </AccordionItem>
 
