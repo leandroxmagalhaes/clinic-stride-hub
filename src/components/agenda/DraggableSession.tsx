@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import React from "react";
 import { useData } from "@/contexts/DataContext";
+import { HOUR_HEIGHT } from "./DroppableSlot";
 
 interface Session {
   id: string;
@@ -35,6 +36,8 @@ interface DraggableSessionProps {
   positionStyle?: React.CSSProperties;
   overlapTotal?: number;
   asStrip?: boolean;
+  onResizeEnd?: (sessionId: string, newStart: Date, newEnd: Date) => void;
+  resizable?: boolean;
 }
 
 // ── Formata o nome do serviço: remove "Fisioterapia" e abrevia ──────────────
@@ -58,11 +61,66 @@ function formatServico(name: string): string {
 }
 // ───────────────────────────────────────────────────────────────────────────
 
-export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle, overlapTotal, asStrip }: DraggableSessionProps) {
+export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle, overlapTotal, asStrip, onResizeEnd, resizable }: DraggableSessionProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: session.id,
     data: { session },
   });
+
+  // ── Redimensionamento (estilo Google Calendar) ────────────────────────────
+  const [resizeEdge, setResizeEdge] = React.useState<null | "top" | "bottom">(null);
+  const [resizeDeltaMin, setResizeDeltaMin] = React.useState(0);
+  const justResizedRef = React.useRef(false);
+
+  const startResize = (e: React.PointerEvent, edge: "top" | "bottom") => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    const startY = e.clientY;
+    const startDate = new Date(session.start_time);
+    const endDate = new Date(session.end_time);
+    const durationMin = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+    let delta = 0;
+
+    setResizeEdge(edge);
+    setResizeDeltaMin(0);
+
+    const onMove = (ev: PointerEvent) => {
+      const diffPx = ev.clientY - startY;
+      let minutes = Math.round(((diffPx / HOUR_HEIGHT) * 60) / 5) * 5;
+      if (edge === "bottom") {
+        const minDelta = 15 - durationMin;
+        if (minutes < minDelta) minutes = minDelta;
+      } else {
+        const maxDelta = durationMin - 15;
+        if (minutes > maxDelta) minutes = maxDelta;
+      }
+      delta = minutes;
+      setResizeDeltaMin(minutes);
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      justResizedRef.current = true;
+      if (delta !== 0 && onResizeEnd) {
+        if (edge === "bottom") {
+          const newEnd = new Date(endDate.getTime() + delta * 60000);
+          onResizeEnd(session.id, startDate, newEnd);
+        } else {
+          const newStart = new Date(startDate.getTime() + delta * 60000);
+          onResizeEnd(session.id, newStart, endDate);
+        }
+      }
+      setResizeEdge(null);
+      setResizeDeltaMin(0);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  // ──────────────────────────────────────────────────────────────────────────
+
 
   const isPendingPayment = session.payment_status === "pending" || hasCredits === false;
   const hasCreditAvailable = hasCredits === true;
@@ -206,6 +264,20 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     internalStyle.transform = CSS.Translate.toString(transform);
   }
 
+  // ── Pré-visualização ao vivo do redimensionamento ─────────────────────────
+  if (resizeEdge) {
+    const deltaPx = (resizeDeltaMin / 60) * HOUR_HEIGHT;
+    const baseTop = parseFloat(String(positionStyle?.top ?? 0)) || 0;
+    const baseHeight = parseFloat(String(positionStyle?.height ?? 0)) || 0;
+    if (resizeEdge === "bottom") {
+      internalStyle.height = `${baseHeight + deltaPx}px`;
+    } else {
+      internalStyle.top = `${baseTop + deltaPx}px`;
+      internalStyle.height = `${baseHeight - deltaPx}px`;
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   if (asStrip) {
     const stripTitle = `Cancelada: ${session.paciente?.full_name ?? ""}, ${displayTime ?? ""}`.trim();
     return (
@@ -221,6 +293,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     );
   }
 
+  const showResizeHandles = !!resizable && !isCompact && !asStrip;
+
   return (
     <div
       ref={setNodeRef}
@@ -233,9 +307,36 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
 
       onClick={(e) => {
         e.stopPropagation();
+        if (justResizedRef.current) {
+          justResizedRef.current = false;
+          return;
+        }
         onClick(session);
       }}
     >
+      {showResizeHandles && (
+        <>
+          <div
+            className="absolute top-0 left-0 right-0 h-[6px] z-20 cursor-ns-resize touch-none"
+            onPointerDown={(e) => startResize(e, "top")}
+          >
+            <div
+              className="h-[2px] w-full rounded-full opacity-0 group-hover/session:opacity-100 transition-opacity"
+              style={{ backgroundColor: cardColors.border }}
+            />
+          </div>
+          <div
+            className="absolute bottom-0 left-0 right-0 h-[6px] z-20 cursor-ns-resize touch-none flex items-end"
+            onPointerDown={(e) => startResize(e, "bottom")}
+          >
+            <div
+              className="h-[2px] w-full rounded-full opacity-0 group-hover/session:opacity-100 transition-opacity"
+              style={{ backgroundColor: cardColors.border }}
+            />
+          </div>
+        </>
+      )}
+
       {/* Badge de pagamento — canto inferior direito */}
       {!isCompact && session.sem_cobranca && (
         <span className="absolute bottom-1 right-1 z-10 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-zinc-200 text-zinc-700 border border-zinc-300 shadow-sm">

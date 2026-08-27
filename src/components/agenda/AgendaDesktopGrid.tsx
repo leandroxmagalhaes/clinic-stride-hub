@@ -26,6 +26,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { SessionService } from "@/services/SessionService";
 
 interface Session {
   id: string;
@@ -54,6 +56,7 @@ interface AgendaDesktopGridProps {
   onSlotClick: (date: Date, hour: number) => void;
   onSessionClick: (session: Session) => void;
   onSessionReschedule?: (sessionId: string, newDate: Date, newHour: number) => void;
+  onSessionResize?: (sessionId: string, newStart: Date, newEnd: Date) => void;
   onReservedSlotClick?: (reservation: ReservedSlot) => void;
   getCreditBalance?: (patientId: string) => number;
 }
@@ -264,6 +267,7 @@ export function AgendaDesktopGrid({
   onSlotClick,
   onSessionClick,
   onSessionReschedule,
+  onSessionResize,
   onReservedSlotClick,
   getCreditBalance,
 }: AgendaDesktopGridProps) {
@@ -354,6 +358,32 @@ export function AgendaDesktopGrid({
   const handleCancelReschedule = () => {
     setPendingReschedule(null);
   };
+
+  const handleSessionResize = (sessionId: string, newStart: Date, newEnd: Date) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    if (NON_DRAGGABLE_STATUSES.includes(session.status)) return;
+
+    const others = sessions.filter((s) => s.id !== sessionId);
+    const conflict = SessionService.checkConflict(
+      others as any,
+      (session as any).profissional_id,
+      newStart,
+      newStart.getHours(),
+      newStart.getMinutes(),
+      60,
+      newEnd.getHours(),
+      newEnd.getMinutes(),
+    );
+
+    if (conflict.hasConflict) {
+      toast.error(conflict.message ?? "Conflito de horário");
+      return;
+    }
+
+    onSessionResize?.(sessionId, newStart, newEnd);
+  };
+
 
   const totalHeight = hours.length * HOUR_HEIGHT;
 
@@ -474,6 +504,8 @@ export function AgendaDesktopGrid({
                                 positionStyle={style}
                                 overlapTotal={item.overlapTotal}
                                 asStrip={item.asStrip}
+                                onResizeEnd={handleSessionResize}
+                                resizable={!NON_DRAGGABLE_STATUSES.includes(s.status)}
                               />
                             );
                           } else {
