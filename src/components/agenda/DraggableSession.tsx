@@ -61,11 +61,66 @@ function formatServico(name: string): string {
 }
 // ───────────────────────────────────────────────────────────────────────────
 
-export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle, overlapTotal, asStrip }: DraggableSessionProps) {
+export function DraggableSession({ session, onClick, hasCredits, displayTime, positionStyle, overlapTotal, asStrip, onResizeEnd, resizable }: DraggableSessionProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: session.id,
     data: { session },
   });
+
+  // ── Redimensionamento (estilo Google Calendar) ────────────────────────────
+  const [resizeEdge, setResizeEdge] = React.useState<null | "top" | "bottom">(null);
+  const [resizeDeltaMin, setResizeDeltaMin] = React.useState(0);
+  const justResizedRef = React.useRef(false);
+
+  const startResize = (e: React.PointerEvent, edge: "top" | "bottom") => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    const startY = e.clientY;
+    const startDate = new Date(session.start_time);
+    const endDate = new Date(session.end_time);
+    const durationMin = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+    let delta = 0;
+
+    setResizeEdge(edge);
+    setResizeDeltaMin(0);
+
+    const onMove = (ev: PointerEvent) => {
+      const diffPx = ev.clientY - startY;
+      let minutes = Math.round(((diffPx / HOUR_HEIGHT) * 60) / 5) * 5;
+      if (edge === "bottom") {
+        const minDelta = 15 - durationMin;
+        if (minutes < minDelta) minutes = minDelta;
+      } else {
+        const maxDelta = durationMin - 15;
+        if (minutes > maxDelta) minutes = maxDelta;
+      }
+      delta = minutes;
+      setResizeDeltaMin(minutes);
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      justResizedRef.current = true;
+      if (delta !== 0 && onResizeEnd) {
+        if (edge === "bottom") {
+          const newEnd = new Date(endDate.getTime() + delta * 60000);
+          onResizeEnd(session.id, startDate, newEnd);
+        } else {
+          const newStart = new Date(startDate.getTime() + delta * 60000);
+          onResizeEnd(session.id, newStart, endDate);
+        }
+      }
+      setResizeEdge(null);
+      setResizeDeltaMin(0);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  // ──────────────────────────────────────────────────────────────────────────
+
 
   const isPendingPayment = session.payment_status === "pending" || hasCredits === false;
   const hasCreditAvailable = hasCredits === true;
