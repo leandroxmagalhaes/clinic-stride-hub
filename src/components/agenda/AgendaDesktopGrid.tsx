@@ -357,6 +357,32 @@ export function AgendaDesktopGrid({
     setPendingReschedule(null);
   };
 
+  const handleSessionResize = (sessionId: string, newStart: Date, newEnd: Date) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    if (NON_DRAGGABLE_STATUSES.includes(session.status)) return;
+
+    const others = sessions.filter((s) => s.id !== sessionId);
+    const conflict = SessionService.checkConflict(
+      others as any,
+      (session as any).profissional_id,
+      newStart,
+      newStart.getHours(),
+      newStart.getMinutes(),
+      60,
+      newEnd.getHours(),
+      newEnd.getMinutes(),
+    );
+
+    if (conflict.hasConflict) {
+      toast.error(conflict.message ?? "Conflito de horário");
+      return;
+    }
+
+    onSessionResize?.(sessionId, newStart, newEnd);
+  };
+
+
   const totalHeight = hours.length * HOUR_HEIGHT;
 
   return (
