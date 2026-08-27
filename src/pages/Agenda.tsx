@@ -243,6 +243,20 @@ export default function Agenda() {
     [sessions, updateSession],
   );
 
+  const handleSessionResize = useCallback(
+    async (sessionId: string, newStart: Date, newEnd: Date) => {
+      try {
+        await updateSession(sessionId, { start_time: newStart, end_time: newEnd });
+        toast.success("Duração da sessão atualizada");
+      } catch {
+        toast.error("Erro ao guardar a nova duração");
+      }
+    },
+    [updateSession],
+  );
+
+
+
   const handleDuplicateSession = async (data: {
     pacienteId: string;
     profissionalId: string;
