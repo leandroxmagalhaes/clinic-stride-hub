@@ -210,16 +210,20 @@ export class SessionService {
     existingSessions: Session[],
   ): { success: boolean; error?: string; updatedSession?: Session } {
     const otherSessions = existingSessions.filter((s) => s.id !== session.id);
-    const durationMinutes = session.servico?.duration_minutes || 60;
+    const rawDuration =
+      (new Date(session.end_time).getTime() - new Date(session.start_time).getTime()) / 60000;
+    const durationMinutes =
+      Number.isFinite(rawDuration) && rawDuration > 0
+        ? Math.round(rawDuration)
+        : session.servico?.duration_minutes || 60;
     const conflict = this.checkConflict(otherSessions, session.profissional_id, newDate, newHour, 0, durationMinutes);
 
     if (conflict.hasConflict) {
       return { success: false, error: conflict.message };
     }
 
-    const duration = session.servico?.duration_minutes || 60;
     const newStartTime = setMinutes(setHours(new Date(newDate), newHour), 0);
-    const newEndTime = addMinutes(newStartTime, duration);
+    const newEndTime = addMinutes(newStartTime, durationMinutes);
 
     return {
       success: true,
