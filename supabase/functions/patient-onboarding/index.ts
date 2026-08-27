@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
 
         const allowedFields = [
           "full_name", "birth_date", "gender", "cpf", "phone", "email",
-          "height_cm", "weight_kg",
+          "health_insurance",
           "emergency_contact", "emergency_phone",
           "billing_name", "billing_nif", "billing_address",
           "image_consent", "data_consent",
@@ -223,7 +223,7 @@ Deno.serve(async (req) => {
         .from("pacientes")
         .select(`
           full_name, birth_date, gender, cpf, phone, email,
-          height_cm, weight_kg,
+          health_insurance,
           emergency_contact, emergency_phone,
           billing_name, billing_nif, billing_address,
           image_consent, data_consent,
@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
 
       const allowedFields = [
         "full_name", "birth_date", "gender", "cpf", "phone", "email",
-        "height_cm", "weight_kg",
+        "health_insurance",
         "emergency_contact", "emergency_phone",
         "billing_name", "billing_nif", "billing_address",
         "image_consent", "data_consent",

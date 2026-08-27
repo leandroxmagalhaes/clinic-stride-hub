@@ -18,8 +18,7 @@ interface PatientData {
   cpf: string | null;
   phone: string | null;
   email: string | null;
-  height_cm: number | null;
-  weight_kg: number | null;
+  health_insurance: string | null;
   emergency_contact: string | null;
   emergency_phone: string | null;
   billing_name: string | null;
@@ -122,8 +121,7 @@ export default function PreRegisto() {
     cpf: null,
     phone: null,
     email: null,
-    height_cm: null,
-    weight_kg: null,
+    health_insurance: null,
     emergency_contact: null,
     emergency_phone: null,
     billing_name: null,
@@ -283,8 +281,7 @@ export default function PreRegisto() {
         cpf: p.cpf || null,
         phone: p.phone || null,
         email: p.email || null,
-        height_cm: p.height_cm || null,
-        weight_kg: p.weight_kg || null,
+        health_insurance: p.health_insurance || null,
         emergency_contact: p.emergency_contact || null,
         emergency_phone: p.emergency_phone || null,
         billing_name: p.billing_name || null,
@@ -534,34 +531,16 @@ export default function PreRegisto() {
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="height_cm">Altura (cm)</Label>
-                  <Input
-                    id="height_cm"
-                    type="number"
-                    value={form.height_cm ?? ""}
-                    onChange={(e) => updateField("height_cm", e.target.value ? parseInt(e.target.value) : null)}
-                    placeholder="170"
-                    disabled={disabled}
-                    min={50}
-                    max={250}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="weight_kg">Peso (kg)</Label>
-                  <Input
-                    id="weight_kg"
-                    type="number"
-                    value={form.weight_kg ?? ""}
-                    onChange={(e) => updateField("weight_kg", e.target.value ? parseFloat(e.target.value) : null)}
-                    placeholder="70"
-                    disabled={disabled}
-                    min={10}
-                    max={300}
-                    step="0.1"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="health_insurance">Seguradora / Entidade</Label>
+                <Input
+                  id="health_insurance"
+                  value={form.health_insurance || ""}
+                  onChange={(e) => updateField("health_insurance", e.target.value)}
+                  placeholder="Nome da seguradora e nº de beneficiário (se aplicável)"
+                  disabled={disabled}
+                  maxLength={200}
+                />
               </div>
             </AccordionContent>
           </AccordionItem>
