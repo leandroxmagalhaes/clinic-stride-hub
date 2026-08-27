@@ -353,6 +353,7 @@ export default function Agenda() {
           onSlotClick={handleSlotClick}
           onSessionClick={handleSessionClick}
           onSessionReschedule={handleSessionReschedule}
+          onSessionResize={handleSessionResize}
           onReservedSlotClick={handleReservedSlotClick}
         />
         <AgendaMobileTimeline
