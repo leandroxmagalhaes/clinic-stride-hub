@@ -265,6 +265,7 @@ export function AgendaDesktopGrid({
   onSlotClick,
   onSessionClick,
   onSessionReschedule,
+  onSessionResize,
   onReservedSlotClick,
   getCreditBalance,
 }: AgendaDesktopGridProps) {
