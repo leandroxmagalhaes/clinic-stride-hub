@@ -264,6 +264,20 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     internalStyle.transform = CSS.Translate.toString(transform);
   }
 
+  // ── Pré-visualização ao vivo do redimensionamento ─────────────────────────
+  if (resizeEdge) {
+    const deltaPx = (resizeDeltaMin / 60) * HOUR_HEIGHT;
+    const baseTop = parseFloat(String(positionStyle?.top ?? 0)) || 0;
+    const baseHeight = parseFloat(String(positionStyle?.height ?? 0)) || 0;
+    if (resizeEdge === "bottom") {
+      internalStyle.height = `${baseHeight + deltaPx}px`;
+    } else {
+      internalStyle.top = `${baseTop + deltaPx}px`;
+      internalStyle.height = `${baseHeight - deltaPx}px`;
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   if (asStrip) {
     const stripTitle = `Cancelada: ${session.paciente?.full_name ?? ""}, ${displayTime ?? ""}`.trim();
     return (
@@ -279,6 +293,8 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
     );
   }
 
+  const showResizeHandles = !!resizable && !isCompact && !asStrip;
+
   return (
     <div
       ref={setNodeRef}
@@ -291,9 +307,36 @@ export function DraggableSession({ session, onClick, hasCredits, displayTime, po
 
       onClick={(e) => {
         e.stopPropagation();
+        if (justResizedRef.current) {
+          justResizedRef.current = false;
+          return;
+        }
         onClick(session);
       }}
     >
+      {showResizeHandles && (
+        <>
+          <div
+            className="absolute top-0 left-0 right-0 h-[6px] z-20 cursor-ns-resize touch-none"
+            onPointerDown={(e) => startResize(e, "top")}
+          >
+            <div
+              className="h-[2px] w-full rounded-full opacity-0 group-hover/session:opacity-100 transition-opacity"
+              style={{ backgroundColor: cardColors.border }}
+            />
+          </div>
+          <div
+            className="absolute bottom-0 left-0 right-0 h-[6px] z-20 cursor-ns-resize touch-none flex items-end"
+            onPointerDown={(e) => startResize(e, "bottom")}
+          >
+            <div
+              className="h-[2px] w-full rounded-full opacity-0 group-hover/session:opacity-100 transition-opacity"
+              style={{ backgroundColor: cardColors.border }}
+            />
+          </div>
+        </>
+      )}
+
       {/* Badge de pagamento — canto inferior direito */}
       {!isCompact && session.sem_cobranca && (
         <span className="absolute bottom-1 right-1 z-10 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-zinc-200 text-zinc-700 border border-zinc-300 shadow-sm">
