@@ -504,6 +504,8 @@ export function AgendaDesktopGrid({
                                 positionStyle={style}
                                 overlapTotal={item.overlapTotal}
                                 asStrip={item.asStrip}
+                                onResizeEnd={handleSessionResize}
+                                resizable={!NON_DRAGGABLE_STATUSES.includes(s.status)}
                               />
                             );
                           } else {
