@@ -162,6 +162,14 @@ const App = () => (
                     }
                   />
                   <Route
+                    path="/questionario/:token"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <QuestionarioPublico />
+                      </Suspense>
+                    }
+                  />
+                  <Route
                     path="/pre-registo/:token"
                     element={
                       <Suspense fallback={<PageLoadingFallback />}>
@@ -169,6 +177,7 @@ const App = () => (
                       </Suspense>
                     }
                   />
+
                   <Route
                     path="/portal/ativar/:token"
                     element={
