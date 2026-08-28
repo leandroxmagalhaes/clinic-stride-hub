@@ -7,15 +7,11 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getPublicBaseUrl(): string {
   if (typeof window === 'undefined') {
-    return 'https://clinic-stride-hub.lovable.app';
+    return 'https://physione.app';
   }
   const host = window.location.hostname;
-  const previewMatch = host.match(/^id-preview--(.+)\.lovable\.app$/);
-  if (previewMatch) {
-    return `https://${previewMatch[1]}.lovable.app`;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return window.location.origin;
   }
-  if (host.includes('lovable.dev')) {
-    return 'https://clinic-stride-hub.lovable.app';
-  }
-  return window.location.origin;
+  return 'https://physione.app';
 }

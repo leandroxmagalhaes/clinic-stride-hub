@@ -21,7 +21,7 @@ export function getPortalBaseUrl(): string {
   if (typeof window !== 'undefined') {
     return getPublicBaseUrl();
   }
-  return 'https://clinic-stride-hub.lovable.app';
+  return 'https://physione.app';
 }
 
 /**
