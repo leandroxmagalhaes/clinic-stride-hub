@@ -87,3 +87,7 @@ verify_jwt = false
 
 [functions.process-pack-billing]
 verify_jwt = false
+
+[functions.questionario-publico]
+verify_jwt = false
+

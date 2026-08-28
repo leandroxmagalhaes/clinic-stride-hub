@@ -49,6 +49,8 @@ const Engajamento = lazyWithRetry(() => import("./pages/Engajamento"));
 const Configuracoes = lazyWithRetry(() => import("./pages/Configuracoes"));
 const PatientPortal = lazyWithRetry(() => import("./pages/PatientPortal"));
 const PreRegisto = lazyWithRetry(() => import("./pages/PreRegisto"));
+const QuestionarioPublico = lazyWithRetry(() => import("./pages/QuestionarioPublico"));
+
 const RelatorioResp = lazyWithRetry(() => import("./pages/RelatorioRespiratorio"));
 const PortalVerificacao = lazyWithRetry(() => import("./pages/PortalVerificacao"));
 const PortalAtivacao = lazyWithRetry(() => import("./pages/PortalAtivacao"));
@@ -160,6 +162,14 @@ const App = () => (
                     }
                   />
                   <Route
+                    path="/questionario/:token"
+                    element={
+                      <Suspense fallback={<PageLoadingFallback />}>
+                        <QuestionarioPublico />
+                      </Suspense>
+                    }
+                  />
+                  <Route
                     path="/pre-registo/:token"
                     element={
                       <Suspense fallback={<PageLoadingFallback />}>
@@ -167,6 +177,7 @@ const App = () => (
                       </Suspense>
                     }
                   />
+
                   <Route
                     path="/portal/ativar/:token"
                     element={

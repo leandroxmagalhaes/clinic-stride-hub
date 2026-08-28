@@ -20,14 +20,16 @@ interface Props {
   initialAnswers?: Record<string, Record<string, any>>;
   inviteToken?: string | null;
   saving?: boolean;
+  draftKey?: string;
   onSubmit: (answers: Record<string, Record<string, any>>) => void;
   onExit?: () => void;
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, inviteToken, saving, onSubmit, onExit }: Props) {
-  const localDraftKey = pacienteId ? `portal_questionario_draft:${pacienteId}:${template.id}` : null;
+export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, inviteToken, saving, draftKey, onSubmit, onExit }: Props) {
+  const localDraftKey = draftKey || (pacienteId ? `portal_questionario_draft:${pacienteId}:${template.id}` : null);
+
   const [answers, setAnswers] = useState<Record<string, Record<string, any>>>(() => {
     if (initialAnswers && Object.keys(initialAnswers).length > 0) return initialAnswers;
     if (!localDraftKey) return {};
