@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, CheckCircle } from "lucide-react";
+import { Loader2, CheckCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DynamicQuestionnaireRenderer } from "@/components/patient-portal/DynamicQuestionnaireRenderer";
@@ -16,17 +16,44 @@ interface PublicPatient {
   health_insurance: string | null;
 }
 
+interface TemplateListItem {
+  id: string;
+  identifier: string;
+  name: string;
+  description: string | null;
+  estimated_minutes: number | null;
+}
+
+type Step = "escolha" | "confirmacao" | "questionario";
+
+function ageInYears(birthDate: string | null): number | null {
+  if (!birthDate) return null;
+  const bd = new Date(birthDate);
+  if (isNaN(bd.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - bd.getFullYear();
+  const m = now.getMonth() - bd.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < bd.getDate())) age--;
+  return age;
+}
+
 export default function QuestionarioPublico() {
   const { token } = useParams<{ token: string }>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [patient, setPatient] = useState<PublicPatient | null>(null);
-  const [template, setTemplate] = useState<any>(null);
   const [clinicName, setClinicName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const draftKey = `questionario_publico:${token}`;
+  const [templates, setTemplates] = useState<TemplateListItem[]>([]);
+  const [suggestedIdentifier, setSuggestedIdentifier] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateListItem | null>(null);
+  const [fullTemplate, setFullTemplate] = useState<any>(null);
+  const [step, setStep] = useState<Step>("escolha");
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
+
+  const draftKey = `questionario_publico:${token}:${fullTemplate?.id ?? ""}`;
 
   useEffect(() => {
     const load = async () => {
@@ -46,8 +73,15 @@ export default function QuestionarioPublico() {
         }
         if ((data as any)?.error) throw new Error((data as any).error);
         setPatient((data as any).patient);
-        setTemplate((data as any).template);
         setClinicName((data as any).clinic_name || null);
+        const list: TemplateListItem[] = (data as any).templates || [];
+        setTemplates(list);
+        const suggested: string | null = (data as any).suggested_identifier ?? null;
+        setSuggestedIdentifier(suggested);
+        const match = suggested
+          ? list.find((t) => t.identifier === suggested) ?? null
+          : null;
+        setSelectedTemplate(match);
       } catch (err: any) {
         setError(err?.message || "Link inválido");
       } finally {
@@ -61,11 +95,37 @@ export default function QuestionarioPublico() {
     }
   }, [token]);
 
+  const handleConfirmTemplate = async () => {
+    if (!selectedTemplate) return;
+    setLoadingTemplate(true);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("questionario-publico", {
+        body: { action: "template", token, template_id: selectedTemplate.id },
+      });
+      if (fnError) {
+        const ctx: any = (fnError as any).context;
+        let msg = fnError.message;
+        try {
+          const body = await ctx?.json?.();
+          if (body?.error) msg = body.error;
+        } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+      setFullTemplate((data as any).template);
+      setStep("questionario");
+    } catch (err: any) {
+      toast.error(err?.message || "Não foi possível abrir o questionário");
+    } finally {
+      setLoadingTemplate(false);
+    }
+  };
+
   const handleSubmit = async (answers: Record<string, Record<string, any>>) => {
     setSaving(true);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("questionario-publico", {
-        body: { action: "submit", token, answers },
+        body: { action: "submit", token, answers, template_id: fullTemplate?.id },
       });
       if (fnError) {
         const ctx: any = (fnError as any).context;
@@ -137,36 +197,181 @@ export default function QuestionarioPublico() {
     { label: "Seguradora", value: patient?.health_insurance },
   ].filter((r) => !!r.value);
 
+  const dataHeader = (
+    <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
+      <Card>
+        <CardContent className="pt-6 space-y-3">
+          <h2 className="text-base font-semibold">Os seus dados</h2>
+          <div className="space-y-1">
+            {rows.map((r) => (
+              <p key={r.label} className="text-sm">
+                <span className="text-muted-foreground">{r.label}: </span>
+                <span className="text-foreground">{r.value}</span>
+              </p>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Se algum destes dados estiver errado, avise a clínica.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // ----- Step: escolha -----
+  if (step === "escolha") {
+    return (
+      <div className="min-h-screen bg-muted/30">
+        <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+          <div className="max-w-lg mx-auto flex flex-col items-center gap-1 text-center">
+            <h1 className="text-lg font-semibold text-foreground">{clinicName || "Clínica"}</h1>
+          </div>
+        </div>
+
+        {dataHeader}
+
+        <div className="max-w-lg mx-auto px-4 pb-10 space-y-4">
+          <h2 className="text-base font-semibold text-foreground">Qual questionário vai preencher?</h2>
+          <div className="space-y-3">
+            {templates.map((t) => {
+              const isSelected = selectedTemplate?.id === t.id;
+              const isSuggested = suggestedIdentifier && t.identifier === suggestedIdentifier;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSelectedTemplate(t)}
+                  className={`w-full text-left rounded-lg border p-4 transition-colors ${
+                    isSelected
+                      ? "border-primary ring-1 ring-primary bg-primary/5"
+                      : "border-border bg-white hover:border-primary/40"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">{t.name}</p>
+                      {t.description && (
+                        <p className="text-xs text-muted-foreground">{t.description}</p>
+                      )}
+                      {t.estimated_minutes != null && (
+                        <p className="text-xs text-muted-foreground">{t.estimated_minutes}min</p>
+                      )}
+                    </div>
+                    {isSuggested && (
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        Sugerido para a idade
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            disabled={!selectedTemplate}
+            onClick={() => setStep("confirmacao")}
+            className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+          >
+            Continuar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ----- Step: confirmacao -----
+  if (step === "confirmacao") {
+    const age = ageInYears(patient?.birth_date ?? null);
+    const identifier = selectedTemplate?.identifier ?? null;
+    let ageWarning: string | null = null;
+    if (age != null && identifier) {
+      if (age < 12 && (identifier === "template_adult" || identifier === "template_elderly")) {
+        ageWarning = "Este questionário é de adulto, mas a data de nascimento indica uma criança. Confirme se é mesmo este.";
+      } else if (
+        age >= 18 &&
+        (identifier === "template_baby_complete" || identifier === "template_child")
+      ) {
+        ageWarning = "Este questionário é pediátrico, mas a data de nascimento indica um adulto. Confirme se é mesmo este.";
+      }
+    }
+
+    return (
+      <div className="min-h-screen bg-muted/30">
+        <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+          <div className="max-w-lg mx-auto flex flex-col items-center gap-1 text-center">
+            <h1 className="text-lg font-semibold text-foreground">{clinicName || "Clínica"}</h1>
+          </div>
+        </div>
+
+        <div className="max-w-lg mx-auto px-4 py-10">
+          <Card>
+            <CardContent className="pt-6 space-y-4 text-center">
+              <h2 className="text-base font-semibold">Confirme antes de começar</h2>
+              {selectedTemplate && (
+                <>
+                  <p className="text-lg font-semibold text-foreground">{selectedTemplate.name}</p>
+                  {selectedTemplate.estimated_minutes != null && (
+                    <p className="text-sm text-muted-foreground">
+                      Tempo estimado: {selectedTemplate.estimated_minutes}min
+                    </p>
+                  )}
+                </>
+              )}
+              <p className="text-sm text-muted-foreground">
+                Depois de submeter não é possível voltar a preencher este link.
+              </p>
+
+              {ageWarning && (
+                <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-left">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                  <p className="text-xs text-amber-800">{ageWarning}</p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={loadingTemplate}
+                  onClick={handleConfirmTemplate}
+                  className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                >
+                  {loadingTemplate && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {loadingTemplate ? "A abrir..." : "Confirmar e começar"}
+                </button>
+                <button
+                  type="button"
+                  disabled={loadingTemplate}
+                  onClick={() => setStep("escolha")}
+                  className="w-full rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  Escolher outro
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ----- Step: questionario -----
   return (
     <div className="min-h-screen bg-muted/30">
       <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
         <div className="max-w-lg mx-auto flex flex-col items-center gap-1 text-center">
           <h1 className="text-lg font-semibold text-foreground">{clinicName || "Clínica"}</h1>
-          {template?.name && <p className="text-xs text-muted-foreground">{template.name}</p>}
+          {fullTemplate?.name && <p className="text-xs text-muted-foreground">{fullTemplate.name}</p>}
         </div>
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
-        <Card>
-          <CardContent className="pt-6 space-y-3">
-            <h2 className="text-base font-semibold">Os seus dados</h2>
-            <div className="space-y-1">
-              {rows.map((r) => (
-                <p key={r.label} className="text-sm">
-                  <span className="text-muted-foreground">{r.label}: </span>
-                  <span className="text-foreground">{r.value}</span>
-                </p>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Se algum destes dados estiver errado, avise a clínica.
-            </p>
-          </CardContent>
-        </Card>
+        {dataHeader}
 
-        {template && (
+        {fullTemplate && (
           <DynamicQuestionnaireRenderer
-            template={template}
+            template={fullTemplate}
             pacienteId={null}
             draftKey={draftKey}
             saving={saving}
