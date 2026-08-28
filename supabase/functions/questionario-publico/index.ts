@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { action, token, answers } = await req.json();
+    const { action, token, answers, template_id } = await req.json();
     if (!token) throw new Error("Link inválido");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -52,29 +52,15 @@ Deno.serve(async (req) => {
 
     if (!patient) throw new Error("Link inválido");
 
-    // Template resolution
-    let template: any = null;
-    if (invite.template_id) {
-      const { data } = await admin
-        .from("portal_questionario_templates")
-        .select("id, identifier, name, description, estimated_minutes, schema")
-        .eq("id", invite.template_id)
-        .maybeSingle();
-      template = data;
-    }
-    if (!template) {
-      const identifier = identifierForBirthDate(patient.birth_date);
-      const { data } = await admin
-        .from("portal_questionario_templates")
-        .select("id, identifier, name, description, estimated_minutes, schema")
-        .eq("identifier", identifier)
-        .eq("is_active", true)
-        .maybeSingle();
-      template = data;
-    }
-    if (!template) throw new Error("Questionário não disponível");
-
     if (action === "load") {
+      const { data: templates } = await admin
+        .from("portal_questionario_templates")
+        .select("id, identifier, name, description, estimated_minutes")
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+
+      const suggestedIdentifier = identifierForBirthDate(patient.birth_date);
+
       let clinicName: string | null = null;
       if (patient.clinic_id) {
         const { data: clinic } = await admin
@@ -96,9 +82,28 @@ Deno.serve(async (req) => {
             gender: patient.gender,
             health_insurance: patient.health_insurance,
           },
-          template,
+          templates: templates || [],
+          suggested_identifier: suggestedIdentifier,
           clinic_name: clinicName,
         }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (action === "template") {
+      if (!template_id) throw new Error("Questionário não disponível");
+
+      const { data: template } = await admin
+        .from("portal_questionario_templates")
+        .select("id, identifier, name, description, estimated_minutes, schema")
+        .eq("id", template_id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (!template) throw new Error("Questionário não disponível");
+
+      return new Response(
+        JSON.stringify({ template }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -107,6 +112,28 @@ Deno.serve(async (req) => {
       if (!answers || typeof answers !== "object" || Object.keys(answers).length === 0) {
         throw new Error("Respostas em falta");
       }
+
+      let template: any = null;
+      if (template_id) {
+        const { data } = await admin
+          .from("portal_questionario_templates")
+          .select("id, identifier")
+          .eq("id", template_id)
+          .eq("is_active", true)
+          .maybeSingle();
+        template = data;
+      }
+      if (!template) {
+        const identifier = identifierForBirthDate(patient.birth_date);
+        const { data } = await admin
+          .from("portal_questionario_templates")
+          .select("id, identifier")
+          .eq("identifier", identifier)
+          .eq("is_active", true)
+          .maybeSingle();
+        template = data;
+      }
+      if (!template) throw new Error("Questionário não disponível");
 
       const { error: rpcErr } = await admin.rpc("upsert_portal_questionnaire", {
         p_paciente_id: invite.paciente_id,
