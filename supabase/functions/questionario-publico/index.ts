@@ -20,6 +20,68 @@ function identifierForBirthDate(birthDate: string | null): string {
   return "template_adult";
 }
 
+function normalizar(texto: string): string {
+  return (texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[.,;:!?()[\]{}'"]/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+const CAMPOS_DO_CADASTRO = new Set([
+  "nome",
+  "nome completo",
+  "nome do utente",
+  "nome do paciente",
+  "nome da crianca",
+  "data de nascimento",
+  "data nascimento",
+  "genero",
+  "sexo",
+  "nif",
+  "numero de contribuinte",
+  "contribuinte",
+  "cpf",
+  "telefone",
+  "telemovel",
+  "contacto telefonico",
+  "contacto",
+  "email",
+  "correio eletronico",
+  "morada",
+  "endereco",
+  "codigo postal",
+  "localidade",
+  "contacto de emergencia",
+  "telefone de emergencia",
+  "pessoa de contacto em emergencia",
+  "seguradora",
+  "entidade",
+  "seguro de saude",
+  "subsistema de saude",
+]);
+
+function limparSchema(schema: any): any {
+  if (!schema || !Array.isArray(schema.sections)) return schema;
+  const sections = schema.sections
+    .map((section: any) => {
+      const fields = (section.fields || []).filter((field: any) => {
+        const labelNorm = normalizar(field?.label || "");
+        const keyNorm = normalizar(field?.key || "");
+        return !CAMPOS_DO_CADASTRO.has(labelNorm) && !CAMPOS_DO_CADASTRO.has(keyNorm);
+      });
+      return { ...section, fields };
+    })
+    .filter((section: any) => {
+      const temCampos = Array.isArray(section.fields) && section.fields.length > 0;
+      const temTexto = Boolean(section.intro || section.description);
+      return temCampos || temTexto;
+    });
+  return { ...schema, sections };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -102,8 +164,10 @@ Deno.serve(async (req) => {
 
       if (!template) throw new Error("Questionário não disponível");
 
+      const templateLimpo = { ...template, schema: limparSchema(template.schema) };
+
       return new Response(
-        JSON.stringify({ template }),
+        JSON.stringify({ template: templateLimpo }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
