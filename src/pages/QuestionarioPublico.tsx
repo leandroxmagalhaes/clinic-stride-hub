@@ -317,6 +317,7 @@ export default function QuestionarioPublico() {
                   key={t.id}
                   type="button"
                   onClick={() => setSelectedTemplate(t)}
+                  style={{ borderLeft: `3px solid ${corDoModelo(t.identifier, corBase)}` }}
                   className={`w-full text-left rounded-lg border p-4 transition-colors ${
                     isSelected
                       ? "border-primary ring-1 ring-primary bg-primary/5"
@@ -434,8 +435,8 @@ export default function QuestionarioPublico() {
 
   // ----- Step: questionario -----
   return (
-    <div className="min-h-screen bg-muted/30">
-      <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+    <div style={estiloEcran} className="min-h-screen">
+      <div style={estiloFaixa} className="sticky top-0 z-10 border-b px-4 py-4">
         <div className="max-w-lg mx-auto flex flex-col items-center gap-1 text-center">
           <h1 className="text-lg font-semibold text-foreground">{clinicName || "Clínica"}</h1>
           {fullTemplate?.name && <p className="text-xs text-muted-foreground">{fullTemplate.name}</p>}
