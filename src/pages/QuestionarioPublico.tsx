@@ -87,6 +87,7 @@ export default function QuestionarioPublico() {
   const [error, setError] = useState<string | null>(null);
   const [patient, setPatient] = useState<PublicPatient | null>(null);
   const [clinicName, setClinicName] = useState<string | null>(null);
+  const [clinicColor, setClinicColor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -118,6 +119,7 @@ export default function QuestionarioPublico() {
         if ((data as any)?.error) throw new Error((data as any).error);
         setPatient((data as any).patient);
         setClinicName((data as any).clinic_name || null);
+        setClinicColor((data as any).clinic_primary_color || null);
         const list: TemplateListItem[] = (data as any).templates || [];
         setTemplates(list);
         const suggested: string | null = (data as any).suggested_identifier ?? null;
