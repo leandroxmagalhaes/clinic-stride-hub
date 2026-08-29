@@ -144,6 +144,31 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
     setLoading(false);
   };
 
+  const handleGerarQuestionario = async () => {
+    setGerandoQuestionario(true);
+    try {
+      const token = crypto.randomUUID();
+      const codigo = String(Math.floor(100000 + Math.random() * 900000));
+      const expiraEm = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { error } = await (supabase as any).from("portal_convites").insert({
+        paciente_id: patientId,
+        link_token: token,
+        codigo,
+        tipo: "questionario",
+        expira_em: expiraEm,
+      });
+      if (error) throw error;
+      const link = `${getPublicBaseUrl()}/questionario/${token}`;
+      setQuestionarioLink(link);
+      await navigator.clipboard.writeText(link);
+      toast.success("Link do questionário gerado e copiado");
+    } catch (e: any) {
+      toast.error("Erro ao gerar o link do questionário");
+    } finally {
+      setGerandoQuestionario(false);
+    }
+  };
+
   const getStatus = (): { label: string; variant: "default" | "secondary" | "destructive" | "outline" } => {
     if (!account && !lastInvite) return { label: "Não activado", variant: "secondary" };
     if (account?.status === "blocked") return { label: "Bloqueado", variant: "destructive" };
