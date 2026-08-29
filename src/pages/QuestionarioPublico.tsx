@@ -274,7 +274,7 @@ export default function QuestionarioPublico() {
                         <p className="text-xs text-muted-foreground">{t.description}</p>
                       )}
                       {t.estimated_minutes != null && (
-                        <p className="text-xs text-muted-foreground">{t.estimated_minutes}min</p>
+                        <p className="text-xs text-muted-foreground">{t.estimated_minutes}</p>
                       )}
                     </div>
                     {isSuggested && (

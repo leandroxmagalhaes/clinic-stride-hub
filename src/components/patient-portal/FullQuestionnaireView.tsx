@@ -855,6 +855,14 @@ export function FullQuestionnaireView({
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {template.is_active === false && (
+          <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 p-3">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+            <p className="text-xs text-amber-800">
+              Este questionário foi preenchido num modelo que já não está em uso. As respostas mantêm-se tal como foram submetidas. Para uma avaliação atualizada, gere um novo questionário na ficha do utente.
+            </p>
+          </div>
+        )}
         {/* Alert badges banner — hidden during edit and in print to keep the printout focused on content. */}
         {!editing && alertBadges.length > 0 && (
           <div className="anamnese-print-hide flex flex-wrap gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
