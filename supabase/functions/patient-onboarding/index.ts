@@ -71,12 +71,13 @@ function escapeHtml(text: string): string {
 }
 
 // Gera (ou reaproveita) o link do questionário clínico e envia-o por email ao utente.
-// Nunca deixa rebentar o pedido principal — erros são apenas registados na consola.
+// Devolve o endereço do questionário quando consegue criar/reaproveitar um convite
+// (mesmo que o email falhe ou não exista), e null em todos os outros casos.
 async function dispararQuestionario(
   supabase: any,
   pacienteId: string,
   clinicId: string
-): Promise<void> {
+): Promise<string | null> {
   try {
     // 1.1 Paciente
     const { data: paciente } = await supabase
@@ -84,7 +85,7 @@ async function dispararQuestionario(
       .select("full_name, email")
       .eq("id", pacienteId)
       .single();
-    if (!paciente) return;
+    if (!paciente) return null;
 
     // 1.2 Questionário já completo
     const { data: questionarioCompleto } = await supabase
@@ -93,7 +94,7 @@ async function dispararQuestionario(
       .eq("paciente_id", pacienteId)
       .eq("completo", true)
       .limit(1);
-    if (questionarioCompleto && questionarioCompleto.length > 0) return;
+    if (questionarioCompleto && questionarioCompleto.length > 0) return null;
 
     // 1.3 Convite de questionário ativo — reaproveitar
     const { data: conviteAtivo } = await supabase
@@ -123,21 +124,21 @@ async function dispararQuestionario(
       });
       if (inviteError) {
         console.error("dispararQuestionario: erro ao criar convite:", inviteError);
-        return;
+        return null;
       }
     }
 
     // 1.5 Endereço do questionário
     const linkQuestionario = `https://physione.app/questionario/${linkToken}`;
 
-    // 1.6 Sem email — o link fica apenas disponível na ficha
-    if (!paciente.email) return;
+    // 1.6 Sem email — o link fica apenas disponível na ficha (mas devolve-se o endereço)
+    if (!paciente.email) return linkQuestionario;
 
     // 1.7 Enviar email via Resend (mesmo padrão de send-portal-link-automation)
     const resendKey = Deno.env.get("RESEND_API_KEY");
     if (!resendKey) {
       console.error("dispararQuestionario: RESEND_API_KEY not configured");
-      return;
+      return linkQuestionario;
     }
 
     const { data: clinic } = await supabase
@@ -180,8 +181,11 @@ async function dispararQuestionario(
       const errBody = await resendRes.text();
       console.error(`dispararQuestionario: resend ${resendRes.status}: ${errBody}`);
     }
+
+    return linkQuestionario;
   } catch (err) {
     console.error("dispararQuestionario error:", err);
+    return null;
   }
 }
 
@@ -296,10 +300,10 @@ Deno.serve(async (req) => {
         });
 
         // Gerar link do questionário clínico e enviar por email (anti-dup interno)
-        await dispararQuestionario(supabase, newPatient.id, clinic.id);
+        const questionarioUrl = await dispararQuestionario(supabase, newPatient.id, clinic.id);
 
         return new Response(
-          JSON.stringify({ success: true, patient_id: newPatient.id }),
+          JSON.stringify({ success: true, patient_id: newPatient.id, questionario_url: questionarioUrl }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -421,12 +425,13 @@ Deno.serve(async (req) => {
         .select("id, clinic_id")
         .eq("public_token", token)
         .single();
+      let questionarioUrl: string | null = null;
       if (utenteAtualizado) {
-        await dispararQuestionario(supabase, utenteAtualizado.id, utenteAtualizado.clinic_id);
+        questionarioUrl = await dispararQuestionario(supabase, utenteAtualizado.id, utenteAtualizado.clinic_id);
       }
 
       return new Response(
-        JSON.stringify({ success: true }),
+        JSON.stringify({ success: true, questionario_url: questionarioUrl }),
         {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
