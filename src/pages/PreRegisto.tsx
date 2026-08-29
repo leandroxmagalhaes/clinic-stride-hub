@@ -114,6 +114,7 @@ export default function PreRegisto() {
   const [clinic, setClinic] = useState<ClinicInfo>({ name: "", logo_url: "", primary_color: "#10B981", clinic_id: "" });
   const [noNif, setNoNif] = useState(false);
   const [faturacaoDiferente, setFaturacaoDiferente] = useState(false);
+  const [questionarioUrl, setQuestionarioUrl] = useState<string | null>(null);
 
   const [form, setForm] = useState<PatientData>({
     full_name: "",
@@ -383,6 +384,9 @@ export default function PreRegisto() {
         toast({ title: "Erro", description: result.error || "Erro ao atualizar dados.", variant: "destructive" });
         return;
       }
+      if (result.questionario_url) {
+        setQuestionarioUrl(result.questionario_url);
+      }
       setSuccess(true);
     } catch {
       toast({ title: "Erro", description: "Erro de ligação. Tente novamente.", variant: "destructive" });
@@ -428,7 +432,26 @@ export default function PreRegisto() {
           <h1 className="text-xl font-semibold text-foreground">
             {isNewMode ? "O seu registo foi criado com sucesso!" : "Os seus dados foram atualizados com sucesso!"}
           </h1>
-          <p className="text-muted-foreground text-sm">Pode fechar esta página. Obrigado!</p>
+          {questionarioUrl ? (
+            <div className="w-full max-w-sm mx-auto space-y-3">
+              <p className="text-muted-foreground text-sm">Obrigado pelos seus dados.</p>
+              <p className="text-muted-foreground text-sm">
+                Falta apenas o questionário clínico. Pode preenchê-lo agora, demora poucos minutos.
+              </p>
+              <Button
+                className="w-full text-white"
+                style={{ backgroundColor: clinic.primary_color }}
+                onClick={() => {
+                  if (questionarioUrl) window.location.href = questionarioUrl;
+                }}
+              >
+                Preencher questionário agora
+              </Button>
+              <p className="text-xs text-muted-foreground">Também lhe enviámos este link por email.</p>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">Pode fechar esta página. Obrigado!</p>
+          )}
           {clinic.name && <p className="text-xs text-muted-foreground">{clinic.name}</p>}
         </div>
       </div>
