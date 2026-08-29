@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle, AlertTriangle } from "lucide-react";
@@ -25,6 +25,50 @@ interface TemplateListItem {
 }
 
 type Step = "escolha" | "confirmacao" | "questionario";
+
+interface TemaClinica {
+  hsl: string;
+  foreground: string;
+  rgb: string;
+}
+
+// Mesma lógica de conversão hex -> HSL e contraste usada no script de arranque do index.html
+function hexParaTema(hex: string): TemaClinica | null {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return null;
+  const c = hex.slice(1);
+  const r = parseInt(c.substr(0, 2), 16) / 255;
+  const g = parseInt(c.substr(2, 2), 16) / 255;
+  const b = parseInt(c.substr(4, 2), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  const H = Math.round(h * 360), S = Math.round(s * 100), L = Math.round(l * 100);
+  const lin = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  const lum = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return {
+    hsl: `${H} ${S}% ${L}%`,
+    foreground: lum > 0.55 ? "0 0% 10%" : "0 0% 100%",
+    rgb: `${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}`,
+  };
+}
+
+const CORES_MODELOS: Record<string, string> = {
+  template_baby_complete: "#7A5AA8",
+  template_elderly: "#B4713D",
+};
+
+function corDoModelo(identifier: string, corClinica: string): string {
+  if (identifier.includes("respir")) return "#3B6EA5";
+  return CORES_MODELOS[identifier] ?? corClinica;
+}
 
 function ageInYears(birthDate: string | null): number | null {
   if (!birthDate) return null;
