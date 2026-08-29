@@ -434,6 +434,7 @@ export default function PreRegisto() {
           </h1>
           {questionarioUrl ? (
             <div className="w-full max-w-sm mx-auto space-y-3">
+              <p className="text-muted-foreground text-sm">Obrigado pelos seus dados.</p>
               <p className="text-muted-foreground text-sm">
                 Falta apenas o questionário clínico. Pode preenchê-lo agora, demora poucos minutos.
               </p>
