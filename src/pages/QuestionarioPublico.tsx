@@ -204,7 +204,7 @@ export default function QuestionarioPublico() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-muted/30 px-4">
+      <div style={estiloEcran} className="min-h-screen flex flex-col items-center justify-center gap-3 px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground">A carregar o seu questionário...</p>
       </div>
@@ -213,7 +213,7 @@ export default function QuestionarioPublico() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
+      <div style={estiloEcran} className="min-h-screen flex items-center justify-center px-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 space-y-3 text-center">
             <h1 className="text-lg font-semibold">Não foi possível abrir o questionário</h1>
@@ -227,7 +227,7 @@ export default function QuestionarioPublico() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
+      <div style={estiloEcran} className="min-h-screen flex items-center justify-center px-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 space-y-3 text-center">
             <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto" />
