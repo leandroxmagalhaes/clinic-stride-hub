@@ -218,6 +218,26 @@ export default function QuestionarioPublico() {
     </div>
   );
 
+  const firstSectionIntro = (
+    <div className="space-y-3">
+      <div className="rounded-lg bg-muted/50 p-4 space-y-2">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-baseline justify-between gap-4">
+            <span className="text-xs text-muted-foreground shrink-0">{r.label}</span>
+            <span className="text-sm text-foreground text-right">{r.value}</span>
+          </div>
+        ))}
+        <p className="text-xs text-muted-foreground pt-1">
+          Se algum destes dados estiver errado, avise a clínica.
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">Completar</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+    </div>
+  );
+
   // ----- Step: escolha -----
   if (step === "escolha") {
     return (
@@ -367,17 +387,20 @@ export default function QuestionarioPublico() {
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
-        {dataHeader}
-
         {fullTemplate && (
           <DynamicQuestionnaireRenderer
             template={fullTemplate}
             pacienteId={null}
             draftKey={draftKey}
             saving={saving}
+            layout="acordeao"
+            firstSectionIntro={firstSectionIntro}
             onSubmit={handleSubmit}
           />
         )}
+        <p className="text-xs text-muted-foreground text-center">
+          As suas respostas ficam guardadas neste telemóvel.
+        </p>
       </div>
     </div>
   );
