@@ -415,6 +415,16 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Gerar link do questionário clínico e enviar por email (anti-dup interno)
+      const { data: utenteAtualizado } = await supabase
+        .from("pacientes")
+        .select("id, clinic_id")
+        .eq("public_token", token)
+        .single();
+      if (utenteAtualizado) {
+        await dispararQuestionario(supabase, utenteAtualizado.id, utenteAtualizado.clinic_id);
+      }
+
       return new Response(
         JSON.stringify({ success: true }),
         {
