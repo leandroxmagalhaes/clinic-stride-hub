@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, Bookmark, Save, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, Bookmark, Save, CheckCircle2, AlertTriangle, ChevronDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type {
@@ -21,13 +21,18 @@ interface Props {
   inviteToken?: string | null;
   saving?: boolean;
   draftKey?: string;
+  layout?: "continuo" | "acordeao";
+  firstSectionIntro?: ReactNode;
   onSubmit: (answers: Record<string, Record<string, any>>) => void;
   onExit?: () => void;
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, inviteToken, saving, draftKey, onSubmit, onExit }: Props) {
+export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, inviteToken, saving, draftKey, layout = "continuo", firstSectionIntro, onSubmit, onExit }: Props) {
+  const isAcordeao = layout === "acordeao";
+  const [openSectionIdx, setOpenSectionIdx] = useState(0);
+  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const localDraftKey = draftKey || (pacienteId ? `portal_questionario_draft:${pacienteId}:${template.id}` : null);
 
   const [answers, setAnswers] = useState<Record<string, Record<string, any>>>(() => {
