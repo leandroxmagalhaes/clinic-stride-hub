@@ -114,6 +114,7 @@ export default function PreRegisto() {
   const [clinic, setClinic] = useState<ClinicInfo>({ name: "", logo_url: "", primary_color: "#10B981", clinic_id: "" });
   const [noNif, setNoNif] = useState(false);
   const [faturacaoDiferente, setFaturacaoDiferente] = useState(false);
+  const [questionarioUrl, setQuestionarioUrl] = useState<string | null>(null);
 
   const [form, setForm] = useState<PatientData>({
     full_name: "",
@@ -382,6 +383,9 @@ export default function PreRegisto() {
       if (!response.ok) {
         toast({ title: "Erro", description: result.error || "Erro ao atualizar dados.", variant: "destructive" });
         return;
+      }
+      if (result.questionario_url) {
+        setQuestionarioUrl(result.questionario_url);
       }
       setSuccess(true);
     } catch {
