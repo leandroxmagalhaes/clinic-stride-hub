@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { FileText, Pencil, Save, X, History, ChevronDown, ChevronUp, Loader2, Printer, Trash2 } from "lucide-react";
+import { FileText, Pencil, Save, X, History, ChevronDown, ChevronUp, Loader2, Printer, Trash2, AlertTriangle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
