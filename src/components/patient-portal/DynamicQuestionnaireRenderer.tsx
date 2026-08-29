@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, Bookmark, Save, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, Bookmark, Save, CheckCircle2, AlertTriangle, ChevronDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type {
@@ -21,13 +21,18 @@ interface Props {
   inviteToken?: string | null;
   saving?: boolean;
   draftKey?: string;
+  layout?: "continuo" | "acordeao";
+  firstSectionIntro?: ReactNode;
   onSubmit: (answers: Record<string, Record<string, any>>) => void;
   onExit?: () => void;
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, inviteToken, saving, draftKey, onSubmit, onExit }: Props) {
+export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnswers, inviteToken, saving, draftKey, layout = "continuo", firstSectionIntro, onSubmit, onExit }: Props) {
+  const isAcordeao = layout === "acordeao";
+  const [openSectionIdx, setOpenSectionIdx] = useState(0);
+  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const localDraftKey = draftKey || (pacienteId ? `portal_questionario_draft:${pacienteId}:${template.id}` : null);
 
   const [answers, setAnswers] = useState<Record<string, Record<string, any>>>(() => {
@@ -159,6 +164,32 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
     return true;
   };
 
+  const isEmptyValue = (v: any) =>
+    v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+
+  const isSectionComplete = (section: (typeof questionSections)[number]) =>
+    section.fields
+      .filter((f) => f.required)
+      .every((f) => !isEmptyValue(answers[section.id]?.[f.key]));
+
+  const handleConcluir = () => {
+    if (validate()) {
+      onSubmit(answers);
+      return;
+    }
+    if (isAcordeao) {
+      const idx = questionSections.findIndex((s) =>
+        s.fields.some((f) => f.required && isEmptyValue(answers[s.id]?.[f.key]))
+      );
+      if (idx >= 0) {
+        setOpenSectionIdx(idx);
+        setTimeout(() => {
+          sectionRefs.current[idx]?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 50);
+      }
+    }
+  };
+
   const handleExit = async () => {
     if (pacienteId && dirtyRef.current) {
       await flushSave();
@@ -269,7 +300,13 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
       ))}
 
       {/* Top bar: progress + autosave indicator */}
-      <div className="space-y-1.5">
+      <div
+        className={
+          isAcordeao
+            ? "space-y-1.5 sticky top-0 z-30 bg-card/90 backdrop-blur border-b py-2 -mx-1 px-1"
+            : "space-y-1.5"
+        }
+      >
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             Secção <strong className="text-foreground">{currentSectionIdx}</strong> de {totalSections}
@@ -296,40 +333,112 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
         <Progress value={percent} className="h-1" />
       </div>
 
-      {questionSections.map((section) => (
-        <Card key={section.id}>
-          <CardContent className="pt-6 space-y-4">
-            <div className="space-y-1">
-              <h3 className="text-base font-semibold">{section.title}</h3>
-              {section.description && (
-                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {section.description}
-                </p>
-              )}
-              {section.intro && (
-                <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-line pt-1 border-l-2 border-primary/30 pl-3">
-                  {section.intro}
-                </p>
-              )}
-            </div>
-            {section.fields.map((field) => (
-              <div key={field.key} className="space-y-1.5">
-                {field.type !== "checkbox" && (
-                  <label className="text-xs font-medium block">
-                    {field.label} {field.required && <span className="text-destructive">*</span>}
-                  </label>
+      {isAcordeao ? (
+        <div className="space-y-2">
+          {questionSections.map((section, idx) => {
+            const isOpen = openSectionIdx === idx;
+            const complete = isSectionComplete(section);
+            return (
+              <div
+                key={section.id}
+                ref={(el) => { sectionRefs.current[idx] = el; }}
+                className="rounded-lg border bg-card scroll-mt-24"
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenSectionIdx(isOpen ? -1 : idx)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                >
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                      complete
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {complete ? <Check className="h-3.5 w-3.5" /> : idx + 1}
+                  </span>
+                  <span className="flex-1 text-sm font-semibold text-foreground">{section.title}</span>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {isOpen && (
+                  <div className="space-y-4 px-4 pb-4 pt-1">
+                    {idx === 0 && firstSectionIntro}
+                    {(section.description || section.intro) && (
+                      <div className="space-y-1">
+                        {section.description && (
+                          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
+                            {section.description}
+                          </p>
+                        )}
+                        {section.intro && (
+                          <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-line pt-1 border-l-2 border-primary/30 pl-3">
+                            {section.intro}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {section.fields.map((field) => (
+                      <div key={field.key} className="space-y-1.5">
+                        {field.type !== "checkbox" && (
+                          <label className="text-xs font-medium block">
+                            {field.label} {field.required && <span className="text-destructive">*</span>}
+                          </label>
+                        )}
+                        {field.helpText && (
+                          <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-line">
+                            {field.helpText}
+                          </p>
+                        )}
+                        {renderField(section.id, field)}
+                      </div>
+                    ))}
+                  </div>
                 )}
-                {field.helpText && (
-                  <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-line">
-                    {field.helpText}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        questionSections.map((section) => (
+          <Card key={section.id}>
+            <CardContent className="pt-6 space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold">{section.title}</h3>
+                {section.description && (
+                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {section.description}
                   </p>
                 )}
-                {renderField(section.id, field)}
+                {section.intro && (
+                  <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-line pt-1 border-l-2 border-primary/30 pl-3">
+                    {section.intro}
+                  </p>
+                )}
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      ))}
+              {section.fields.map((field) => (
+                <div key={field.key} className="space-y-1.5">
+                  {field.type !== "checkbox" && (
+                    <label className="text-xs font-medium block">
+                      {field.label} {field.required && <span className="text-destructive">*</span>}
+                    </label>
+                  )}
+                  {field.helpText && (
+                    <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-line">
+                      {field.helpText}
+                    </p>
+                  )}
+                  {renderField(section.id, field)}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ))
+      )}
 
       <div className="flex flex-col sm:flex-row sm:justify-between gap-2">
         {onExit ? (
@@ -337,7 +446,7 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
             <Bookmark className="h-4 w-4" /> Sair e continuar depois
           </Button>
         ) : <span />}
-        <Button onClick={() => { if (validate()) onSubmit(answers); }} disabled={saving} className="sm:order-2">
+        <Button onClick={handleConcluir} disabled={saving} className="sm:order-2">
           {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           Concluir
         </Button>
