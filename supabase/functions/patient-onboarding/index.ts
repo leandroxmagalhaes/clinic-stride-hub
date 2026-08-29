@@ -61,6 +61,130 @@ async function resolveClinic(
   };
 }
 
+function escapeHtml(text: string): string {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Gera (ou reaproveita) o link do questionário clínico e envia-o por email ao utente.
+// Nunca deixa rebentar o pedido principal — erros são apenas registados na consola.
+async function dispararQuestionario(
+  supabase: any,
+  pacienteId: string,
+  clinicId: string
+): Promise<void> {
+  try {
+    // 1.1 Paciente
+    const { data: paciente } = await supabase
+      .from("pacientes")
+      .select("full_name, email")
+      .eq("id", pacienteId)
+      .single();
+    if (!paciente) return;
+
+    // 1.2 Questionário já completo
+    const { data: questionarioCompleto } = await supabase
+      .from("portal_questionario")
+      .select("id")
+      .eq("paciente_id", pacienteId)
+      .eq("completo", true)
+      .limit(1);
+    if (questionarioCompleto && questionarioCompleto.length > 0) return;
+
+    // 1.3 Convite de questionário ativo — reaproveitar
+    const { data: conviteAtivo } = await supabase
+      .from("portal_convites")
+      .select("link_token")
+      .eq("paciente_id", pacienteId)
+      .eq("tipo", "questionario")
+      .eq("utilizado", false)
+      .gt("expira_em", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    let linkToken: string;
+    if (conviteAtivo && conviteAtivo.length > 0) {
+      linkToken = conviteAtivo[0].link_token;
+    } else {
+      // 1.4 Criar convite novo
+      linkToken = crypto.randomUUID();
+      const codigo = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
+      const expiraEm = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { error: inviteError } = await supabase.from("portal_convites").insert({
+        paciente_id: pacienteId,
+        link_token: linkToken,
+        codigo,
+        tipo: "questionario",
+        expira_em: expiraEm,
+      });
+      if (inviteError) {
+        console.error("dispararQuestionario: erro ao criar convite:", inviteError);
+        return;
+      }
+    }
+
+    // 1.5 Endereço do questionário
+    const linkQuestionario = `https://physione.app/questionario/${linkToken}`;
+
+    // 1.6 Sem email — o link fica apenas disponível na ficha
+    if (!paciente.email) return;
+
+    // 1.7 Enviar email via Resend (mesmo padrão de send-portal-link-automation)
+    const resendKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendKey) {
+      console.error("dispararQuestionario: RESEND_API_KEY not configured");
+      return;
+    }
+
+    const { data: clinic } = await supabase
+      .from("clinics")
+      .select("name")
+      .eq("id", clinicId)
+      .single();
+    const clinicName = clinic?.name || "Clínica";
+    const firstName = escapeHtml(paciente.full_name?.split(" ")[0] || "Utente");
+
+    const html = `
+<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#f8fafc;">
+  <div style="background:#fff;border-radius:16px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+    <h1 style="color:#3b82f6;margin:0 0 6px;font-size:20px;">${escapeHtml(clinicName)}</h1>
+    <p style="color:#64748b;margin:0 0 24px;font-size:13px;">Questionário clínico</p>
+    <p style="line-height:1.6;color:#0f172a;font-size:15px;margin:0 0 16px;">Olá, ${firstName}!</p>
+    <p style="line-height:1.6;color:#0f172a;font-size:15px;margin:0 0 16px;">Obrigado por concluir o seu pré-registo. Antes da sua primeira consulta, precisamos que preencha um questionário clínico curto — leva apenas alguns minutos e ajuda-nos a preparar melhor a sua avaliação.</p>
+    <div style="text-align:center;margin:28px 0 8px;">
+      <a href="${linkQuestionario}" style="display:inline-block;background:#3b82f6;color:#fff;padding:13px 32px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;">Preencher questionário</a>
+    </div>
+    <p style="color:#94a3b8;font-size:12px;margin-top:24px;">Se o botão não funcionar, copie este endereço:</p>
+    <p style="color:#3b82f6;font-size:12px;word-break:break-all;">${linkQuestionario}</p>
+    <p style="color:#94a3b8;font-size:12px;margin-top:16px;">Este link é válido durante sete dias e só pode ser usado uma vez.</p>
+  </div>
+</body></html>`;
+
+    const resendRes = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: `${clinicName} <noreply@respiraedesenvolve.com>`,
+        to: [paciente.email],
+        subject: "Questionário clínico da sua primeira consulta",
+        html,
+      }),
+    });
+
+    if (!resendRes.ok) {
+      const errBody = await resendRes.text();
+      console.error(`dispararQuestionario: resend ${resendRes.status}: ${errBody}`);
+    }
+  } catch (err) {
+    console.error("dispararQuestionario error:", err);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -171,30 +295,8 @@ Deno.serve(async (req) => {
           created_at: new Date().toISOString(),
         });
 
-        // Trigger automation: portal_link_enviado (fire-and-forget, anti-dup at function level)
-        if (body.email?.trim()) {
-          try {
-            await fetch(
-              `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-portal-link-automation`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                  apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-                },
-                body: JSON.stringify({
-                  pacienteId: newPatient.id,
-                  clinicId: clinic.id,
-                  triggerType: "portal_link_enviado",
-                }),
-              },
-            );
-          } catch (e) {
-            console.error("portal_link_enviado dispatch failed:", e);
-          }
-        }
-
+        // Gerar link do questionário clínico e enviar por email (anti-dup interno)
+        await dispararQuestionario(supabase, newPatient.id, clinic.id);
 
         return new Response(
           JSON.stringify({ success: true, patient_id: newPatient.id }),
