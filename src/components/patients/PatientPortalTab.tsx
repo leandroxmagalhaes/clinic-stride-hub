@@ -118,14 +118,29 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
 
   const loadData = async () => {
     setLoading(true);
-    const [accountRes, inviteRes, questionnaireRes] = await Promise.all([
+    const [accountRes, inviteRes, questionnaireRes, questionarioConviteRes] = await Promise.all([
       (supabase as any).from("portal_contas").select("*").eq("paciente_id", patientId).maybeSingle(),
       (supabase as any).from("portal_convites").select("*").eq("paciente_id", patientId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       (supabase as any).from("portal_questionario").select("*").eq("paciente_id", patientId).maybeSingle(),
+      (supabase as any)
+        .from("portal_convites")
+        .select("*")
+        .eq("paciente_id", patientId)
+        .eq("tipo", "questionario")
+        .eq("utilizado", false)
+        .gt("expira_em", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
     setAccount(accountRes.data || null);
     setLastInvite(inviteRes.data || null);
     setQuestionnaire(questionnaireRes.data || null);
+    if (questionarioConviteRes.data) {
+      setQuestionarioLink(`${getPublicBaseUrl()}/questionario/${questionarioConviteRes.data.link_token}`);
+    } else {
+      setQuestionarioLink(null);
+    }
     setLoading(false);
   };
 
