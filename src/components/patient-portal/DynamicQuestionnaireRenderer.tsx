@@ -164,6 +164,32 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
     return true;
   };
 
+  const isEmptyValue = (v: any) =>
+    v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+
+  const isSectionComplete = (section: (typeof questionSections)[number]) =>
+    section.fields
+      .filter((f) => f.required)
+      .every((f) => !isEmptyValue(answers[section.id]?.[f.key]));
+
+  const handleConcluir = () => {
+    if (validate()) {
+      onSubmit(answers);
+      return;
+    }
+    if (isAcordeao) {
+      const idx = questionSections.findIndex((s) =>
+        s.fields.some((f) => f.required && isEmptyValue(answers[s.id]?.[f.key]))
+      );
+      if (idx >= 0) {
+        setOpenSectionIdx(idx);
+        setTimeout(() => {
+          sectionRefs.current[idx]?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 50);
+      }
+    }
+  };
+
   const handleExit = async () => {
     if (pacienteId && dirtyRef.current) {
       await flushSave();
