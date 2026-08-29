@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle, AlertTriangle } from "lucide-react";
@@ -26,6 +26,50 @@ interface TemplateListItem {
 
 type Step = "escolha" | "confirmacao" | "questionario";
 
+interface TemaClinica {
+  hsl: string;
+  foreground: string;
+  rgb: string;
+}
+
+// Mesma lógica de conversão hex -> HSL e contraste usada no script de arranque do index.html
+function hexParaTema(hex: string): TemaClinica | null {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return null;
+  const c = hex.slice(1);
+  const r = parseInt(c.substr(0, 2), 16) / 255;
+  const g = parseInt(c.substr(2, 2), 16) / 255;
+  const b = parseInt(c.substr(4, 2), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  const H = Math.round(h * 360), S = Math.round(s * 100), L = Math.round(l * 100);
+  const lin = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  const lum = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return {
+    hsl: `${H} ${S}% ${L}%`,
+    foreground: lum > 0.55 ? "0 0% 10%" : "0 0% 100%",
+    rgb: `${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}`,
+  };
+}
+
+const CORES_MODELOS: Record<string, string> = {
+  template_baby_complete: "#7A5AA8",
+  template_elderly: "#B4713D",
+};
+
+function corDoModelo(identifier: string, corClinica: string): string {
+  if (identifier.includes("respir")) return "#3B6EA5";
+  return CORES_MODELOS[identifier] ?? corClinica;
+}
+
 function ageInYears(birthDate: string | null): number | null {
   if (!birthDate) return null;
   const bd = new Date(birthDate);
@@ -43,6 +87,7 @@ export default function QuestionarioPublico() {
   const [error, setError] = useState<string | null>(null);
   const [patient, setPatient] = useState<PublicPatient | null>(null);
   const [clinicName, setClinicName] = useState<string | null>(null);
+  const [clinicColor, setClinicColor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -54,6 +99,16 @@ export default function QuestionarioPublico() {
   const [loadingTemplate, setLoadingTemplate] = useState(false);
 
   const draftKey = `questionario_publico:${token}:${fullTemplate?.id ?? ""}`;
+
+  const corBase = clinicColor && /^#[0-9a-fA-F]{6}$/.test(clinicColor) ? clinicColor : "#2A9D8F";
+  const tema = hexParaTema(corBase)!;
+  const estiloEcran: CSSProperties = {
+    ["--primary" as any]: tema.hsl,
+    ["--ring" as any]: tema.hsl,
+    ["--primary-foreground" as any]: tema.foreground,
+    backgroundColor: `rgba(${tema.rgb}, 0.07)`,
+  };
+  const estiloFaixa: CSSProperties = { backgroundColor: `rgba(${tema.rgb}, 0.12)` };
 
   useEffect(() => {
     const load = async () => {
@@ -74,6 +129,7 @@ export default function QuestionarioPublico() {
         if ((data as any)?.error) throw new Error((data as any).error);
         setPatient((data as any).patient);
         setClinicName((data as any).clinic_name || null);
+        setClinicColor((data as any).clinic_primary_color || null);
         const list: TemplateListItem[] = (data as any).templates || [];
         setTemplates(list);
         const suggested: string | null = (data as any).suggested_identifier ?? null;
@@ -148,7 +204,7 @@ export default function QuestionarioPublico() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-muted/30 px-4">
+      <div style={estiloEcran} className="min-h-screen flex flex-col items-center justify-center gap-3 px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground">A carregar o seu questionário...</p>
       </div>
@@ -157,7 +213,7 @@ export default function QuestionarioPublico() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
+      <div style={estiloEcran} className="min-h-screen flex items-center justify-center px-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 space-y-3 text-center">
             <h1 className="text-lg font-semibold">Não foi possível abrir o questionário</h1>
@@ -171,7 +227,7 @@ export default function QuestionarioPublico() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
+      <div style={estiloEcran} className="min-h-screen flex items-center justify-center px-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 space-y-3 text-center">
             <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto" />
@@ -241,8 +297,8 @@ export default function QuestionarioPublico() {
   // ----- Step: escolha -----
   if (step === "escolha") {
     return (
-      <div className="min-h-screen bg-muted/30">
-        <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+      <div style={estiloEcran} className="min-h-screen">
+        <div style={estiloFaixa} className="sticky top-0 z-10 border-b px-4 py-4">
           <div className="max-w-lg mx-auto flex flex-col items-center gap-1 text-center">
             <h1 className="text-lg font-semibold text-foreground">{clinicName || "Clínica"}</h1>
           </div>
@@ -261,6 +317,7 @@ export default function QuestionarioPublico() {
                   key={t.id}
                   type="button"
                   onClick={() => setSelectedTemplate(t)}
+                  style={{ borderLeft: `3px solid ${corDoModelo(t.identifier, corBase)}` }}
                   className={`w-full text-left rounded-lg border p-4 transition-colors ${
                     isSelected
                       ? "border-primary ring-1 ring-primary bg-primary/5"
@@ -318,8 +375,8 @@ export default function QuestionarioPublico() {
     }
 
     return (
-      <div className="min-h-screen bg-muted/30">
-        <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+      <div style={estiloEcran} className="min-h-screen">
+        <div style={estiloFaixa} className="sticky top-0 z-10 border-b px-4 py-4">
           <div className="max-w-lg mx-auto flex flex-col items-center gap-1 text-center">
             <h1 className="text-lg font-semibold text-foreground">{clinicName || "Clínica"}</h1>
           </div>
@@ -378,8 +435,8 @@ export default function QuestionarioPublico() {
 
   // ----- Step: questionario -----
   return (
-    <div className="min-h-screen bg-muted/30">
-      <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+    <div style={estiloEcran} className="min-h-screen">
+      <div style={estiloFaixa} className="sticky top-0 z-10 border-b px-4 py-4">
         <div className="max-w-lg mx-auto flex flex-col items-center gap-1 text-center">
           <h1 className="text-lg font-semibold text-foreground">{clinicName || "Clínica"}</h1>
           {fullTemplate?.name && <p className="text-xs text-muted-foreground">{fullTemplate.name}</p>}
