@@ -100,6 +100,16 @@ export default function QuestionarioPublico() {
 
   const draftKey = `questionario_publico:${token}:${fullTemplate?.id ?? ""}`;
 
+  const corBase = clinicColor && /^#[0-9a-fA-F]{6}$/.test(clinicColor) ? clinicColor : "#2A9D8F";
+  const tema = hexParaTema(corBase)!;
+  const estiloEcran: CSSProperties = {
+    ["--primary" as any]: tema.hsl,
+    ["--ring" as any]: tema.hsl,
+    ["--primary-foreground" as any]: tema.foreground,
+    backgroundColor: `rgba(${tema.rgb}, 0.07)`,
+  };
+  const estiloFaixa: CSSProperties = { backgroundColor: `rgba(${tema.rgb}, 0.12)` };
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
