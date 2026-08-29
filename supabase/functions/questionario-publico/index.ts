@@ -124,13 +124,15 @@ Deno.serve(async (req) => {
       const suggestedIdentifier = identifierForBirthDate(patient.birth_date);
 
       let clinicName: string | null = null;
+      let clinicPrimaryColor: string | null = null;
       if (patient.clinic_id) {
         const { data: clinic } = await admin
           .from("clinics")
-          .select("name")
+          .select("name, primary_color")
           .eq("id", patient.clinic_id)
           .maybeSingle();
         clinicName = clinic?.name ?? null;
+        clinicPrimaryColor = (clinic as any)?.primary_color ?? null;
       }
 
       return new Response(
@@ -147,6 +149,7 @@ Deno.serve(async (req) => {
           templates: templates || [],
           suggested_identifier: suggestedIdentifier,
           clinic_name: clinicName,
+          clinic_primary_color: clinicPrimaryColor,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
