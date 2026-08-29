@@ -297,8 +297,8 @@ export default function QuestionarioPublico() {
   // ----- Step: escolha -----
   if (step === "escolha") {
     return (
-      <div className="min-h-screen bg-muted/30">
-        <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+      <div style={estiloEcran} className="min-h-screen">
+        <div style={estiloFaixa} className="sticky top-0 z-10 border-b px-4 py-4">
           <div className="max-w-lg mx-auto flex flex-col items-center gap-1 text-center">
             <h1 className="text-lg font-semibold text-foreground">{clinicName || "Clínica"}</h1>
           </div>
@@ -374,8 +374,8 @@ export default function QuestionarioPublico() {
     }
 
     return (
-      <div className="min-h-screen bg-muted/30">
-        <div className="sticky top-0 z-10 bg-white border-b px-4 py-4">
+      <div style={estiloEcran} className="min-h-screen">
+        <div style={estiloFaixa} className="sticky top-0 z-10 border-b px-4 py-4">
           <div className="max-w-lg mx-auto flex flex-col items-center gap-1 text-center">
             <h1 className="text-lg font-semibold text-foreground">{clinicName || "Clínica"}</h1>
           </div>
