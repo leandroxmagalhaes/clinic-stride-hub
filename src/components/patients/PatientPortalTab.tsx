@@ -459,6 +459,43 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
         )}
       </div>
 
+      {/* Questionário clínico público */}
+      <div className="space-y-2 pt-2 border-t">
+        <span className="text-xs font-medium text-muted-foreground">Questionário clínico</span>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={handleGerarQuestionario}
+            disabled={gerandoQuestionario}
+            className="gap-1.5"
+          >
+            {gerandoQuestionario ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            Gerar link do questionário
+          </Button>
+        </div>
+        {questionarioLink && (
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={questionarioLink}
+              className="h-9 flex-1 rounded-md border bg-muted/30 px-3 text-xs text-muted-foreground"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                await navigator.clipboard.writeText(questionarioLink);
+                toast.success("Link copiado");
+              }}
+              className="gap-1.5"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">Válido durante sete dias e utilizável uma única vez.</p>
+      </div>
+
       {/* Confirm password reset */}
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
         <DialogContent className="max-w-md">
