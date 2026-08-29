@@ -300,7 +300,13 @@ export function DynamicQuestionnaireRenderer({ template, pacienteId, initialAnsw
       ))}
 
       {/* Top bar: progress + autosave indicator */}
-      <div className="space-y-1.5">
+      <div
+        className={
+          isAcordeao
+            ? "space-y-1.5 sticky top-0 z-30 bg-card/90 backdrop-blur border-b py-2 -mx-1 px-1"
+            : "space-y-1.5"
+        }
+      >
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             Secção <strong className="text-foreground">{currentSectionIdx}</strong> de {totalSections}
