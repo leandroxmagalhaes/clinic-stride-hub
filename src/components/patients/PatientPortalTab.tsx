@@ -64,6 +64,8 @@ export function PatientPortalTab({ patientId, patientEmail, patientPhone, patien
   const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [waOpen, setWaOpen] = useState(false);
+  const [questionarioLink, setQuestionarioLink] = useState<string | null>(null);
+  const [gerandoQuestionario, setGerandoQuestionario] = useState(false);
   const { isAdmin, isProfessional } = useUserRole();
   const showDiagnostics = isAdmin || isProfessional;
   const isAdminMaster = isAdmin;
