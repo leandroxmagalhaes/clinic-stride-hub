@@ -208,21 +208,47 @@ Deno.serve(async (req) => {
       }
       if (!template) throw new Error("Questionário não disponível");
 
-      const { error: rpcErr } = await admin.rpc("upsert_portal_questionnaire", {
-        p_paciente_id: invite.paciente_id,
-        p_template_id: template.id,
-        p_perfil_tipo: template.identifier,
-        p_respostas: answers,
-        p_completo: true,
-        p_link_token: token,
-      });
-      if (rpcErr) throw rpcErr;
+      const { data: existing, error: existErr } = await admin
+        .from("portal_questionario")
+        .select("id")
+        .eq("paciente_id", invite.paciente_id)
+        .eq("template_id", template.id)
+        .maybeSingle();
+      if (existErr) throw new Error(existErr.message);
+
+      const agora = new Date().toISOString();
+
+      if (existing) {
+        const { error: updQErr } = await admin
+          .from("portal_questionario")
+          .update({
+            template_id: template.id,
+            perfil_tipo: template.identifier,
+            respostas: answers,
+            completo: true,
+            updated_at: agora,
+          })
+          .eq("id", existing.id);
+        if (updQErr) throw new Error(updQErr.message);
+      } else {
+        const { error: insErr } = await admin
+          .from("portal_questionario")
+          .insert({
+            paciente_id: invite.paciente_id,
+            template_id: template.id,
+            perfil_tipo: template.identifier,
+            respostas: answers,
+            completo: true,
+            updated_at: agora,
+          });
+        if (insErr) throw new Error(insErr.message);
+      }
 
       const { error: updErr } = await admin
         .from("portal_convites")
         .update({ utilizado: true })
         .eq("id", invite.id);
-      if (updErr) throw updErr;
+      if (updErr) throw new Error(updErr.message);
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
