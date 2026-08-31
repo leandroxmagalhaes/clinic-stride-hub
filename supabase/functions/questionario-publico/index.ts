@@ -128,11 +128,17 @@ Deno.serve(async (req) => {
       if (patient.clinic_id) {
         const { data: clinic } = await admin
           .from("clinics")
-          .select("name, primary_color")
+          .select("name")
           .eq("id", patient.clinic_id)
           .maybeSingle();
         clinicName = clinic?.name ?? null;
-        clinicPrimaryColor = (clinic as any)?.primary_color ?? null;
+
+        const { data: settings } = await admin
+          .from("clinic_settings")
+          .select("primary_color")
+          .eq("clinic_id", patient.clinic_id)
+          .maybeSingle();
+        clinicPrimaryColor = (settings as any)?.primary_color ?? null;
       }
 
       return new Response(
