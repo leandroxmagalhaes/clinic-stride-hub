@@ -258,7 +258,12 @@ Deno.serve(async (req) => {
     throw new Error("Ação inválida");
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
+      JSON.stringify({
+        error:
+          err instanceof Error
+            ? err.message
+            : (err as any)?.message ?? String(err),
+      }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
