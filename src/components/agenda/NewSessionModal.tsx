@@ -707,20 +707,99 @@ export function NewSessionModal({
                 )}
               </>
             ) : (
-              <div className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-muted/30">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
-                    {getInitials(selectedPatient.full_name)}
+              <>
+                <div className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-muted/30">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
+                      {getInitials(selectedPatient.full_name)}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">{selectedPatient.full_name}</div>
+                      {(() => {
+                        const { dataTxt, semData, nif } = formatIdentLine(selectedPatient);
+                        return (
+                          <div className="text-xs text-muted-foreground">
+                            {semData ? (
+                              <span className="text-amber-600">Sem data de nascimento</span>
+                            ) : (
+                              dataTxt
+                            )}
+                            {" · "}{nif || "Sem NIF"}
+                          </div>
+                        );
+                      })()}
+                      {selectedPatient.phone && <div className="text-xs text-muted-foreground">{selectedPatient.phone}</div>}
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm font-medium">{selectedPatient.full_name}</div>
-                    {selectedPatient.phone && <div className="text-xs text-muted-foreground">{selectedPatient.phone}</div>}
-                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClearPatient}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClearPatient}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+
+                {/* ═══ Homónimos: aviso / confirmação por reescrita ═══ */}
+                {nivelRisco !== "nenhum" && (
+                  <div className="border border-amber-300 bg-amber-50 rounded-lg px-3 py-2.5 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="space-y-1">
+                        <div className="text-sm font-semibold text-amber-900">
+                          Atenção — {homonimos.length + 1} utentes com este nome
+                        </div>
+                        <div className="space-y-0.5">
+                          {homonimos.map((h) => (
+                            <div key={h.id} className="text-xs text-amber-800">
+                              {h.full_name} —{" "}
+                              {h.birth_date ? formatIdentLine(h).dataTxt : "sem data de nascimento"}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-amber-800">Confirme que está a marcar para o utente certo.</p>
+                      </div>
+                    </div>
+
+                    {nivelRisco === "elevado" && (
+                      <div className="border-t border-amber-200 pt-2 space-y-2">
+                        {anoNascimentoSelecionado !== null ? (
+                          <div className="space-y-1">
+                            <Label className="text-xs text-amber-900">
+                              Escreva o ano de nascimento de {selectedPatient.full_name.split(" ").slice(0, 2).join(" ")}
+                            </Label>
+                            <Input
+                              value={anoDigitado}
+                              onChange={(e) => setAnoDigitado(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                              inputMode="numeric"
+                              maxLength={4}
+                              placeholder="AAAA"
+                              className="w-28 bg-white"
+                            />
+                            {anoDigitado.length === 4 && (
+                              <p className={cn("text-xs", identidadeOk ? "text-green-700" : "text-red-600")}>
+                                {identidadeOk ? "Confere" : "Não corresponde a este utente"}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-xs text-amber-800">
+                              Este utente nao tem data de nascimento registada, por isso nao é possível confirmar a identidade com um segundo identificador.
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="confirmou-identidade"
+                                checked={confirmouIdentidade}
+                                onCheckedChange={(v) => setConfirmouIdentidade(v === true)}
+                              />
+                              <Label htmlFor="confirmou-identidade" className="text-xs text-amber-900">
+                                Confirmo que verifiquei a identidade do utente.
+                              </Label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </section>
 
