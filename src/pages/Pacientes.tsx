@@ -767,6 +767,39 @@ export default function Pacientes() {
         } : undefined}
       />
 
+      {/* Dialog: Solicitar permissão ao admin master */}
+      <AlertDialog open={showPermissaoDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowPermissaoDialog(false);
+          setPatientToReactivate(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Solicitar permissão ao admin master</AlertDialogTitle>
+            <AlertDialogDescription>
+              A reativação de utentes inativos é restrita ao perfil admin master. Peça a autorização do responsável da clínica para reativar este utente.
+            </AlertDialogDescription>
+            {patientToReactivate && (
+              <p className="text-sm font-semibold text-foreground">
+                {patientToReactivate.full_name}
+              </p>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowPermissaoDialog(false);
+                setPatientToReactivate(null);
+              }}
+            >
+              Entendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* New Patient Modal */}
       <Dialog
         open={isModalOpen}
