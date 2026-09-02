@@ -638,6 +638,19 @@ export function NewSessionModal({
                         >
                           <div>
                             <div className="text-sm font-medium">{p.full_name}</div>
+                            {(() => {
+                              const { dataTxt, semData, nif } = formatIdentLine(p);
+                              return (
+                                <div className="text-xs text-muted-foreground">
+                                  {semData ? (
+                                    <span className="text-amber-600">Sem data de nascimento</span>
+                                  ) : (
+                                    dataTxt
+                                  )}
+                                  {" · "}{nif || "Sem NIF"}
+                                </div>
+                              );
+                            })()}
                             {p.phone && <div className="text-xs text-muted-foreground">{p.phone}</div>}
                           </div>
                           {p._hasActivePack && (
