@@ -470,7 +470,35 @@ export function NewSessionModal({
 
   const slotsOk = sessionSlots.length > 0 && sessionSlots.every((s) => s.date && s.time);
   const novoPackOk = !showNewPack || (parseInt(novoPackSessoes, 10) >= 1);
-  const canConfirm = !!selectedPatient && slotsOk && !!selectedServico && !!selectedProfissional && novoPackOk && !isSaving;
+
+  // ── Nível de risco de homónimos ──
+  const nivelRisco: "nenhum" | "aviso" | "elevado" = useMemo(() => {
+    if (!selectedPatient || homonimos.length === 0) return "nenhum";
+    const nomeSel = normalizarNome(selectedPatient.full_name);
+    const apelidosSel = new Set(nomeSel.split(" ").slice(1));
+    const elevado = homonimos.some((h) => {
+      const nomeH = normalizarNome(h.full_name);
+      if (nomeH === nomeSel) return true;
+      return nomeH.split(" ").slice(1).some((a) => apelidosSel.has(a));
+    });
+    return elevado ? "elevado" : "aviso";
+  }, [selectedPatient, homonimos]);
+
+  const anoNascimentoSelecionado = useMemo(() => {
+    if (!selectedPatient?.birth_date) return null;
+    const d = new Date(selectedPatient.birth_date + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d.getFullYear();
+  }, [selectedPatient]);
+
+  const identidadeOk = useMemo(() => {
+    if (nivelRisco !== "elevado") return true;
+    if (anoNascimentoSelecionado !== null) {
+      return anoDigitado.length === 4 && parseInt(anoDigitado, 10) === anoNascimentoSelecionado;
+    }
+    return confirmouIdentidade;
+  }, [nivelRisco, anoNascimentoSelecionado, anoDigitado, confirmouIdentidade]);
+
+  const canConfirm = !!selectedPatient && slotsOk && !!selectedServico && !!selectedProfissional && novoPackOk && identidadeOk && !isSaving;
 
   // ── Confirmar ──
   const handleConfirm = async () => {
