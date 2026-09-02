@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar as CalendarIcon, Check, UserPlus, Loader2, Package, Search, X, Plus } from "lucide-react";
+import { Calendar as CalendarIcon, Check, UserPlus, Loader2, Package, Search, X, Plus, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,7 +39,42 @@ interface Patient {
   phone?: string | null;
   email?: string | null;
   health_tags?: string[];
+  birth_date?: string | null;
+  cpf?: string | null;
 }
+
+interface Homonimo {
+  id: string;
+  full_name: string;
+  birth_date?: string | null;
+  cpf?: string | null;
+}
+
+// Normaliza nome: minúsculas, sem acentos, sem pontuação, sem espaços repetidos
+const normalizarNome = (nome: string) =>
+  nome
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// Linha de identificação: data de nascimento · NIF
+const formatIdentLine = (p: { birth_date?: string | null; cpf?: string | null }) => {
+  let dataTxt = "";
+  let semData = false;
+  if (p.birth_date) {
+    try {
+      dataTxt = format(new Date(p.birth_date + "T00:00:00"), "dd/MM/yyyy");
+    } catch {
+      dataTxt = p.birth_date;
+    }
+  } else {
+    semData = true;
+  }
+  return { dataTxt, semData, nif: p.cpf || "" };
+};
 
 interface Professional {
   id: string;
