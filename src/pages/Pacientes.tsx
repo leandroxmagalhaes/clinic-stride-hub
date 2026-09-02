@@ -7,6 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -73,6 +82,8 @@ export default function Pacientes() {
   const [deletedPatients, setDeletedPatients] = useState<any[]>([]);
   const [isLoadingDeleted, setIsLoadingDeleted] = useState(false);
   const [viewDeletedData, setViewDeletedData] = useState<any | null>(null);
+  const [showPermissaoDialog, setShowPermissaoDialog] = useState(false);
+  const [patientToReactivate, setPatientToReactivate] = useState<Patient | null>(null);
 
   useEffect(() => {
     async function fetchClinicId() {
@@ -319,6 +330,14 @@ export default function Pacientes() {
   };
 
   const handleReactivatePatient = async (patientId: string) => {
+    if (!isAdminMaster) {
+      const patient =
+        patients.find((p) => p.id === patientId) ||
+        deletedPatients.find((p) => p.id === patientId);
+      setPatientToReactivate((patient as Patient) ?? null);
+      setShowPermissaoDialog(true);
+      return;
+    }
     const { error } = await supabase.from("pacientes").update({ is_active: true }).eq("id", patientId);
     if (error) {
       toast.error("Erro ao reativar paciente");
@@ -711,8 +730,17 @@ export default function Pacientes() {
               <Card className="shadow-card">
                 <CardContent className="p-12 text-center">
                   <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                  <h3 className="font-semibold mb-1">Nenhum paciente encontrado</h3>
-                  <p className="text-sm text-muted-foreground">Tente ajustar sua busca ou cadastre um novo paciente</p>
+                  {searchTerm.trim() ? (
+                    <>
+                      <h3 className="font-semibold mb-1">Nenhum resultado para esta pesquisa</h3>
+                      <p className="text-sm text-muted-foreground">Os números nos separadores contam todos os utentes. Limpe a pesquisa para ver a lista completa deste separador.</p>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="font-semibold mb-1">Nenhum paciente encontrado</h3>
+                      <p className="text-sm text-muted-foreground">Tente ajustar sua busca ou cadastre um novo paciente</p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -737,6 +765,38 @@ export default function Pacientes() {
           if (statusFilter === "excluidos") fetchDeletedPatients();
         } : undefined}
       />
+
+      {/* Dialog: Solicitar permissão ao admin master */}
+      <AlertDialog open={showPermissaoDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowPermissaoDialog(false);
+          setPatientToReactivate(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Solicitar permissão ao admin master</AlertDialogTitle>
+            <AlertDialogDescription>
+              A reativação de utentes inativos é restrita ao perfil admin master. Peça a autorização do responsável da clínica para reativar este utente.
+            </AlertDialogDescription>
+            {patientToReactivate && (
+              <p className="text-sm font-semibold text-foreground">
+                {patientToReactivate.full_name}
+              </p>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                setShowPermissaoDialog(false);
+                setPatientToReactivate(null);
+              }}
+            >
+              Entendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* New Patient Modal */}
       <Dialog
