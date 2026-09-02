@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar as CalendarIcon, Check, UserPlus, Loader2, Package, Search, X, Plus } from "lucide-react";
+import { Calendar as CalendarIcon, Check, UserPlus, Loader2, Package, Search, X, Plus, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,7 +39,42 @@ interface Patient {
   phone?: string | null;
   email?: string | null;
   health_tags?: string[];
+  birth_date?: string | null;
+  cpf?: string | null;
 }
+
+interface Homonimo {
+  id: string;
+  full_name: string;
+  birth_date?: string | null;
+  cpf?: string | null;
+}
+
+// Normaliza nome: minúsculas, sem acentos, sem pontuação, sem espaços repetidos
+const normalizarNome = (nome: string) =>
+  nome
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// Linha de identificação: data de nascimento · NIF
+const formatIdentLine = (p: { birth_date?: string | null; cpf?: string | null }) => {
+  let dataTxt = "";
+  let semData = false;
+  if (p.birth_date) {
+    try {
+      dataTxt = format(new Date(p.birth_date + "T00:00:00"), "dd/MM/yyyy");
+    } catch {
+      dataTxt = p.birth_date;
+    }
+  } else {
+    semData = true;
+  }
+  return { dataTxt, semData, nif: p.cpf || "" };
+};
 
 interface Professional {
   id: string;
@@ -144,6 +179,11 @@ export function NewSessionModal({
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // ── Homónimos (dois identificadores) ──
+  const [homonimos, setHomonimos] = useState<Homonimo[]>([]);
+  const [anoDigitado, setAnoDigitado] = useState("");
+  const [confirmouIdentidade, setConfirmouIdentidade] = useState(false);
+
   // ── Reset ao abrir ──
   useEffect(() => {
     if (isOpen) {
@@ -178,6 +218,9 @@ export function NewSessionModal({
       setNotes("");
       setSemCobranca(false);
       setMotivoSemCobranca("Cortesia");
+      setHomonimos([]);
+      setAnoDigitado("");
+      setConfirmouIdentidade(false);
     }
   }, [isOpen]);
 
@@ -215,7 +258,7 @@ export function NewSessionModal({
       try {
         const { data } = await supabase
           .from("pacientes")
-          .select("id, full_name, phone, email")
+          .select("id, full_name, phone, email, birth_date, cpf")
           .ilike("full_name", `%${searchQuery}%`)
           .eq("is_active", true)
           .limit(10);
@@ -305,12 +348,38 @@ export function NewSessionModal({
     }
   }, [selectedServico, services, patientPrecoConsulta]);
 
+  // ── Detetar homónimos (mesmo primeiro nome normalizado) ──
+  const fetchHomonimos = useCallback(async (patient: Patient) => {
+    try {
+      const primeiroNome = normalizarNome(patient.full_name).split(" ")[0] || "";
+      if (!primeiroNome) { setHomonimos([]); return; }
+      const { data } = await (supabase as any)
+        .from("pacientes")
+        .select("id, full_name, birth_date, cpf")
+        .eq("is_active", true)
+        .ilike("full_name", `%${patient.full_name.split(" ")[0]}%`)
+        .neq("id", patient.id)
+        .limit(100);
+      const lista = (data || []).filter((p: any) =>
+        normalizarNome(p.full_name || "").split(" ")[0] === primeiroNome
+      );
+      setHomonimos(lista);
+    } catch (err) {
+      console.error("Homónimos error:", err);
+      setHomonimos([]);
+    }
+  }, []);
+
   const handleSelectPatient = useCallback(async (patient: Patient) => {
     setSelectedPatient(patient);
     setSearchQuery("");
     setShowDropdown(false);
     setSelectedPackId("");
+    setHomonimos([]);
+    setAnoDigitado("");
+    setConfirmouIdentidade(false);
     prefillFromLastSession(patient.id);
+    fetchHomonimos(patient);
     try {
       const { data } = await (supabase as any)
         .from("pacientes")
@@ -322,7 +391,7 @@ export function NewSessionModal({
     } catch {
       setPatientPrecoConsulta(null);
     }
-  }, [prefillFromLastSession]);
+  }, [prefillFromLastSession, fetchHomonimos]);
 
   const handleClearPatient = useCallback(() => {
     setSelectedPatient(null);
@@ -330,6 +399,9 @@ export function NewSessionModal({
     setCobrarAvulso(false);
     setShowNewPack(false);
     setPatientPrecoConsulta(null);
+    setHomonimos([]);
+    setAnoDigitado("");
+    setConfirmouIdentidade(false);
   }, []);
 
   // ── Criação rápida de paciente ──
@@ -398,7 +470,35 @@ export function NewSessionModal({
 
   const slotsOk = sessionSlots.length > 0 && sessionSlots.every((s) => s.date && s.time);
   const novoPackOk = !showNewPack || (parseInt(novoPackSessoes, 10) >= 1);
-  const canConfirm = !!selectedPatient && slotsOk && !!selectedServico && !!selectedProfissional && novoPackOk && !isSaving;
+
+  // ── Nível de risco de homónimos ──
+  const nivelRisco: "nenhum" | "aviso" | "elevado" = useMemo(() => {
+    if (!selectedPatient || homonimos.length === 0) return "nenhum";
+    const nomeSel = normalizarNome(selectedPatient.full_name);
+    const apelidosSel = new Set(nomeSel.split(" ").slice(1));
+    const elevado = homonimos.some((h) => {
+      const nomeH = normalizarNome(h.full_name);
+      if (nomeH === nomeSel) return true;
+      return nomeH.split(" ").slice(1).some((a) => apelidosSel.has(a));
+    });
+    return elevado ? "elevado" : "aviso";
+  }, [selectedPatient, homonimos]);
+
+  const anoNascimentoSelecionado = useMemo(() => {
+    if (!selectedPatient?.birth_date) return null;
+    const d = new Date(selectedPatient.birth_date + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d.getFullYear();
+  }, [selectedPatient]);
+
+  const identidadeOk = useMemo(() => {
+    if (nivelRisco !== "elevado") return true;
+    if (anoNascimentoSelecionado !== null) {
+      return anoDigitado.length === 4 && parseInt(anoDigitado, 10) === anoNascimentoSelecionado;
+    }
+    return confirmouIdentidade;
+  }, [nivelRisco, anoNascimentoSelecionado, anoDigitado, confirmouIdentidade]);
+
+  const canConfirm = !!selectedPatient && slotsOk && !!selectedServico && !!selectedProfissional && novoPackOk && identidadeOk && !isSaving;
 
   // ── Confirmar ──
   const handleConfirm = async () => {
@@ -538,6 +638,19 @@ export function NewSessionModal({
                         >
                           <div>
                             <div className="text-sm font-medium">{p.full_name}</div>
+                            {(() => {
+                              const { dataTxt, semData, nif } = formatIdentLine(p);
+                              return (
+                                <div className="text-xs text-muted-foreground">
+                                  {semData ? (
+                                    <span className="text-amber-600">Sem data de nascimento</span>
+                                  ) : (
+                                    dataTxt
+                                  )}
+                                  {" · "}{nif || "Sem NIF"}
+                                </div>
+                              );
+                            })()}
                             {p.phone && <div className="text-xs text-muted-foreground">{p.phone}</div>}
                           </div>
                           {p._hasActivePack && (
@@ -594,20 +707,99 @@ export function NewSessionModal({
                 )}
               </>
             ) : (
-              <div className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-muted/30">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
-                    {getInitials(selectedPatient.full_name)}
+              <>
+                <div className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-muted/30">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
+                      {getInitials(selectedPatient.full_name)}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">{selectedPatient.full_name}</div>
+                      {(() => {
+                        const { dataTxt, semData, nif } = formatIdentLine(selectedPatient);
+                        return (
+                          <div className="text-xs text-muted-foreground">
+                            {semData ? (
+                              <span className="text-amber-600">Sem data de nascimento</span>
+                            ) : (
+                              dataTxt
+                            )}
+                            {" · "}{nif || "Sem NIF"}
+                          </div>
+                        );
+                      })()}
+                      {selectedPatient.phone && <div className="text-xs text-muted-foreground">{selectedPatient.phone}</div>}
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm font-medium">{selectedPatient.full_name}</div>
-                    {selectedPatient.phone && <div className="text-xs text-muted-foreground">{selectedPatient.phone}</div>}
-                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClearPatient}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClearPatient}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+
+                {/* ═══ Homónimos: aviso / confirmação por reescrita ═══ */}
+                {nivelRisco !== "nenhum" && (
+                  <div className="border border-amber-300 bg-amber-50 rounded-lg px-3 py-2.5 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="space-y-1">
+                        <div className="text-sm font-semibold text-amber-900">
+                          Atenção — {homonimos.length + 1} utentes com este nome
+                        </div>
+                        <div className="space-y-0.5">
+                          {homonimos.map((h) => (
+                            <div key={h.id} className="text-xs text-amber-800">
+                              {h.full_name} —{" "}
+                              {h.birth_date ? formatIdentLine(h).dataTxt : "sem data de nascimento"}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-amber-800">Confirme que está a marcar para o utente certo.</p>
+                      </div>
+                    </div>
+
+                    {nivelRisco === "elevado" && (
+                      <div className="border-t border-amber-200 pt-2 space-y-2">
+                        {anoNascimentoSelecionado !== null ? (
+                          <div className="space-y-1">
+                            <Label className="text-xs text-amber-900">
+                              Escreva o ano de nascimento de {selectedPatient.full_name.split(" ").slice(0, 2).join(" ")}
+                            </Label>
+                            <Input
+                              value={anoDigitado}
+                              onChange={(e) => setAnoDigitado(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                              inputMode="numeric"
+                              maxLength={4}
+                              placeholder="AAAA"
+                              className="w-28 bg-white"
+                            />
+                            {anoDigitado.length === 4 && (
+                              <p className={cn("text-xs", identidadeOk ? "text-green-700" : "text-red-600")}>
+                                {identidadeOk ? "Confere" : "Não corresponde a este utente"}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-xs text-amber-800">
+                              Este utente nao tem data de nascimento registada, por isso nao é possível confirmar a identidade com um segundo identificador.
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="confirmou-identidade"
+                                checked={confirmouIdentidade}
+                                onCheckedChange={(v) => setConfirmouIdentidade(v === true)}
+                              />
+                              <Label htmlFor="confirmou-identidade" className="text-xs text-amber-900">
+                                Confirmo que verifiquei a identidade do utente.
+                              </Label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </section>
 
