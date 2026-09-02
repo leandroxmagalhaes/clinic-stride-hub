@@ -787,7 +787,6 @@ export default function Pacientes() {
             )}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setShowPermissaoDialog(false);
