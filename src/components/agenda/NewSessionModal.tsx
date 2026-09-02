@@ -179,6 +179,11 @@ export function NewSessionModal({
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // ── Homónimos (dois identificadores) ──
+  const [homonimos, setHomonimos] = useState<Homonimo[]>([]);
+  const [anoDigitado, setAnoDigitado] = useState("");
+  const [confirmouIdentidade, setConfirmouIdentidade] = useState(false);
+
   // ── Reset ao abrir ──
   useEffect(() => {
     if (isOpen) {
@@ -213,6 +218,9 @@ export function NewSessionModal({
       setNotes("");
       setSemCobranca(false);
       setMotivoSemCobranca("Cortesia");
+      setHomonimos([]);
+      setAnoDigitado("");
+      setConfirmouIdentidade(false);
     }
   }, [isOpen]);
 
@@ -250,7 +258,7 @@ export function NewSessionModal({
       try {
         const { data } = await supabase
           .from("pacientes")
-          .select("id, full_name, phone, email")
+          .select("id, full_name, phone, email, birth_date, cpf")
           .ilike("full_name", `%${searchQuery}%`)
           .eq("is_active", true)
           .limit(10);
