@@ -348,12 +348,38 @@ export function NewSessionModal({
     }
   }, [selectedServico, services, patientPrecoConsulta]);
 
+  // ── Detetar homónimos (mesmo primeiro nome normalizado) ──
+  const fetchHomonimos = useCallback(async (patient: Patient) => {
+    try {
+      const primeiroNome = normalizarNome(patient.full_name).split(" ")[0] || "";
+      if (!primeiroNome) { setHomonimos([]); return; }
+      const { data } = await (supabase as any)
+        .from("pacientes")
+        .select("id, full_name, birth_date, cpf")
+        .eq("is_active", true)
+        .ilike("full_name", `%${patient.full_name.split(" ")[0]}%`)
+        .neq("id", patient.id)
+        .limit(100);
+      const lista = (data || []).filter((p: any) =>
+        normalizarNome(p.full_name || "").split(" ")[0] === primeiroNome
+      );
+      setHomonimos(lista);
+    } catch (err) {
+      console.error("Homónimos error:", err);
+      setHomonimos([]);
+    }
+  }, []);
+
   const handleSelectPatient = useCallback(async (patient: Patient) => {
     setSelectedPatient(patient);
     setSearchQuery("");
     setShowDropdown(false);
     setSelectedPackId("");
+    setHomonimos([]);
+    setAnoDigitado("");
+    setConfirmouIdentidade(false);
     prefillFromLastSession(patient.id);
+    fetchHomonimos(patient);
     try {
       const { data } = await (supabase as any)
         .from("pacientes")
@@ -365,7 +391,7 @@ export function NewSessionModal({
     } catch {
       setPatientPrecoConsulta(null);
     }
-  }, [prefillFromLastSession]);
+  }, [prefillFromLastSession, fetchHomonimos]);
 
   const handleClearPatient = useCallback(() => {
     setSelectedPatient(null);
@@ -373,6 +399,9 @@ export function NewSessionModal({
     setCobrarAvulso(false);
     setShowNewPack(false);
     setPatientPrecoConsulta(null);
+    setHomonimos([]);
+    setAnoDigitado("");
+    setConfirmouIdentidade(false);
   }, []);
 
   // ── Criação rápida de paciente ──
