@@ -838,7 +838,7 @@ export default function Pacientes() {
         onUpdatePatient={handleUpdatePatient}
         onNavigateToProntuario={handleNavigateToProntuario}
         isAdminMaster={isAdminMaster}
-        onReactivatePatient={(patientId: string) => {
+        onReactivatePatient={async (patientId: string) => {
           const p = patients.find((pt) => pt.id === patientId);
           if (p && isAdminMaster) openAcaoRestricao(p, "reativado");
         }}
