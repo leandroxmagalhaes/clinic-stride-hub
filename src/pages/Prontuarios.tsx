@@ -72,7 +72,9 @@ import { PatientPortalTab } from "@/components/patients/PatientPortalTab";
 import { PackManagerModal } from "@/components/agenda/PackManagerModal";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { HealthTag } from "@/services/HealthTagService";
-import { Tag, Package as PackageIcon, Globe } from "lucide-react";
+import { Tag, Package as PackageIcon, Globe, Mail } from "lucide-react";
+import { EnviarEmailModal } from "@/components/prontuarios/EnviarEmailModal";
+
 
 interface ProntuarioData {
   id: string;
@@ -103,6 +105,8 @@ export default function Prontuarios() {
   const [selectedProntuario, setSelectedProntuario] = useState<ProntuarioData | null>(null);
   const [isNewEvolucaoOpen, setIsNewEvolucaoOpen] = useState(false);
   const [isEditClinicalOpen, setIsEditClinicalOpen] = useState(false);
+  const [isEnviarEmailOpen, setIsEnviarEmailOpen] = useState(false);
+
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
   const [editingEvolution, setEditingEvolution] = useState<EvolutionToEdit | null>(null);
@@ -761,10 +765,15 @@ export default function Prontuarios() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setIsEnviarEmailOpen(true)} className="gap-2">
+                        <Mail className="h-4 w-4" />
+                        Enviar email
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => setIsEditClinicalOpen(true)} className="gap-2">
                         <Pencil className="h-4 w-4" />
                         Editar Dados Clínicos
                       </Button>
+
                       <Button
                         onClick={() => {
                           setPrefilledDate(null);
@@ -1225,6 +1234,20 @@ export default function Prontuarios() {
           onSave={handleSaveClinicalData}
         />
       )}
+
+      {selectedProntuario && (
+        <EnviarEmailModal
+          isOpen={isEnviarEmailOpen}
+          onClose={() => setIsEnviarEmailOpen(false)}
+          patient={{
+            id: selectedProntuario.paciente_id,
+            nome: selectedProntuario.paciente?.full_name || "",
+            email: selectedProntuario.paciente?.email,
+          }}
+        />
+      )}
+
+
 
       <Dialog open={showAlertsModal} onOpenChange={setShowAlertsModal}>
         <DialogContent className="max-w-md">
