@@ -735,19 +735,44 @@ export default function Pacientes() {
                                   <FileDown className="h-4 w-4 mr-2" />
                                   Extrato
                                 </DropdownMenuItem>
-                                {patient.is_active !== false && (
+                                {isAdminMaster && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleInativar();
-                                      }}
-                                      className="text-destructive focus:text-destructive"
-                                    >
-                                      <XCircle className="h-4 w-4 mr-2" />
-                                      Inativar
-                                    </DropdownMenuItem>
+                                    {patient.is_active !== false ? (
+                                      <>
+                                        <DropdownMenuItem
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openAcaoRestricao(patient, "indisponibilizado");
+                                          }}
+                                          className="text-warning focus:text-warning"
+                                        >
+                                          <XCircle className="h-4 w-4 mr-2" />
+                                          Tornar indisponível
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openAcaoRestricao(patient, "arquivado");
+                                          }}
+                                          className="text-destructive focus:text-destructive"
+                                        >
+                                          <Archive className="h-4 w-4 mr-2" />
+                                          Arquivar
+                                        </DropdownMenuItem>
+                                      </>
+                                    ) : (
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openAcaoRestricao(patient, "reativado");
+                                        }}
+                                        className="text-success focus:text-success"
+                                      >
+                                        <RotateCcw className="h-4 w-4 mr-2" />
+                                        Reativar
+                                      </DropdownMenuItem>
+                                    )}
                                   </>
                                 )}
                               </DropdownMenuContent>
