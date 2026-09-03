@@ -850,33 +850,66 @@ export default function Pacientes() {
         } : undefined}
       />
 
-      {/* Dialog: Solicitar permissão ao admin master */}
-      <AlertDialog open={showPermissaoDialog} onOpenChange={(open) => {
-        if (!open) {
-          setShowPermissaoDialog(false);
-          setPatientToReactivate(null);
+      {/* Dialog: ações de estado com motivo obrigatório (admin master) */}
+      <AlertDialog open={!!acaoPendente} onOpenChange={(open) => {
+        if (!open && !isExecutandoAcao) {
+          setAcaoPendente(null);
+          setPatientAcaoPendente(null);
+          setMotivoAcao("");
         }
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Solicitar permissão ao admin master</AlertDialogTitle>
+            <AlertDialogTitle>
+              {acaoPendente === "indisponibilizado"
+                ? "Tornar utente indisponível"
+                : acaoPendente === "arquivado"
+                  ? "Arquivar utente"
+                  : "Reativar utente"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              A reativação de utentes inativos é restrita ao perfil admin master. Peça a autorização do responsável da clínica para reativar este utente.
+              {acaoPendente === "indisponibilizado"
+                ? "O utente deixa de aparecer nas listas e buscas da equipa, os seus dados de contacto e clínicos deixam de estar visíveis para quem não é admin master e nenhuma comunicação lhe será enviada. Esta ação é reversível."
+                : acaoPendente === "arquivado"
+                  ? "O prontuário sai de circulação mas não é destruído. Fica acessível apenas ao admin master. Esta ação é reversível."
+                  : "O utente volta a ficar visível e contactável pela equipa."}
             </AlertDialogDescription>
-            {patientToReactivate && (
+            {patientAcaoPendente && (
               <p className="text-sm font-semibold text-foreground">
-                {patientToReactivate.full_name}
+                {patientAcaoPendente.full_name}
               </p>
             )}
+            <div className="space-y-2 pt-2">
+              <Label htmlFor="motivo-acao">Motivo (obrigatório)</Label>
+              <Textarea
+                id="motivo-acao"
+                value={motivoAcao}
+                onChange={(e) => setMotivoAcao(e.target.value)}
+                placeholder="Descreva o motivo desta ação..."
+                rows={3}
+              />
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction
+            <Button
+              variant="outline"
+              disabled={isExecutandoAcao}
               onClick={() => {
-                setShowPermissaoDialog(false);
-                setPatientToReactivate(null);
+                setAcaoPendente(null);
+                setPatientAcaoPendente(null);
+                setMotivoAcao("");
               }}
             >
-              Entendido
+              Cancelar
+            </Button>
+            <AlertDialogAction
+              disabled={!motivoAcao.trim() || isExecutandoAcao}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmarAcaoRestricao();
+              }}
+            >
+              {isExecutandoAcao ? "A processar..." : "Confirmar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
