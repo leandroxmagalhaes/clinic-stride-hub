@@ -42,6 +42,7 @@ import {
   MoreVertical,
   FileDown,
   XCircle,
+  Archive,
 } from "lucide-react";
 import {
   DropdownMenu,
