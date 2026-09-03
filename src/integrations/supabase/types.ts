@@ -1140,6 +1140,54 @@ export type Database = {
           },
         ]
       }
+      paciente_auditoria: {
+        Row: {
+          acao: string
+          clinic_id: string
+          created_at: string
+          executado_por: string
+          executado_por_nome: string | null
+          id: string
+          motivo: string | null
+          paciente_id: string
+        }
+        Insert: {
+          acao: string
+          clinic_id: string
+          created_at?: string
+          executado_por: string
+          executado_por_nome?: string | null
+          id?: string
+          motivo?: string | null
+          paciente_id: string
+        }
+        Update: {
+          acao?: string
+          clinic_id?: string
+          created_at?: string
+          executado_por?: string
+          executado_por_nome?: string | null
+          id?: string
+          motivo?: string | null
+          paciente_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paciente_auditoria_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paciente_auditoria_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "patient_credit_balances"
+            referencedColumns: ["patient_id"]
+          },
+        ]
+      }
       paciente_etiquetas: {
         Row: {
           clinic_id: string
@@ -3439,6 +3487,10 @@ export type Database = {
         Returns: boolean
       }
       recompute_pack_status: { Args: { p_pack_id: string }; Returns: undefined }
+      registar_auditoria_paciente: {
+        Args: { p_acao: string; p_motivo?: string; p_paciente_id: string }
+        Returns: undefined
+      }
       upsert_portal_questionnaire: {
         Args: {
           p_completo?: boolean
