@@ -528,6 +528,12 @@ serve(async (req) => {
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
 
+        if (patient?.is_active === false) {
+          console.log(`Sessao ${(session as any).id} ignorada: utente bloqueado (is_active=false)`);
+          results3.skipped++;
+          continue;
+        }
+
         const automacao = getAutomacao((session as any).clinic_id);
         if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) { results3.skipped++; continue; }
         if ((session as any).status !== "agendado") { results3.skipped++; continue; }

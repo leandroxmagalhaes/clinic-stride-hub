@@ -91,6 +91,12 @@ serve(async (req) => {
         const clinic = (session as any).clinics;
         const settings = settingsMap.get((session as any).clinic_id) || {};
 
+        if (patient?.is_active === false) {
+          console.log(`Sessao ${(session as any).id} ignorada: utente bloqueado (is_active=false)`);
+          results.skipped++;
+          continue;
+        }
+
         if (settings.reminder_ativo === false) {
           results.skipped++;
           continue;
@@ -318,6 +324,12 @@ serve(async (req) => {
           const patient = s.pacientes;
           const clinic = s.clinics;
           const settings = settingsMap.get(s.clinic_id) || {};
+
+          if (patient?.is_active === false) {
+            console.log(`Sessao ${s.id} ignorada: utente bloqueado (is_active=false)`);
+            followupResults.skipped++;
+            continue;
+          }
 
           const followupCfg = getFollowup(s.clinic_id);
           if (!followupCfg.ativo) { followupResults.skipped++; continue; }

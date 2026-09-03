@@ -189,6 +189,11 @@ serve(async (req) => {
             }
 
             const patient = session.pacientes;
+            if (patient?.is_active === false) {
+              console.log(`Sessao ${session.id} ignorada: utente bloqueado (is_active=false)`);
+              results.skipped++;
+              continue;
+            }
             const professional = session.profiles;
             const service = session.servicos;
             const clinic = session.clinics;
