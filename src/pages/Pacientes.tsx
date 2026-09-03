@@ -285,14 +285,22 @@ export default function Pacientes() {
     privacy_consent: false,
   });
 
-  const activeCount = useMemo(() => patients.filter(p => p.is_active !== false).length, [patients]);
-  const inactiveCount = useMemo(() => patients.filter(p => p.is_active === false).length, [patients]);
+  const getEstadoUtente = (p: any): "ativo" | "indisponivel" | "arquivado" => {
+    if (p.is_active !== false) return "ativo";
+    return p.estado_restricao === "arquivado" ? "arquivado" : "indisponivel";
+  };
+
+  const activeCount = useMemo(() => patients.filter(p => getEstadoUtente(p) === "ativo").length, [patients]);
+  const indisponiveisCount = useMemo(() => patients.filter(p => getEstadoUtente(p) === "indisponivel").length, [patients]);
+  const arquivadosCount = useMemo(() => patients.filter(p => getEstadoUtente(p) === "arquivado").length, [patients]);
 
   const statusFilteredPatients = useMemo(() => {
-    if (statusFilter === "ativos") return patients.filter(p => p.is_active !== false);
-    if (statusFilter === "inativos") return patients.filter(p => p.is_active === false);
-    return patients;
-  }, [patients, statusFilter]);
+    const base = isAdminMaster ? patients : patients.filter(p => p.is_active !== false);
+    if (statusFilter === "ativos") return base.filter(p => getEstadoUtente(p) === "ativo");
+    if (statusFilter === "indisponiveis") return base.filter(p => getEstadoUtente(p) === "indisponivel");
+    if (statusFilter === "arquivados") return base.filter(p => getEstadoUtente(p) === "arquivado");
+    return base;
+  }, [patients, statusFilter, isAdminMaster]);
 
   const filteredPatients = PatientService.filterBySearch(statusFilteredPatients, searchTerm);
 
