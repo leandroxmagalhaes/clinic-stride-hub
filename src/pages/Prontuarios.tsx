@@ -1235,6 +1235,20 @@ export default function Prontuarios() {
         />
       )}
 
+      {selectedProntuario && (
+        <EnviarEmailModal
+          isOpen={isEnviarEmailOpen}
+          onClose={() => setIsEnviarEmailOpen(false)}
+          patient={{
+            id: selectedProntuario.paciente_id,
+            nome: selectedProntuario.paciente?.full_name || "",
+            email: selectedProntuario.paciente?.email,
+          }}
+        />
+      )}
+
+
+
       <Dialog open={showAlertsModal} onOpenChange={setShowAlertsModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
