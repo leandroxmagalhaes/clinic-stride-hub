@@ -82,8 +82,11 @@ export default function Pacientes() {
   const [deletedPatients, setDeletedPatients] = useState<any[]>([]);
   const [isLoadingDeleted, setIsLoadingDeleted] = useState(false);
   const [viewDeletedData, setViewDeletedData] = useState<any | null>(null);
-  const [showPermissaoDialog, setShowPermissaoDialog] = useState(false);
-  const [patientToReactivate, setPatientToReactivate] = useState<Patient | null>(null);
+  type AcaoRestricao = "indisponibilizado" | "arquivado" | "reativado";
+  const [acaoPendente, setAcaoPendente] = useState<AcaoRestricao | null>(null);
+  const [patientAcaoPendente, setPatientAcaoPendente] = useState<Patient | null>(null);
+  const [motivoAcao, setMotivoAcao] = useState("");
+  const [isExecutandoAcao, setIsExecutandoAcao] = useState(false);
 
   useEffect(() => {
     async function fetchClinicId() {
