@@ -105,6 +105,8 @@ export default function Prontuarios() {
   const [selectedProntuario, setSelectedProntuario] = useState<ProntuarioData | null>(null);
   const [isNewEvolucaoOpen, setIsNewEvolucaoOpen] = useState(false);
   const [isEditClinicalOpen, setIsEditClinicalOpen] = useState(false);
+  const [isEnviarEmailOpen, setIsEnviarEmailOpen] = useState(false);
+
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
   const [editingEvolution, setEditingEvolution] = useState<EvolutionToEdit | null>(null);
