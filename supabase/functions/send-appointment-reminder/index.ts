@@ -71,7 +71,7 @@ serve(async (req) => {
       .from("sessoes")
       .select(`
         id, paciente_id, start_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, confirmation_token,
-        pacientes!sessoes_paciente_id_fkey ( full_name, email ),
+        pacientes!sessoes_paciente_id_fkey ( full_name, email, is_active ),
         profiles!sessoes_profissional_id_fkey ( full_name ),
         servicos!sessoes_servico_id_fkey ( name ),
         clinics!sessoes_clinic_id_fkey ( name, phone, email )
@@ -299,7 +299,7 @@ serve(async (req) => {
         .from("sessoes")
         .select(`
           id, paciente_id, start_time, end_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, metodo_pagamento_previsto, confirmation_token,
-          pacientes!sessoes_paciente_id_fkey ( full_name, email ),
+          pacientes!sessoes_paciente_id_fkey ( full_name, email, is_active ),
           clinics!sessoes_clinic_id_fkey ( name, phone, email )
         `)
         .lte("end_time", cutoff)

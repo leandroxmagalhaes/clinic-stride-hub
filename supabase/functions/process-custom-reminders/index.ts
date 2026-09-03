@@ -146,7 +146,7 @@ serve(async (req) => {
           .select(`
             id, paciente_id, start_time, end_time, status, confirmacao_estado,
             payment_status, sem_cobranca, clinic_id,
-            pacientes!sessoes_paciente_id_fkey ( full_name, email ),
+            pacientes!sessoes_paciente_id_fkey ( full_name, email, is_active ),
             profiles!sessoes_profissional_id_fkey ( full_name ),
             servicos!sessoes_servico_id_fkey ( name ),
             clinics!sessoes_clinic_id_fkey ( name, phone, email )
