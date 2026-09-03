@@ -645,14 +645,6 @@ export default function Pacientes() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredPatients.map((patient) => {
                 const healthTags = (patient.health_tags as HealthTag[]) || [];
-                const handleInativar = async () => {
-                  if (!confirm(`Inativar o utente "${patient.full_name}"?`)) return;
-                  try {
-                    await handleUpdatePatient(patient.id, { is_active: false } as Partial<Patient>);
-                  } catch {
-                    /* toast já mostrado */
-                  }
-                };
                 const handleExtrato = async () => {
                   try {
                     await PatientStatementService.downloadStatement(patient.id, patient.full_name);
