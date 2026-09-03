@@ -340,23 +340,59 @@ export default function Pacientes() {
     }
   };
 
-  const handleReactivatePatient = async (patientId: string) => {
-    if (!isAdminMaster) {
-      const patient =
-        patients.find((p) => p.id === patientId) ||
-        deletedPatients.find((p) => p.id === patientId);
-      setPatientToReactivate((patient as Patient) ?? null);
-      setShowPermissaoDialog(true);
-      return;
-    }
-    const { error } = await supabase.from("pacientes").update({ is_active: true }).eq("id", patientId);
-    if (error) {
-      toast.error("Erro ao reativar paciente");
-      return;
-    }
-    await refreshPatients();
-    if (selectedPatient?.id === patientId) {
-      setSelectedPatient({ ...selectedPatient, is_active: true } as Patient);
+  const openAcaoRestricao = (patient: Patient, acao: AcaoRestricao) => {
+    setPatientAcaoPendente(patient);
+    setAcaoPendente(acao);
+    setMotivoAcao("");
+  };
+
+  const confirmarAcaoRestricao = async () => {
+    if (!patientAcaoPendente || !acaoPendente || !motivoAcao.trim()) return;
+    setIsExecutandoAcao(true);
+    try {
+      const updates: Record<string, unknown> =
+        acaoPendente === "indisponibilizado"
+          ? { is_active: false, estado_restricao: "indisponivel" }
+          : acaoPendente === "arquivado"
+            ? { is_active: false, estado_restricao: "arquivado" }
+            : { is_active: true, estado_restricao: null };
+
+      const { error } = await (supabase as any)
+        .from("pacientes")
+        .update(updates)
+        .eq("id", patientAcaoPendente.id);
+      if (error) {
+        toast.error(error.message || "Não foi possível atualizar o estado do utente.");
+        return;
+      }
+
+      const { error: auditError } = await (supabase as any).rpc("registar_auditoria_paciente", {
+        p_paciente_id: patientAcaoPendente.id,
+        p_acao: acaoPendente,
+        p_motivo: motivoAcao.trim(),
+      });
+      if (auditError) {
+        console.error("Erro ao registar auditoria:", auditError);
+        toast.warning("Estado atualizado, mas o registo de auditoria falhou.");
+      } else {
+        toast.success(
+          acaoPendente === "indisponibilizado"
+            ? "Utente tornado indisponível"
+            : acaoPendente === "arquivado"
+              ? "Utente arquivado"
+              : "Utente reativado"
+        );
+      }
+
+      await refreshPatients();
+      if (selectedPatient?.id === patientAcaoPendente.id) {
+        setSelectedPatient({ ...selectedPatient, ...updates } as Patient);
+      }
+      setAcaoPendente(null);
+      setPatientAcaoPendente(null);
+      setMotivoAcao("");
+    } finally {
+      setIsExecutandoAcao(false);
     }
   };
 
