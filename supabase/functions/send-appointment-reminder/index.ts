@@ -71,7 +71,7 @@ serve(async (req) => {
       .from("sessoes")
       .select(`
         id, paciente_id, start_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, confirmation_token,
-        pacientes!sessoes_paciente_id_fkey ( full_name, email ),
+        pacientes!sessoes_paciente_id_fkey ( full_name, email, is_active ),
         profiles!sessoes_profissional_id_fkey ( full_name ),
         servicos!sessoes_servico_id_fkey ( name ),
         clinics!sessoes_clinic_id_fkey ( name, phone, email )
@@ -90,6 +90,12 @@ serve(async (req) => {
         const service = (session as any).servicos;
         const clinic = (session as any).clinics;
         const settings = settingsMap.get((session as any).clinic_id) || {};
+
+        if (patient?.is_active === false) {
+          console.log(`Sessao ${(session as any).id} ignorada: utente bloqueado (is_active=false)`);
+          results.skipped++;
+          continue;
+        }
 
         if (settings.reminder_ativo === false) {
           results.skipped++;
@@ -299,7 +305,7 @@ serve(async (req) => {
         .from("sessoes")
         .select(`
           id, paciente_id, start_time, end_time, status, clinic_id, isento, pack_id, payment_status, pagamento_estado, sem_cobranca, metodo_pagamento_previsto, confirmation_token,
-          pacientes!sessoes_paciente_id_fkey ( full_name, email ),
+          pacientes!sessoes_paciente_id_fkey ( full_name, email, is_active ),
           clinics!sessoes_clinic_id_fkey ( name, phone, email )
         `)
         .lte("end_time", cutoff)
@@ -318,6 +324,12 @@ serve(async (req) => {
           const patient = s.pacientes;
           const clinic = s.clinics;
           const settings = settingsMap.get(s.clinic_id) || {};
+
+          if (patient?.is_active === false) {
+            console.log(`Sessao ${s.id} ignorada: utente bloqueado (is_active=false)`);
+            followupResults.skipped++;
+            continue;
+          }
 
           const followupCfg = getFollowup(s.clinic_id);
           if (!followupCfg.ativo) { followupResults.skipped++; continue; }

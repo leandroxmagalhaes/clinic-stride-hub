@@ -148,7 +148,7 @@ serve(async (req) => {
       .from("sessoes")
       .select(`
         id, paciente_id, start_time, status, clinic_id, confirmation_token, confirmacao_estado,
-        pacientes!sessoes_paciente_id_fkey ( full_name, email ),
+        pacientes!sessoes_paciente_id_fkey ( full_name, email, is_active ),
         profiles!sessoes_profissional_id_fkey ( full_name ),
         servicos!sessoes_servico_id_fkey ( name ),
         clinics!sessoes_clinic_id_fkey ( name, phone, email )
@@ -174,6 +174,12 @@ serve(async (req) => {
         const clinic = (session as any).clinics;
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
+
+        if (patient?.is_active === false) {
+          console.log(`Sessao ${(session as any).id} ignorada: utente bloqueado (is_active=false)`);
+          results.skipped++;
+          continue;
+        }
 
         const automacao = getAutomacao((session as any).clinic_id);
         if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) {
@@ -374,6 +380,12 @@ serve(async (req) => {
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
 
+        if (patient?.is_active === false) {
+          console.log(`Sessao ${(session as any).id} ignorada: utente bloqueado (is_active=false)`);
+          results2.skipped++;
+          continue;
+        }
+
         const automacao = getAutomacao((session as any).clinic_id);
         if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) { results2.skipped++; continue; }
 
@@ -515,6 +527,12 @@ serve(async (req) => {
         const patient = (session as any).pacientes;
         const settings = settingsMap.get((session as any).clinic_id) || {};
         const tz = settings.timezone || "Europe/Lisbon";
+
+        if (patient?.is_active === false) {
+          console.log(`Sessao ${(session as any).id} ignorada: utente bloqueado (is_active=false)`);
+          results3.skipped++;
+          continue;
+        }
 
         const automacao = getAutomacao((session as any).clinic_id);
         if (settings.confirmacao_dia_anterior_ativo === false || automacao.ativo === false) { results3.skipped++; continue; }
