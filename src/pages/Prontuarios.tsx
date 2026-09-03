@@ -72,7 +72,9 @@ import { PatientPortalTab } from "@/components/patients/PatientPortalTab";
 import { PackManagerModal } from "@/components/agenda/PackManagerModal";
 import { HealthTagList } from "@/components/ui/health-tag-badge";
 import { HealthTag } from "@/services/HealthTagService";
-import { Tag, Package as PackageIcon, Globe } from "lucide-react";
+import { Tag, Package as PackageIcon, Globe, Mail } from "lucide-react";
+import { EnviarEmailModal } from "@/components/prontuarios/EnviarEmailModal";
+
 
 interface ProntuarioData {
   id: string;
