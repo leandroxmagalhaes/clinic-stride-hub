@@ -674,15 +674,28 @@ export default function Pacientes() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-semibold truncate flex-1">{patient.full_name}</h3>
-                            {patient.is_active ? (
-                              <Badge variant="secondary" className="bg-success/10 text-success text-[10px]">
-                                Ativo
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px]">
-                                Inativo
-                              </Badge>
-                            )}
+                            {(() => {
+                              const estado = getEstadoUtente(patient);
+                              if (estado === "ativo") {
+                                return (
+                                  <Badge variant="secondary" className="bg-success/10 text-success text-[10px]">
+                                    Ativo
+                                  </Badge>
+                                );
+                              }
+                              if (estado === "arquivado") {
+                                return (
+                                  <Badge variant="secondary" className="bg-slate-500/10 text-slate-500 text-[10px]">
+                                    Arquivado
+                                  </Badge>
+                                );
+                              }
+                              return (
+                                <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px]">
+                                  Indisponível
+                                </Badge>
+                              );
+                            })()}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                 <Button
