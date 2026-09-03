@@ -42,6 +42,7 @@ import {
   MoreVertical,
   FileDown,
   XCircle,
+  Archive,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -78,12 +79,15 @@ export default function Pacientes() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [clinicId, setClinicId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos" | "excluidos">("ativos");
+  const [statusFilter, setStatusFilter] = useState<"ativos" | "indisponiveis" | "arquivados" | "todos" | "excluidos">("ativos");
   const [deletedPatients, setDeletedPatients] = useState<any[]>([]);
   const [isLoadingDeleted, setIsLoadingDeleted] = useState(false);
   const [viewDeletedData, setViewDeletedData] = useState<any | null>(null);
-  const [showPermissaoDialog, setShowPermissaoDialog] = useState(false);
-  const [patientToReactivate, setPatientToReactivate] = useState<Patient | null>(null);
+  type AcaoRestricao = "indisponibilizado" | "arquivado" | "reativado";
+  const [acaoPendente, setAcaoPendente] = useState<AcaoRestricao | null>(null);
+  const [patientAcaoPendente, setPatientAcaoPendente] = useState<Patient | null>(null);
+  const [motivoAcao, setMotivoAcao] = useState("");
+  const [isExecutandoAcao, setIsExecutandoAcao] = useState(false);
 
   useEffect(() => {
     async function fetchClinicId() {
@@ -282,14 +286,22 @@ export default function Pacientes() {
     privacy_consent: false,
   });
 
-  const activeCount = useMemo(() => patients.filter(p => p.is_active !== false).length, [patients]);
-  const inactiveCount = useMemo(() => patients.filter(p => p.is_active === false).length, [patients]);
+  const getEstadoUtente = (p: any): "ativo" | "indisponivel" | "arquivado" => {
+    if (p.is_active !== false) return "ativo";
+    return p.estado_restricao === "arquivado" ? "arquivado" : "indisponivel";
+  };
+
+  const activeCount = useMemo(() => patients.filter(p => getEstadoUtente(p) === "ativo").length, [patients]);
+  const indisponiveisCount = useMemo(() => patients.filter(p => getEstadoUtente(p) === "indisponivel").length, [patients]);
+  const arquivadosCount = useMemo(() => patients.filter(p => getEstadoUtente(p) === "arquivado").length, [patients]);
 
   const statusFilteredPatients = useMemo(() => {
-    if (statusFilter === "ativos") return patients.filter(p => p.is_active !== false);
-    if (statusFilter === "inativos") return patients.filter(p => p.is_active === false);
-    return patients;
-  }, [patients, statusFilter]);
+    const base = isAdminMaster ? patients : patients.filter(p => p.is_active !== false);
+    if (statusFilter === "ativos") return base.filter(p => getEstadoUtente(p) === "ativo");
+    if (statusFilter === "indisponiveis") return base.filter(p => getEstadoUtente(p) === "indisponivel");
+    if (statusFilter === "arquivados") return base.filter(p => getEstadoUtente(p) === "arquivado");
+    return base;
+  }, [patients, statusFilter, isAdminMaster]);
 
   const filteredPatients = PatientService.filterBySearch(statusFilteredPatients, searchTerm);
 
@@ -329,23 +341,59 @@ export default function Pacientes() {
     }
   };
 
-  const handleReactivatePatient = async (patientId: string) => {
-    if (!isAdminMaster) {
-      const patient =
-        patients.find((p) => p.id === patientId) ||
-        deletedPatients.find((p) => p.id === patientId);
-      setPatientToReactivate((patient as Patient) ?? null);
-      setShowPermissaoDialog(true);
-      return;
-    }
-    const { error } = await supabase.from("pacientes").update({ is_active: true }).eq("id", patientId);
-    if (error) {
-      toast.error("Erro ao reativar paciente");
-      return;
-    }
-    await refreshPatients();
-    if (selectedPatient?.id === patientId) {
-      setSelectedPatient({ ...selectedPatient, is_active: true } as Patient);
+  const openAcaoRestricao = (patient: Patient, acao: AcaoRestricao) => {
+    setPatientAcaoPendente(patient);
+    setAcaoPendente(acao);
+    setMotivoAcao("");
+  };
+
+  const confirmarAcaoRestricao = async () => {
+    if (!patientAcaoPendente || !acaoPendente || !motivoAcao.trim()) return;
+    setIsExecutandoAcao(true);
+    try {
+      const updates: Record<string, unknown> =
+        acaoPendente === "indisponibilizado"
+          ? { is_active: false, estado_restricao: "indisponivel" }
+          : acaoPendente === "arquivado"
+            ? { is_active: false, estado_restricao: "arquivado" }
+            : { is_active: true, estado_restricao: null };
+
+      const { error } = await (supabase as any)
+        .from("pacientes")
+        .update(updates)
+        .eq("id", patientAcaoPendente.id);
+      if (error) {
+        toast.error(error.message || "Não foi possível atualizar o estado do utente.");
+        return;
+      }
+
+      const { error: auditError } = await (supabase as any).rpc("registar_auditoria_paciente", {
+        p_paciente_id: patientAcaoPendente.id,
+        p_acao: acaoPendente,
+        p_motivo: motivoAcao.trim(),
+      });
+      if (auditError) {
+        console.error("Erro ao registar auditoria:", auditError);
+        toast.warning("Estado atualizado, mas o registo de auditoria falhou.");
+      } else {
+        toast.success(
+          acaoPendente === "indisponibilizado"
+            ? "Utente tornado indisponível"
+            : acaoPendente === "arquivado"
+              ? "Utente arquivado"
+              : "Utente reativado"
+        );
+      }
+
+      await refreshPatients();
+      if (selectedPatient?.id === patientAcaoPendente.id) {
+        setSelectedPatient({ ...selectedPatient, ...updates } as Patient);
+      }
+      setAcaoPendente(null);
+      setPatientAcaoPendente(null);
+      setMotivoAcao("");
+    } finally {
+      setIsExecutandoAcao(false);
     }
   };
 
@@ -530,10 +578,14 @@ export default function Pacientes() {
 
         {/* Status filter chips */}
         <div className="flex gap-2 flex-wrap">
-          {(["ativos", "inativos", "todos", ...(isAdminMaster ? ["excluidos"] : [])] as const).map((filter) => {
+          {(isAdminMaster
+            ? (["ativos", "indisponiveis", "arquivados", "todos", "excluidos"] as const)
+            : (["ativos"] as const)
+          ).map((filter) => {
             const labels: Record<string, string> = {
               ativos: `Ativos (${activeCount})`,
-              inativos: `Inativos (${inactiveCount})`,
+              indisponiveis: `Indisponíveis (${indisponiveisCount})`,
+              arquivados: `Arquivados (${arquivadosCount})`,
               todos: `Todos (${patients.length})`,
               excluidos: `Excluídos (${deletedPatients.length})`,
             };
@@ -598,14 +650,6 @@ export default function Pacientes() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredPatients.map((patient) => {
                 const healthTags = (patient.health_tags as HealthTag[]) || [];
-                const handleInativar = async () => {
-                  if (!confirm(`Inativar o utente "${patient.full_name}"?`)) return;
-                  try {
-                    await handleUpdatePatient(patient.id, { is_active: false } as Partial<Patient>);
-                  } catch {
-                    /* toast já mostrado */
-                  }
-                };
                 const handleExtrato = async () => {
                   try {
                     await PatientStatementService.downloadStatement(patient.id, patient.full_name);
@@ -635,15 +679,28 @@ export default function Pacientes() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-semibold truncate flex-1">{patient.full_name}</h3>
-                            {patient.is_active ? (
-                              <Badge variant="secondary" className="bg-success/10 text-success text-[10px]">
-                                Ativo
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px]">
-                                Inativo
-                              </Badge>
-                            )}
+                            {(() => {
+                              const estado = getEstadoUtente(patient);
+                              if (estado === "ativo") {
+                                return (
+                                  <Badge variant="secondary" className="bg-success/10 text-success text-[10px]">
+                                    Ativo
+                                  </Badge>
+                                );
+                              }
+                              if (estado === "arquivado") {
+                                return (
+                                  <Badge variant="secondary" className="bg-slate-500/10 text-slate-500 text-[10px]">
+                                    Arquivado
+                                  </Badge>
+                                );
+                              }
+                              return (
+                                <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px]">
+                                  Indisponível
+                                </Badge>
+                              );
+                            })()}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                 <Button
@@ -683,19 +740,44 @@ export default function Pacientes() {
                                   <FileDown className="h-4 w-4 mr-2" />
                                   Extrato
                                 </DropdownMenuItem>
-                                {patient.is_active !== false && (
+                                {isAdminMaster && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleInativar();
-                                      }}
-                                      className="text-destructive focus:text-destructive"
-                                    >
-                                      <XCircle className="h-4 w-4 mr-2" />
-                                      Inativar
-                                    </DropdownMenuItem>
+                                    {patient.is_active !== false ? (
+                                      <>
+                                        <DropdownMenuItem
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openAcaoRestricao(patient, "indisponibilizado");
+                                          }}
+                                          className="text-warning focus:text-warning"
+                                        >
+                                          <XCircle className="h-4 w-4 mr-2" />
+                                          Tornar indisponível
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openAcaoRestricao(patient, "arquivado");
+                                          }}
+                                          className="text-destructive focus:text-destructive"
+                                        >
+                                          <Archive className="h-4 w-4 mr-2" />
+                                          Arquivar
+                                        </DropdownMenuItem>
+                                      </>
+                                    ) : (
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openAcaoRestricao(patient, "reativado");
+                                        }}
+                                        className="text-success focus:text-success"
+                                      >
+                                        <RotateCcw className="h-4 w-4 mr-2" />
+                                        Reativar
+                                      </DropdownMenuItem>
+                                    )}
                                   </>
                                 )}
                               </DropdownMenuContent>
@@ -756,7 +838,10 @@ export default function Pacientes() {
         onUpdatePatient={handleUpdatePatient}
         onNavigateToProntuario={handleNavigateToProntuario}
         isAdminMaster={isAdminMaster}
-        onReactivatePatient={handleReactivatePatient}
+        onReactivatePatient={async (patientId: string) => {
+          const p = patients.find((pt) => pt.id === patientId);
+          if (p && isAdminMaster) openAcaoRestricao(p, "reativado");
+        }}
         onPermanentlyDeletePatient={isAdminMaster ? async (patientId: string) => {
           const patient = patients.find(p => p.id === patientId);
           const { cascadeDeletePatient } = await import('@/services/PatientCascadeDeleteService');
@@ -766,33 +851,66 @@ export default function Pacientes() {
         } : undefined}
       />
 
-      {/* Dialog: Solicitar permissão ao admin master */}
-      <AlertDialog open={showPermissaoDialog} onOpenChange={(open) => {
-        if (!open) {
-          setShowPermissaoDialog(false);
-          setPatientToReactivate(null);
+      {/* Dialog: ações de estado com motivo obrigatório (admin master) */}
+      <AlertDialog open={!!acaoPendente} onOpenChange={(open) => {
+        if (!open && !isExecutandoAcao) {
+          setAcaoPendente(null);
+          setPatientAcaoPendente(null);
+          setMotivoAcao("");
         }
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Solicitar permissão ao admin master</AlertDialogTitle>
+            <AlertDialogTitle>
+              {acaoPendente === "indisponibilizado"
+                ? "Tornar utente indisponível"
+                : acaoPendente === "arquivado"
+                  ? "Arquivar utente"
+                  : "Reativar utente"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              A reativação de utentes inativos é restrita ao perfil admin master. Peça a autorização do responsável da clínica para reativar este utente.
+              {acaoPendente === "indisponibilizado"
+                ? "O utente deixa de aparecer nas listas e buscas da equipa, os seus dados de contacto e clínicos deixam de estar visíveis para quem não é admin master e nenhuma comunicação lhe será enviada. Esta ação é reversível."
+                : acaoPendente === "arquivado"
+                  ? "O prontuário sai de circulação mas não é destruído. Fica acessível apenas ao admin master. Esta ação é reversível."
+                  : "O utente volta a ficar visível e contactável pela equipa."}
             </AlertDialogDescription>
-            {patientToReactivate && (
+            {patientAcaoPendente && (
               <p className="text-sm font-semibold text-foreground">
-                {patientToReactivate.full_name}
+                {patientAcaoPendente.full_name}
               </p>
             )}
+            <div className="space-y-2 pt-2">
+              <Label htmlFor="motivo-acao">Motivo (obrigatório)</Label>
+              <Textarea
+                id="motivo-acao"
+                value={motivoAcao}
+                onChange={(e) => setMotivoAcao(e.target.value)}
+                placeholder="Descreva o motivo desta ação..."
+                rows={3}
+              />
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction
+            <Button
+              variant="outline"
+              disabled={isExecutandoAcao}
               onClick={() => {
-                setShowPermissaoDialog(false);
-                setPatientToReactivate(null);
+                setAcaoPendente(null);
+                setPatientAcaoPendente(null);
+                setMotivoAcao("");
               }}
             >
-              Entendido
+              Cancelar
+            </Button>
+            <AlertDialogAction
+              disabled={!motivoAcao.trim() || isExecutandoAcao}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmarAcaoRestricao();
+              }}
+            >
+              {isExecutandoAcao ? "A processar..." : "Confirmar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1244,6 +1244,7 @@ export type Database = {
           email: string | null
           emergency_contact: string | null
           emergency_phone: string | null
+          estado_restricao: string | null
           full_name: string
           gender: string | null
           health_insurance: string | null
@@ -1276,6 +1277,7 @@ export type Database = {
           email?: string | null
           emergency_contact?: string | null
           emergency_phone?: string | null
+          estado_restricao?: string | null
           full_name: string
           gender?: string | null
           health_insurance?: string | null
@@ -1308,6 +1310,7 @@ export type Database = {
           email?: string | null
           emergency_contact?: string | null
           emergency_phone?: string | null
+          estado_restricao?: string | null
           full_name?: string
           gender?: string | null
           health_insurance?: string | null
