@@ -577,10 +577,14 @@ export default function Pacientes() {
 
         {/* Status filter chips */}
         <div className="flex gap-2 flex-wrap">
-          {(["ativos", "inativos", "todos", ...(isAdminMaster ? ["excluidos"] : [])] as const).map((filter) => {
+          {(isAdminMaster
+            ? (["ativos", "indisponiveis", "arquivados", "todos", "excluidos"] as const)
+            : (["ativos"] as const)
+          ).map((filter) => {
             const labels: Record<string, string> = {
               ativos: `Ativos (${activeCount})`,
-              inativos: `Inativos (${inactiveCount})`,
+              indisponiveis: `Indisponíveis (${indisponiveisCount})`,
+              arquivados: `Arquivados (${arquivadosCount})`,
               todos: `Todos (${patients.length})`,
               excluidos: `Excluídos (${deletedPatients.length})`,
             };
