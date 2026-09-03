@@ -761,10 +761,15 @@ export default function Prontuarios() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setIsEnviarEmailOpen(true)} className="gap-2">
+                        <Mail className="h-4 w-4" />
+                        Enviar email
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => setIsEditClinicalOpen(true)} className="gap-2">
                         <Pencil className="h-4 w-4" />
                         Editar Dados Clínicos
                       </Button>
+
                       <Button
                         onClick={() => {
                           setPrefilledDate(null);
